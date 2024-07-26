@@ -101,7 +101,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                 if (func->Stage() == core::ir::Function::PipelineStage::kFragment &&
                     addrspace == core::AddressSpace::kIn &&
                     io.type->is_integer_scalar_or_vector()) {
-                    io.attributes.interpolation = {core::InterpolationType::kFlat};
+                    io.attributes.interpolation = core::Interpolation{core::InterpolationType::kFlat};
                 }
             }
             if (io.attributes.location) {
