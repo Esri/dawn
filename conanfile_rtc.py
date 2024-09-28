@@ -3,8 +3,8 @@ from conans import ConanFile
 class DawnConan(ConanFile):
     name = "dawn"
     version = "0.0.1"
-    url = "https://devtopia.esri.com/dunc8812/dawn"
-    license = "https://devtopia.esri.com/dunc8812/dawn/blob/main/LICENSE"
+    url = "https://github.com/Esri/dawn/blob/runtimecore"
+    license = "https://github.com/Esri/dawn/blob/runtimecore/LICENSE"
     description = "Dawn is an open-source and cross-platform implementation of the WebGPU standard."
 
     # RTC specific triple
