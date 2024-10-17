@@ -1077,13 +1077,7 @@ if (_PLATFORM_WINDOWS) then
   configuration { "Test" }
 
   buildoptions {
-    "/GL", -- Enable whole program optimizations
-    "/Gw", -- Optimize Global Data
-    -- "/Ob3" is already on for Test builds
-    "/wd4701", -- Silences potentially uninitialized local variable warning which causes errors during LTCG
-    "/wd4702", -- Silences an unreachable code warning which causes errors during LTCG
-    "/wd4706", -- Silences assignment within conditional expression warning which causes errors during LTCG
-    "/wd4740", -- Silences flow in or out of inline asm code suppresses global optimization errors during LTCG
+    "/Ob2"
   }
 
 end
