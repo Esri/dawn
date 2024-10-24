@@ -12,9 +12,9 @@ local DAWN_SRC_DIR = _3RDPARTY_DIR .. "/dawn"
 -- Generation
 --
 local DAWN_GEN_OUTPUT_DIR = DAWN_SRC_DIR.."/out/gen"
-local PYTHON_EXE = "/usr/local/rtc/python/3.8/bin/python"
+local PYTHON_EXE = "/usr/local/rtc/python/3.12/bin/python"
 if (os.is("windows")) then
-  PYTHON_EXE = "C:/rtc/python/3.8/Scripts/python"
+  PYTHON_EXE = "C:/rtc/python/3.12/Scripts/python"
 end
 
 -- version based utilities
@@ -618,7 +618,7 @@ files {
   "src/tint/lang/wgsl/writer/raise/rename_conflicts.cc",
   "src/tint/lang/wgsl/writer/raise/value_to_let_rtc_shim.cc",
   "src/tint/lang/wgsl/writer/syntax_tree_printer/syntax_tree_printer.cc",
-  
+
   -- CMake target: tint_utils
   "src/tint/utils/bytes/buffer_reader.cc",
   "src/tint/utils/bytes/bytes.cc",
@@ -732,7 +732,7 @@ if (enable_glsl) then
     "src/tint/lang/glsl/writer/printer/printer_rtc_shim1.cc",
     "src/tint/lang/glsl/writer/raise/raise_rtc_shim1.cc",
   }
-  
+
 end
 
 if (enable_hlsl) then
