@@ -114,6 +114,7 @@ end
 
 defines {
   "DAWN_NATIVE_IMPLEMENTATION",
+  "STRIP_LOG=1", -- Disable logging in abseil
   "TINT_BUILD_WGSL_READER=1",
   "TINT_BUILD_WGSL_WRITER=1",
 }
