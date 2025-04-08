@@ -114,6 +114,7 @@ end
 
 defines {
   "DAWN_NATIVE_IMPLEMENTATION",
+  "STRIP_LOG=1", -- Prevent abseil-cpp making restricted windows calls for stack tracing
   "TINT_BUILD_WGSL_READER=1",
   "TINT_BUILD_WGSL_WRITER=1",
 }
@@ -139,7 +140,7 @@ includedirs {
 -- to the same output location. One will overwrite the other.
 --
 --   "src/tint/lang/core/ir/function.cc",
---   "src/tint/lang/wgsl/ast/function_rtc_shim1.cc",
+--   "src/tint/lang/wgsl/ast/function.cc",
 --
 -- To remedy this, the runtimecore branch introduces "shim" files with
 -- unique names which simply include the original. We build the shim file
