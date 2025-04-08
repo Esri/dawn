@@ -778,11 +778,6 @@ if (enable_msl) then
 
     -- CMake target: tint_lang_msl_writer
     "src/tint/lang/msl/writer/writer_rtc_shim4.cc",
-    "src/tint/lang/msl/writer/ast_printer/ast_printer_rtc_shim3.cc",
-    "src/tint/lang/msl/writer/ast_raise/module_scope_var_to_entry_point_param.cc",
-    "src/tint/lang/msl/writer/ast_raise/packed_vec3.cc",
-    "src/tint/lang/msl/writer/ast_raise/pixel_local.cc",
-    "src/tint/lang/msl/writer/ast_raise/subgroup_ballot.cc",
     "src/tint/lang/msl/writer/common/option_helpers.cc",
     "src/tint/lang/msl/writer/common/options_rtc_shim4.cc",
     "src/tint/lang/msl/writer/common/printer_support.cc",
