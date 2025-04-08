@@ -180,6 +180,7 @@ files {
   "src/dawn/native/BindGroupLayoutInternal.cpp",
   "src/dawn/native/BindingInfo.cpp",
   "src/dawn/native/BlitBufferToDepthStencil.cpp",
+  "src/dawn/native/BlitBufferToTexture.cpp",
   "src/dawn/native/BlitColorToColorWithDraw.cpp",
   "src/dawn/native/BlitDepthToDepth.cpp",
   "src/dawn/native/BlitTextureToBuffer.cpp",
@@ -241,6 +242,7 @@ files {
   "src/dawn/native/RenderEncoderBase.cpp",
   "src/dawn/native/RenderPassEncoder.cpp",
   "src/dawn/native/RenderPipeline.cpp",
+  "src/dawn/native/RenderPassWorkaroundsHelper.cpp",
   "src/dawn/native/ResourceMemoryAllocation.cpp",
   "src/dawn/native/RingBufferAllocator.cpp",
   "src/dawn/native/Sampler.cpp",
@@ -256,6 +258,7 @@ files {
   "src/dawn/native/Texture.cpp",
   "src/dawn/native/TintUtils.cpp",
   "src/dawn/native/Toggles.cpp",
+  "src/dawn/native/ValidationUtils.cpp",
   "src/dawn/native/webgpu_absl_format.cpp",
   "src/dawn/native/stream/BlobSource.cpp",
   "src/dawn/native/stream/ByteVectorSink.cpp",
@@ -275,7 +278,9 @@ files {
   "src/dawn/common/RefCounted.cpp",
   "src/dawn/common/Result.cpp",
   "src/dawn/common/SlabAllocator.cpp",
+  "src/dawn/common/StringViewUtils.cpp",
   "src/dawn/common/SystemUtils.cpp",
+  "src/dawn/common/ThreadLocal.cpp",
   "src/dawn/common/WeakRefSupport.cpp",
 
   -- CMake target: dawn_platform
@@ -285,6 +290,7 @@ files {
   "src/dawn/platform/tracing/EventTracer.cpp",
 
   -- CMake target: tint_api
+  "src/tint/api/common/vertex_pulling_config.cc",
   "src/tint/api/tint.cc",
 
   -- CMake target: tint_lang_core
@@ -322,6 +328,7 @@ files {
   "src/tint/lang/core/ir/builtin_call.cc",
   "src/tint/lang/core/ir/call.cc",
   "src/tint/lang/core/ir/clone_context.cc",
+  "src/tint/lang/core/ir/constexpr_if.cc",
   "src/tint/lang/core/ir/constant.cc",
   "src/tint/lang/core/ir/construct.cc",
   "src/tint/lang/core/ir/continue.cc",
@@ -330,6 +337,7 @@ files {
   "src/tint/lang/core/ir/core_binary.cc",
   "src/tint/lang/core/ir/core_builtin_call.cc",
   "src/tint/lang/core/ir/core_unary.cc",
+  "src/tint/lang/core/ir/disassembler.cc",
   "src/tint/lang/core/ir/discard.cc",
   "src/tint/lang/core/ir/exit.cc",
   "src/tint/lang/core/ir/exit_if.cc",
@@ -753,8 +761,14 @@ if (enable_msl) then
     "src/tint/lang/msl/builtin_fn_rtc_shim3.cc",
     "src/tint/lang/msl/intrinsic/data_rtc_shim3.cc",
     "src/tint/lang/msl/ir/builtin_call_rtc_shim2.cc",
+    "src/tint/lang/msl/ir/component.cc",
+    "src/tint/lang/msl/ir/member_builtin_call.cc",
+    "src/tint/lang/msl/ir/memory_order.cc",
+    "src/tint/lang/msl/type/bias.cc",
+    "src/tint/lang/msl/type/gradient.cc",
+    "src/tint/lang/msl/type/level.cc",
     "src/tint/lang/msl/validate/validate_rtc_shim2.cc",
-
+    
     -- CMake target: tint_lang_msl_writer
     "src/tint/lang/msl/writer/writer_rtc_shim4.cc",
     "src/tint/lang/msl/writer/common/option_helpers.cc",
@@ -762,9 +776,14 @@ if (enable_msl) then
     "src/tint/lang/msl/writer/common/printer_support.cc",
     "src/tint/lang/msl/writer/helpers/generate_bindings.cc",
     "src/tint/lang/msl/writer/printer/printer.cc",
+    "src/tint/lang/msl/writer/raise/binary_polyfill.cc",
     "src/tint/lang/msl/writer/raise/builtin_polyfill_rtc_shim2.cc",
     "src/tint/lang/msl/writer/raise/module_scope_vars.cc",
+    "src/tint/lang/msl/writer/raise/packed_vec3.cc",
     "src/tint/lang/msl/writer/raise/raise_rtc_shim2.cc",
+    "src/tint/lang/msl/writer/raise/shader_io.cc",
+    "src/tint/lang/msl/writer/raise/simd_ballot.cc",
+    "src/tint/lang/msl/writer/raise/unary_polyfill.cc",
     "src/tint/lang/msl/writer/common/output_rtc_shim3.cc",
     "src/tint/lang/msl/writer/writer_rtc_shim5.cc",
   }
@@ -942,6 +961,7 @@ if (enable_metal) then
     "src/dawn/native/metal/CommandRecordingContext.mm",
     "src/dawn/native/metal/ComputePipelineMTL.mm",
     "src/dawn/native/metal/DeviceMTL.mm",
+    "src/dawn/native/metal/MultiDrawEncoder.mm",
     "src/dawn/native/metal/PhysicalDeviceMTL.mm",
     "src/dawn/native/metal/PipelineLayoutMTL.mm",
     "src/dawn/native/metal/QueueMTL.mm",
