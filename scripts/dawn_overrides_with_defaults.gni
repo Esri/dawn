@@ -48,10 +48,6 @@ if (!defined(dawn_root)) {
 }
 dawn_gen_root = get_path_info("${dawn_root}", "gen_dir")
 
-if (!defined(dawn_jinja2_dir)) {
-  dawn_jinja2_dir = "//third_party/jinja2"
-}
-
 if (!defined(dawn_glfw_dir)) {
   dawn_glfw_dir = "//third_party/glfw"
 }

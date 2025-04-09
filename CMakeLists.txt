@@ -291,7 +291,6 @@ set_if_not_defined(DAWN_THIRD_PARTY_DIR "${Dawn_SOURCE_DIR}/third_party" "Direct
 
 set_if_not_defined(DAWN_ABSEIL_DIR "${DAWN_THIRD_PARTY_DIR}/abseil-cpp" "Directory in which to find Abseil")
 set_if_not_defined(DAWN_GLFW_DIR "${DAWN_THIRD_PARTY_DIR}/glfw" "Directory in which to find GLFW")
-set_if_not_defined(DAWN_JINJA2_DIR "${DAWN_THIRD_PARTY_DIR}/jinja2" "Directory in which to find Jinja2")
 set_if_not_defined(DAWN_MARKUPSAFE_DIR "${DAWN_THIRD_PARTY_DIR}/markupsafe" "Directory in which to find MarkupSafe")
 set_if_not_defined(DAWN_KHRONOS_DIR "${DAWN_THIRD_PARTY_DIR}/khronos" "Directory in which to find Khronos GL headers")
 set_if_not_defined(DAWN_SWIFTSHADER_DIR "${DAWN_THIRD_PARTY_DIR}/swiftshader" "Directory in which to find swiftshader")
@@ -308,7 +307,6 @@ set_if_not_defined(DAWN_VULKAN_UTILITY_LIBRARIES_DIR "${DAWN_THIRD_PARTY_DIR}/vu
 
 message(STATUS "Dawn third_party dir: ${DAWN_THIRD_PARTY_DIR}")
 message(STATUS "Dawn GLFW dir: ${DAWN_GLFW_DIR}")
-message(STATUS "Dawn Jinja2 dir: ${DAWN_JINJA2_DIR}")
 message(STATUS "Dawn MarkupSafe dir: ${DAWN_MARKUPSAFE_DIR}")
 message(STATUS "Dawn Khronos dir: ${DAWN_KHRONOS_DIR}")
 message(STATUS "Dawn Swiftshader dir: ${DAWN_SWIFTSHADER_DIR}")
