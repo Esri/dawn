@@ -45,13 +45,13 @@ namespace {
 
 void BuiltinValueParser(::benchmark::State& state) {
     const char* kStrings[] = {
-        "_ccpoint_siz",
-        "_3poi_ile",
-        "__poiVt_size",
-        "__point_size",
-        "1_point_size",
-        "__pointJsqze",
-        "__lloint_siz77",
+        "clip_distacecc",
+        "c_disla3ces",
+        "cliV_distances",
+        "clip_distances",
+        "clip1distances",
+        "cqqiJ_distanes",
+        "clip_dllstance77",
         "frqqgppepHHh",
         "fv_dcpt",
         "frabGdeth",

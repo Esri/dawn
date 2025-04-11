@@ -39,7 +39,9 @@
 #include "src/tint/utils/math/hash.h"
 #include "src/tint/utils/math/math.h"
 #include "src/tint/utils/memory/aligned_storage.h"
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/rtti/traits.h"
+
+TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 
 namespace tint {
 
@@ -466,7 +468,7 @@ class HashmapBase {
         count_ = other.count_;
     }
 
-    /// Moves the the hashmap @p other into this empty hashmap.
+    /// Moves the hashmap @p other into this empty hashmap.
     /// @note This hashmap must be empty before calling
     /// @param other the hashmap to move
     void Move(HashmapBase&& other) {
@@ -651,7 +653,7 @@ class HashmapBase {
             constexpr size_t kAllocationSize = RoundUp(alignof(Node), sizeof(Allocation));
             auto* memory =
                 reinterpret_cast<std::byte*>(malloc(kAllocationSize + sizeof(Node) * count));
-            if (TINT_UNLIKELY(!memory)) {
+            if (DAWN_UNLIKELY(!memory)) {
                 TINT_ICE() << "out of memory";
                 return;
             }
@@ -680,5 +682,7 @@ class HashmapBase {
 };
 
 }  // namespace tint
+
+TINT_END_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 
 #endif  // SRC_TINT_UTILS_CONTAINERS_HASHMAP_BASE_H_

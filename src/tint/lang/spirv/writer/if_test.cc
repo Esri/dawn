@@ -33,6 +33,8 @@ namespace tint::spirv::writer {
 namespace {
 
 TEST_F(SpirvWriterTest, If_TrueEmpty_FalseEmpty) {
+    // Spirv 1.6 requires that 'OpBranchConditional' have different labels for the true/false target
+    // blocks.
     auto* func = b.Function("foo", ty.void_());
     b.Append(func->Block(), [&] {
         auto* i = b.If(true);
@@ -48,7 +50,9 @@ TEST_F(SpirvWriterTest, If_TrueEmpty_FalseEmpty) {
     ASSERT_TRUE(Generate()) << Error() << output_;
     EXPECT_INST(R"(
                OpSelectionMerge %5 None
-               OpBranchConditional %true %5 %5
+               OpBranchConditional %true %6 %5
+          %6 = OpLabel
+               OpBranch %5
           %5 = OpLabel
                OpReturn
                OpFunctionEnd
@@ -125,7 +129,9 @@ TEST_F(SpirvWriterTest, If_BothBranchesReturn) {
     ASSERT_TRUE(Generate()) << Error() << output_;
     EXPECT_INST(R"(
                OpSelectionMerge %5 None
-               OpBranchConditional %true %5 %5
+               OpBranchConditional %true %6 %5
+          %6 = OpLabel
+               OpBranch %5
           %5 = OpLabel
                OpReturn
                OpFunctionEnd
@@ -136,7 +142,7 @@ TEST_F(SpirvWriterTest, If_Phi_SingleValue) {
     auto* func = b.Function("foo", ty.i32());
     b.Append(func->Block(), [&] {
         auto* i = b.If(true);
-        i->SetResults(b.InstructionResult(ty.i32()));
+        i->SetResult(b.InstructionResult(ty.i32()));
         b.Append(i->True(), [&] {  //
             b.ExitIf(i, 10_i);
         });
@@ -165,7 +171,7 @@ TEST_F(SpirvWriterTest, If_Phi_SingleValue_TrueReturn) {
     auto* func = b.Function("foo", ty.i32());
     b.Append(func->Block(), [&] {
         auto* i = b.If(true);
-        i->SetResults(b.InstructionResult(ty.i32()));
+        i->SetResult(b.InstructionResult(ty.i32()));
         b.Append(i->True(), [&] {  //
             b.Return(func, 42_i);
         });
@@ -181,21 +187,21 @@ TEST_F(SpirvWriterTest, If_Phi_SingleValue_TrueReturn) {
                OpSelectionMerge %12 None
                OpBranchConditional %true %13 %14
          %13 = OpLabel
-               OpStore %continue_execution %false
-               OpStore %return_value %int_42
+               OpStore %continue_execution %false None
+               OpStore %return_value %int_42 None
                OpBranch %12
          %14 = OpLabel
                OpBranch %12
          %12 = OpLabel
          %17 = OpPhi %int %18 %13 %int_20 %14
-         %20 = OpLoad %bool %continue_execution
+         %20 = OpLoad %bool %continue_execution None
                OpSelectionMerge %21 None
                OpBranchConditional %20 %22 %21
          %22 = OpLabel
-               OpStore %return_value %17
+               OpStore %return_value %17 None
                OpBranch %21
          %21 = OpLabel
-         %23 = OpLoad %int %return_value
+         %23 = OpLoad %int %return_value None
                OpReturnValue %23
                OpFunctionEnd
 )");
@@ -205,7 +211,7 @@ TEST_F(SpirvWriterTest, If_Phi_SingleValue_FalseReturn) {
     auto* func = b.Function("foo", ty.i32());
     b.Append(func->Block(), [&] {
         auto* i = b.If(true);
-        i->SetResults(b.InstructionResult(ty.i32()));
+        i->SetResult(b.InstructionResult(ty.i32()));
         b.Append(i->True(), [&] {  //
             b.ExitIf(i, 10_i);
         });
@@ -223,19 +229,19 @@ TEST_F(SpirvWriterTest, If_Phi_SingleValue_FalseReturn) {
          %13 = OpLabel
                OpBranch %12
          %14 = OpLabel
-               OpStore %continue_execution %false
-               OpStore %return_value %int_42
+               OpStore %continue_execution %false None
+               OpStore %return_value %int_42 None
                OpBranch %12
          %12 = OpLabel
          %17 = OpPhi %int %int_10 %13 %19 %14
-         %20 = OpLoad %bool %continue_execution
+         %20 = OpLoad %bool %continue_execution None
                OpSelectionMerge %21 None
                OpBranchConditional %20 %22 %21
          %22 = OpLabel
-               OpStore %return_value %17
+               OpStore %return_value %17 None
                OpBranch %21
          %21 = OpLabel
-         %23 = OpLoad %int %return_value
+         %23 = OpLoad %int %return_value None
                OpReturnValue %23
                OpFunctionEnd
 )");
@@ -245,7 +251,7 @@ TEST_F(SpirvWriterTest, If_Phi_SingleValue_ImplicitFalse) {
     auto* func = b.Function("foo", ty.i32());
     b.Append(func->Block(), [&] {
         auto* i = b.If(true);
-        i->SetResults(b.InstructionResult(ty.i32()));
+        i->SetResult(b.InstructionResult(ty.i32()));
         b.Append(i->True(), [&] {  //
             b.ExitIf(i, 10_i);
         });
@@ -333,17 +339,17 @@ TEST_F(SpirvWriterTest, If_Phi_Nested) {
     auto* func = b.Function("foo", ty.i32());
     b.Append(func->Block(), [&] {
         auto* outer = b.If(true);
-        outer->SetResults(b.InstructionResult(ty.i32()));
+        outer->SetResult(b.InstructionResult(ty.i32()));
         b.Append(outer->True(), [&] {  //
             auto* inner = b.If(true);
-            inner->SetResults(b.InstructionResult(ty.i32()));
+            inner->SetResult(b.InstructionResult(ty.i32()));
             b.Append(inner->True(), [&] {  //
                 b.ExitIf(inner, 10_i);
             });
             b.Append(inner->False(), [&] {  //
                 b.ExitIf(inner, 20_i);
             });
-            b.ExitIf(outer, inner->Result(0));
+            b.ExitIf(outer, inner->Result());
         });
         b.Append(outer->False(), [&] {  //
             b.ExitIf(outer, 30_i);

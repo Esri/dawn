@@ -62,6 +62,7 @@
 #include "src/tint/lang/wgsl/ast/must_use_attribute.h"
 #include "src/tint/lang/wgsl/ast/override.h"
 #include "src/tint/lang/wgsl/ast/return_statement.h"
+#include "src/tint/lang/wgsl/ast/row_major_attribute.h"
 #include "src/tint/lang/wgsl/ast/stage_attribute.h"
 #include "src/tint/lang/wgsl/ast/stride_attribute.h"
 #include "src/tint/lang/wgsl/ast/struct.h"
@@ -376,16 +377,11 @@ class DependencyScanner {
         Switch(
             attr,  //
             [&](const ast::BindingAttribute* binding) { TraverseExpression(binding->expr); },
-            [&](const ast::BuiltinAttribute* builtin) { TraverseExpression(builtin->builtin); },
             [&](const ast::ColorAttribute* color) { TraverseExpression(color->expr); },
             [&](const ast::GroupAttribute* group) { TraverseExpression(group->expr); },
             [&](const ast::IdAttribute* id) { TraverseExpression(id->expr); },
             [&](const ast::InputAttachmentIndexAttribute* idx) { TraverseExpression(idx->expr); },
             [&](const ast::BlendSrcAttribute* index) { TraverseExpression(index->expr); },
-            [&](const ast::InterpolateAttribute* interpolate) {
-                TraverseExpression(interpolate->type);
-                TraverseExpression(interpolate->sampling);
-            },
             [&](const ast::LocationAttribute* loc) { TraverseExpression(loc->expr); },
             [&](const ast::StructMemberAlignAttribute* align) { TraverseExpression(align->expr); },
             [&](const ast::StructMemberSizeAttribute* size) { TraverseExpression(size->expr); },
@@ -402,7 +398,8 @@ class DependencyScanner {
             [&](Default) {
                 if (!attr->IsAnyOf<ast::BuiltinAttribute, ast::DiagnosticAttribute,
                                    ast::InterpolateAttribute, ast::InvariantAttribute,
-                                   ast::MustUseAttribute, ast::StageAttribute, ast::StrideAttribute,
+                                   ast::MustUseAttribute, ast::RowMajorAttribute,
+                                   ast::StageAttribute, ast::StrideAttribute,
                                    ast::StructMemberOffsetAttribute>()) {
                     TINT_ICE() << "unhandled attribute type: " << attr->TypeInfo().name;
                 }
@@ -417,18 +414,12 @@ class DependencyScanner {
         kFunction,
         /// Builtin
         kBuiltin,
-        /// Builtin value
-        kBuiltinValue,
         /// Address space
         kAddressSpace,
         /// Texel format
         kTexelFormat,
         /// Access
         kAccess,
-        /// Interpolation Type
-        kInterpolationType,
-        /// Interpolation Sampling
-        kInterpolationSampling,
     };
 
     /// BuiltinInfo stores information about the builtin that a symbol represents.
@@ -443,12 +434,9 @@ class DependencyScanner {
         std::variant<std::monostate,
                      wgsl::BuiltinFn,
                      core::BuiltinType,
-                     core::BuiltinValue,
                      core::AddressSpace,
                      core::TexelFormat,
-                     core::Access,
-                     core::InterpolationType,
-                     core::InterpolationSampling>
+                     core::Access>
             value = {};
     };
 
@@ -465,10 +453,6 @@ class DependencyScanner {
                 builtin_ty != core::BuiltinType::kUndefined) {
                 return BuiltinInfo{BuiltinType::kBuiltin, builtin_ty};
             }
-            if (auto builtin_val = core::ParseBuiltinValue(symbol.NameView());
-                builtin_val != core::BuiltinValue::kUndefined) {
-                return BuiltinInfo{BuiltinType::kBuiltinValue, builtin_val};
-            }
             if (auto addr = core::ParseAddressSpace(symbol.NameView());
                 addr != core::AddressSpace::kUndefined) {
                 return BuiltinInfo{BuiltinType::kAddressSpace, addr};
@@ -480,14 +464,6 @@ class DependencyScanner {
             if (auto access = core::ParseAccess(symbol.NameView());
                 access != core::Access::kUndefined) {
                 return BuiltinInfo{BuiltinType::kAccess, access};
-            }
-            if (auto i_type = core::ParseInterpolationType(symbol.NameView());
-                i_type != core::InterpolationType::kUndefined) {
-                return BuiltinInfo{BuiltinType::kInterpolationType, i_type};
-            }
-            if (auto i_smpl = core::ParseInterpolationSampling(symbol.NameView());
-                i_smpl != core::InterpolationSampling::kUndefined) {
-                return BuiltinInfo{BuiltinType::kInterpolationSampling, i_smpl};
             }
             return BuiltinInfo{};
         });
@@ -511,10 +487,6 @@ class DependencyScanner {
                     graph_.resolved_identifiers.Add(
                         from, ResolvedIdentifier(builtin_info.Value<core::BuiltinType>()));
                     break;
-                case BuiltinType::kBuiltinValue:
-                    graph_.resolved_identifiers.Add(
-                        from, ResolvedIdentifier(builtin_info.Value<core::BuiltinValue>()));
-                    break;
                 case BuiltinType::kAddressSpace:
                     graph_.resolved_identifiers.Add(
                         from, ResolvedIdentifier(builtin_info.Value<core::AddressSpace>()));
@@ -526,15 +498,6 @@ class DependencyScanner {
                 case BuiltinType::kAccess:
                     graph_.resolved_identifiers.Add(
                         from, ResolvedIdentifier(builtin_info.Value<core::Access>()));
-                    break;
-                case BuiltinType::kInterpolationType:
-                    graph_.resolved_identifiers.Add(
-                        from, ResolvedIdentifier(builtin_info.Value<core::InterpolationType>()));
-                    break;
-                case BuiltinType::kInterpolationSampling:
-                    graph_.resolved_identifiers.Add(
-                        from,
-                        ResolvedIdentifier(builtin_info.Value<core::InterpolationSampling>()));
                     break;
             }
             return;
@@ -745,7 +708,7 @@ struct DependencyAnalysis {
 
             sorted_.Add(global->node);
 
-            if (TINT_UNLIKELY(!stack.IsEmpty())) {
+            if (DAWN_UNLIKELY(!stack.IsEmpty())) {
                 // Each stack.push() must have a corresponding stack.pop_back().
                 TINT_ICE() << "stack not empty after returning from TraverseDependencies()";
             }
@@ -757,7 +720,7 @@ struct DependencyAnalysis {
     /// @note will raise an ICE if the edge is not found.
     DependencyInfo DepInfoFor(const Global* from, const Global* to) const {
         auto info = dependency_edges_.Get(DependencyEdge{from, to});
-        if (TINT_LIKELY(info)) {
+        if (DAWN_LIKELY(info)) {
             return *info;
         }
         TINT_ICE() << "failed to find dependency info for edge: '" << NameOf(from->node) << "' -> '"
@@ -885,20 +848,11 @@ std::string ResolvedIdentifier::String() const {
     if (auto builtin_ty = BuiltinType(); builtin_ty != core::BuiltinType::kUndefined) {
         return "builtin type '" + tint::ToString(builtin_ty) + "'";
     }
-    if (auto builtin_val = BuiltinValue(); builtin_val != core::BuiltinValue::kUndefined) {
-        return "builtin value '" + tint::ToString(builtin_val) + "'";
-    }
     if (auto access = Access(); access != core::Access::kUndefined) {
         return "access '" + tint::ToString(access) + "'";
     }
     if (auto addr = AddressSpace(); addr != core::AddressSpace::kUndefined) {
         return "address space '" + tint::ToString(addr) + "'";
-    }
-    if (auto type = InterpolationType(); type != core::InterpolationType::kUndefined) {
-        return "interpolation type '" + tint::ToString(type) + "'";
-    }
-    if (auto smpl = InterpolationSampling(); smpl != core::InterpolationSampling::kUndefined) {
-        return "interpolation sampling '" + tint::ToString(smpl) + "'";
     }
     if (auto fmt = TexelFormat(); fmt != core::TexelFormat::kUndefined) {
         return "texel format '" + tint::ToString(fmt) + "'";

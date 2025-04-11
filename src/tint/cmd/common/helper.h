@@ -132,6 +132,73 @@ std::string InterpolationTypeToString(tint::inspector::InterpolationType type);
 /// @return the text name
 std::string OverrideTypeToString(tint::inspector::Override::Type type);
 
+/// Returns true if the given `name` is either empty or `-` which signifies `stdout` is selected.
+bool IsStdout(const std::string& name);
+
+/// Writes the given `buffer` to standard output. If any error occurs, returns false and outputs
+/// error message to standard error. The ContainerT type must have data() and size() methods, like
+/// `std::string` and `std::vector` do.
+/// @returns true on success
+/// @private
+template <typename ContainerT>
+bool WriteStdoutImpl(const ContainerT& buffer) {
+    size_t written =
+        fwrite(buffer.data(), sizeof(typename ContainerT::value_type), buffer.size(), stdout);
+    if (buffer.size() != written) {
+        std::cerr << "Could not write all output to standard output\n";
+        return false;
+    }
+    fflush(stdout);
+    return true;
+}
+
+/// Writes the given `buffer` into the file named as `output_file` using the given `mode`. If any
+/// error occurs, returns false and outputs error message to standard error. The ContainerT type
+/// must have data() and size() methods, like `std::string` and `std::vector` do.
+/// @returns true on success
+/// @private
+template <typename ContainerT>
+bool WriteFileImpl(const std::string& output_file,
+                   const std::string mode,
+                   const ContainerT& buffer) {
+    FILE* file = nullptr;
+
+#if defined(_MSC_VER)
+    fopen_s(&file, output_file.c_str(), mode.c_str());
+#else
+    file = fopen(output_file.c_str(), mode.c_str());
+#endif
+    if (!file) {
+        std::cerr << "Could not open file " << output_file << " for writing\n";
+        return false;
+    }
+
+    size_t written =
+        fwrite(buffer.data(), sizeof(typename ContainerT::value_type), buffer.size(), file);
+    if (buffer.size() != written) {
+        std::cerr << "Could not write to file " << output_file << "\n";
+        fclose(file);
+        return false;
+    }
+    fclose(file);
+
+    return true;
+}
+
+/// Writes the given `buffer` into the file named as `output_file` using the
+/// given `mode`.  If `output_file` is empty or "-", writes to standard
+/// output. If any error occurs, returns false and outputs error message to
+/// standard error. The ContainerT type must have data() and size() methods,
+/// like `std::string` and `std::vector` do.
+/// @returns true on success
+template <typename ContainerT>
+bool WriteFile(const std::string& output_file, const std::string mode, const ContainerT& buffer) {
+    if (IsStdout(output_file)) {
+        return WriteStdoutImpl(buffer);
+    }
+    return WriteFileImpl(output_file, mode, buffer);
+}
+
 /// Copies the content from the file named `input_file` to `buffer`,
 /// assuming each element in the file is of type `T`.  If any error occurs,
 /// writes error messages to the standard error stream and returns false.
@@ -140,7 +207,7 @@ std::string OverrideTypeToString(tint::inspector::Override::Type type);
 template <typename T>
 bool ReadFile(const std::string& input_file, std::vector<T>* buffer) {
     if (!buffer) {
-        std::cerr << "The buffer pointer was null" << std::endl;
+        std::cerr << "The buffer pointer was null\n";
         return false;
     }
 
@@ -151,7 +218,7 @@ bool ReadFile(const std::string& input_file, std::vector<T>* buffer) {
     file = fopen(input_file.c_str(), "rb");
 #endif
     if (!file) {
-        std::cerr << "Failed to open " << input_file << std::endl;
+        std::cerr << "Failed to open " << input_file << "\n";
         return false;
     }
 
@@ -160,8 +227,7 @@ bool ReadFile(const std::string& input_file, std::vector<T>* buffer) {
     if (0 != (file_size % sizeof(T))) {
         std::cerr << "File " << input_file
                   << " does not contain an integral number of objects: " << file_size
-                  << " bytes in the file, require " << sizeof(T) << " bytes per object"
-                  << std::endl;
+                  << " bytes in the file, require " << sizeof(T) << " bytes per object\n";
         fclose(file);
         return false;
     }
@@ -173,7 +239,7 @@ bool ReadFile(const std::string& input_file, std::vector<T>* buffer) {
     size_t bytes_read = fread(buffer->data(), 1, file_size, file);
     fclose(file);
     if (bytes_read != file_size) {
-        std::cerr << "Failed to read " << input_file << std::endl;
+        std::cerr << "Failed to read " << input_file << "\n";
         return false;
     }
 

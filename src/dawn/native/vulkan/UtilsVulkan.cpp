@@ -87,6 +87,18 @@ VkCompareOp ToVulkanCompareOp(wgpu::CompareFunction op) {
     DAWN_UNREACHABLE();
 }
 
+VkFilter ToVulkanSamplerFilter(wgpu::FilterMode filter) {
+    switch (filter) {
+        case wgpu::FilterMode::Linear:
+            return VK_FILTER_LINEAR;
+        case wgpu::FilterMode::Nearest:
+            return VK_FILTER_NEAREST;
+        case wgpu::FilterMode::Undefined:
+            break;
+    }
+    DAWN_UNREACHABLE();
+}
+
 // Convert Dawn texture aspects to  Vulkan texture aspect flags
 VkImageAspectFlags VulkanAspectMask(const Aspect& aspects) {
     VkImageAspectFlags flags = 0;
@@ -150,14 +162,14 @@ Extent3D ComputeTextureCopyExtent(const TextureCopy& textureCopy, const Extent3D
 VkBufferImageCopy ComputeBufferImageCopyRegion(const BufferCopy& bufferCopy,
                                                const TextureCopy& textureCopy,
                                                const Extent3D& copySize) {
-    TextureDataLayout passDataLayout;
+    TexelCopyBufferLayout passDataLayout;
     passDataLayout.offset = bufferCopy.offset;
     passDataLayout.rowsPerImage = bufferCopy.rowsPerImage;
     passDataLayout.bytesPerRow = bufferCopy.bytesPerRow;
     return ComputeBufferImageCopyRegion(passDataLayout, textureCopy, copySize);
 }
 
-VkBufferImageCopy ComputeBufferImageCopyRegion(const TextureDataLayout& dataLayout,
+VkBufferImageCopy ComputeBufferImageCopyRegion(const TexelCopyBufferLayout& dataLayout,
                                                const TextureCopy& textureCopy,
                                                const Extent3D& copySize) {
     const Texture* texture = ToBackend(textureCopy.texture.Get());
@@ -227,7 +239,11 @@ void SetDebugNameInternal(Device* device,
                           VkObjectType objectType,
                           uint64_t objectHandle,
                           const char* prefix,
-                          std::string label) {
+                          std::string_view label) {
+    if (!device->IsToggleEnabled(Toggle::UseUserDefinedLabelsInBackend)) {
+        return;
+    }
+
     if (!objectHandle || !device->GetVkDevice()) {
         return;
     }
@@ -243,15 +259,10 @@ void SetDebugNameInternal(Device* device,
         // Prefix with the device's message ID so that if this label appears in a validation
         // message it can be parsed out and the message can be associated with the right device.
         objectNameStream << device->GetDebugPrefix() << kDeviceDebugSeparator << prefix;
-
-        // NOTE: Whereas other platforms set backend labels *only* if the
-        // `UseUserDefinedLabelsInBackend` toggle is enabled, on Vulkan these
-        // labels must always be set as they currently provide the only way to
-        // map Vulkan errors that include backend objects back to the device
-        // with which the backend objects are associated.
-        if (!label.empty() && device->IsToggleEnabled(Toggle::UseUserDefinedLabelsInBackend)) {
+        if (!label.empty()) {
             objectNameStream << "_" << label;
         }
+
         std::string objectName = objectNameStream.str();
         objectNameInfo.pObjectName = objectName.c_str();
         device->fn.SetDebugUtilsObjectNameEXT(device->GetVkDevice(), &objectNameInfo);
@@ -354,7 +365,7 @@ ResultOrError<VkSamplerYcbcrConversion> CreateSamplerYCbCrConversionCreateInfo(
         static_cast<VkChromaLocation>(yCbCrDescriptor.vkXChromaOffset);
     vulkanYCbCrCreateInfo.yChromaOffset =
         static_cast<VkChromaLocation>(yCbCrDescriptor.vkYChromaOffset);
-    vulkanYCbCrCreateInfo.chromaFilter = static_cast<VkFilter>(yCbCrDescriptor.vkChromaFilter);
+    vulkanYCbCrCreateInfo.chromaFilter = ToVulkanSamplerFilter(yCbCrDescriptor.vkChromaFilter);
     vulkanYCbCrCreateInfo.forceExplicitReconstruction =
         static_cast<VkBool32>(yCbCrDescriptor.forceExplicitReconstruction);
 

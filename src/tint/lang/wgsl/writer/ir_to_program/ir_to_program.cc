@@ -58,6 +58,8 @@
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/multi_in_block.h"
 #include "src/tint/lang/core/ir/next_iteration.h"
+#include "src/tint/lang/core/ir/override.h"
+#include "src/tint/lang/core/ir/phony.h"
 #include "src/tint/lang/core/ir/return.h"
 #include "src/tint/lang/core/ir/store.h"
 #include "src/tint/lang/core/ir/store_vector_element.h"
@@ -72,6 +74,7 @@
 #include "src/tint/lang/core/type/atomic.h"
 #include "src/tint/lang/core/type/depth_multisampled_texture.h"
 #include "src/tint/lang/core/type/depth_texture.h"
+#include "src/tint/lang/core/type/input_attachment.h"
 #include "src/tint/lang/core/type/multisampled_texture.h"
 #include "src/tint/lang/core/type/pointer.h"
 #include "src/tint/lang/core/type/reference.h"
@@ -83,6 +86,7 @@
 #include "src/tint/lang/wgsl/ir/builtin_call.h"
 #include "src/tint/lang/wgsl/ir/unary.h"
 #include "src/tint/lang/wgsl/program/program_builder.h"
+#include "src/tint/lang/wgsl/reserved_words.h"
 #include "src/tint/lang/wgsl/resolver/resolve.h"
 #include "src/tint/utils/containers/hashmap.h"
 #include "src/tint/utils/containers/predicates.h"
@@ -92,6 +96,8 @@
 #include "src/tint/utils/macros/scoped_assignment.h"
 #include "src/tint/utils/math/math.h"
 #include "src/tint/utils/rtti/switch.h"
+
+TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 
 // Helper for incrementing nesting_depth_ and then decrementing nesting_depth_ at the end
 // of the scope that holds the call.
@@ -109,12 +115,21 @@ class State {
     explicit State(const core::ir::Module& m) : mod(m) {}
 
     Program Run(const ProgramOptions& options) {
-        core::ir::Capabilities caps{core::ir::Capability::kAllowRefTypes};
+        core::ir::Capabilities caps{core::ir::Capability::kAllowRefTypes,
+                                    core::ir::Capability::kAllowOverrides,
+                                    core::ir::Capability::kAllowPhonyInstructions};
         if (auto res = core::ir::Validate(mod, caps); res != Success) {
             // IR module failed validation.
-            b.Diagnostics() = res.Failure().reason;
+            b.Diagnostics().AddError(Source{}) << res.Failure();
             return Program{resolver::Resolve(b)};
         }
+
+        // Clone all symbols before we start.
+        // This ensures that we preserve the names of named values and prevents unnamed values
+        // receiving names that would conflict with named values that are emitted later than them.
+        mod.symbols.Foreach([&](Symbol s) {  //
+            b.Symbols().New(s.Name());
+        });
 
         RootBlock(mod.root_block);
 
@@ -187,8 +202,10 @@ class State {
     void RootBlock(const core::ir::Block* root) {
         for (auto* inst : *root) {
             tint::Switch(
-                inst,                                         //
-                [&](const core::ir::Var* var) { Var(var); },  //
+                inst,                                                               //
+                [&](const core::ir::Var* var) { Var(var); },                        //
+                [&](const core::ir::Override* override_) { Override(override_); },  //
+                [&](const core::ir::Binary* binary) { Binary(binary); },            //
                 TINT_ICE_ON_NO_MATCH);
         }
     }
@@ -240,22 +257,30 @@ class State {
                         attrs.Push(b.Builtin(core::BuiltinValue::kSampleMask));
                         break;
                     case core::BuiltinValue::kSubgroupInvocationId:
-                        Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
+                        Enable(wgsl::Extension::kSubgroups);
                         attrs.Push(b.Builtin(core::BuiltinValue::kSubgroupInvocationId));
                         break;
                     case core::BuiltinValue::kSubgroupSize:
-                        Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
+                        Enable(wgsl::Extension::kSubgroups);
                         attrs.Push(b.Builtin(core::BuiltinValue::kSubgroupSize));
+                        break;
+                    case core::BuiltinValue::kClipDistances:
+                        Enable(wgsl::Extension::kClipDistances);
+                        attrs.Push(b.Builtin(core::BuiltinValue::kClipDistances));
                         break;
                     default:
                         TINT_UNIMPLEMENTED() << builtin.value();
                 }
             }
             if (auto loc = param->Location()) {
-                attrs.Push(b.Location(AInt(loc->value)));
-                if (auto interp = loc->interpolation) {
-                    attrs.Push(b.Interpolate(interp->type, interp->sampling));
-                }
+                attrs.Push(b.Location(u32(loc.value())));
+            }
+            if (auto color = param->Color()) {
+                Enable(wgsl::Extension::kChromiumExperimentalFramebufferFetch);
+                attrs.Push(b.Color(u32(color.value())));
+            }
+            if (auto interp = param->Interpolation()) {
+                attrs.Push(b.Interpolate(interp->type, interp->sampling));
             }
             if (param->Invariant()) {
                 attrs.Push(b.Invariant());
@@ -277,7 +302,7 @@ class State {
             case core::ir::Function::PipelineStage::kCompute: {
                 auto wgsize = fn->WorkgroupSize().value();
                 attrs.Push(b.Stage(ast::PipelineStage::kCompute));
-                attrs.Push(b.WorkgroupSize(AInt(wgsize[0]), AInt(wgsize[1]), AInt(wgsize[2])));
+                attrs.Push(b.WorkgroupSize(Expr(wgsize[0]), Expr(wgsize[1]), Expr(wgsize[2])));
                 break;
             }
             case core::ir::Function::PipelineStage::kFragment:
@@ -305,10 +330,10 @@ class State {
             }
         }
         if (auto loc = fn->ReturnLocation()) {
-            ret_attrs.Push(b.Location(AInt(loc->value)));
-            if (auto interp = loc->interpolation) {
-                ret_attrs.Push(b.Interpolate(interp->type, interp->sampling));
-            }
+            ret_attrs.Push(b.Location(u32(loc.value())));
+        }
+        if (auto interp = fn->ReturnInterpolation()) {
+            ret_attrs.Push(b.Interpolate(interp->type, interp->sampling));
         }
         if (fn->ReturnInvariant()) {
             ret_attrs.Push(b.Invariant());
@@ -353,6 +378,7 @@ class State {
             [&](const core::ir::LoadVectorElement* i) { LoadVectorElement(i); },    //
             [&](const core::ir::Loop* l) { Loop(l); },                              //
             [&](const core::ir::NextIteration*) {},                                 //
+            [&](const core::ir::Phony* i) { Phony(i); },                            //
             [&](const core::ir::Return* i) { Return(i); },                          //
             [&](const core::ir::Store* i) { Store(i); },                            //
             [&](const core::ir::StoreVectorElement* i) { StoreVectorElement(i); },  //
@@ -420,7 +446,7 @@ class State {
         {
             TINT_SCOPED_ASSIGNMENT(statements_, &body_stmts);
             for (auto* inst : *l->Body()) {
-                if (body_stmts.IsEmpty()) {
+                if (body_stmts.IsEmpty() && !cond) {
                     if (auto* if_ = inst->As<core::ir::If>()) {
                         if (if_->Results().IsEmpty() &&                          //
                             if_->True()->Length() == 1 &&                        //
@@ -548,17 +574,21 @@ class State {
     }
 
     void Var(const core::ir::Var* var) {
-        auto* val = var->Result(0);
+        auto* val = var->Result();
         auto* ref = As<core::type::Reference>(val->Type());
         TINT_ASSERT(ref /* converted by PtrToRef */);
         auto ty = Type(ref->StoreType());
-        Symbol name = NameFor(var->Result(0));
-        Bind(var->Result(0), name);
+        Symbol name = NameFor(var->Result());
+        Bind(var->Result(), name);
 
         Vector<const ast::Attribute*, 4> attrs;
         if (auto bp = var->BindingPoint()) {
-            attrs.Push(b.Group(AInt(bp->group)));
-            attrs.Push(b.Binding(AInt(bp->binding)));
+            attrs.Push(b.Group(u32(bp->group)));
+            attrs.Push(b.Binding(u32(bp->binding)));
+        }
+
+        if (auto ii = var->InputAttachmentIndex()) {
+            attrs.Push(b.InputAttachmentIndex(u32(ii.value())));
         }
 
         const ast::Expression* init = nullptr;
@@ -575,22 +605,46 @@ class State {
             case core::AddressSpace::kHandle:
                 b.GlobalVar(name, ty, init, std::move(attrs));
                 return;
+            case core::AddressSpace::kPixelLocal:
+                Enable(wgsl::Extension::kChromiumExperimentalPixelLocal);
+                b.GlobalVar(name, ty, init, ref->AddressSpace(), std::move(attrs));
+                return;
+            case core::AddressSpace::kPushConstant:
+                Enable(wgsl::Extension::kChromiumExperimentalPushConstant);
+                b.GlobalVar(name, ty, init, ref->AddressSpace(), std::move(attrs));
+                return;
             default:
                 b.GlobalVar(name, ty, init, ref->AddressSpace(), std::move(attrs));
                 return;
         }
     }
 
-    void Let(const core::ir::Let* let) {
-        auto* result = let->Result(0);
-        if (mod.NameOf(result).IsValid() || result->NumUsages() > 0) {
-            Symbol name = NameFor(result);
-            Append(b.Decl(b.Let(name, Expr(let->Value()))));
-            Bind(result, name);
-        } else {
-            Append(b.Assign(b.Phony(), Expr(let->Value())));
+    void Override(const core::ir::Override* override_) {
+        auto* val = override_->Result();
+        Symbol name = NameFor(override_->Result());
+        Bind(override_->Result(), name);
+
+        Vector<const ast::Attribute*, 4> attrs;
+        if (override_->OverrideId().has_value()) {
+            attrs.Push(b.Id(override_->OverrideId().value()));
         }
+
+        auto ty = Type(val->Type());
+        const ast::Expression* init = nullptr;
+        if (override_->Initializer()) {
+            init = Expr(override_->Initializer());
+        }
+        b.Override(name, ty, init, attrs);
     }
+
+    void Let(const core::ir::Let* let) {
+        auto* result = let->Result();
+        Symbol name = NameFor(result);
+        Append(b.Decl(b.Let(name, Expr(let->Value()))));
+        Bind(result, name);
+    }
+
+    void Phony(const core::ir::Phony* phony) { Append(b.Assign(b.Phony(), Expr(phony->Value()))); }
 
     void Store(const core::ir::Store* store) {
         auto* dst = Expr(store->To());
@@ -613,11 +667,11 @@ class State {
             call,  //
             [&](const core::ir::UserCall* c) {
                 auto* expr = b.Call(NameFor(c->Target()), std::move(args));
-                if (call->Results().IsEmpty() || !call->Result(0)->IsUsed()) {
+                if (call->Results().IsEmpty() || !call->Result()->IsUsed()) {
                     Append(b.CallStmt(expr));
                     return;
                 }
-                Bind(c->Result(0), expr);
+                Bind(c->Result(), expr);
             },
             [&](const wgsl::ir::BuiltinCall* c) {
                 if (!disabled_derivative_uniformity_ && RequiresDerivativeUniformity(c->Func())) {
@@ -629,41 +683,75 @@ class State {
 
                 switch (c->Func()) {
                     case wgsl::BuiltinFn::kSubgroupBallot:
+                    case wgsl::BuiltinFn::kSubgroupElect:
                     case wgsl::BuiltinFn::kSubgroupBroadcast:
-                        Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
+                    case wgsl::BuiltinFn::kSubgroupBroadcastFirst:
+                    case wgsl::BuiltinFn::kSubgroupShuffle:
+                    case wgsl::BuiltinFn::kSubgroupShuffleXor:
+                    case wgsl::BuiltinFn::kSubgroupShuffleUp:
+                    case wgsl::BuiltinFn::kSubgroupShuffleDown:
+                    case wgsl::BuiltinFn::kSubgroupAdd:
+                    case wgsl::BuiltinFn::kSubgroupInclusiveAdd:
+                    case wgsl::BuiltinFn::kSubgroupExclusiveAdd:
+                    case wgsl::BuiltinFn::kSubgroupMul:
+                    case wgsl::BuiltinFn::kSubgroupInclusiveMul:
+                    case wgsl::BuiltinFn::kSubgroupExclusiveMul:
+                    case wgsl::BuiltinFn::kSubgroupAnd:
+                    case wgsl::BuiltinFn::kSubgroupOr:
+                    case wgsl::BuiltinFn::kSubgroupXor:
+                    case wgsl::BuiltinFn::kSubgroupMin:
+                    case wgsl::BuiltinFn::kSubgroupMax:
+                    case wgsl::BuiltinFn::kSubgroupAny:
+                    case wgsl::BuiltinFn::kSubgroupAll:
+                    case wgsl::BuiltinFn::kQuadBroadcast:
+                    case wgsl::BuiltinFn::kQuadSwapX:
+                    case wgsl::BuiltinFn::kQuadSwapY:
+                    case wgsl::BuiltinFn::kQuadSwapDiagonal:
+                        Enable(wgsl::Extension::kF16);
+                        Enable(wgsl::Extension::kSubgroups);
                         break;
                     default:
                         break;
                 }
 
-                auto* expr = b.Call(c->Func(), std::move(args));
-                if (call->Results().IsEmpty() || !call->Result(0)->IsUsed()) {
+                const ast::CallExpression* expr = nullptr;
+                if (!c->ExplicitTemplateParams().IsEmpty()) {
+                    Vector<const ast::Expression*, 4> tmpl_args;
+                    for (auto* e : c->ExplicitTemplateParams()) {
+                        tmpl_args.Push(Type(e).expr);
+                    }
+                    expr = b.Call(b.Ident(c->Func(), std::move(tmpl_args)), std::move(args));
+                } else {
+                    expr = b.Call(c->Func(), std::move(args));
+                }
+
+                if (call->Results().IsEmpty() || !call->Result()->IsUsed()) {
                     Append(b.CallStmt(expr));
                     return;
                 }
-                Bind(c->Result(0), expr);
+                Bind(c->Result(), expr);
             },
             [&](const core::ir::Construct* c) {
-                auto ty = Type(c->Result(0)->Type());
-                Bind(c->Result(0), b.Call(ty, std::move(args)));
+                auto ty = Type(c->Result()->Type());
+                Bind(c->Result(), b.Call(ty, std::move(args)));
             },
             [&](const core::ir::Convert* c) {
-                auto ty = Type(c->Result(0)->Type());
-                Bind(c->Result(0), b.Call(ty, std::move(args)));
+                auto ty = Type(c->Result()->Type());
+                Bind(c->Result(), b.Call(ty, std::move(args)));
             },
             [&](const core::ir::Bitcast* c) {
-                auto ty = Type(c->Result(0)->Type());
-                Bind(c->Result(0), b.Bitcast(ty, args[0]));
+                auto ty = Type(c->Result()->Type());
+                Bind(c->Result(), b.Bitcast(ty, args[0]));
             },
             [&](const core::ir::Discard*) { Append(b.Discard()); },  //
             TINT_ICE_ON_NO_MATCH);
     }
 
-    void Load(const core::ir::Load* l) { Bind(l->Result(0), Expr(l->From())); }
+    void Load(const core::ir::Load* l) { Bind(l->Result(), Expr(l->From())); }
 
     void LoadVectorElement(const core::ir::LoadVectorElement* l) {
         auto* vec = Expr(l->From());
-        Bind(l->Result(0), VectorMemberAccess(vec, l->Index()));
+        Bind(l->Result(), VectorMemberAccess(vec, l->Index()));
     }
 
     void Unary(const core::ir::Unary* u) {
@@ -675,16 +763,17 @@ class State {
             case core::UnaryOp::kNegation:
                 expr = b.Negation(Expr(u->Val()));
                 break;
+            case core::UnaryOp::kNot:
+                expr = b.Not(Expr(u->Val()));
+                break;
             case core::UnaryOp::kAddressOf:
                 expr = b.AddressOf(Expr(u->Val()));
                 break;
             case core::UnaryOp::kIndirection:
                 expr = b.Deref(Expr(u->Val()));
                 break;
-            default:
-                TINT_UNIMPLEMENTED() << u->Op();
         }
-        Bind(u->Result(0), expr);
+        Bind(u->Result(), expr);
     }
 
     void Access(const core::ir::Access* a) {
@@ -694,7 +783,7 @@ class State {
             tint::Switch(
                 obj_ty,
                 [&](const core::type::Vector* vec) {
-                    TINT_DEFER(obj_ty = vec->type());
+                    TINT_DEFER(obj_ty = vec->Type());
                     expr = VectorMemberAccess(expr, index);
                 },
                 [&](const core::type::Matrix* mat) {
@@ -718,21 +807,21 @@ class State {
                 },  //
                 TINT_ICE_ON_NO_MATCH);
         }
-        Bind(a->Result(0), expr);
+        Bind(a->Result(), expr);
     }
 
     void Swizzle(const core::ir::Swizzle* s) {
         auto* vec = Expr(s->Object());
         Vector<char, 4> components;
         for (uint32_t i : s->Indices()) {
-            if (TINT_UNLIKELY(i >= 4)) {
+            if (DAWN_UNLIKELY(i >= 4)) {
                 TINT_ICE() << "invalid swizzle index: " << i;
             }
             components.Push("xyzw"[i]);
         }
         auto* swizzle =
             b.MemberAccessor(vec, std::string_view(components.begin(), components.Length()));
-        Bind(s->Result(0), swizzle);
+        Bind(s->Result(), swizzle);
     }
 
     void Binary(const core::ir::Binary* e) {
@@ -741,7 +830,7 @@ class State {
             if (rhs && rhs->Type()->Is<core::type::Bool>() &&
                 rhs->Value()->ValueAs<bool>() == false) {
                 // expr == false
-                Bind(e->Result(0), b.Not(Expr(e->LHS())));
+                Bind(e->Result(), b.Not(Expr(e->LHS())));
                 return;
             }
         }
@@ -804,7 +893,7 @@ class State {
                 expr = b.LogicalOr(lhs, rhs);
                 break;
         }
-        Bind(e->Result(0), expr);
+        Bind(e->Result(), expr);
     }
 
     TINT_BEGIN_DISABLE_WARNING(UNREACHABLE_CODE);
@@ -815,7 +904,7 @@ class State {
             [&](const core::ir::Constant* c) { return Constant(c); },
             [&](Default) -> const ast::Expression* {
                 auto lookup = bindings_.Get(value);
-                if (TINT_UNLIKELY(!lookup)) {
+                if (DAWN_UNLIKELY(!lookup)) {
                     TINT_ICE() << "Expr(" << (value ? value->TypeInfo().name : "null")
                                << ") value has no expression";
                 }
@@ -923,18 +1012,18 @@ class State {
             [&](const core::type::F32*) { return b.ty.f32(); },  //
             [&](const core::type::Bool*) { return b.ty.bool_(); },
             [&](const core::type::Matrix* m) {
-                return b.ty.mat(Type(m->type()), m->columns(), m->rows());
+                return b.ty.mat(Type(m->Type()), m->Columns(), m->Rows());
             },
             [&](const core::type::Vector* v) {
-                auto el = Type(v->type());
-                if (v->Packed()) {
-                    TINT_ASSERT(v->Width() == 3u);
-                    return b.ty(core::BuiltinType::kPackedVec3, el);
-                } else {
-                    return b.ty.vec(el, v->Width());
-                }
+                auto el = Type(v->Type());
+                return b.ty.vec(el, v->Width());
             },
             [&](const core::type::Array* a) {
+                if (ContainsBuiltinStruct(a)) {
+                    // The element type is untypeable, so we need to infer it instead.
+                    return ast::Type{b.Expr(b.Ident("array"))};
+                }
+
                 auto el = Type(a->ElemType());
                 Vector<const ast::Attribute*, 1> attrs;
                 if (!a->IsStrideImplicit()) {
@@ -944,34 +1033,34 @@ class State {
                     return b.ty.array(el, std::move(attrs));
                 }
                 auto count = a->ConstantCount();
-                if (TINT_UNLIKELY(!count)) {
+                if (DAWN_UNLIKELY(!count)) {
                     TINT_ICE() << core::type::Array::kErrExpectedConstantCount;
                 }
                 return b.ty.array(el, u32(count.value()), std::move(attrs));
             },
             [&](const core::type::Struct* s) { return Struct(s); },
             [&](const core::type::Atomic* a) { return b.ty.atomic(Type(a->Type())); },
-            [&](const core::type::DepthTexture* t) { return b.ty.depth_texture(t->dim()); },
+            [&](const core::type::DepthTexture* t) { return b.ty.depth_texture(t->Dim()); },
             [&](const core::type::DepthMultisampledTexture* t) {
-                return b.ty.depth_multisampled_texture(t->dim());
+                return b.ty.depth_multisampled_texture(t->Dim());
             },
             [&](const core::type::ExternalTexture*) { return b.ty.external_texture(); },
             [&](const core::type::MultisampledTexture* t) {
-                auto el = Type(t->type());
-                return b.ty.multisampled_texture(t->dim(), el);
+                auto el = Type(t->Type());
+                return b.ty.multisampled_texture(t->Dim(), el);
             },
             [&](const core::type::SampledTexture* t) {
-                auto el = Type(t->type());
-                return b.ty.sampled_texture(t->dim(), el);
+                auto el = Type(t->Type());
+                return b.ty.sampled_texture(t->Dim(), el);
             },
             [&](const core::type::StorageTexture* t) {
                 if (RequiresChromiumInternalGraphite(t)) {
                     Enable(wgsl::Extension::kChromiumInternalGraphite);
                 }
 
-                return b.ty.storage_texture(t->dim(), t->texel_format(), t->access());
+                return b.ty.storage_texture(t->Dim(), t->TexelFormat(), t->Access());
             },
-            [&](const core::type::Sampler* s) { return b.ty.sampler(s->kind()); },
+            [&](const core::type::Sampler* s) { return b.ty.sampler(s->Kind()); },
             [&](const core::type::Pointer* p) {
                 // Note: type::Pointer always has an inferred access, but WGSL only allows an
                 // explicit access in the 'storage' address space.
@@ -984,11 +1073,26 @@ class State {
             },
             [&](const core::type::Reference*) -> ast::Type {
                 TINT_ICE() << "reference types should never appear in the IR";
+            },
+            [&](const core::type::InputAttachment* i) {
+                Enable(wgsl::Extension::kChromiumInternalInputAttachments);
+                auto el = Type(i->Type());
+                return b.ty.input_attachment(el);
+            },  //
+            [&](const core::type::SubgroupMatrix* m) {
+                Enable(wgsl::Extension::kChromiumExperimentalSubgroupMatrix);
+                auto el = Type(m->Type());
+                return b.ty.subgroup_matrix(m->Kind(), el, m->Columns(), m->Rows());
             },  //
             TINT_ICE_ON_NO_MATCH);
     }
 
     ast::Type Struct(const core::type::Struct* s) {
+        // Skip builtin structures.
+        if (ContainsBuiltinStruct(s)) {
+            return ast::Type{};
+        }
+
         auto n = structs_.GetOrAdd(s, [&] {
             auto members = tint::Transform<8>(s->Members(), [&](const core::type::StructMember* m) {
                 auto ty = Type(m->Type());
@@ -1004,12 +1108,18 @@ class State {
                     ast_attrs.Push(b.Location(u32(*location)));
                 }
                 if (auto blend_src = ir_attrs.blend_src) {
-                    Enable(wgsl::Extension::kChromiumInternalDualSourceBlending);
+                    Enable(wgsl::Extension::kDualSourceBlending);
                     ast_attrs.Push(b.BlendSrc(u32(*blend_src)));
+                }
+                if (auto color = ir_attrs.color) {
+                    Enable(wgsl::Extension::kChromiumExperimentalFramebufferFetch);
+                    ast_attrs.Push(b.Color(u32(*color)));
                 }
                 if (auto builtin = ir_attrs.builtin) {
                     if (RequiresSubgroups(*builtin)) {
-                        Enable(wgsl::Extension::kChromiumExperimentalSubgroups);
+                        Enable(wgsl::Extension::kSubgroups);
+                    } else if (*builtin == core::BuiltinValue::kClipDistances) {
+                        Enable(wgsl::Extension::kClipDistances);
                     }
                     ast_attrs.Push(b.Builtin(*builtin));
                 }
@@ -1033,19 +1143,80 @@ class State {
         return b.ty(n);
     }
 
+    bool ContainsBuiltinStruct(const core::type::Type* ty) {
+        if (auto* s = ty->As<core::type::Struct>()) {
+            // Note: We don't need to check the members of the struct, as builtin structures cannot
+            // be nested inside other structures.
+            if (s->IsWgslInternal()) {
+                return true;
+            }
+        } else if (auto* a = ty->As<core::type::Array>()) {
+            return ContainsBuiltinStruct(a->ElemType());
+        }
+        return false;
+    }
+
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // Bindings
     ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    bool IsKeyword(std::string_view s) {
+        return s == "alias" || s == "break" || s == "case" || s == "const" || s == "const_assert" ||
+               s == "continue" || s == "continuing" || s == "default" || s == "diagnostic" ||
+               s == "discard" || s == "else" || s == "enable" || s == "false" || s == "fn" ||
+               s == "for" || s == "if" || s == "let" || s == "loop" || s == "override" ||
+               s == "requires" || s == "return" || s == "struct" || s == "switch" || s == "true" ||
+               s == "var" || s == "while";
+    }
+
+    bool IsEnumName(std::string_view s) {
+        return s == "read" || s == "write" || s == "read_write" || s == "function" ||
+               s == "private" || s == "workgroup" || s == "uniform" || s == "storage" ||
+               s == "rgba8unorm" || s == "rgba8snorm" || s == "rgba8uint" || s == "rgba8sint" ||
+               s == "rgba16uint" || s == "rgba16sint" || s == "rgba16float" || s == "r32uint" ||
+               s == "r32sint" || s == "r32float" || s == "rg32uint" || s == "rg32sint" ||
+               s == "rg32float" || s == "rgba32uint" || s == "rgba32sint" || s == "rgba32float" ||
+               s == "bgra8unorm";
+    }
+
+    bool IsTypeName(std::string_view s) {
+        return s == "bool" || s == "void" || s == "i32" || s == "u32" || s == "f32" || s == "f16" ||
+               s == "vec" || s == "vec2" || s == "vec3" || s == "vec4" || s == "vec2f" ||
+               s == "vec3f" || s == "vec4f" || s == "vec2h" || s == "vec3h" || s == "vec4h" ||
+               s == "vec2i" || s == "vec3i" || s == "vec4i" || s == "vec2u" || s == "vec3u" ||
+               s == "vec4u" || s == "mat2x2" || s == "mat2x3" || s == "mat2x4" || s == "mat3x2" ||
+               s == "mat3x3" || s == "mat3x4" || s == "mat4x2" || s == "mat4x3" || s == "mat4x4" ||
+               s == "mat2x2f" || s == "mat2x3f" || s == "mat2x4f" || s == "mat3x2f" ||
+               s == "mat3x3f" || s == "mat3x4f" || s == "mat4x2f" || s == "mat4x3f" ||
+               s == "mat4x4f" || s == "mat2x2h" || s == "mat2x3h" || s == "mat2x4h" ||
+               s == "mat3x2h" || s == "mat3x3h" || s == "mat3x4h" || s == "mat4x2h" ||
+               s == "mat4x3h" || s == "mat4x4h" || s == "atomic" || s == "array" || s == "ptr" ||
+               s == "texture_1d" || s == "texture_2d" || s == "texture_2d_array" ||
+               s == "texture_3d" || s == "texture_cube" || s == "texture_cube_array" ||
+               s == "texture_multisampled_2d" || s == "texture_depth_multisampled_2d" ||
+               s == "texture_external" || s == "texture_storage_1d" || s == "texture_storage_2d" ||
+               s == "texture_storage_2d_array" || s == "texture_storage_3d" ||
+               s == "texture_depth_2d" || s == "texture_depth_2d_array" ||
+               s == "texture_depth_cube" || s == "texture_depth_cube_array" || s == "sampler" ||
+               s == "sampler_comparison";
+    }
+
+    bool IsWGSLSafe(std::string_view name) {
+        return !IsReserved(name) && !IsKeyword(name) && !IsEnumName(name) && !IsTypeName(name);
+    }
 
     /// @returns the AST name for the given value, creating and returning a new name on the first
     /// call.
     Symbol NameFor(const core::ir::Value* value, std::string_view suggested = {}) {
         return names_.GetOrAdd(value, [&] {
             if (!suggested.empty()) {
-                return b.Symbols().Register(suggested);
-            }
-            if (auto sym = mod.NameOf(value)) {
-                return b.Symbols().Register(sym.NameView());
+                if (IsWGSLSafe(suggested)) {
+                    return b.Symbols().Register(suggested);
+                }
+            } else if (auto sym = mod.NameOf(value)) {
+                if (IsWGSLSafe(sym.NameView())) {
+                    return b.Symbols().Register(sym.NameView());
+                }
             }
             return b.Symbols().New("v");
         });
@@ -1057,7 +1228,7 @@ class State {
         TINT_ASSERT(value);
         if (value->IsUsed()) {
             // Value will be inlined at its place of usage.
-            if (TINT_UNLIKELY(!bindings_.Add(value, InlinedValue{expr}))) {
+            if (DAWN_UNLIKELY(!bindings_.Add(value, InlinedValue{expr}))) {
                 TINT_ICE() << "Bind(" << value->TypeInfo().name << ") called twice for same value";
             }
         } else {
@@ -1069,9 +1240,7 @@ class State {
     /// name.
     void Bind(const core::ir::Value* value, Symbol name) {
         TINT_ASSERT(value);
-
-        bool added = bindings_.Add(value, VariableValue{name});
-        if (TINT_UNLIKELY(!added)) {
+        if (DAWN_UNLIKELY(!bindings_.Add(value, VariableValue{name}))) {
             TINT_ICE() << "Bind(" << value->TypeInfo().name << ") called twice for same value";
         }
     }
@@ -1085,7 +1254,7 @@ class State {
         if (i->Results().IsEmpty()) {
             return false;
         }
-        auto* result = i->Result(0);
+        auto* result = i->Result();
         if (!result->Type()->Is<core::type::Bool>()) {
             return false;  // Wrong result type
         }
@@ -1186,8 +1355,7 @@ class State {
         }
     }
 
-    /// @returns true if the builtin value requires the kChromiumExperimentalSubgroups extension to
-    /// be enabled.
+    /// @returns true if the builtin value requires the kSubgroups extension to be enabled.
     bool RequiresSubgroups(core::BuiltinValue builtin) {
         switch (builtin) {
             case core::BuiltinValue::kSubgroupInvocationId:
@@ -1201,7 +1369,7 @@ class State {
     /// @returns true if the storage texture type requires the kChromiumInternalGraphite extension
     /// to be enabled.
     bool RequiresChromiumInternalGraphite(const core::type::StorageTexture* tex) {
-        return tex->texel_format() == core::TexelFormat::kR8Unorm;
+        return tex->TexelFormat() == core::TexelFormat::kR8Unorm;
     }
 };
 
@@ -1212,3 +1380,5 @@ Program IRToProgram(const core::ir::Module& i, const ProgramOptions& options) {
 }
 
 }  // namespace tint::wgsl::writer
+
+TINT_END_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);

@@ -1,68 +1,101 @@
-#version 310 es
-
-uniform highp sampler3D arg_0_1;
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
-  vec4 inner;
-} prevent_dce;
-
-void textureLoad_bcbb3c() {
-  vec4 res = texelFetch(arg_0_1, ivec3(uvec3(1u)), 1);
-  prevent_dce.inner = res;
-}
-
-vec4 vertex_main() {
-  textureLoad_bcbb3c();
-  return vec4(0.0f);
-}
-
-void main() {
-  gl_PointSize = 1.0;
-  vec4 inner_result = vertex_main();
-  gl_Position = inner_result;
-  gl_Position.y = -(gl_Position.y);
-  gl_Position.z = ((2.0f * gl_Position.z) - gl_Position.w);
-  return;
-}
+//
+// fragment_main
+//
 #version 310 es
 precision highp float;
 precision highp int;
 
-uniform highp sampler3D arg_0_1;
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+
+struct TintTextureUniformData {
+  uint tint_builtin_value_0;
+};
+
+layout(binding = 0, std430)
+buffer f_prevent_dce_block_ssbo {
   vec4 inner;
-} prevent_dce;
-
-void textureLoad_bcbb3c() {
-  vec4 res = texelFetch(arg_0_1, ivec3(uvec3(1u)), 1);
-  prevent_dce.inner = res;
+} v;
+layout(binding = 0, std140)
+uniform f_tint_symbol_ubo {
+  TintTextureUniformData inner;
+} v_1;
+uniform highp sampler3D f_arg_0;
+vec4 textureLoad_bcbb3c() {
+  uint v_2 = (v_1.inner.tint_builtin_value_0 - 1u);
+  uint v_3 = min(uint(1), v_2);
+  ivec3 v_4 = ivec3(min(uvec3(1u), (uvec3(textureSize(f_arg_0, int(v_3))) - uvec3(1u))));
+  vec4 res = texelFetch(f_arg_0, v_4, int(v_3));
+  return res;
 }
-
-void fragment_main() {
-  textureLoad_bcbb3c();
-}
-
 void main() {
-  fragment_main();
-  return;
+  v.inner = textureLoad_bcbb3c();
 }
+//
+// compute_main
+//
 #version 310 es
 
-uniform highp sampler3D arg_0_1;
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+
+struct TintTextureUniformData {
+  uint tint_builtin_value_0;
+};
+
+layout(binding = 0, std430)
+buffer prevent_dce_block_1_ssbo {
   vec4 inner;
-} prevent_dce;
-
-void textureLoad_bcbb3c() {
-  vec4 res = texelFetch(arg_0_1, ivec3(uvec3(1u)), 1);
-  prevent_dce.inner = res;
+} v;
+layout(binding = 0, std140)
+uniform tint_symbol_1_ubo {
+  TintTextureUniformData inner;
+} v_1;
+uniform highp sampler3D arg_0;
+vec4 textureLoad_bcbb3c() {
+  uint v_2 = (v_1.inner.tint_builtin_value_0 - 1u);
+  uint v_3 = min(uint(1), v_2);
+  ivec3 v_4 = ivec3(min(uvec3(1u), (uvec3(textureSize(arg_0, int(v_3))) - uvec3(1u))));
+  vec4 res = texelFetch(arg_0, v_4, int(v_3));
+  return res;
 }
-
-void compute_main() {
-  textureLoad_bcbb3c();
-}
-
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
-  compute_main();
-  return;
+  v.inner = textureLoad_bcbb3c();
+}
+//
+// vertex_main
+//
+#version 310 es
+
+
+struct TintTextureUniformData {
+  uint tint_builtin_value_0;
+};
+
+struct VertexOutput {
+  vec4 pos;
+  vec4 prevent_dce;
+};
+
+layout(binding = 0, std140)
+uniform v_tint_symbol_ubo {
+  TintTextureUniformData inner;
+} v;
+uniform highp sampler3D v_arg_0;
+layout(location = 0) flat out vec4 tint_interstage_location0;
+vec4 textureLoad_bcbb3c() {
+  uint v_1 = (v.inner.tint_builtin_value_0 - 1u);
+  uint v_2 = min(uint(1), v_1);
+  ivec3 v_3 = ivec3(min(uvec3(1u), (uvec3(textureSize(v_arg_0, int(v_2))) - uvec3(1u))));
+  vec4 res = texelFetch(v_arg_0, v_3, int(v_2));
+  return res;
+}
+VertexOutput vertex_main_inner() {
+  VertexOutput v_4 = VertexOutput(vec4(0.0f), vec4(0.0f));
+  v_4.pos = vec4(0.0f);
+  v_4.prevent_dce = textureLoad_bcbb3c();
+  return v_4;
+}
+void main() {
+  VertexOutput v_5 = vertex_main_inner();
+  gl_Position = vec4(v_5.pos.x, -(v_5.pos.y), ((2.0f * v_5.pos.z) - v_5.pos.w), v_5.pos.w);
+  tint_interstage_location0 = v_5.prevent_dce;
+  gl_PointSize = 1.0f;
 }

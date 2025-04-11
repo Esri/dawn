@@ -27,6 +27,12 @@
 
 #include "src/tint/utils/bytes/buffer_reader.h"
 
+#include <algorithm>
+
+#include "src/tint/utils/macros/compiler.h"
+
+TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
+
 namespace tint::bytes {
 
 BufferReader::~BufferReader() = default;
@@ -44,3 +50,5 @@ bool BufferReader::IsEOF() const {
 }
 
 }  // namespace tint::bytes
+
+TINT_END_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);

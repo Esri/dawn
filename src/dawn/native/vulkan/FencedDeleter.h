@@ -45,6 +45,7 @@ class FencedDeleter {
     void DeleteWhenUnused(VkBuffer buffer);
     void DeleteWhenUnused(VkDescriptorPool pool);
     void DeleteWhenUnused(VkDeviceMemory memory);
+    void DeleteWhenUnused(VkFence fence);
     void DeleteWhenUnused(VkFramebuffer framebuffer);
     void DeleteWhenUnused(VkImage image);
     void DeleteWhenUnused(VkImageView view);
@@ -59,6 +60,12 @@ class FencedDeleter {
     void DeleteWhenUnused(VkSurfaceKHR surface);
     void DeleteWhenUnused(VkSwapchainKHR swapChain);
 
+    // Returns the last serial that an object is pending deletion after or
+    // kBeginningOfGPUTime if no objects are pending deletion.
+    ExecutionSerial GetLastPendingDeletionSerial();
+    // Returns the serial used for deleting the resources.
+    ExecutionSerial GetCurrentDeletionSerial();
+
     void Tick(ExecutionSerial completedSerial);
 
   private:
@@ -66,6 +73,7 @@ class FencedDeleter {
     SerialQueue<ExecutionSerial, VkBuffer> mBuffersToDelete;
     SerialQueue<ExecutionSerial, VkDescriptorPool> mDescriptorPoolsToDelete;
     SerialQueue<ExecutionSerial, VkDeviceMemory> mMemoriesToDelete;
+    SerialQueue<ExecutionSerial, VkFence> mFencesToDelete;
     SerialQueue<ExecutionSerial, VkFramebuffer> mFramebuffersToDelete;
     SerialQueue<ExecutionSerial, VkImage> mImagesToDelete;
     SerialQueue<ExecutionSerial, VkImageView> mImageViewsToDelete;

@@ -34,9 +34,9 @@ namespace tint::wgsl::reader {
 namespace {
 
 void ParseWGSL(benchmark::State& state, std::string input_name) {
-    auto res = bench::LoadInputFile(input_name);
+    auto res = bench::GetWgslFile(input_name);
     if (res != Success) {
-        state.SkipWithError(res.Failure().reason.Str());
+        state.SkipWithError(res.Failure().reason);
         return;
     }
     for (auto _ : state) {

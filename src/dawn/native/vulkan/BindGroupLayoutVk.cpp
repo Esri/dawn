@@ -32,11 +32,13 @@
 #include "absl/container/flat_hash_map.h"
 #include "dawn/common/BitSetIterator.h"
 #include "dawn/common/MatchVariant.h"
+#include "dawn/common/Range.h"
 #include "dawn/common/ityp_vector.h"
 #include "dawn/native/CacheKey.h"
 #include "dawn/native/vulkan/DescriptorSetAllocator.h"
 #include "dawn/native/vulkan/DeviceVk.h"
 #include "dawn/native/vulkan/FencedDeleter.h"
+#include "dawn/native/vulkan/PhysicalDeviceVk.h"
 #include "dawn/native/vulkan/SamplerVk.h"
 #include "dawn/native/vulkan/UtilsVulkan.h"
 #include "dawn/native/vulkan/VulkanError.h"
@@ -76,19 +78,29 @@ VkDescriptorType VulkanDescriptorType(const BindingInfo& bindingInfo) {
                 case wgpu::BufferBindingType::Storage:
                 case kInternalStorageBufferBinding:
                 case wgpu::BufferBindingType::ReadOnlyStorage:
+                case kInternalReadOnlyStorageBufferBinding:
                     if (layout.hasDynamicOffset) {
                         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
                     }
                     return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                case wgpu::BufferBindingType::BindingNotUsed:
                 case wgpu::BufferBindingType::Undefined:
                     DAWN_UNREACHABLE();
                     return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             }
+            DAWN_UNREACHABLE();
         },
         [](const SamplerBindingInfo&) { return VK_DESCRIPTOR_TYPE_SAMPLER; },
-        [](const StaticSamplerBindingInfo&) { return VK_DESCRIPTOR_TYPE_SAMPLER; },
+        [](const StaticSamplerBindingInfo& layout) {
+            // Make this entry into a combined image sampler iff the client
+            // specified a single texture binding to be paired with it.
+            return (layout.isUsedForSingleTextureBinding)
+                       ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+                       : VK_DESCRIPTOR_TYPE_SAMPLER;
+        },
         [](const TextureBindingInfo&) { return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE; },
-        [](const StorageTextureBindingInfo&) { return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; });
+        [](const StorageTextureBindingInfo&) { return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; },
+        [](const InputAttachmentBindingInfo&) { return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT; });
 }
 
 // static
@@ -107,7 +119,33 @@ MaybeError BindGroupLayout::Initialize() {
     ityp::vector<BindingIndex, VkDescriptorSetLayoutBinding> bindings;
     bindings.reserve(GetBindingCount());
 
+    // Build the mapping from the indices of textures that will be paired with
+    // static samplers at the Vk level in combined image sampler entries to
+    // their respective sampler indices.
+    for (BindingIndex bindingIndex : Range(GetBindingCount())) {
+        const BindingInfo& bindingInfo = GetBindingInfo(bindingIndex);
+        if (!std::holds_alternative<StaticSamplerBindingInfo>(bindingInfo.bindingLayout)) {
+            continue;
+        }
+
+        auto samplerLayout = std::get<StaticSamplerBindingInfo>(bindingInfo.bindingLayout);
+        if (!samplerLayout.isUsedForSingleTextureBinding) {
+            // The client did not specify that this sampler should be paired
+            // with a single texture binding.
+            continue;
+        }
+
+        mTextureToStaticSamplerIndices[GetBindingIndex(samplerLayout.sampledTextureBinding)] =
+            bindingIndex;
+    }
+
     for (const auto& [_, bindingIndex] : GetBindingMap()) {
+        if (mTextureToStaticSamplerIndices.contains(bindingIndex)) {
+            // This texture will be bound into the VkDescriptorSet at the index
+            // for the sampler itself.
+            continue;
+        }
+
         const BindingInfo& bindingInfo = GetBindingInfo(bindingIndex);
 
         VkDescriptorSetLayoutBinding vkBinding;
@@ -146,10 +184,38 @@ MaybeError BindGroupLayout::Initialize() {
     absl::flat_hash_map<VkDescriptorType, uint32_t> descriptorCountPerType;
 
     for (BindingIndex bindingIndex{0}; bindingIndex < GetBindingCount(); ++bindingIndex) {
+        if (mTextureToStaticSamplerIndices.contains(bindingIndex)) {
+            // This texture will be bound into the VkDescriptorSet at the index
+            // for the sampler itself.
+            continue;
+        }
+
         VkDescriptorType vulkanType = VulkanDescriptorType(GetBindingInfo(bindingIndex));
 
+        size_t numVkDescriptors = 1;
+        if (vulkanType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
+            const BindingInfo& bindingInfo = GetBindingInfo(bindingIndex);
+            auto samplerLayout = std::get<StaticSamplerBindingInfo>(bindingInfo.bindingLayout);
+            auto sampler = ToBackend(samplerLayout.sampler);
+            if (sampler->IsYCbCr()) {
+                // A YCbCr sampler can take up multiple Vk descriptor slots.  There is a
+                // recommended Vulkan API to query how many slots a YCbCr sampler should take, but
+                // it is not clear how to actually pass the Android external format to that API.
+                // However, the spec for that API says the following:
+                // "combinedImageSamplerDescriptorCount is a number between 1 and the number of
+                // planes in the format. A descriptor set layout binding with immutable Y′CBCR
+                // conversion samplers will have a maximum combinedImageSamplerDescriptorCount
+                // which is the maximum across all formats supported by its samplers of the
+                // combinedImageSamplerDescriptorCount for each format." Hence, we simply hardcode
+                // the maximum number of planes that an external format can have here. The number
+                // of overall YCbCr descriptors will be relatively small and these pools are not an
+                // overall bottleneck on memory usage.
+                numVkDescriptors = 3;
+            }
+        }
+
         // absl:flat_hash_map::operator[] will return 0 if the key doesn't exist.
-        descriptorCountPerType[vulkanType]++;
+        descriptorCountPerType[vulkanType] += numVkDescriptors;
     }
 
     // TODO(enga): Consider deduping allocators for layouts with the same descriptor type
@@ -199,10 +265,24 @@ ResultOrError<Ref<BindGroup>> BindGroupLayout::AllocateBindGroup(
     return AcquireRef(mBindGroupAllocator->Allocate(device, descriptor, descriptorSetAllocation));
 }
 
-void BindGroupLayout::DeallocateBindGroup(BindGroup* bindGroup,
-                                          DescriptorSetAllocation* descriptorSetAllocation) {
-    mDescriptorSetAllocator->Deallocate(descriptorSetAllocation);
+void BindGroupLayout::DeallocateBindGroup(BindGroup* bindGroup) {
     mBindGroupAllocator->Deallocate(bindGroup);
+}
+
+void BindGroupLayout::DeallocateDescriptorSet(DescriptorSetAllocation* descriptorSetAllocation) {
+    mDescriptorSetAllocator->Deallocate(descriptorSetAllocation);
+}
+
+void BindGroupLayout::ReduceMemoryUsage() {
+    mBindGroupAllocator->DeleteEmptySlabs();
+}
+
+std::optional<BindingIndex> BindGroupLayout::GetStaticSamplerIndexForTexture(
+    BindingIndex textureBinding) const {
+    if (mTextureToStaticSamplerIndices.contains(textureBinding)) {
+        return mTextureToStaticSamplerIndices.at(textureBinding);
+    }
+    return {};
 }
 
 void BindGroupLayout::SetLabelImpl() {

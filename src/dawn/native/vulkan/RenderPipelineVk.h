@@ -32,12 +32,14 @@
 
 #include "dawn/common/vulkan_platform.h"
 #include "dawn/native/Error.h"
+#include "dawn/native/vulkan/PipelineVk.h"
 
 namespace dawn::native::vulkan {
 
 class Device;
+struct VkPipelineLayoutObject;
 
-class RenderPipeline final : public RenderPipelineBase {
+class RenderPipeline final : public RenderPipelineBase, public PipelineVk {
   public:
     static Ref<RenderPipeline> CreateUninitialized(
         Device* device,
@@ -64,6 +66,9 @@ class RenderPipeline final : public RenderPipelineBase {
     VkPipelineDepthStencilStateCreateInfo ComputeDepthStencilDesc();
 
     VkPipeline mHandle = VK_NULL_HANDLE;
+
+    // Whether the pipeline has any input attachment being used in the frag shader.
+    bool mHasInputAttachment = false;
 };
 
 }  // namespace dawn::native::vulkan

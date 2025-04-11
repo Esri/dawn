@@ -35,9 +35,9 @@
 #include <optional>
 
 #include "src/tint/utils/macros/compiler.h"
-#include "src/tint/utils/result/result.h"
+#include "src/tint/utils/result.h"
+#include "src/tint/utils/rtti/traits.h"
 #include "src/tint/utils/text/string_stream.h"
-#include "src/tint/utils/traits/traits.h"
 
 // Forward declaration
 namespace tint::core {
@@ -278,10 +278,16 @@ using AInt = Number<int64_t>;
 /// `AFloat` is a type alias to `Number<double>`.
 using AFloat = Number<double>;
 
+/// `i8` is a type alias to `Number<int8_t>`.
+using i8 = Number<int8_t>;
 /// `i32` is a type alias to `Number<int32_t>`.
 using i32 = Number<int32_t>;
+/// `u8` is a type alias to `Number<uint8_t>`.
+using u8 = Number<uint8_t>;
 /// `u32` is a type alias to `Number<uint32_t>`.
 using u32 = Number<uint32_t>;
+/// `u64` is a type alias to `Number<uint64_t>`.
+using u64 = Number<uint64_t>;
 /// `f32` is a type alias to `Number<float>`
 using f32 = Number<float>;
 /// `f16` is a type alias to `Number<detail::NumberKindF16>`, which should be IEEE 754 binary16.
@@ -358,11 +364,32 @@ tint::Result<TO, ConversionFailure> CheckedConvert(Number<FROM> num) {
     using T = std::conditional_t<IsFloatingPoint<UnwrapNumber<TO>> || IsFloatingPoint<FROM>,
                                  AFloat::type, AInt::type>;
     const auto value = static_cast<T>(num.value);
-    if (value > static_cast<T>(TO::kHighestValue)) {
-        return ConversionFailure::kExceedsPositiveLimit;
-    }
-    if (value < static_cast<T>(TO::kLowestValue)) {
-        return ConversionFailure::kExceedsNegativeLimit;
+    // Float to integral conversions clamp to the target range.
+    // https://gpuweb.github.io/gpuweb/wgsl/#scalar-floating-point-to-integral-conversion
+    constexpr auto float_to_integral = IsFloatingPoint<FROM> && IsIntegral<UnwrapNumber<TO>>;
+    if constexpr (std::is_same_v<TO, u64>) {
+        // Special case checks for u64 as its range does not fit into an AInt.
+        if (value < 0) {
+            if constexpr (float_to_integral) {
+                return TO(0);
+            }
+            if constexpr (IsSignedIntegral<FROM>) {
+                return ConversionFailure::kExceedsNegativeLimit;
+            }
+        }
+    } else {
+        if (value > static_cast<T>(TO::kHighestValue)) {
+            if (float_to_integral) {
+                return TO(TO::kHighestValue);
+            }
+            return ConversionFailure::kExceedsPositiveLimit;
+        }
+        if (value < static_cast<T>(TO::kLowestValue)) {
+            if (float_to_integral) {
+                return TO(TO::kLowestValue);
+            }
+            return ConversionFailure::kExceedsNegativeLimit;
+        }
     }
     return TO(value);  // Success
 }

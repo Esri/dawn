@@ -40,7 +40,7 @@
 #include <cstdint>
 #include <string>
 
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/rtti/traits.h"
 
 // \cond DO_NOT_DOCUMENT
 namespace tint::wgsl {
@@ -157,6 +157,7 @@ enum class BuiltinFn : uint8_t {
     kTextureSampleBaseClampToEdge,
     kTextureStore,
     kTextureLoad,
+    kInputAttachmentLoad,
     kAtomicLoad,
     kAtomicStore,
     kAtomicAdd,
@@ -169,7 +170,34 @@ enum class BuiltinFn : uint8_t {
     kAtomicExchange,
     kAtomicCompareExchangeWeak,
     kSubgroupBallot,
+    kSubgroupElect,
     kSubgroupBroadcast,
+    kSubgroupBroadcastFirst,
+    kSubgroupShuffle,
+    kSubgroupShuffleXor,
+    kSubgroupShuffleUp,
+    kSubgroupShuffleDown,
+    kSubgroupAdd,
+    kSubgroupInclusiveAdd,
+    kSubgroupExclusiveAdd,
+    kSubgroupMul,
+    kSubgroupInclusiveMul,
+    kSubgroupExclusiveMul,
+    kSubgroupAnd,
+    kSubgroupOr,
+    kSubgroupXor,
+    kSubgroupMin,
+    kSubgroupMax,
+    kSubgroupAll,
+    kSubgroupAny,
+    kQuadBroadcast,
+    kQuadSwapX,
+    kQuadSwapY,
+    kQuadSwapDiagonal,
+    kSubgroupMatrixLoad,
+    kSubgroupMatrixStore,
+    kSubgroupMatrixMultiply,
+    kSubgroupMatrixMultiplyAccumulate,
     kTintMaterialize,
     kNone,
 };
@@ -303,6 +331,7 @@ constexpr BuiltinFn kBuiltinFns[] = {
     BuiltinFn::kTextureSampleBaseClampToEdge,
     BuiltinFn::kTextureStore,
     BuiltinFn::kTextureLoad,
+    BuiltinFn::kInputAttachmentLoad,
     BuiltinFn::kAtomicLoad,
     BuiltinFn::kAtomicStore,
     BuiltinFn::kAtomicAdd,
@@ -315,7 +344,34 @@ constexpr BuiltinFn kBuiltinFns[] = {
     BuiltinFn::kAtomicExchange,
     BuiltinFn::kAtomicCompareExchangeWeak,
     BuiltinFn::kSubgroupBallot,
+    BuiltinFn::kSubgroupElect,
     BuiltinFn::kSubgroupBroadcast,
+    BuiltinFn::kSubgroupBroadcastFirst,
+    BuiltinFn::kSubgroupShuffle,
+    BuiltinFn::kSubgroupShuffleXor,
+    BuiltinFn::kSubgroupShuffleUp,
+    BuiltinFn::kSubgroupShuffleDown,
+    BuiltinFn::kSubgroupAdd,
+    BuiltinFn::kSubgroupInclusiveAdd,
+    BuiltinFn::kSubgroupExclusiveAdd,
+    BuiltinFn::kSubgroupMul,
+    BuiltinFn::kSubgroupInclusiveMul,
+    BuiltinFn::kSubgroupExclusiveMul,
+    BuiltinFn::kSubgroupAnd,
+    BuiltinFn::kSubgroupOr,
+    BuiltinFn::kSubgroupXor,
+    BuiltinFn::kSubgroupMin,
+    BuiltinFn::kSubgroupMax,
+    BuiltinFn::kSubgroupAll,
+    BuiltinFn::kSubgroupAny,
+    BuiltinFn::kQuadBroadcast,
+    BuiltinFn::kQuadSwapX,
+    BuiltinFn::kQuadSwapY,
+    BuiltinFn::kQuadSwapDiagonal,
+    BuiltinFn::kSubgroupMatrixLoad,
+    BuiltinFn::kSubgroupMatrixStore,
+    BuiltinFn::kSubgroupMatrixMultiply,
+    BuiltinFn::kSubgroupMatrixMultiplyAccumulate,
     BuiltinFn::kTintMaterialize,
 };
 
@@ -431,6 +487,7 @@ constexpr const char* kBuiltinFnStrings[] = {
     "textureSampleBaseClampToEdge",
     "textureStore",
     "textureLoad",
+    "inputAttachmentLoad",
     "atomicLoad",
     "atomicStore",
     "atomicAdd",
@@ -443,7 +500,34 @@ constexpr const char* kBuiltinFnStrings[] = {
     "atomicExchange",
     "atomicCompareExchangeWeak",
     "subgroupBallot",
+    "subgroupElect",
     "subgroupBroadcast",
+    "subgroupBroadcastFirst",
+    "subgroupShuffle",
+    "subgroupShuffleXor",
+    "subgroupShuffleUp",
+    "subgroupShuffleDown",
+    "subgroupAdd",
+    "subgroupInclusiveAdd",
+    "subgroupExclusiveAdd",
+    "subgroupMul",
+    "subgroupInclusiveMul",
+    "subgroupExclusiveMul",
+    "subgroupAnd",
+    "subgroupOr",
+    "subgroupXor",
+    "subgroupMin",
+    "subgroupMax",
+    "subgroupAll",
+    "subgroupAny",
+    "quadBroadcast",
+    "quadSwapX",
+    "quadSwapY",
+    "quadSwapDiagonal",
+    "subgroupMatrixLoad",
+    "subgroupMatrixStore",
+    "subgroupMatrixMultiply",
+    "subgroupMatrixMultiplyAccumulate",
     "__tint_materialize",
 };
 
@@ -503,6 +587,16 @@ bool IsPacked4x8IntegerDotProductBuiltin(BuiltinFn f);
 /// @param f the builtin type
 /// @returns true if the given `f` is a subgroup builtin
 bool IsSubgroup(BuiltinFn f);
+
+/// Determines if the given `f` is a subgroup matrix builtin.
+/// @param f the builtin type
+/// @returns true if the given `f` is a subgroup matrix builtin
+bool IsSubgroupMatrix(BuiltinFn f);
+
+/// Determines if the given `f` is a quadSwap* builtin.
+/// @param f the builtin type
+/// @returns true if the given `f` is a quadSwap* builtin
+bool IsQuadSwap(BuiltinFn f);
 
 /// Determines if the given `f` may have side-effects (i.e. writes to at least one of its inputs)
 /// @returns true if intrinsic may have side-effects

@@ -228,7 +228,7 @@ TEST_F(SpirvWriterTest, Switch_Phi_SingleValue) {
     auto* func = b.Function("foo", ty.i32());
     b.Append(func->Block(), [&] {
         auto* s = b.Switch(42_i);
-        s->SetResults(b.InstructionResult(ty.i32()));
+        s->SetResult(b.InstructionResult(ty.i32()));
         auto* case_a = b.Case(s, Vector{b.Constant(1_i), nullptr});
         b.Append(case_a, [&] {  //
             b.ExitSwitch(s, 10_i);
@@ -262,7 +262,7 @@ TEST_F(SpirvWriterTest, Switch_Phi_SingleValue_CaseReturn) {
     auto* func = b.Function("foo", ty.i32());
     b.Append(func->Block(), [&] {
         auto* s = b.Switch(42_i);
-        s->SetResults(b.InstructionResult(ty.i32()));
+        s->SetResult(b.InstructionResult(ty.i32()));
         auto* case_a = b.Case(s, Vector{b.Constant(1_i), nullptr});
         b.Append(case_a, [&] {  //
             b.Return(func, 10_i);
@@ -285,23 +285,24 @@ TEST_F(SpirvWriterTest, Switch_Phi_SingleValue_CaseReturn) {
                OpSelectionMerge %15 None
                OpSwitch %int_42 %12 1 %12 2 %14
          %12 = OpLabel
-               OpStore %continue_execution %false
-               OpStore %return_value %int_10
+               OpStore %continue_execution %false None
+               OpStore %return_value %int_10 None
                OpBranch %15
          %14 = OpLabel
                OpBranch %15
          %15 = OpLabel
          %18 = OpPhi %int %19 %12 %int_20 %14
-         %21 = OpLoad %bool %continue_execution
+         %21 = OpLoad %bool %continue_execution None
                OpSelectionMerge %22 None
                OpBranchConditional %21 %23 %22
          %23 = OpLabel
-               OpStore %return_value %18
+               OpStore %return_value %18 None
                OpBranch %22
          %22 = OpLabel
-         %24 = OpLoad %int %return_value
+         %24 = OpLoad %int %return_value None
                OpReturnValue %24
                OpFunctionEnd
+
 )");
 }
 
@@ -379,11 +380,11 @@ TEST_F(SpirvWriterTest, Switch_Phi_NestedIf) {
     auto* func = b.Function("foo", ty.i32());
     b.Append(func->Block(), [&] {
         auto* s = b.Switch(42_i);
-        s->SetResults(b.InstructionResult(ty.i32()));
+        s->SetResult(b.InstructionResult(ty.i32()));
         auto* case_a = b.Case(s, Vector{b.Constant(1_i), nullptr});
         b.Append(case_a, [&] {  //
             auto* inner = b.If(true);
-            inner->SetResults(b.InstructionResult(ty.i32()));
+            inner->SetResult(b.InstructionResult(ty.i32()));
             b.Append(inner->True(), [&] {  //
                 b.ExitIf(inner, 10_i);
             });
@@ -391,7 +392,7 @@ TEST_F(SpirvWriterTest, Switch_Phi_NestedIf) {
                 b.ExitIf(inner, 20_i);
             });
 
-            b.ExitSwitch(s, inner->Result(0));
+            b.ExitSwitch(s, inner->Result());
         });
 
         auto* case_b = b.Case(s, Vector{b.Constant(2_i)});
@@ -430,7 +431,7 @@ TEST_F(SpirvWriterTest, Switch_Phi_NestedSwitch) {
     auto* func = b.Function("foo", ty.i32());
     b.Append(func->Block(), [&] {
         auto* outer = b.Switch(42_i);
-        outer->SetResults(b.InstructionResult(ty.i32()));
+        outer->SetResult(b.InstructionResult(ty.i32()));
         auto* case_a = b.Case(outer, Vector{b.Constant(1_i), nullptr});
         b.Append(case_a, [&] {  //
             auto* inner = b.Switch(42_i);

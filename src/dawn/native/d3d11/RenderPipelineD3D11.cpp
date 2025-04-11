@@ -53,7 +53,6 @@ D3D11_INPUT_CLASSIFICATION VertexStepModeFunction(wgpu::VertexStepMode mode) {
             return D3D11_INPUT_PER_VERTEX_DATA;
         case wgpu::VertexStepMode::Instance:
             return D3D11_INPUT_PER_INSTANCE_DATA;
-        case wgpu::VertexStepMode::VertexBufferNotUsed:
         case wgpu::VertexStepMode::Undefined:
             break;
     }
@@ -262,7 +261,7 @@ RenderPipeline::~RenderPipeline() = default;
 void RenderPipeline::ApplyNow(const ScopedSwapStateCommandRecordingContext* commandContext,
                               const std::array<float, 4>& blendColor,
                               uint32_t stencilReference) {
-    auto* d3d11DeviceContext = commandContext->GetD3D11DeviceContext4();
+    auto* d3d11DeviceContext = commandContext->GetD3D11DeviceContext3();
     d3d11DeviceContext->IASetPrimitiveTopology(mD3DPrimitiveTopology);
     // TODO(dawn:1753): deduplicate these objects in the backend eventually, and to avoid redundant
     // state setting.
@@ -277,14 +276,14 @@ void RenderPipeline::ApplyNow(const ScopedSwapStateCommandRecordingContext* comm
 
 void RenderPipeline::ApplyBlendState(const ScopedSwapStateCommandRecordingContext* commandContext,
                                      const std::array<float, 4>& blendColor) {
-    auto* d3d11DeviceContext = commandContext->GetD3D11DeviceContext4();
+    auto* d3d11DeviceContext = commandContext->GetD3D11DeviceContext3();
     d3d11DeviceContext->OMSetBlendState(mBlendState.Get(), blendColor.data(), GetSampleMask());
 }
 
 void RenderPipeline::ApplyDepthStencilState(
     const ScopedSwapStateCommandRecordingContext* commandContext,
     uint32_t stencilReference) {
-    auto* d3d11DeviceContext = commandContext->GetD3D11DeviceContext4();
+    auto* d3d11DeviceContext = commandContext->GetD3D11DeviceContext3();
     d3d11DeviceContext->OMSetDepthStencilState(mDepthStencilState.Get(), stencilReference);
 }
 
@@ -405,11 +404,13 @@ MaybeError RenderPipeline::InitializeDepthStencilState() {
     const DepthStencilState* state = GetDepthStencilState();
 
     D3D11_DEPTH_STENCIL_DESC depthStencilDesc = {};
-    depthStencilDesc.DepthEnable =
-        (state->depthCompare == wgpu::CompareFunction::Always && !state->depthWriteEnabled) ? FALSE
-                                                                                            : TRUE;
-    depthStencilDesc.DepthWriteMask =
-        state->depthWriteEnabled ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
+    depthStencilDesc.DepthEnable = (state->depthCompare == wgpu::CompareFunction::Always &&
+                                    state->depthWriteEnabled != wgpu::OptionalBool::True)
+                                       ? FALSE
+                                       : TRUE;
+    depthStencilDesc.DepthWriteMask = state->depthWriteEnabled == wgpu::OptionalBool::True
+                                          ? D3D11_DEPTH_WRITE_MASK_ALL
+                                          : D3D11_DEPTH_WRITE_MASK_ZERO;
     depthStencilDesc.DepthFunc = ToD3D11ComparisonFunc(state->depthCompare);
 
     depthStencilDesc.StencilEnable = UsesStencil() ? TRUE : FALSE;
@@ -475,11 +476,11 @@ MaybeError RenderPipeline::InitializeShaders() {
         mUsesInstanceIndex = compiledShader[SingleShaderStage::Vertex].usesInstanceIndex;
     }
 
-    std::optional<tint::PixelLocalOptions> pixelLocalOptions;
+    std::optional<tint::hlsl::writer::PixelLocalOptions> pixelLocalOptions;
     if (GetStageMask() & wgpu::ShaderStage::Fragment) {
-        pixelLocalOptions = tint::PixelLocalOptions();
+        pixelLocalOptions = tint::hlsl::writer::PixelLocalOptions();
         // HLSL SM5.0 doesn't support groups, so we set group index to 0.
-        pixelLocalOptions->pixel_local_group_index = 0;
+        pixelLocalOptions->group_index = 0;
 
         if (GetAttachmentState()->HasPixelLocalStorage()) {
             const std::vector<wgpu::TextureFormat>& storageAttachmentSlots =
@@ -493,7 +494,8 @@ MaybeError RenderPipeline::InitializeShaders() {
                 ToBackend(GetLayout())->GetTotalUAVBindingCount() -
                 static_cast<uint32_t>(storageAttachmentSlots.size());
             for (size_t i = 0; i < storageAttachmentSlots.size(); i++) {
-                pixelLocalOptions->attachments[i] = basePixelLocalAttachmentIndex + i;
+                auto& attachment = pixelLocalOptions->attachments[i];
+                attachment.index = basePixelLocalAttachmentIndex + i;
 
                 static_assert(
                     RenderPipelineBase::kImplicitPLSSlotFormat == wgpu::TextureFormat::R32Uint,
@@ -502,16 +504,16 @@ MaybeError RenderPipeline::InitializeShaders() {
                         // We use R32Uint as default pixel local storage attachment format
                     case wgpu::TextureFormat::Undefined:
                     case wgpu::TextureFormat::R32Uint:
-                        pixelLocalOptions->attachment_formats[i] =
-                            tint::PixelLocalOptions::TexelFormat::kR32Uint;
+                        attachment.format =
+                            tint::hlsl::writer::PixelLocalAttachment::TexelFormat::kR32Uint;
                         break;
                     case wgpu::TextureFormat::R32Sint:
-                        pixelLocalOptions->attachment_formats[i] =
-                            tint::PixelLocalOptions::TexelFormat::kR32Sint;
+                        attachment.format =
+                            tint::hlsl::writer::PixelLocalAttachment::TexelFormat::kR32Sint;
                         break;
                     case wgpu::TextureFormat::R32Float:
-                        pixelLocalOptions->attachment_formats[i] =
-                            tint::PixelLocalOptions::TexelFormat::kR32Float;
+                        attachment.format =
+                            tint::hlsl::writer::PixelLocalAttachment::TexelFormat::kR32Float;
                         break;
                     default:
                         DAWN_UNREACHABLE();

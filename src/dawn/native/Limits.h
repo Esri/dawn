@@ -37,22 +37,29 @@ namespace dawn::native {
 
 struct CombinedLimits {
     Limits v1;
-    DawnExperimentalSubgroupLimits experimentalSubgroupLimits;
+    DawnExperimentalImmediateDataLimits experimentalImmediateDataLimits;
+    DawnTexelCopyBufferRowAlignmentLimits texelCopyBufferRowAlignmentLimits;
 };
 
 // Populate |limits| with the default limits.
-void GetDefaultLimits(Limits* limits, FeatureLevel featureLevel);
+void GetDefaultLimits(Limits* limits, wgpu::FeatureLevel featureLevel);
 
 // Returns a copy of |limits| where all undefined values are replaced
 // with their defaults. Also clamps to the defaults if the provided limits
 // are worse.
-Limits ReifyDefaultLimits(const Limits& limits, FeatureLevel featureLevel);
+Limits ReifyDefaultLimits(const Limits& limits, wgpu::FeatureLevel featureLevel);
+
+// Fixup limits after device creation
+void EnforceLimitSpecInvariants(Limits* limits, wgpu::FeatureLevel featureLevel);
 
 // Validate that |requiredLimits| are no better than |supportedLimits|.
 MaybeError ValidateLimits(const Limits& supportedLimits, const Limits& requiredLimits);
 
 // Returns a copy of |limits| where limit tiers are applied.
-Limits ApplyLimitTiers(Limits limits);
+CombinedLimits ApplyLimitTiers(const CombinedLimits& limits);
+
+// Apply limit tiers to |limits|
+void ApplyLimitTiers(CombinedLimits* limits);
 
 // If there are new limit member needed at shader compilation time
 // Simply append a new X(type, name) here.
@@ -73,7 +80,7 @@ struct LimitsForCompilationRequest {
 //      arrays in Dawn's internal code;
 //   2. Additional enforcement for dependent limits, e.g. maxStorageBufferBindingSize and
 //      maxUniformBufferBindingSize must not be larger than maxBufferSize.
-void NormalizeLimits(Limits* limits);
+void NormalizeLimits(CombinedLimits* limits);
 
 }  // namespace dawn::native
 

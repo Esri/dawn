@@ -28,6 +28,8 @@
 #ifndef SRC_DAWN_NATIVE_CREATEPIPELINEASYNCEVENT_H_
 #define SRC_DAWN_NATIVE_CREATEPIPELINEASYNCEVENT_H_
 
+#include <webgpu/webgpu.h>
+
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -37,7 +39,6 @@
 #include "dawn/native/Error.h"
 #include "dawn/native/EventManager.h"
 #include "dawn/native/Pipeline.h"
-#include "dawn/webgpu.h"
 #include "partition_alloc/pointers/raw_ptr.h"
 
 namespace dawn::native {
@@ -69,7 +70,7 @@ class CreatePipelineAsyncEvent final : public EventManager::TrackedEvent {
     CreatePipelineAsyncEvent(DeviceBase* device,
                              const CreatePipelineAsyncCallbackInfo& callbackInfo,
                              std::unique_ptr<ErrorData> error,
-                             const char* label);
+                             StringView label);
 
     ~CreatePipelineAsyncEvent() override;
 
@@ -102,9 +103,9 @@ class CreatePipelineAsyncEvent final : public EventManager::TrackedEvent {
 };
 
 using CreateComputePipelineAsyncEvent =
-    CreatePipelineAsyncEvent<ComputePipelineBase, WGPUCreateComputePipelineAsyncCallbackInfo2>;
+    CreatePipelineAsyncEvent<ComputePipelineBase, WGPUCreateComputePipelineAsyncCallbackInfo>;
 using CreateRenderPipelineAsyncEvent =
-    CreatePipelineAsyncEvent<RenderPipelineBase, WGPUCreateRenderPipelineAsyncCallbackInfo2>;
+    CreatePipelineAsyncEvent<RenderPipelineBase, WGPUCreateRenderPipelineAsyncCallbackInfo>;
 
 }  // namespace dawn::native
 

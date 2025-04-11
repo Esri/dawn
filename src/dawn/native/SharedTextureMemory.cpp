@@ -29,6 +29,7 @@
 
 #include <utility>
 
+#include "dawn/common/WeakRef.h"
 #include "dawn/native/ChainUtils.h"
 #include "dawn/native/Device.h"
 #include "dawn/native/Queue.h"
@@ -82,21 +83,24 @@ SharedTextureMemoryBase::SharedTextureMemoryBase(DeviceBase* device,
       } {}
 
 SharedTextureMemoryBase::SharedTextureMemoryBase(DeviceBase* device,
-                                                 const char* label,
+                                                 StringView label,
                                                  const SharedTextureMemoryProperties& properties)
     : SharedResourceMemory(device, label), mProperties(properties) {
     // Reify properties to ensure we don't expose capabilities not supported by the device.
     const Format& internalFormat = device->GetValidInternalFormat(mProperties.format);
-    if (!internalFormat.supportsStorageUsage || internalFormat.IsMultiPlanar()) {
-        mProperties.usage = mProperties.usage & ~wgpu::TextureUsage::StorageBinding;
-    }
-    if (!internalFormat.isRenderable || (internalFormat.IsMultiPlanar() &&
-                                         !device->HasFeature(Feature::MultiPlanarRenderTargets))) {
-        mProperties.usage = mProperties.usage & ~wgpu::TextureUsage::RenderAttachment;
-    }
-    if (internalFormat.IsMultiPlanar() &&
-        !device->HasFeature(Feature::MultiPlanarFormatExtendedUsages)) {
-        mProperties.usage = mProperties.usage & ~wgpu::TextureUsage::CopyDst;
+    if (internalFormat.format != wgpu::TextureFormat::External) {
+        if (!internalFormat.supportsStorageUsage || internalFormat.IsMultiPlanar()) {
+            mProperties.usage = mProperties.usage & ~wgpu::TextureUsage::StorageBinding;
+        }
+        if (!internalFormat.isRenderable ||
+            (internalFormat.IsMultiPlanar() &&
+             !device->HasFeature(Feature::MultiPlanarRenderTargets))) {
+            mProperties.usage = mProperties.usage & ~wgpu::TextureUsage::RenderAttachment;
+        }
+        if (internalFormat.IsMultiPlanar() &&
+            !device->HasFeature(Feature::MultiPlanarFormatExtendedUsages)) {
+            mProperties.usage = mProperties.usage & ~wgpu::TextureUsage::CopyDst;
+        }
     }
 
     GetObjectTrackingList()->Track(this);
@@ -161,8 +165,9 @@ ResultOrError<Ref<TextureBase>> SharedTextureMemoryBase::CreateTexture(
     DAWN_TRY(GetDevice()->ValidateIsAlive());
     DAWN_TRY(GetDevice()->ValidateObject(this));
 
+    TextureDescriptor reifiedDescriptor = rawDescriptor->WithTrivialFrontendDefaults();
     UnpackedPtr<TextureDescriptor> descriptor;
-    DAWN_TRY_ASSIGN(descriptor, ValidateAndUnpack(rawDescriptor));
+    DAWN_TRY_ASSIGN(descriptor, ValidateAndUnpack(&reifiedDescriptor));
 
     // Validate that there is one 2D, single-sampled subresource
     DAWN_INVALID_IF(descriptor->dimension != wgpu::TextureDimension::e2D,
@@ -198,6 +203,14 @@ ResultOrError<Ref<TextureBase>> SharedTextureMemoryBase::CreateTexture(
     return texture;
 }
 
+Ref<SharedResourceMemoryContents> SharedTextureMemoryBase::CreateContents() {
+    return AcquireRef(new SharedTextureMemoryContents(GetWeakRef(this)));
+}
+
+SharedTextureMemoryContents* SharedTextureMemoryBase::GetContents() const {
+    return static_cast<SharedTextureMemoryContents*>(SharedResourceMemory::GetContents());
+}
+
 void APISharedTextureMemoryEndAccessStateFreeMembers(WGPUSharedTextureMemoryEndAccessState cState) {
     auto* state = reinterpret_cast<SharedTextureMemoryBase::EndAccessState*>(&cState);
     for (size_t i = 0; i < state->fenceCount; ++i) {
@@ -205,6 +218,22 @@ void APISharedTextureMemoryEndAccessStateFreeMembers(WGPUSharedTextureMemoryEndA
     }
     delete[] state->fences;
     delete[] state->signaledValues;
+}
+
+// SharedTextureMemoryContents
+
+SharedTextureMemoryContents::SharedTextureMemoryContents(
+    WeakRef<SharedTextureMemoryBase> sharedTextureMemory)
+    : SharedResourceMemoryContents(sharedTextureMemory),
+      mSupportedExternalSampleTypes(SampleTypeBit::None) {}
+
+SampleTypeBit SharedTextureMemoryContents::GetExternalFormatSupportedSampleTypes() const {
+    return mSupportedExternalSampleTypes;
+}
+
+void SharedTextureMemoryContents::SetExternalFormatSupportedSampleTypes(
+    SampleTypeBit supportedSampleType) {
+    mSupportedExternalSampleTypes = supportedSampleType;
 }
 
 }  // namespace dawn::native

@@ -174,6 +174,7 @@ Return FindStorageBufferBindingAliasing(const PipelineLayoutBase* pipelineLayout
                     break;
                 case wgpu::StorageTextureAccess::ReadOnly:
                     continue;
+                case wgpu::StorageTextureAccess::BindingNotUsed:
                 case wgpu::StorageTextureAccess::Undefined:
                 default:
                     DAWN_UNREACHABLE();
@@ -555,7 +556,7 @@ void CommandBufferStateTracker::RecomputeLazyAspects(ValidationAspects aspects) 
         }
     }
 
-    if (aspects[VALIDATION_ASPECT_INDEX_BUFFER] && mIndexBufferSet) {
+    if (aspects[VALIDATION_ASPECT_INDEX_BUFFER] && IndexBufferSet()) {
         RenderPipelineBase* lastRenderPipeline = GetRenderPipeline();
         if (!IsStripPrimitiveTopology(lastRenderPipeline->GetPrimitiveTopology()) ||
             mIndexFormat == lastRenderPipeline->GetStripIndexFormat()) {
@@ -572,7 +573,7 @@ MaybeError CommandBufferStateTracker::CheckMissingAspects(ValidationAspects aspe
     DAWN_INVALID_IF(aspects[VALIDATION_ASPECT_PIPELINE], "No pipeline set.");
 
     if (aspects[VALIDATION_ASPECT_INDEX_BUFFER]) {
-        DAWN_INVALID_IF(!mIndexBufferSet, "Index buffer was not set.");
+        DAWN_INVALID_IF(!IndexBufferSet(), "Index buffer was not set.");
 
         RenderPipelineBase* lastRenderPipeline = GetRenderPipeline();
         wgpu::IndexFormat pipelineIndexFormat = lastRenderPipeline->GetStripIndexFormat();
@@ -623,7 +624,7 @@ MaybeError CommandBufferStateTracker::CheckMissingAspects(ValidationAspects aspe
             BindGroupLayoutBase* currentBGL = mBindgroups[i]->GetFrontendLayout();
 
             DAWN_INVALID_IF(
-                requiredBGL->GetPipelineCompatibilityToken() != PipelineCompatibilityToken(0) &&
+                requiredBGL->GetPipelineCompatibilityToken() != kExplicitPCT &&
                     currentBGL->GetPipelineCompatibilityToken() !=
                         requiredBGL->GetPipelineCompatibilityToken(),
                 "The current pipeline (%s) was created with a default layout, and is not "
@@ -634,8 +635,8 @@ MaybeError CommandBufferStateTracker::CheckMissingAspects(ValidationAspects aspe
                 mLastPipeline, mBindgroups[i], i, currentBGL, i);
 
             DAWN_INVALID_IF(
-                requiredBGL->GetPipelineCompatibilityToken() == PipelineCompatibilityToken(0) &&
-                    currentBGL->GetPipelineCompatibilityToken() != PipelineCompatibilityToken(0),
+                requiredBGL->GetPipelineCompatibilityToken() == kExplicitPCT &&
+                    currentBGL->GetPipelineCompatibilityToken() != kExplicitPCT,
                 "%s set at group index %u uses a %s which was created as part of the default "
                 "layout "
                 "for a different pipeline than the current one (%s), and as a result is not "
@@ -754,10 +755,11 @@ void CommandBufferStateTracker::SetBindGroup(BindGroupIndex index,
     mAspects.reset(VALIDATION_ASPECT_BIND_GROUPS);
 }
 
-void CommandBufferStateTracker::SetIndexBuffer(wgpu::IndexFormat format,
+void CommandBufferStateTracker::SetIndexBuffer(BufferBase* buffer,
+                                               wgpu::IndexFormat format,
                                                uint64_t offset,
                                                uint64_t size) {
-    mIndexBufferSet = true;
+    mIndexBuffer = buffer;
     mIndexFormat = format;
     mIndexBufferSize = size;
     mIndexBufferOffset = offset;
@@ -798,6 +800,10 @@ bool CommandBufferStateTracker::HasPipeline() const {
     return mLastPipeline != nullptr;
 }
 
+bool CommandBufferStateTracker::IndexBufferSet() const {
+    return mIndexBuffer != nullptr;
+}
+
 RenderPipelineBase* CommandBufferStateTracker::GetRenderPipeline() const {
     DAWN_ASSERT(HasPipeline() && mLastPipeline->GetType() == ObjectType::RenderPipeline);
     return static_cast<RenderPipelineBase*>(mLastPipeline);
@@ -810,6 +816,10 @@ ComputePipelineBase* CommandBufferStateTracker::GetComputePipeline() const {
 
 PipelineLayoutBase* CommandBufferStateTracker::GetPipelineLayout() const {
     return mLastPipelineLayout;
+}
+
+BufferBase* CommandBufferStateTracker::GetIndexBuffer() const {
+    return mIndexBuffer;
 }
 
 wgpu::IndexFormat CommandBufferStateTracker::GetIndexFormat() const {

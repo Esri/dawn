@@ -1,68 +1,66 @@
-#version 310 es
-
-struct frexp_result_f32 {
-  float fract;
-  int exp;
-};
-
-
-void frexp_4b2200() {
-  frexp_result_f32 res = frexp_result_f32(0.5f, 1);
-}
-
-vec4 vertex_main() {
-  frexp_4b2200();
-  return vec4(0.0f);
-}
-
-void main() {
-  gl_PointSize = 1.0;
-  vec4 inner_result = vertex_main();
-  gl_Position = inner_result;
-  gl_Position.y = -(gl_Position.y);
-  gl_Position.z = ((2.0f * gl_Position.z) - gl_Position.w);
-  return;
-}
+//
+// fragment_main
+//
 #version 310 es
 precision highp float;
 precision highp int;
 
-struct frexp_result_f32 {
-  float fract;
-  int exp;
-};
 
+struct frexp_result_f32 {
+  float member_0;
+  int member_1;
+};
 
 void frexp_4b2200() {
   frexp_result_f32 res = frexp_result_f32(0.5f, 1);
 }
-
-void fragment_main() {
+void main() {
   frexp_4b2200();
 }
-
-void main() {
-  fragment_main();
-  return;
-}
+//
+// compute_main
+//
 #version 310 es
 
-struct frexp_result_f32 {
-  float fract;
-  int exp;
-};
 
+struct frexp_result_f32 {
+  float member_0;
+  int member_1;
+};
 
 void frexp_4b2200() {
   frexp_result_f32 res = frexp_result_f32(0.5f, 1);
 }
-
-void compute_main() {
-  frexp_4b2200();
-}
-
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
-  compute_main();
-  return;
+  frexp_4b2200();
+}
+//
+// vertex_main
+//
+#version 310 es
+
+
+struct frexp_result_f32 {
+  float member_0;
+  int member_1;
+};
+
+struct VertexOutput {
+  vec4 pos;
+};
+
+void frexp_4b2200() {
+  frexp_result_f32 res = frexp_result_f32(0.5f, 1);
+}
+VertexOutput vertex_main_inner() {
+  VertexOutput v = VertexOutput(vec4(0.0f));
+  v.pos = vec4(0.0f);
+  frexp_4b2200();
+  return v;
+}
+void main() {
+  vec4 v_1 = vertex_main_inner().pos;
+  gl_Position = vec4(v_1.x, -(v_1.y), ((2.0f * v_1.z) - v_1.w), v_1.w);
+  gl_PointSize = 1.0f;
 }

@@ -38,11 +38,12 @@
 #include "dawn/native/Device.h"
 #include "dawn/native/ObjectType_autogen.h"
 #include "dawn/native/ValidationUtils_autogen.h"
+#include "dawn/native/utils/WGPUHelpers.h"
 
 namespace dawn::native {
 
 ProgrammableEncoder::ProgrammableEncoder(DeviceBase* device,
-                                         const char* label,
+                                         StringView label,
                                          EncodingContext* encodingContext)
     : ApiObjectBase(device, label),
       mEncodingContext(encodingContext),
@@ -51,7 +52,7 @@ ProgrammableEncoder::ProgrammableEncoder(DeviceBase* device,
 ProgrammableEncoder::ProgrammableEncoder(DeviceBase* device,
                                          EncodingContext* encodingContext,
                                          ErrorTag errorTag,
-                                         const char* label)
+                                         StringView label)
     : ApiObjectBase(device, errorTag, label),
       mEncodingContext(encodingContext),
       mValidationEnabled(device->IsValidationEnabled()) {}
@@ -67,20 +68,18 @@ MaybeError ProgrammableEncoder::ValidateProgrammableEncoderEnd() const {
     return {};
 }
 
-void ProgrammableEncoder::APIInsertDebugMarker(const char* groupLabel) {
+void ProgrammableEncoder::APIInsertDebugMarker(StringView markerIn) {
+    std::string_view marker = utils::NormalizeMessageString(markerIn);
     mEncodingContext->TryEncode(
         this,
         [&](CommandAllocator* allocator) -> MaybeError {
             InsertDebugMarkerCmd* cmd =
                 allocator->Allocate<InsertDebugMarkerCmd>(Command::InsertDebugMarker);
-            cmd->length = strlen(groupLabel);
-
-            char* label = allocator->AllocateData<char>(cmd->length + 1);
-            memcpy(label, groupLabel, cmd->length + 1);
+            AddNullTerminatedString(allocator, marker, &cmd->length);
 
             return {};
         },
-        "encoding %s.InsertDebugMarker(\"%s\").", this, groupLabel);
+        "encoding %s.InsertDebugMarker(%s).", this, marker);
 }
 
 void ProgrammableEncoder::APIPopDebugGroup() {
@@ -100,23 +99,68 @@ void ProgrammableEncoder::APIPopDebugGroup() {
         "encoding %s.PopDebugGroup().", this);
 }
 
-void ProgrammableEncoder::APIPushDebugGroup(const char* groupLabel) {
+void ProgrammableEncoder::APIPushDebugGroup(StringView groupLabelIn) {
+    std::string_view groupLabel = utils::NormalizeMessageString(groupLabelIn);
     mEncodingContext->TryEncode(
         this,
         [&](CommandAllocator* allocator) -> MaybeError {
             PushDebugGroupCmd* cmd =
                 allocator->Allocate<PushDebugGroupCmd>(Command::PushDebugGroup);
-            cmd->length = strlen(groupLabel);
-
-            char* label = allocator->AllocateData<char>(cmd->length + 1);
-            memcpy(label, groupLabel, cmd->length + 1);
+            const char* label = AddNullTerminatedString(allocator, groupLabel, &cmd->length);
 
             mDebugGroupStackSize++;
-            mEncodingContext->PushDebugGroupLabel(groupLabel);
+            mEncodingContext->PushDebugGroupLabel(std::string_view(label, cmd->length));
 
             return {};
         },
-        "encoding %s.PushDebugGroup(\"%s\").", this, groupLabel);
+        "encoding %s.PushDebugGroup(%s).", this, groupLabel);
+}
+
+void ProgrammableEncoder::APISetImmediateData(uint32_t offset, const void* data, size_t size) {
+    mEncodingContext->TryEncode(
+        this,
+        [&](CommandAllocator* allocator) -> MaybeError {
+            DAWN_INVALID_IF(!GetDevice()->HasFeature(Feature::ChromiumExperimentalImmediateData),
+                            "SetImmediateData() called without "
+                            "Feature::ChromiumExperimentalImmediateData supported.");
+
+            if (IsValidationEnabled()) {
+                uint32_t maxImmediateDataRangeByteSize =
+                    GetDevice()
+                        ->GetLimits()
+                        .experimentalImmediateDataLimits.maxImmediateDataRangeByteSize;
+                // Validate offset and size are aligned to 4 bytes.
+                DAWN_INVALID_IF(offset % 4 != 0, "offset (%u) is not a multiple of 4", offset);
+                DAWN_INVALID_IF(size % 4 != 0, "size (%u) is not a multiple of 4", size);
+
+                // Validate OOB
+                DAWN_INVALID_IF(offset > maxImmediateDataRangeByteSize,
+                                "offset (%u) is larger than maxImmediateDataRangeByteSize (%u).",
+                                offset, maxImmediateDataRangeByteSize);
+                DAWN_INVALID_IF(size > maxImmediateDataRangeByteSize,
+                                "size (%u) is larger than maxImmediateDataRangeByteSize (%u).",
+                                size, maxImmediateDataRangeByteSize);
+                DAWN_INVALID_IF(
+                    size > maxImmediateDataRangeByteSize - offset,
+                    "offset (%u) + size (%u): is larger than maxImmediateDataRangeByteSize (%u).",
+                    offset, size, maxImmediateDataRangeByteSize);
+            }
+
+            // Skip SetImmediateData when uploading constants are empty.
+            if (size == 0) {
+                return {};
+            }
+
+            SetImmediateDataCmd* cmd =
+                allocator->Allocate<SetImmediateDataCmd>(Command::SetImmediateData);
+            cmd->offset = offset;
+            cmd->size = size;
+            uint8_t* immediateDatas = allocator->AllocateData<uint8_t>(cmd->size);
+            memcpy(immediateDatas, data, size);
+
+            return {};
+        },
+        "encoding %s.SetImmediateData(%u, %u, ...).", this, offset, size);
 }
 
 MaybeError ProgrammableEncoder::ValidateSetBindGroup(BindGroupIndex index,
@@ -161,8 +205,10 @@ MaybeError ProgrammableEncoder::ValidateSetBindGroup(BindGroupIndex index,
             case wgpu::BufferBindingType::Storage:
             case wgpu::BufferBindingType::ReadOnlyStorage:
             case kInternalStorageBufferBinding:
+            case kInternalReadOnlyStorageBufferBinding:
                 requiredAlignment = GetDevice()->GetLimits().v1.minStorageBufferOffsetAlignment;
                 break;
+            case wgpu::BufferBindingType::BindingNotUsed:
             case wgpu::BufferBindingType::Undefined:
                 DAWN_UNREACHABLE();
         }

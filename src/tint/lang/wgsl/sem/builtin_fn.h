@@ -33,7 +33,7 @@
 
 #include "src/tint/lang/wgsl/builtin_fn.h"
 #include "src/tint/lang/wgsl/extension.h"
-#include "src/tint/lang/wgsl/features/language_feature.h"
+#include "src/tint/lang/wgsl/language_feature.h"
 #include "src/tint/lang/wgsl/sem/call_target.h"
 #include "src/tint/lang/wgsl/sem/pipeline_stage_set.h"
 #include "src/tint/utils/math/hash.h"
@@ -109,17 +109,19 @@ class BuiltinFn final : public Castable<BuiltinFn, CallTarget> {
     /// `packed_4x8_integer_dot_product`.
     bool IsPacked4x8IntegerDotProductBuiltin() const;
 
-    /// @returns true if builtin is a subgroup builtin (defined in the extension
-    /// chromium_experimental_subgroups)
+    /// @returns true if builtin is a subgroup builtin (defined in the extension `subgroups`).
     bool IsSubgroup() const;
+
+    /// @returns true if builtin is a subgroup matrix builtin (defined in the extension
+    /// `subgroup_matrix`).
+    bool IsSubgroupMatrix() const;
+
+    /// @returns true if builtin is a quadSwap builtin
+    bool IsQuadSwap() const;
 
     /// @returns true if intrinsic may have side-effects (i.e. writes to at least
     /// one of its inputs)
     bool HasSideEffects() const;
-
-    /// @returns the required extension of this builtin function. Returns
-    /// wgsl::Extension::kUndefined if no extension is required.
-    wgsl::Extension RequiredExtension() const;
 
     /// @returns the required language feature of this builtin function. Returns
     /// wgsl::LanguageFeature::kUndefined if no language feature is required.

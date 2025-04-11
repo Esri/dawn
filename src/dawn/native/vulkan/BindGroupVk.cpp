@@ -29,6 +29,7 @@
 
 #include "dawn/common/BitSetIterator.h"
 #include "dawn/common/MatchVariant.h"
+#include "dawn/common/Range.h"
 #include "dawn/common/ityp_stack_vec.h"
 #include "dawn/native/ExternalTexture.h"
 #include "dawn/native/vulkan/BindGroupLayoutVk.h"
@@ -45,14 +46,21 @@ namespace dawn::native::vulkan {
 // static
 ResultOrError<Ref<BindGroup>> BindGroup::Create(Device* device,
                                                 const BindGroupDescriptor* descriptor) {
-    return ToBackend(descriptor->layout->GetInternalBindGroupLayout())
-        ->AllocateBindGroup(device, descriptor);
+    Ref<BindGroup> bindGroup;
+    DAWN_TRY_ASSIGN(bindGroup, ToBackend(descriptor->layout->GetInternalBindGroupLayout())
+                                   ->AllocateBindGroup(device, descriptor));
+    DAWN_TRY(bindGroup->Initialize(descriptor));
+    return bindGroup;
 }
 
 BindGroup::BindGroup(Device* device,
                      const BindGroupDescriptor* descriptor,
                      DescriptorSetAllocation descriptorSetAllocation)
-    : BindGroupBase(this, device, descriptor), mDescriptorSetAllocation(descriptorSetAllocation) {
+    : BindGroupBase(this, device, descriptor), mDescriptorSetAllocation(descriptorSetAllocation) {}
+
+BindGroup::~BindGroup() = default;
+
+MaybeError BindGroup::InitializeImpl() {
     // Now do a write of a single descriptor set with all possible chained data allocated on the
     // stack.
     const uint32_t bindingCount = static_cast<uint32_t>((GetLayout()->GetBindingCount()));
@@ -64,10 +72,7 @@ BindGroup::BindGroup(Device* device,
         bindingCount);
 
     uint32_t numWrites = 0;
-    for (const auto& bindingItem : GetLayout()->GetBindingMap()) {
-        // We cannot use structured binding here because lambda expressions can only capture
-        // variables, while structured binding doesn't introduce variables.
-        BindingIndex bindingIndex = bindingItem.second;
+    for (BindingIndex bindingIndex : Range(GetLayout()->GetBindingCount())) {
         const BindingInfo& bindingInfo = GetLayout()->GetBindingInfo(bindingIndex);
 
         auto& write = writes[numWrites];
@@ -122,6 +127,20 @@ BindGroup::BindGroup(Device* device,
                     // resources.
                     return false;
                 }
+
+                // TODO(crbug.com/41488897: Add GetVkDescriptorSet{Index,
+                // Type}(BindingIndex) functions to BindGroupLayoutVk that
+                // access vectors holding entries for all BGL entries and
+                // eliminate this special-case code in favor of calling those
+                // functions to assign `dstBinding` and `descriptorType` above.
+                if (auto samplerIndex =
+                        ToBackend(GetLayout())->GetStaticSamplerIndexForTexture(bindingIndex)) {
+                    // Write the info of the texture at the binding index for the
+                    // sampler.
+                    write.dstBinding = static_cast<uint32_t>(samplerIndex.value());
+                    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                }
+
                 writeImageInfo[numWrites].imageView = handle;
                 writeImageInfo[numWrites].imageLayout = VulkanImageLayout(
                     view->GetTexture()->GetFormat(), wgpu::TextureUsage::TextureBinding);
@@ -151,6 +170,24 @@ BindGroup::BindGroup(Device* device,
 
                 write.pImageInfo = &writeImageInfo[numWrites];
                 return true;
+            },
+            [&](const InputAttachmentBindingInfo&) -> bool {
+                TextureView* view = ToBackend(GetBindingAsTextureView(bindingIndex));
+
+                VkImageView handle = view->GetHandle();
+                if (handle == VK_NULL_HANDLE) {
+                    // The Texture was destroyed before the TextureView was created.
+                    // Skip this descriptor write since it would be
+                    // a Vulkan Validation Layers error. This bind group won't be used as it
+                    // is an error to submit a command buffer that references destroyed
+                    // resources.
+                    return false;
+                }
+                writeImageInfo[numWrites].imageView = handle;
+                writeImageInfo[numWrites].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+                write.pImageInfo = &writeImageInfo[numWrites];
+                return true;
             });
 
         if (shouldWriteDescriptor) {
@@ -158,17 +195,27 @@ BindGroup::BindGroup(Device* device,
         }
     }
 
+    Device* device = ToBackend(GetDevice());
     // TODO(crbug.com/dawn/855): Batch these updates
     device->fn.UpdateDescriptorSets(device->GetVkDevice(), numWrites, writes.data(), 0, nullptr);
 
     SetLabelImpl();
-}
 
-BindGroup::~BindGroup() = default;
+    return {};
+}
 
 void BindGroup::DestroyImpl() {
     BindGroupBase::DestroyImpl();
-    ToBackend(GetLayout())->DeallocateBindGroup(this, &mDescriptorSetAllocation);
+    ToBackend(GetLayout())->DeallocateDescriptorSet(&mDescriptorSetAllocation);
+}
+
+void BindGroup::DeleteThis() {
+    // This function must first run the destructor and then deallocate memory. Take a reference to
+    // the BindGroupLayout+SlabAllocator before running the destructor so this function can access
+    // it afterwards and it's not destroyed prematurely.
+    Ref<BindGroupLayout> layout = ToBackend(GetLayout());
+    BindGroupBase::DeleteThis();
+    layout->DeallocateBindGroup(this);
 }
 
 VkDescriptorSet BindGroup::GetHandle() const {

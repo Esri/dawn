@@ -28,7 +28,7 @@
 #ifndef SRC_DAWN_WIRE_CLIENT_TEXTURE_H_
 #define SRC_DAWN_WIRE_CLIENT_TEXTURE_H_
 
-#include "dawn/webgpu.h"
+#include <webgpu/webgpu.h>
 
 #include "dawn/wire/client/ObjectBase.h"
 
@@ -38,6 +38,8 @@ class Device;
 
 class Texture final : public ObjectBase {
   public:
+    static WGPUTexture CreateError(Device* device, const WGPUTextureDescriptor* descriptor);
+
     Texture(const ObjectBaseParams& params, const WGPUTextureDescriptor* descriptor);
     ~Texture() override;
 

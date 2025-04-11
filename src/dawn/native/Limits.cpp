@@ -52,10 +52,10 @@
     X(Maximum,                    maxComputeWorkgroupSizeZ,        64,          64,         64) \
     X(Maximum,            maxComputeWorkgroupsPerDimension,     65535,       65535,      65535)
 
-// Tiers are 128MB, 1GB, 2GB-4, 4GB-4.
+// Tiers are 128MB, 512MB, 1GB, 2GB-4, 4GB-4.
 //                                          compat     tier0      tier1
 #define LIMITS_STORAGE_BUFFER_BINDING_SIZE(X)                                                        \
-    X(Maximum, maxStorageBufferBindingSize, 134217728, 134217728, 1073741824, 2147483644, 4294967292)
+    X(Maximum, maxStorageBufferBindingSize, 134217728, 134217728, 536870912, 1073741824, 2147483644, 4294967292)
 
 // Tiers are 256MB, 1GB, 2GB, 4GB.
 //                            compat      tier0       tier1
@@ -72,6 +72,8 @@
     X(Maximum,            maxSampledTexturesPerShaderStage,        16,        16,         16) \
     X(Maximum,                   maxSamplersPerShaderStage,        16,        16,         16) \
     X(Maximum,            maxStorageTexturesPerShaderStage,         4,         4,          8) \
+    X(Maximum,           maxStorageTexturesInFragmentStage,         4,         4,          8) \
+    X(Maximum,             maxStorageTexturesInVertexStage,         0,         4,          8) \
     X(Maximum,             maxUniformBuffersPerShaderStage,        12,        12,         12)
 
 // Tiers for limits related to storage buffer bindings. Should probably be merged with
@@ -79,8 +81,10 @@
 // TODO(crbug.com/dawn/685): Define these better. For now, use two tiers where one
 // offers slightly better than default limits.
 //
-#define LIMITS_STORAGE_BUFFER_BINDINGS(X)                                                           \
-    X(Maximum,             maxStorageBuffersPerShaderStage,         4,         8,          10)
+#define LIMITS_STORAGE_BUFFER_BINDINGS(X)                                                      \
+    X(Maximum,             maxStorageBuffersPerShaderStage,         8,         8,          10) \
+    X(Maximum,             maxStorageBuffersInFragmentStage,        4,         8,          10) \
+    X(Maximum,             maxStorageBuffersInVertexStage,          0,         8,          10)
 
 // TODO(crbug.com/dawn/685):
 // These limits aren't really tiered and could probably be grouped better.
@@ -93,7 +97,6 @@
 // Tiers for limits related to inter-stage shader variables.
 //                                                             compat      tier0       tier1
 #define LIMITS_INTER_STAGE_SHADER_VARIABLES(X) \
-    X(Maximum,               maxInterStageShaderComponents,       60,        64,        112) \
     X(Maximum,               maxInterStageShaderVariables,        15,        16,         28) \
 
 // Tiered limits for texture dimensions.
@@ -221,20 +224,20 @@ bool IsLimitUndefined<uint64_t>(uint64_t value) {
 
 }  // namespace
 
-void GetDefaultLimits(Limits* limits, FeatureLevel featureLevel) {
+void GetDefaultLimits(Limits* limits, wgpu::FeatureLevel featureLevel) {
     DAWN_ASSERT(limits != nullptr);
 #define X(Better, limitName, compat, base, ...) \
-    limits->limitName = featureLevel == FeatureLevel::Compatibility ? compat : base;
+    limits->limitName = featureLevel == wgpu::FeatureLevel::Compatibility ? compat : base;
     LIMITS(X)
 #undef X
 }
 
-Limits ReifyDefaultLimits(const Limits& limits, FeatureLevel featureLevel) {
+Limits ReifyDefaultLimits(const Limits& limits, wgpu::FeatureLevel featureLevel) {
     Limits out;
 #define X(Class, limitName, compat, base, ...)                                         \
     {                                                                                  \
         const auto defaultLimit = static_cast<decltype(limits.limitName)>(             \
-            featureLevel == FeatureLevel::Compatibility ? compat : base);              \
+            featureLevel == wgpu::FeatureLevel::Compatibility ? compat : base);        \
         if (IsLimitUndefined(limits.limitName) ||                                      \
             CheckLimit<LimitClass::Class>::IsBetter(defaultLimit, limits.limitName)) { \
             /* If the limit is undefined or the default is better, use the default */  \
@@ -257,10 +260,17 @@ MaybeError ValidateLimits(const Limits& supportedLimits, const Limits& requiredL
     }
     LIMITS(X)
 #undef X
+
     return {};
 }
 
-Limits ApplyLimitTiers(Limits limits) {
+CombinedLimits ApplyLimitTiers(const CombinedLimits& limits) {
+    CombinedLimits limitsCopy = limits;
+    ApplyLimitTiers(&limitsCopy);
+    return limitsCopy;
+}
+
+void ApplyLimitTiers(CombinedLimits* limits) {
 #define X_TIER_COUNT(Better, limitName, ...) , std::integer_sequence<uint64_t, __VA_ARGS__>{}.size()
 #define GET_TIER_COUNT(LIMIT_GROUP) \
     ReduceSameValue(std::integer_sequence<uint32_t LIMIT_GROUP(X_TIER_COUNT)>{})
@@ -279,12 +289,12 @@ Limits ApplyLimitTiers(Limits limits) {
     {                                                                                     \
         constexpr std::array<decltype(Limits::limitName), kTierCount> tiers{__VA_ARGS__}; \
         decltype(Limits::limitName) tierValue = tiers[i - 1];                             \
-        if (CheckLimit<LimitClass::Class>::IsBetter(tierValue, limits.limitName)) {       \
+        if (CheckLimit<LimitClass::Class>::IsBetter(tierValue, limits->v1.limitName)) {   \
             /* The tier is better. Go to the next tier. */                                \
             continue;                                                                     \
-        } else if (tierValue != limits.limitName) {                                       \
+        } else if (tierValue != limits->v1.limitName) {                                   \
             /* Better than the tier. Degrade |limits| to the tier. */                     \
-            limits.limitName = tiers[i - 1];                                              \
+            limits->v1.limitName = tiers[i - 1];                                          \
         }                                                                                 \
     }
 
@@ -298,13 +308,12 @@ Limits ApplyLimitTiers(Limits limits) {
     // maxBufferSize being 2GB. NormalizeLimits will clamp the maxStorageBufferBindingSize to
     // maxBufferSize in such cases, although the result may or may not be one of predefined
     // maxStorageBufferBindingSize tiers.
-    NormalizeLimits(&limits);
+    NormalizeLimits(limits);
 
 #undef X_CHECK_BETTER_AND_CLAMP
 #undef X_EACH_GROUP
 #undef GET_TIER_COUNT
 #undef X_TIER_COUNT
-    return limits;
 }
 
 #define DAWN_INTERNAL_LIMITS_MEMBER_ASSIGNMENT(type, name) \
@@ -325,35 +334,87 @@ void stream::Stream<LimitsForCompilationRequest>::Write(Sink* s,
     t.VisitAll([&](const auto&... members) { StreamIn(s, members...); });
 }
 
-void NormalizeLimits(Limits* limits) {
+void NormalizeLimits(CombinedLimits* limits) {
     // Enforce internal Dawn constants for some limits to ensure they don't go over fixed-size
     // arrays in Dawn's internal code.
-    limits->maxVertexBufferArrayStride =
-        std::min(limits->maxVertexBufferArrayStride, kMaxVertexBufferArrayStride);
-    limits->maxColorAttachments =
-        std::min(limits->maxColorAttachments, uint32_t(kMaxColorAttachments));
-    limits->maxBindGroups = std::min(limits->maxBindGroups, kMaxBindGroups);
-    limits->maxBindGroupsPlusVertexBuffers =
-        std::min(limits->maxBindGroupsPlusVertexBuffers, kMaxBindGroupsPlusVertexBuffers);
-    limits->maxVertexAttributes =
-        std::min(limits->maxVertexAttributes, uint32_t(kMaxVertexAttributes));
-    limits->maxVertexBuffers = std::min(limits->maxVertexBuffers, uint32_t(kMaxVertexBuffers));
-    limits->maxSampledTexturesPerShaderStage =
-        std::min(limits->maxSampledTexturesPerShaderStage, kMaxSampledTexturesPerShaderStage);
-    limits->maxSamplersPerShaderStage =
-        std::min(limits->maxSamplersPerShaderStage, kMaxSamplersPerShaderStage);
-    limits->maxStorageBuffersPerShaderStage =
-        std::min(limits->maxStorageBuffersPerShaderStage, kMaxStorageBuffersPerShaderStage);
-    limits->maxStorageTexturesPerShaderStage =
-        std::min(limits->maxStorageTexturesPerShaderStage, kMaxStorageTexturesPerShaderStage);
-    limits->maxUniformBuffersPerShaderStage =
-        std::min(limits->maxUniformBuffersPerShaderStage, kMaxUniformBuffersPerShaderStage);
+    limits->v1.maxVertexBufferArrayStride =
+        std::min(limits->v1.maxVertexBufferArrayStride, kMaxVertexBufferArrayStride);
+    limits->v1.maxColorAttachments =
+        std::min(limits->v1.maxColorAttachments, uint32_t(kMaxColorAttachments));
+    limits->v1.maxBindGroups = std::min(limits->v1.maxBindGroups, kMaxBindGroups);
+    limits->v1.maxBindGroupsPlusVertexBuffers =
+        std::min(limits->v1.maxBindGroupsPlusVertexBuffers, kMaxBindGroupsPlusVertexBuffers);
+    limits->v1.maxVertexAttributes =
+        std::min(limits->v1.maxVertexAttributes, uint32_t(kMaxVertexAttributes));
+    limits->v1.maxVertexBuffers =
+        std::min(limits->v1.maxVertexBuffers, uint32_t(kMaxVertexBuffers));
+    limits->v1.maxSampledTexturesPerShaderStage =
+        std::min(limits->v1.maxSampledTexturesPerShaderStage, kMaxSampledTexturesPerShaderStage);
+    limits->v1.maxSamplersPerShaderStage =
+        std::min(limits->v1.maxSamplersPerShaderStage, kMaxSamplersPerShaderStage);
+    limits->v1.maxStorageBuffersPerShaderStage =
+        std::min(limits->v1.maxStorageBuffersPerShaderStage, kMaxStorageBuffersPerShaderStage);
+    limits->v1.maxStorageTexturesPerShaderStage =
+        std::min(limits->v1.maxStorageTexturesPerShaderStage, kMaxStorageTexturesPerShaderStage);
+    limits->v1.maxStorageBuffersInVertexStage =
+        std::min(limits->v1.maxStorageBuffersInVertexStage, kMaxStorageBuffersPerShaderStage);
+    limits->v1.maxStorageTexturesInVertexStage =
+        std::min(limits->v1.maxStorageTexturesInVertexStage, kMaxStorageTexturesPerShaderStage);
+    limits->v1.maxStorageBuffersInFragmentStage =
+        std::min(limits->v1.maxStorageBuffersInFragmentStage, kMaxStorageBuffersPerShaderStage);
+    limits->v1.maxStorageTexturesInFragmentStage =
+        std::min(limits->v1.maxStorageTexturesInFragmentStage, kMaxStorageTexturesPerShaderStage);
+    limits->v1.maxUniformBuffersPerShaderStage =
+        std::min(limits->v1.maxUniformBuffersPerShaderStage, kMaxUniformBuffersPerShaderStage);
 
     // Additional enforcement for dependent limits.
-    limits->maxStorageBufferBindingSize =
-        std::min(limits->maxStorageBufferBindingSize, limits->maxBufferSize);
-    limits->maxUniformBufferBindingSize =
-        std::min(limits->maxUniformBufferBindingSize, limits->maxBufferSize);
+    limits->v1.maxStorageBufferBindingSize =
+        std::min(limits->v1.maxStorageBufferBindingSize, limits->v1.maxBufferSize);
+    limits->v1.maxUniformBufferBindingSize =
+        std::min(limits->v1.maxUniformBufferBindingSize, limits->v1.maxBufferSize);
+
+    // Enforce immediate data bytes to ensure they don't go over a fixed limit in Dawn's internal
+    // code.
+    limits->experimentalImmediateDataLimits.maxImmediateDataRangeByteSize = kMaxImmediateDataBytes;
+}
+
+void EnforceLimitSpecInvariants(Limits* limits, wgpu::FeatureLevel featureLevel) {
+    // In all feature levels, maxXXXPerStage is raised to maxXXXInStage
+    // The reason for this is in compatibility mode, maxXXXPerStage defaults to = 4.
+    // That means if the adapter has 8 maxXXXInStage and 8 maxXXXPerStage
+    // and you request maxXXXInStage = 3 things work but, if you request
+    // maxXXXInStage = 5 they'd fail because suddenly you're you'd also be required
+    // to request maxXXXPerStage to 5. So, we auto-uprade the perStage limits.
+    limits->maxStorageBuffersPerShaderStage =
+        Max(limits->maxStorageBuffersPerShaderStage, limits->maxStorageBuffersInVertexStage,
+            limits->maxStorageBuffersInFragmentStage);
+    limits->maxStorageTexturesPerShaderStage =
+        Max(limits->maxStorageTexturesPerShaderStage, limits->maxStorageTexturesInVertexStage,
+            limits->maxStorageTexturesInFragmentStage);
+
+    if (featureLevel != wgpu::FeatureLevel::Compatibility) {
+        // In core mode the maxStorageXXXInYYYStage are always set to maxStorageXXXPerShaderStage
+        // In compat they can vary but validation:
+        //   In compat, user requests 3 and 5 respectively so result:
+        //     device.limits.maxStorageBuffersInFragmentStage = 3;
+        //     device.limits.maxStorageBuffersPerShaderStage = 5;
+        //     It's ok to use 3 storage buffers in fragment stage but fails if 4 used.
+        //   In core, user requests 3 and 5 respectively so result:
+        //     device.limits.maxStorageBuffersInFragmentStage = 5;
+        //     device.limits.maxStorageBuffersPerShaderStage = 5;
+        //     It's ok to use 5 storage buffers in fragment stage because in core
+        //     we originally only had maxStorageBuffersPerShaderStage
+        limits->maxStorageBuffersInFragmentStage = limits->maxStorageBuffersPerShaderStage;
+        limits->maxStorageTexturesInFragmentStage = limits->maxStorageTexturesPerShaderStage;
+        limits->maxStorageBuffersInVertexStage = limits->maxStorageBuffersPerShaderStage;
+        limits->maxStorageTexturesInVertexStage = limits->maxStorageTexturesPerShaderStage;
+    }
+}
+
+void NormalizeExperimentalLimits(CombinedLimits* limits) {
+    // Enforce immediate data bytes to ensure they don't go over a fixed limit in Dawn's internal
+    // code.
+    limits->experimentalImmediateDataLimits.maxImmediateDataRangeByteSize = kMaxImmediateDataBytes;
 }
 
 }  // namespace dawn::native

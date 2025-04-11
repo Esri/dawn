@@ -28,6 +28,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/strings/str_format.h"
 #include "dawn/common/Assert.h"
 #include "dawn/tests/DawnTest.h"
 #include "dawn/utils/ComboRenderPipelineDescriptor.h"
@@ -57,6 +58,12 @@ const std::vector<uint32_t> kStencilValues = {0, 1, 38, 255};
 
 class DepthStencilSamplingTest : public DawnTestWithParams<DepthStencilSamplingTestParams> {
   protected:
+    wgpu::Limits GetRequiredLimits(const wgpu::Limits& supported) override {
+        // Just copy all the limits, though all we really care about is
+        // maxStorageBuffersInFragmentStage
+        return supported;
+    }
+
     enum class TestAspectAndSamplerType {
         DepthAsDepth,
         DepthAsFloat,
@@ -67,6 +74,12 @@ class DepthStencilSamplingTest : public DawnTestWithParams<DepthStencilSamplingT
         DawnTestWithParams<DepthStencilSamplingTestParams>::SetUp();
 
         DAWN_TEST_UNSUPPORTED_IF(!mIsFormatSupported);
+
+        // Skip formats other than Depth24PlusStencil8 if we're specifically testing with the packed
+        // depth24_unorm_stencil8 toggle.
+        DAWN_TEST_UNSUPPORTED_IF(HasToggleEnabled("use_packed_depth24_unorm_stencil8_format") &&
+                                 GetParam().mTextureFormat !=
+                                     wgpu::TextureFormat::Depth24PlusStencil8);
 
         wgpu::BufferDescriptor uniformBufferDesc;
         uniformBufferDesc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
@@ -465,13 +478,11 @@ class DepthStencilSamplingTest : public DawnTestWithParams<DepthStencilSamplingT
                 return testing::AssertionSuccess();
             }
 
-            return testing::AssertionFailure() << "Expected stencil data to be "
-                                               << "(" << ssss[0] << ", " << ssss[1] << ", "
-                                               << ssss[2] << ", " << ssss[3] << ") or "
-                                               << "(" << s001[0] << ", " << s001[1] << ", "
-                                               << s001[2] << ", " << s001[3] << "). Got "
-                                               << "(" << data[0] << ", " << data[1] << ", "
-                                               << data[2] << ", " << data[3] << ").";
+            return testing::AssertionFailure()
+                   << "Expected stencil data to be " << "(" << ssss[0] << ", " << ssss[1] << ", "
+                   << ssss[2] << ", " << ssss[3] << ") or " << "(" << s001[0] << ", " << s001[1]
+                   << ", " << s001[2] << ", " << s001[3] << "). Got " << "(" << data[0] << ", "
+                   << data[1] << ", " << data[2] << ", " << data[3] << ").";
         }
 
       private:
@@ -570,7 +581,9 @@ class DepthStencilSamplingTest : public DawnTestWithParams<DepthStencilSamplingT
             queue.Submit(1, &commands);
 
             EXPECT_TEXTURE_EQ(CompareFunctionPasses(compareRef, compare, textureValue) ? 1.f : 0.f,
-                              outputTexture, {0, 0});
+                              outputTexture, {0, 0})
+                << "compareRef=" << compareRef << " " << compare
+                << " textureValue=" << textureValue;
         }
     }
 
@@ -620,7 +633,9 @@ class DepthStencilSamplingTest : public DawnTestWithParams<DepthStencilSamplingT
             float* expected =
                 CompareFunctionPasses(compareRef, compare, textureValue) ? &float1 : &float0;
 
-            EXPECT_BUFFER_U32_EQ(*reinterpret_cast<uint32_t*>(expected), outputBuffer, 0);
+            EXPECT_BUFFER_U32_EQ(*reinterpret_cast<uint32_t*>(expected), outputBuffer, 0)
+                << "compareRef=" << compareRef << " " << compare
+                << " textureValue=" << textureValue;
         }
     }
 
@@ -632,7 +647,7 @@ class DepthStencilSamplingTest : public DawnTestWithParams<DepthStencilSamplingT
 // Repro test for crbug.com/dawn/1187 where sampling a depth texture returns values not in [0, 1]
 TEST_P(DepthStencilSamplingTest, CheckDepthTextureRange) {
     // TODO(crbug.com/dawn/1187): The test fails on ANGLE D3D11, investigate why.
-    DAWN_SUPPRESS_TEST_IF(IsANGLE() && IsWindows());
+    DAWN_SUPPRESS_TEST_IF(IsANGLED3D11());
 
     // TODO(crbug.com/dawn/2295): diagnose this failure on Pixel 4 OpenGLES
     DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsAndroid() && IsQualcomm());
@@ -671,7 +686,35 @@ TEST_P(DepthStencilSamplingTest, CheckDepthTextureRange) {
             }
             return 0.0;
         }
+
+        // Check each depth texture texel has the expected value and outputs a "bool".
+        // Compat can not use texture_depth_2d with a non-comparison sampler
+        @group(0) @binding(0) var t2 : texture_2d<f32>;
+        @fragment fn fs2Compat(@builtin(position) pos : vec4f) -> @location(0) f32 {
+            let x = pos.x / kWidth;
+            let depth = textureSample(t2, s, vec2(x, 0.5)).r;
+
+            let index = pos.x - 0.5;
+            let expectedDepth = index / (kWidth - 1.0);
+
+            if (abs(depth - expectedDepth) < 0.001) {
+                return 1.0;
+            }
+            return 0.0;
+        }
     )");
+
+    wgpu::BindGroupLayout bgl = utils::MakeBindGroupLayout(
+        device, {
+                    {0, wgpu::ShaderStage::Fragment,
+                     IsCompatibilityMode() ? wgpu::TextureSampleType::UnfilterableFloat
+                                           : wgpu::TextureSampleType::Depth},
+                    {1, wgpu::ShaderStage::Fragment, wgpu::SamplerBindingType::NonFiltering},
+                });
+
+    wgpu::PipelineLayoutDescriptor plDescriptor;
+    plDescriptor.bindGroupLayoutCount = 1;
+    plDescriptor.bindGroupLayouts = &bgl;
 
     // The first pipeline will write to the depth texture.
     utils::ComboRenderPipelineDescriptor pDesc1;
@@ -681,14 +724,15 @@ TEST_P(DepthStencilSamplingTest, CheckDepthTextureRange) {
     pDesc1.cTargets[0].format = wgpu::TextureFormat::R32Float;
     pDesc1.primitive.topology = wgpu::PrimitiveTopology::PointList;
     pDesc1.EnableDepthStencil(wgpu::TextureFormat::Depth24PlusStencil8);
-    pDesc1.cDepthStencil.depthWriteEnabled = true;
+    pDesc1.cDepthStencil.depthWriteEnabled = wgpu::OptionalBool::True;
     wgpu::RenderPipeline pipeline1 = device.CreateRenderPipeline(&pDesc1);
 
     // The second pipeline checks the depth texture and outputs 1 to a texel on success.
     utils::ComboRenderPipelineDescriptor pDesc2;
+    pDesc2.layout = device.CreatePipelineLayout(&plDescriptor);
     pDesc2.vertex.module = module;
     pDesc2.cFragment.module = module;
-    pDesc2.cFragment.entryPoint = "fs2";
+    pDesc2.cFragment.entryPoint = IsCompatibilityMode() ? "fs2Compat" : "fs2";
     pDesc2.cTargets[0].format = wgpu::TextureFormat::R32Float;
     pDesc2.primitive.topology = wgpu::PrimitiveTopology::PointList;
     wgpu::RenderPipeline pipeline2 = device.CreateRenderPipeline(&pDesc2);
@@ -742,10 +786,9 @@ TEST_P(DepthStencilSamplingTest, CheckDepthTextureRange) {
 // Test that sampling a depth/stencil texture at components 1, 2, and 3 yield 0, 0, and 1
 // respectively
 TEST_P(DepthStencilSamplingTest, SampleExtraComponents) {
-    // This test fails on ANGLE (both SwiftShader and D3D11).
-    DAWN_SUPPRESS_TEST_IF(IsANGLE());
     // TODO(crbug.com/dawn/2295): diagnose this failure on Pixel 6 OpenGLES
     DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsAndroid() && IsARM());
+    DAWN_SUPPRESS_TEST_IF(GetSupportedLimits().maxStorageBuffersInFragmentStage < 1);
 
     wgpu::TextureFormat format = GetParam().mTextureFormat;
 
@@ -762,6 +805,10 @@ TEST_P(DepthStencilSamplingTest, SampleDepthAndStencilRender) {
     DAWN_TEST_UNSUPPORTED_IF(IsCompatibilityMode());
 
     wgpu::TextureFormat format = GetParam().mTextureFormat;
+
+    // Depth24PlusStencil8 could be mapped to a depth24unorm format and ULP for 24-bit unorm is
+    // 1 / (2 ^ 24 - 1) whereas ULP for 32-bit float varies and can be smaller.
+    const float tolerance = format == wgpu::TextureFormat::Depth24PlusStencil8 ? 1e-6f : 0.0f;
 
     wgpu::SamplerDescriptor samplerDesc;
     wgpu::Sampler sampler = device.CreateSampler(&samplerDesc);
@@ -822,7 +869,7 @@ TEST_P(DepthStencilSamplingTest, SampleDepthAndStencilRender) {
         memcpy(&expectedDepth, &passDescriptor.cDepthStencilAttachmentInfo.depthClearValue,
                sizeof(float));
         EXPECT_BUFFER(depthOutput, 0, sizeof(float),
-                      new ::dawn::detail::ExpectEq<float>(expectedDepth));
+                      new ::dawn::detail::ExpectEq<float>(expectedDepth, tolerance));
 
         uint8_t expectedStencil = 0;
         memcpy(&expectedStencil, &passDescriptor.cDepthStencilAttachmentInfo.stencilClearValue,
@@ -872,7 +919,7 @@ TEST_P(DepthStencilSamplingTest, SampleDepthAndStencilRender) {
         memcpy(&expectedDepth, &passDescriptor.cDepthStencilAttachmentInfo.depthClearValue,
                sizeof(float));
         EXPECT_BUFFER(depthOutput, 0, sizeof(float),
-                      new ::dawn::detail::ExpectEq<float>(expectedDepth));
+                      new ::dawn::detail::ExpectEq<float>(expectedDepth, tolerance));
 
         uint8_t expectedStencil = 0;
         memcpy(&expectedStencil, &passDescriptor.cDepthStencilAttachmentInfo.stencilClearValue,
@@ -885,6 +932,9 @@ class DepthSamplingTest : public DepthStencilSamplingTest {};
 
 // Test that sampling a depth texture with a render/compute pipeline works
 TEST_P(DepthSamplingTest, SampleDepthOnly) {
+    // textureLoad with texture_depth_xxx is not supported in compat mode.
+    DAWN_TEST_UNSUPPORTED_IF(IsCompatibilityMode());
+
     // TODO(crbug.com/dawn/2552): diagnose this flake on Pixel 6 OpenGLES
     DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsAndroid() && IsARM());
 
@@ -892,7 +942,14 @@ TEST_P(DepthSamplingTest, SampleDepthOnly) {
     DAWN_SUPPRESS_TEST_IF(IsWindows() && IsIntelGen12() && IsANGLED3D11());
 
     wgpu::TextureFormat format = GetParam().mTextureFormat;
-    float tolerance = format == wgpu::TextureFormat::Depth16Unorm ? 0.001f : 0.0f;
+
+    // ULP for Depth16Unorm is 1 / (2 ^ 16 - 1). Similarly Depth24PlusStencil8 could be mapped to a
+    // depth24unorm format and ULP for 24-bit unorm is 1 / (2 ^ 24 - 1). But ULP for 32-bit float
+    // varies and can be smaller so set a tolerance (any value greater than unorm ULP is fine).
+    const float tolerance = (format == wgpu::TextureFormat::Depth16Unorm ||
+                             format == wgpu::TextureFormat::Depth24PlusStencil8)
+                                ? 1e-4f
+                                : 0.0f;
 
     // Test 0, between [0, 1], and 1.
     DoSamplingTest(TestAspectAndSamplerType::DepthAsDepth,
@@ -919,13 +976,17 @@ TEST_P(DepthSamplingTest, CompareFunctionsRender) {
     DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsQualcomm());
 
     wgpu::TextureFormat format = GetParam().mTextureFormat;
-    // Test does not account for precision issues when comparison testing Depth16Unorm.
-    DAWN_TEST_UNSUPPORTED_IF(format == wgpu::TextureFormat::Depth16Unorm);
-
     wgpu::RenderPipeline pipeline = CreateComparisonRenderPipeline();
+
+    bool isDepthUnorm = format == wgpu::TextureFormat::Depth16Unorm ||
+                        (format == wgpu::TextureFormat::Depth24PlusStencil8 &&
+                         HasToggleEnabled("use_packed_depth24_unorm_stencil8_format"));
 
     // Test a "normal" ref value between 0 and 1; as well as negative and > 1 refs.
     for (float compareRef : kCompareRefs) {
+        if (isDepthUnorm) {
+            compareRef = std::clamp(compareRef, 0.0f, 1.0f);
+        }
         // Test 0, below the ref, equal to, above the ref, and 1.
         for (wgpu::CompareFunction f : kCompareFunctions) {
             DoDepthCompareRefTest(pipeline, format, compareRef, f, kNormalizedTextureValues);
@@ -937,11 +998,9 @@ class StencilSamplingTest : public DepthStencilSamplingTest {};
 
 // Test that sampling a stencil texture with a render/compute pipeline works
 TEST_P(StencilSamplingTest, SampleStencilOnly) {
-    // This test fails on SwANGLE (although it passes on other ANGLE backends).
-    DAWN_TEST_UNSUPPORTED_IF(IsANGLE());
-
     // TODO(crbug.com/dawn/2295): diagnose this failure on Pixel 6 OpenGLES
     DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsAndroid() && IsARM());
+    DAWN_SUPPRESS_TEST_IF(GetSupportedLimits().maxStorageBuffersInFragmentStage < 1);
 
     wgpu::TextureFormat format = GetParam().mTextureFormat;
 
@@ -955,19 +1014,21 @@ TEST_P(StencilSamplingTest, SampleStencilOnly) {
 }
 
 DAWN_INSTANTIATE_TEST_P(DepthStencilSamplingTest,
-                        {D3D11Backend(), D3D12Backend(), MetalBackend(), OpenGLBackend(),
-                         OpenGLESBackend(), VulkanBackend()},
+                        {D3D11Backend(), D3D11Backend({"use_packed_depth24_unorm_stencil8_format"}),
+                         D3D12Backend(), D3D12Backend({"use_packed_depth24_unorm_stencil8_format"}),
+                         MetalBackend(), OpenGLBackend(), OpenGLESBackend(), VulkanBackend()},
                         std::vector<wgpu::TextureFormat>(utils::kDepthAndStencilFormats.begin(),
                                                          utils::kDepthAndStencilFormats.end()));
 
 DAWN_INSTANTIATE_TEST_P(DepthSamplingTest,
-                        {D3D11Backend(), D3D12Backend(), MetalBackend(), OpenGLBackend(),
-                         OpenGLESBackend(), VulkanBackend()},
+                        {D3D11Backend(), D3D11Backend({"use_packed_depth24_unorm_stencil8_format"}),
+                         MetalBackend(), OpenGLBackend(), OpenGLESBackend(), VulkanBackend()},
                         std::vector<wgpu::TextureFormat>(utils::kDepthFormats.begin(),
                                                          utils::kDepthFormats.end()));
 
 DAWN_INSTANTIATE_TEST_P(StencilSamplingTest,
-                        {D3D11Backend(), D3D12Backend(), MetalBackend(),
+                        {D3D12Backend(), D3D12Backend({"use_packed_depth24_unorm_stencil8_format"}),
+                         MetalBackend(),
                          MetalBackend({"metal_use_combined_depth_stencil_format_for_stencil8"}),
                          OpenGLBackend(), OpenGLESBackend(), VulkanBackend()},
                         std::vector<wgpu::TextureFormat>(utils::kStencilFormats.begin(),

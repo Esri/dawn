@@ -34,6 +34,7 @@
 #include "dawn/native/Device.h"
 #include "dawn/native/ObjectBase.h"
 #include "dawn/native/ObjectType_autogen.h"
+#include "dawn/native/utils/WGPUHelpers.h"
 
 namespace dawn::native {
 
@@ -52,7 +53,7 @@ ObjectBase::ObjectBase(DeviceBase* device) : ErrorMonad(), mDevice(device) {}
 ObjectBase::ObjectBase(DeviceBase* device, ErrorTag) : ErrorMonad(kError), mDevice(device) {}
 
 InstanceBase* ObjectBase::GetInstance() const {
-    return mDevice->GetAdapter()->GetInstance();
+    return mDevice->GetInstance();
 }
 
 DeviceBase* ObjectBase::GetDevice() const {
@@ -85,17 +86,13 @@ void ApiObjectList::Destroy() {
     }
 }
 
-ApiObjectBase::ApiObjectBase(DeviceBase* device, const char* label) : ObjectBase(device) {
-    if (label) {
-        mLabel = label;
-    }
+ApiObjectBase::ApiObjectBase(DeviceBase* device, StringView label) : ObjectBase(device) {
+    mLabel = std::string(label);
 }
 
-ApiObjectBase::ApiObjectBase(DeviceBase* device, ErrorTag tag, const char* label)
+ApiObjectBase::ApiObjectBase(DeviceBase* device, ErrorTag tag, StringView label)
     : ObjectBase(device, tag) {
-    if (label) {
-        mLabel = label;
-    }
+    mLabel = std::string(label);
 }
 
 ApiObjectBase::ApiObjectBase(DeviceBase* device, LabelNotImplementedTag tag) : ObjectBase(device) {}
@@ -104,8 +101,8 @@ ApiObjectBase::~ApiObjectBase() {
     DAWN_ASSERT(!IsAlive());
 }
 
-void ApiObjectBase::APISetLabel(const char* label) {
-    SetLabel(label);
+void ApiObjectBase::APISetLabel(StringView label) {
+    SetLabel(std::string(utils::NormalizeMessageString(label)));
 }
 
 void ApiObjectBase::SetLabel(std::string label) {

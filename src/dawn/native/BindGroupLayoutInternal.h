@@ -33,6 +33,7 @@
 #include <map>
 #include <string>
 
+#include "absl/container/flat_hash_map.h"
 #include "dawn/common/Constants.h"
 #include "dawn/common/ContentLessObjectCacheable.h"
 #include "dawn/common/SlabAllocator.h"
@@ -54,7 +55,8 @@ struct ExternalTextureBindingExpansion {
     BindingNumber params;
 };
 
-using ExternalTextureBindingExpansionMap = std::map<BindingNumber, ExternalTextureBindingExpansion>;
+using ExternalTextureBindingExpansionMap =
+    absl::flat_hash_map<BindingNumber, ExternalTextureBindingExpansion>;
 
 MaybeError ValidateBindGroupLayoutDescriptor(DeviceBase* device,
                                              const BindGroupLayoutDescriptor* descriptor,
@@ -83,6 +85,10 @@ class BindGroupLayoutInternalBase : public ApiObjectBase,
     bool HasBinding(BindingNumber bindingNumber) const;
     BindingIndex GetBindingIndex(BindingNumber bindingNumber) const;
 
+    // Signals it's an appropriate time to free unused memory. BindGroupLayout implementations often
+    // have SlabAllocator<BindGroup> that need an external signal.
+    virtual void ReduceMemoryUsage();
+
     // Functions necessary for the unordered_set<BGLBase*>-based cache.
     size_t ComputeContentHash() override;
 
@@ -91,6 +97,7 @@ class BindGroupLayoutInternalBase : public ApiObjectBase,
                         const BindGroupLayoutInternalBase* b) const;
     };
 
+    bool IsEmpty() const;
     BindingIndex GetBindingCount() const;
     // Returns |BindingIndex| because buffers are packed at the front.
     BindingIndex GetBufferCount() const;
@@ -109,6 +116,8 @@ class BindGroupLayoutInternalBase : public ApiObjectBase,
     const ExternalTextureBindingExpansionMap& GetExternalTextureBindingExpansionMap() const;
 
     uint32_t GetUnexpandedBindingCount() const;
+
+    bool NeedsCrossBindingValidation() const;
 
     // Tests that the BindingInfo of two bind groups are equal.
     bool IsLayoutEqual(const BindGroupLayoutInternalBase* other) const;
@@ -152,9 +161,10 @@ class BindGroupLayoutInternalBase : public ApiObjectBase,
     }
 
   private:
-    BindGroupLayoutInternalBase(DeviceBase* device, ObjectBase::ErrorTag tag, const char* label);
+    BindGroupLayoutInternalBase(DeviceBase* device, ObjectBase::ErrorTag tag, StringView label);
 
     BindingCounts mBindingCounts = {};
+    bool mNeedsCrossBindingValidation = false;
     ityp::vector<BindingIndex, BindingInfo> mBindingInfo;
 
     // Map from BindGroupLayoutEntry.binding to packed indices.

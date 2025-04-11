@@ -1,86 +1,69 @@
+//
+// fragment_main
+//
 #version 310 es
-#extension GL_AMD_gpu_shader_half_float : require
-
-float16_t tint_radians(float16_t param_0) {
-  return param_0 * 0.01745329251994329547hf;
-}
-
-
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
-  float16_t inner;
-} prevent_dce;
-
-void radians_208fd9() {
-  float16_t arg_0 = 1.0hf;
-  float16_t res = tint_radians(arg_0);
-  prevent_dce.inner = res;
-}
-
-vec4 vertex_main() {
-  radians_208fd9();
-  return vec4(0.0f);
-}
-
-void main() {
-  gl_PointSize = 1.0;
-  vec4 inner_result = vertex_main();
-  gl_Position = inner_result;
-  gl_Position.y = -(gl_Position.y);
-  gl_Position.z = ((2.0f * gl_Position.z) - gl_Position.w);
-  return;
-}
-#version 310 es
-#extension GL_AMD_gpu_shader_half_float : require
+#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-float16_t tint_radians(float16_t param_0) {
-  return param_0 * 0.01745329251994329547hf;
-}
-
-
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+layout(binding = 0, std430)
+buffer f_prevent_dce_block_ssbo {
   float16_t inner;
-} prevent_dce;
-
-void radians_208fd9() {
+} v;
+float16_t radians_208fd9() {
   float16_t arg_0 = 1.0hf;
-  float16_t res = tint_radians(arg_0);
-  prevent_dce.inner = res;
+  float16_t res = radians(arg_0);
+  return res;
 }
-
-void fragment_main() {
-  radians_208fd9();
-}
-
 void main() {
-  fragment_main();
-  return;
+  v.inner = radians_208fd9();
 }
+//
+// compute_main
+//
 #version 310 es
-#extension GL_AMD_gpu_shader_half_float : require
+#extension GL_AMD_gpu_shader_half_float: require
 
-float16_t tint_radians(float16_t param_0) {
-  return param_0 * 0.01745329251994329547hf;
-}
-
-
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+layout(binding = 0, std430)
+buffer prevent_dce_block_1_ssbo {
   float16_t inner;
-} prevent_dce;
-
-void radians_208fd9() {
+} v;
+float16_t radians_208fd9() {
   float16_t arg_0 = 1.0hf;
-  float16_t res = tint_radians(arg_0);
-  prevent_dce.inner = res;
+  float16_t res = radians(arg_0);
+  return res;
 }
-
-void compute_main() {
-  radians_208fd9();
-}
-
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
-  compute_main();
-  return;
+  v.inner = radians_208fd9();
+}
+//
+// vertex_main
+//
+#version 310 es
+#extension GL_AMD_gpu_shader_half_float: require
+
+
+struct VertexOutput {
+  vec4 pos;
+  float16_t prevent_dce;
+};
+
+layout(location = 0) flat out float16_t tint_interstage_location0;
+float16_t radians_208fd9() {
+  float16_t arg_0 = 1.0hf;
+  float16_t res = radians(arg_0);
+  return res;
+}
+VertexOutput vertex_main_inner() {
+  VertexOutput v = VertexOutput(vec4(0.0f), 0.0hf);
+  v.pos = vec4(0.0f);
+  v.prevent_dce = radians_208fd9();
+  return v;
+}
+void main() {
+  VertexOutput v_1 = vertex_main_inner();
+  gl_Position = vec4(v_1.pos.x, -(v_1.pos.y), ((2.0f * v_1.pos.z) - v_1.pos.w), v_1.pos.w);
+  tint_interstage_location0 = v_1.prevent_dce;
+  gl_PointSize = 1.0f;
 }

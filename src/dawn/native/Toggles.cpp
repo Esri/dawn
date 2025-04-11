@@ -149,18 +149,6 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
      {"disable_indexed_draw_buffers",
       "Disables the use of indexed draw buffer state which is unsupported on some platforms.",
       "https://crbug.com/dawn/582", ToggleStage::Device}},
-    {Toggle::DisableDepthRead,
-     {"disable_depth_read",
-      "Disables reading from depth textures which is unsupported on some platforms.",
-      "https://crbug.com/dawn/667", ToggleStage::Device}},
-    {Toggle::DisableStencilRead,
-     {"disable_stencil_read",
-      "Disables reading from stencil textures which is unsupported on some platforms.",
-      "https://crbug.com/dawn/667", ToggleStage::Device}},
-    {Toggle::DisableDepthStencilRead,
-     {"disable_depth_stencil_read",
-      "Disables reading from depth/stencil textures which is unsupported on some platforms.",
-      "https://crbug.com/dawn/667", ToggleStage::Device}},
     {Toggle::DisableSampleVariables,
      {"disable_sample_variables",
       "Disables gl_SampleMask and related functionality which is unsupported on some platforms.",
@@ -219,6 +207,14 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
      {"disable_workgroup_init",
       "Disables the workgroup memory zero-initialization for compute shaders.",
       "https://crbug.com/tint/1003", ToggleStage::Device}},
+    {Toggle::DisableDemoteToHelper,
+     {"disable_demote_to_helper",
+      "Disables the conversion of discard to demote to helper thread in the IR transform",
+      "https://crbug.com/42250787", ToggleStage::Device}},
+    {Toggle::VulkanUseDemoteToHelperInvocationExtension,
+     {"vulkan_use_demote_to_helper_invocation_extension",
+      "Sets the use of the vulkan demote to helper extension", "https://crbug.com/42250787",
+      ToggleStage::Device}},
     {Toggle::DisableSymbolRenaming,
      {"disable_symbol_renaming", "Disables the WGSL symbol renaming so that names are preserved.",
       "https://crbug.com/dawn/1016", ToggleStage::Device}},
@@ -226,10 +222,9 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
      {"use_user_defined_labels_in_backend",
       "Enables setting labels on backend-specific APIs that label objects. The labels used will be "
       "those of the corresponding frontend objects if non-empty and default labels otherwise. "
-      "Defaults to false. NOTE: On Vulkan, backend labels are currently always set (with default "
-      "labels if this toggle is not set). The reason is that Dawn currently uses backend "
-      "object labels on Vulkan to map errors back to the device with which the backend objects "
-      "included in the error are associated.",
+      "Defaults to false unless backend validation is enabled in which case it defaults to true. "
+      "NOTE: On Vulkan, backend labels are required to map errors back to the device with which "
+      "the backend objects included in the error are associated.",
       "https://crbug.com/dawn/840", ToggleStage::Device}},
     {Toggle::UsePlaceholderFragmentInVertexOnlyPipeline,
      {"use_placeholder_fragment_in_vertex_only_pipeline",
@@ -269,14 +264,6 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Initialize workgroup memory with OpConstantNull on Vulkan when the Vulkan extension "
       "VK_KHR_zero_initialize_workgroup_memory is supported.",
       "https://crbug.com/dawn/1302", ToggleStage::Device}},
-    {Toggle::D3D12SplitBufferTextureCopyForRowsPerImagePaddings,
-     {"d3d12_split_buffer_texture_copy_for_rows_per_image_paddings",
-      "D3D12 requires more buffer storage than it should when rowsPerImage is greater than "
-      "copyHeight, which means there are pure padding row(s) on each image. In this situation, "
-      "the buffer used for B2T/T2B copy might be big enough according to WebGPU's spec but it "
-      "doesn't meet D3D12's requirement, then we need to workaround it via split the copy "
-      "operation into two copies, in order to make B2T/T2B copy being done correctly on D3D12.",
-      "https://crbug.com/dawn/1289", ToggleStage::Device}},
     {Toggle::MetalRenderR8RG8UnormSmallMipToTempTexture,
      {"metal_render_r8_rg8_unorm_small_mip_to_temp_texture",
       "Metal Intel devices have issues with r8unorm and rg8unorm textures where rendering to small "
@@ -340,6 +327,13 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "This toggle is enabled by default on Metal backend where GPU counters cannot be stored to"
       "sampleBufferAttachments on empty blit encoder.",
       "https://crbug.com/dawn/1473", ToggleStage::Device}},
+    {Toggle::MetalDisableTimestampPeriodEstimation,
+     {"metal_disable_timestamp_period_estimation",
+      "Calling sampleTimestamps:gpuTimestamp: from MTLDevice to estimate timestamp period leads to "
+      "GPU overheating on some specific Intel GPUs due to driver issue, such as Intel Iris "
+      "Plus Graphics 655. Enable this workaround to skip timestamp period estimation and use a "
+      "default value instead on the specific GPUs.",
+      "https://crbug.com/342701242", ToggleStage::Device}},
     {Toggle::VulkanSplitCommandBufferOnComputePassAfterRenderPass,
      {"vulkan_split_command_buffer_on_compute_pass_after_render_pass",
       "Splits any command buffer where a compute pass is recorded after a render pass. This "
@@ -435,6 +429,35 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Use a blit instead of a copy command to copy rgb9e5ufloat texture to a texture or a buffer."
       "Workaround for OpenGLES.",
       "https://crbug.com/dawn/2079", ToggleStage::Device}},
+    {Toggle::UseBlitForRG11B10UfloatTextureCopy,
+     {"use_blit_for_rg11b10ufloat_texture_copy",
+      "Use a blit instead of a copy command to copy rg11b10ufloat texture to a texture or a buffer."
+      "Workaround for OpenGLES.",
+      "https://crbug.com/381214487", ToggleStage::Device}},
+    {Toggle::UseBlitForFloat16TextureCopy,
+     {"use_blit_for_float_16_texture_copy",
+      "Use a blit instead of a copy command to copy float16 texture to a texture or a buffer."
+      "Workaround for OpenGLES.",
+      "https://crbug.com/381214487", ToggleStage::Device}},
+    {Toggle::UseBlitForFloat32TextureCopy,
+     {"use_blit_for_float_32_texture_copy",
+      "Use a blit instead of a copy command to copy float32 texture to a texture or a buffer."
+      "Workaround for OpenGLES.",
+      "https://crbug.com/381214487", ToggleStage::Device}},
+    {Toggle::UseBlitForT2B,
+     {"use_blit_for_t2b",
+      "Use a compute based blit instead of a copy command to copy texture with supported format to "
+      "a buffer.",
+      "https://crbug.com/dawn/348654098", ToggleStage::Device}},
+    {Toggle::UseBlitForB2T,
+     {"use_blit_for_b2t",
+      "Use a shader based blit instead of a copy command to copy a buffer to a texture with "
+      "supported format.",
+      "https://crbug.com/dawn/348653642", ToggleStage::Device}},
+    {Toggle::D3D11DisableCPUUploadBuffers,
+     {"d3d11_disable_cpu_buffers",
+      "Force disabling the usages of CPU upload buffers in the D3D11 backend.",
+      "https://crbug.com/dawn/348653642", ToggleStage::Device}},
     {Toggle::UseT2B2TForSRGBTextureCopy,
      {"use_t2b2t_for_srgb_texture_copy",
       "Use T2B and B2T copies to emulate a T2T copy between sRGB and non-sRGB textures."
@@ -506,6 +529,11 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
      {"polyfill_packed_4x8_dot_product",
       "Always use the polyfill version of dot4I8Packed() and dot4U8Packed().",
       "https://crbug.com/tint/1497", ToggleStage::Device}},
+    {Toggle::PolyfillPackUnpack4x8Norm,
+     {"polyfill_pack_unpack_4x8_norm",
+      "Always use the polyfill version of pack4x8snorm, pack4x8unorm, unpack4x8snorm, "
+      "unpack4x8unorm.",
+      "https://crbug.com/379551588", ToggleStage::Device}},
     {Toggle::D3D12PolyFillPackUnpack4x8,
      {"d3d12_polyfill_pack_unpack_4x8",
       "Always use the polyfill version of pack4xI8(), pack4xU8(), pack4xI8Clamp(), unpack4xI8() "
@@ -542,6 +570,59 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "Only use shader model 6.5 or less for D3D12 backend, to workaround issues on some Intel "
       "devices.",
       "https://crbug.com/dawn/2470", ToggleStage::Adapter}},
+    {Toggle::UsePackedDepth24UnormStencil8Format,
+     {"use_packed_depth24_unorm_stencil8_format",
+      "Use a packed depth24_unorm_stencil8 format like DXGI_FORMAT_D24_UNORM_STENCIL8_UINT on D3D "
+      "for wgpu::TextureFormat::Depth24PlusStencil8.",
+      "https://crbug.com/341254292", ToggleStage::Device}},
+    {Toggle::D3D12ForceStencilComponentReplicateSwizzle,
+     {"d3d12_force_stencil_component_replicate_swizzle",
+      "Force a replicate swizzle for the stencil component i.e. (ssss) instead of (s001) to "
+      "workaround issues on certain Nvidia drivers on D3D12 with depth24_unorm_stencil8 format.",
+      "https://crbug.com/341254292", ToggleStage::Device}},
+    {Toggle::D3D12ExpandShaderResourceStateTransitionsToCopySource,
+     {"d3d12_expand_shader_resource_state_transitions_to_copy_source",
+      "When transitioning to any shader resource states PIXEL or NON_PIXEL_SHADER_RESOURCE include "
+      "COPY_SOURCE too on Nvidia since the shader resource states seem to miss flushing all caches "
+      "and layout transitions causing rendering corruption.",
+      "https://crbug.com/356905061", ToggleStage::Device}},
+    {Toggle::GLDepthBiasModifier,
+     {"gl_depth_bias_modifier",
+      "Empirically some GL drivers select n+1 when a depth value lies between 2^n and 2^(n+1), "
+      "while the WebGPU CTS is expecting n. Scale the depth bias value by multiple 0.5 on certain "
+      "backends to achieve conformant result.",
+      "https://crbug.com/42241017", ToggleStage::Device}},
+    {Toggle::GLForceES31AndNoExtensions,
+     {"gl_force_es_31_and_no_extensions",
+      "Force EGLContext creation with the minimal ES version and no extensions required by the "
+      "Compat spec, which for OpenGLES is version 3.1 with no extensions. This toggle is used by "
+      "end2end testing.",
+      "crbug.com/382084196", ToggleStage::Adapter}},
+    {Toggle::VulkanMonolithicPipelineCache,
+     {"vulkan_monolithic_pipeline_cache",
+      "Use a monolithic VkPipelineCache per device. The embedder is responsible for calling "
+      "PerformIdleTasks() on the device to serialize VkPipelineCache to BlobCache if needed.",
+      "crbug.com/370343334", ToggleStage::Device}},
+    {Toggle::MetalSerializeTimestampGenerationAndResolution,
+     {"metal_serialize_timestamp_generation_and_resolution",
+      "Newer Apple GPUs can race on query set resolution with timestamp writing from earlier "
+      "compute passes. This can be worked around by signaling and waiting for a shared event in "
+      "between timestamp generation and resolution.",
+      "crbug.com/372698905", ToggleStage::Device}},
+    {Toggle::D3D12RelaxMinSubgroupSizeTo8,
+     {"d3d12_relax_min_subgroup_size_to_8",
+      "Relax the adapters and devices' subgroupMinSize to the minimium of D3D12 reported "
+      "minWaveLaneCount and 8. Some D3D12 drivers is possible to run fragment shader with wave "
+      "count 8 while reporting minWaveLaneCount 16.",
+      "https://crbug.com/381969450", ToggleStage::Adapter}},
+    {Toggle::D3D12RelaxBufferTextureCopyPitchAndOffsetAlignment,
+     {"d3d12_relax_buffer_texture_copy_pitch_and_offset_alignment",
+      "Don't require the alignments of D3D12_TEXTURE_DATA_PITCH_ALIGNMENT (256) for row pitch "
+      "and D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT (512) for offset in buffer-texture copies.",
+      "https://crbug.com/381000081", ToggleStage::Device}},
+    {Toggle::UseVulkanMemoryModel,
+     {"use_vulkan_memory_model", "Use the Vulkan Memory Model if available.",
+      "https://crbug.com/392606604", ToggleStage::Adapter}},
     {Toggle::NoWorkaroundSampleMaskBecomesZeroForAllButLastColorTarget,
      {"no_workaround_sample_mask_becomes_zero_for_all_but_last_color_target",
       "MacOS 12.0+ Intel has a bug where the sample mask is only applied for the last color "
@@ -571,6 +652,15 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
     {Toggle::D3D11UseUnmonitoredFence,
      {"d3d11_use_unmonitored_fence", "Use d3d11 unmonitored fence.",
       "https://crbug.com/chromium/335553337", ToggleStage::Device}},
+    {Toggle::D3D11DisableFence,
+     {"d3d11_disable_fence",
+      "Disable d3d11 fence. Fences are not always available on every D3D11 device.",
+      "https://crbug.com/chromium/390441217", ToggleStage::Device}},
+    {Toggle::IgnoreImportedAHardwareBufferVulkanImageSize,
+     {"ignore_imported_ahardwarebuffer_vulkan_image_size",
+      "Don't validate the required VkImage size against the size of the AHardwareBuffer on import. "
+      "Some drivers report the wrong size.",
+      "https://crbug.com/333424893", ToggleStage::Device}},
     // Comment to separate the }} so it is clearer what to copy-paste to add a toggle.
 }};
 }  // anonymous namespace

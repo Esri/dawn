@@ -29,42 +29,38 @@
 #define SRC_DAWN_WIRE_CLIENT_INSTANCE_H_
 
 #include "absl/container/flat_hash_set.h"
+#include "dawn/common/RefCountedWithExternalCount.h"
 #include "dawn/wire/WireClient.h"
 #include "dawn/wire/WireCmd_autogen.h"
 #include "dawn/wire/client/ObjectBase.h"
 
 namespace dawn::wire::client {
 
-class Instance final : public ObjectWithEventsBase {
+class Instance final : public RefCountedWithExternalCount<ObjectWithEventsBase> {
   public:
     explicit Instance(const ObjectBaseParams& params);
-    ~Instance() override;
 
     ObjectType GetObjectType() const override;
 
     WireResult Initialize(const WGPUInstanceDescriptor* descriptor);
 
-    void RequestAdapter(const WGPURequestAdapterOptions* options,
-                        WGPURequestAdapterCallback callback,
-                        void* userdata);
-    WGPUFuture RequestAdapterF(const WGPURequestAdapterOptions* options,
-                               const WGPURequestAdapterCallbackInfo& callbackInfo);
-    WGPUFuture RequestAdapter2(const WGPURequestAdapterOptions* options,
-                               const WGPURequestAdapterCallbackInfo2& callbackInfo);
+    WGPUFuture RequestAdapter(const WGPURequestAdapterOptions* options,
+                              const WGPURequestAdapterCallbackInfo& callbackInfo);
 
     void ProcessEvents();
     WGPUWaitStatus WaitAny(size_t count, WGPUFutureWaitInfo* infos, uint64_t timeoutNS);
 
-    bool HasWGSLLanguageFeature(WGPUWGSLFeatureName feature) const;
-    // Always writes the full list when features is not nullptr.
-    // TODO(https://github.com/webgpu-native/webgpu-headers/issues/252): Add a count argument.
-    size_t EnumerateWGSLLanguageFeatures(WGPUWGSLFeatureName* features) const;
+    bool HasWGSLLanguageFeature(WGPUWGSLLanguageFeatureName feature) const;
+    WGPUStatus GetWGSLLanguageFeatures(WGPUSupportedWGSLLanguageFeatures* features) const;
+
+    WGPUSurface CreateSurface(const WGPUSurfaceDescriptor* desc) const;
 
   private:
+    void WillDropLastExternalRef() override;
     void GatherWGSLFeatures(const WGPUDawnWireWGSLControl* wgslControl,
                             const WGPUDawnWGSLBlocklist* wgslBlocklist);
 
-    absl::flat_hash_set<WGPUWGSLFeatureName> mWGSLFeatures;
+    absl::flat_hash_set<WGPUWGSLLanguageFeatureName> mWGSLFeatures;
 };
 
 }  // namespace dawn::wire::client

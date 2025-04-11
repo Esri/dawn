@@ -141,15 +141,12 @@ const [sendHeartbeat, {
 function wrapPromiseWithHeartbeat(prototype, key) {
   const old = prototype[key];
   prototype[key] = function (...args) {
-    return new Promise((resolve, reject) => {
-      // Send the heartbeat both before and after resolve/reject
-      // so that the heartbeat is sent ahead of any potentially
-      // long-running synchronous code awaiting the Promise.
-      old.call(this, ...args)
-        .then(val => { sendHeartbeat(); resolve(val) })
-        .catch(err => { sendHeartbeat(); reject(err) })
-        .finally(sendHeartbeat);
-    });
+    const promise = old.call(this, ...args);
+    // Send a heartbeat just before any code that was waiting on the promise.
+    promise.finally(sendHeartbeat);
+    // Return the original promise so we don't interfere with the behavior
+    // of the API itself.
+    return promise;
   }
 }
 
@@ -165,6 +162,10 @@ wrapPromiseWithHeartbeat(GPUShaderModule.prototype, 'getCompilationInfo');
 
 globalTestConfig.testHeartbeatCallback = sendHeartbeat;
 globalTestConfig.noRaceWithRejectOnTimeout = true;
+
+// Avoid doing too many things at once (e.g. creating 500 pipelines
+// simultaneously on a 32-bit system easily runs out of memory).
+globalTestConfig.maxSubcasesInFlight = 100;
 
 // FXC is very slow to compile unrolled const-eval loops, where the metal shader
 // compiler (Intel GPU) is very slow to compile rolled loops. Intel drivers for
@@ -238,7 +239,12 @@ async function runCtsTest(queryString) {
     endHeartbeatScope();
 
     sendMessageTestStatus(res.status, res.timems);
-    sendMessageTestLog(res.logs);
+    if (res.status === 'pass') {
+      // Send an "OK" log. Passing tests don't report logs to Telemetry.
+      sendMessageTestLogOK();
+    } else {
+      sendMessageTestLog(res.logs ?? []);
+    }
     sendMessageTestFinished();
   };
   await wpt_fn();
@@ -284,8 +290,35 @@ function sendMessageTestStatus(status, jsDurationMs) {
   }));
 }
 
+function sendMessageTestLogOK() {
+  socket.send('{"type":"TEST_LOG","log":"OK"}');
+}
+
+// Logs look like: " - EXPECTATION FAILED: subcase: foobar=2;foo=a;bar=2\n...."
+// or "EXCEPTION: Name!: Message!\nsubcase: fail = true\n..."
+const kSubcaseLogPrefixRegex = /\bsubcase: .*$\n/m;
+
+/** Send logs with the most important log line on the first line as a "summary". */
 function sendMessageTestLog(logs) {
-  splitLogsForPayload((logs ?? []).map(prettyPrintLog).join('\n\n'))
+  // Find the first log that is max-severity (doesn't have its stack hidden)
+  let summary = '';
+  let details = [];
+  for (const log of logs) {
+    let detail = prettyPrintLog(log);
+    if (summary === '' && log.stackHiddenMessage === undefined) {
+      // First top-severity message (because its stack is not hidden).
+      // Clean up this message and pick it as the summary:
+      summary = '  ' + log.toJSON()
+        .replace(kSubcaseLogPrefixRegex, '')
+        .split('\n')[0] + '\n';
+      // Replace '  - ' with '--> ':
+      detail = '--> ' + detail.slice(4);
+    }
+    details.push(detail);
+  }
+
+  const outLogsString = summary + details.join('\n');
+  splitLogsForPayload(outLogsString)
     .forEach((piece) => {
       socket.send(JSON.stringify({
         'type': 'TEST_LOG',
@@ -306,3 +339,4 @@ function sendMessageInfraFailure(message) {
 }
 
 window.setupWebsocket = setupWebsocket
+window.globalTestConfig = globalTestConfig

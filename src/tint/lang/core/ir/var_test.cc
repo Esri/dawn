@@ -39,22 +39,23 @@ using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
 
 using IR_VarTest = IRTestHelper;
+using IR_VarDeathTest = IR_VarTest;
 
-TEST_F(IR_VarTest, Fail_NullType) {
+TEST_F(IR_VarDeathTest, Fail_NullType) {
     EXPECT_DEATH_IF_SUPPORTED(
         {
             Module mod;
             Builder b{mod};
             b.Var(nullptr);
         },
-        "");
+        "internal compiler error");
 }
 
 TEST_F(IR_VarTest, Results) {
     auto* var = b.Var(ty.ptr<function, f32>());
     EXPECT_EQ(var->Results().Length(), 1u);
-    EXPECT_TRUE(var->Result(0)->Is<InstructionResult>());
-    EXPECT_EQ(var->Result(0)->Instruction(), var);
+    EXPECT_TRUE(var->Result()->Is<InstructionResult>());
+    EXPECT_EQ(var->Result()->Instruction(), var);
 }
 
 TEST_F(IR_VarTest, Initializer_Usage) {
@@ -64,9 +65,9 @@ TEST_F(IR_VarTest, Initializer_Usage) {
     auto* init = b.Constant(1_f);
     var->SetInitializer(init);
 
-    EXPECT_THAT(init->Usages(), testing::UnorderedElementsAre(Usage{var, 0u}));
+    EXPECT_THAT(init->UsagesUnsorted(), testing::UnorderedElementsAre(Usage{var, 0u}));
     var->SetInitializer(nullptr);
-    EXPECT_TRUE(init->Usages().IsEmpty());
+    EXPECT_FALSE(init->IsUsed());
 }
 
 TEST_F(IR_VarTest, Clone) {
@@ -74,16 +75,16 @@ TEST_F(IR_VarTest, Clone) {
     v->SetInitializer(b.Constant(4_f));
     v->SetBindingPoint(1, 2);
     v->SetAttributes(IOAttributes{
-        3, 4, core::BuiltinValue::kFragDepth,
+        3, 4, 5, core::BuiltinValue::kFragDepth,
         Interpolation{core::InterpolationType::kFlat, core::InterpolationSampling::kCentroid},
         true});
 
     auto* new_v = clone_ctx.Clone(v);
 
     EXPECT_NE(v, new_v);
-    ASSERT_NE(nullptr, new_v->Result(0));
-    EXPECT_NE(v->Result(0), new_v->Result(0));
-    EXPECT_EQ(new_v->Result(0)->Type(),
+    ASSERT_NE(nullptr, new_v->Result());
+    EXPECT_NE(v->Result(), new_v->Result());
+    EXPECT_EQ(new_v->Result()->Type(),
               mod.Types().ptr(core::AddressSpace::kFunction, mod.Types().f32()));
 
     ASSERT_NE(nullptr, new_v->Initializer());
@@ -101,6 +102,9 @@ TEST_F(IR_VarTest, Clone) {
 
     EXPECT_TRUE(attrs.blend_src.has_value());
     EXPECT_EQ(4u, attrs.blend_src.value());
+
+    EXPECT_TRUE(attrs.color.has_value());
+    EXPECT_EQ(5u, attrs.color.value());
 
     EXPECT_TRUE(attrs.builtin.has_value());
     EXPECT_EQ(core::BuiltinValue::kFragDepth, attrs.builtin.value());

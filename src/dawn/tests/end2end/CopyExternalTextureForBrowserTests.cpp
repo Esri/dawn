@@ -113,12 +113,12 @@ class CopyExternalTextureForBrowserTests : public Parent {
         //  {0.2126, 0.4172, 1.0, utils::RGBA8::kRed, 1.0f},
         //  {0.7152, 0.1402, 0.0175, utils::RGBA8::kGreen, 0.0f},
         //  {0.0722, 1.0, 0.4937, utils::RGBA8::kBlue, 0.0f},
-        wgpu::ImageCopyTexture plane0 = {};
+        wgpu::TexelCopyTextureInfo plane0 = {};
         plane0.texture = externalTexturePlane0;
         std::array<uint8_t, 16> yPlaneData = {0,   0,   54, 54, 0,   0,   54, 54,
                                               182, 182, 18, 18, 182, 182, 18, 18};
 
-        wgpu::TextureDataLayout externalTexturePlane0DataLayout = {};
+        wgpu::TexelCopyBufferLayout externalTexturePlane0DataLayout = {};
         externalTexturePlane0DataLayout.bytesPerRow = 4;
 
         this->queue.WriteTexture(&plane0, yPlaneData.data(),
@@ -135,7 +135,7 @@ class CopyExternalTextureForBrowserTests : public Parent {
         wgpu::Texture externalTexturePlane1 =
             this->device.CreateTexture(&externalTexturePlane1Desc);
 
-        wgpu::ImageCopyTexture plane1 = {};
+        wgpu::TexelCopyTextureInfo plane1 = {};
         // (Off-topic) spot-test for defaulting of .aspect.
         plane1.aspect = wgpu::TextureAspect::Undefined;
         plane1.texture = externalTexturePlane1;
@@ -143,7 +143,7 @@ class CopyExternalTextureForBrowserTests : public Parent {
             128, 128, 106, 255, 36, 4, 255, 126,
         };
 
-        wgpu::TextureDataLayout externalTexturePlane1DataLayout = {};
+        wgpu::TexelCopyBufferLayout externalTexturePlane1DataLayout = {};
         externalTexturePlane1DataLayout.bytesPerRow = 4;
 
         this->queue.WriteTexture(&plane1, uvPlaneData.data(),
@@ -162,8 +162,9 @@ class CopyExternalTextureForBrowserTests : public Parent {
         externalDesc.plane0 = externalTexturePlane0.CreateView();
         externalDesc.plane1 = externalTexturePlane1.CreateView();
 
-        externalDesc.visibleOrigin = {0, 0};
-        externalDesc.visibleSize = {kWidth, kHeight};
+        externalDesc.cropOrigin = {0, 0};
+        externalDesc.cropSize = {kWidth, kHeight};
+        externalDesc.apparentSize = {kWidth, kHeight};
 
         // Import the external texture
         return this->device.CreateExternalTexture(&externalDesc);
@@ -283,11 +284,11 @@ class CopyExternalTextureForBrowserTestsBase
                             wgpu::TextureFormat::RGBA8Unorm,
                             wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc |
                                 wgpu::TextureUsage::CopyDst);
-        wgpu::ImageCopyTexture dstImageCopyTexture =
-            utils::CreateImageCopyTexture(dstTexture, 0, dstOrigin, dstAspect);
+        wgpu::TexelCopyTextureInfo dstTexelCopyTextureInfo =
+            utils::CreateTexelCopyTextureInfo(dstTexture, 0, dstOrigin, dstAspect);
 
         this->queue.CopyExternalTextureForBrowser(&srcImageCopyExternalTexture,
-                                                  &dstImageCopyTexture, &copySize, &options);
+                                                  &dstTexelCopyTextureInfo, &copySize, &options);
 
         std::vector<utils::RGBA8> expected = this->GetExpectedData(
             options.flipY, srcImageCopyExternalTexture.origin, copySize, naturalSize);
@@ -300,7 +301,6 @@ class CopyExternalTextureForBrowserTests_Basic
     : public CopyExternalTextureForBrowserTestsBase<CopyTestParams> {};
 
 TEST_P(CopyExternalTextureForBrowserTests_Basic, Copy) {
-    DAWN_SUPPRESS_TEST_IF(IsOpenGLES());
     DAWN_SUPPRESS_TEST_IF(IsOpenGL() && IsLinux());
 
     wgpu::CopyTextureForBrowserOptions options = {};
@@ -309,6 +309,10 @@ TEST_P(CopyExternalTextureForBrowserTests_Basic, Copy) {
     CopyRect srcCopyRect = GetParam().mCopySrcRect;
     CopyRect dstCopyRect = GetParam().mCopyDstRect;
     ScaleType scaleType = GetParam().mScaleType;
+
+    // TODO(crbug.com/346951918): only passes with SrcRect=TopLeft on Pixel 4 (Qualcomm)
+    DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsAndroid() && IsQualcomm() &&
+                          srcCopyRect != CopyRect::TopLeft);
 
     // Test skip due to crbug.com/dawn/1719
     DAWN_SUPPRESS_TEST_IF(IsWARP() && srcCopyRect != CopyRect::TopLeft &&
@@ -414,7 +418,6 @@ class CopyExternalTextureForBrowserTests_Aspect : public CopyExternalTextureForB
 };
 
 TEST_P(CopyExternalTextureForBrowserTests_Aspect, Copy) {
-    DAWN_SUPPRESS_TEST_IF(IsOpenGLES());
     DAWN_SUPPRESS_TEST_IF(IsOpenGL() && IsLinux());
 
     wgpu::Origin3D srcOrigin = {};

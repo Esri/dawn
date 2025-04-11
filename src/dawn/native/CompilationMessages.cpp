@@ -28,6 +28,7 @@
 #include "dawn/native/CompilationMessages.h"
 
 #include "dawn/common/Assert.h"
+#include "dawn/common/StringViewUtils.h"
 #include "dawn/native/dawn_platform.h"
 
 #include "tint/tint.h"
@@ -36,14 +37,14 @@ namespace dawn::native {
 
 namespace {
 
-WGPUCompilationMessageType tintSeverityToMessageType(tint::diag::Severity severity) {
+wgpu::CompilationMessageType TintSeverityToMessageType(tint::diag::Severity severity) {
     switch (severity) {
         case tint::diag::Severity::Note:
-            return WGPUCompilationMessageType_Info;
+            return wgpu::CompilationMessageType::Info;
         case tint::diag::Severity::Warning:
-            return WGPUCompilationMessageType_Warning;
+            return wgpu::CompilationMessageType::Warning;
         default:
-            return WGPUCompilationMessageType_Error;
+            return wgpu::CompilationMessageType::Error;
     }
 }
 
@@ -82,28 +83,40 @@ ResultOrError<uint64_t> CountUTF16CodeUnitsFromUTF8String(const std::string_view
     return numberOfUTF16CodeUnits;
 }
 
-OwnedCompilationMessages::OwnedCompilationMessages() {
-    mCompilationInfo.nextInChain = 0;
-    mCompilationInfo.messageCount = 0;
-    mCompilationInfo.messages = nullptr;
-}
+OwnedCompilationMessages::OwnedCompilationMessages() = default;
 
 OwnedCompilationMessages::~OwnedCompilationMessages() = default;
 
-void OwnedCompilationMessages::AddUnanchoredMessage(std::string message,
+void OwnedCompilationMessages::AddUnanchoredMessage(std::string_view message,
                                                     wgpu::CompilationMessageType type) {
-    AddMessage(message, {nullptr, nullptr, static_cast<WGPUCompilationMessageType>(type), 0, 0, 0,
-                         0, 0, 0, 0});
+    CompilationMessage m = {};
+    m.message = message;
+    m.type = type;
+    AddMessage(m);
+
+    mUtf16.push_back({});
 }
 
-void OwnedCompilationMessages::AddMessageForTesting(std::string message,
+void OwnedCompilationMessages::AddMessageForTesting(std::string_view message,
                                                     wgpu::CompilationMessageType type,
                                                     uint64_t lineNum,
                                                     uint64_t linePos,
                                                     uint64_t offset,
                                                     uint64_t length) {
-    AddMessage(message, {nullptr, nullptr, static_cast<WGPUCompilationMessageType>(type), lineNum,
-                         linePos, offset, length, linePos, offset, length});
+    CompilationMessage m = {};
+    m.message = message;
+    m.type = type;
+    m.lineNum = lineNum;
+    m.linePos = linePos;
+    m.offset = offset;
+    m.length = length;
+    AddMessage(m);
+
+    DawnCompilationMessageUtf16 utf16 = {};
+    utf16.linePos = linePos;
+    utf16.offset = offset;
+    utf16.length = length;
+    mUtf16.push_back(utf16);
 }
 
 MaybeError OwnedCompilationMessages::AddMessage(const tint::diag::Diagnostic& diagnostic) {
@@ -160,30 +173,44 @@ MaybeError OwnedCompilationMessages::AddMessage(const tint::diag::Diagnostic& di
                                            fileStart + offsetInBytes, lengthInBytes)));
     }
 
-    AddMessage(
-        diagnostic.message.Plain(),
-        {nullptr, nullptr, tintSeverityToMessageType(diagnostic.severity), lineNum, linePosInBytes,
-         offsetInBytes, lengthInBytes, linePosInUTF16, offsetInUTF16, lengthInUTF16});
+    std::string plainMessage = diagnostic.message.Plain();
+
+    CompilationMessage m = {};
+    m.message = std::string_view(plainMessage);
+    m.type = TintSeverityToMessageType(diagnostic.severity);
+    m.lineNum = lineNum;
+    m.linePos = linePosInBytes;
+    m.offset = offsetInBytes;
+    m.length = lengthInBytes;
+    AddMessage(m);
+
+    DawnCompilationMessageUtf16 utf16 = {};
+    utf16.linePos = linePosInUTF16;
+    utf16.offset = offsetInUTF16;
+    utf16.length = lengthInUTF16;
+    mUtf16.push_back(utf16);
 
     return {};
 }
 
-void OwnedCompilationMessages::AddMessage(std::string messageString,
-                                          const WGPUCompilationMessage& message) {
+void OwnedCompilationMessages::AddMessage(const CompilationMessage& message) {
     // Cannot add messages after GetCompilationInfo has been called.
-    DAWN_ASSERT(mCompilationInfo.messages == nullptr);
+    DAWN_ASSERT(!mCompilationInfo->has_value());
 
     DAWN_ASSERT(message.nextInChain == nullptr);
-    // The message string won't be populated until GetCompilationInfo.
-    DAWN_ASSERT(message.message == nullptr);
 
-    mMessageStrings.push_back(messageString);
     mMessages.push_back(message);
+
+    // Own the contents of the message as it might be freed afterwards.
+    // Note that we use make_unique here as moving strings doesn't guarantee that the data pointer
+    // stays the same, for example if there's some small string optimization.
+    mMessageStrings.push_back(std::make_unique<std::string>(message.message));
+    mMessages.back().message = ToOutputStringView(*mMessageStrings.back());
 }
 
 MaybeError OwnedCompilationMessages::AddMessages(const tint::diag::List& diagnostics) {
     // Cannot add messages after GetCompilationInfo has been called.
-    DAWN_ASSERT(mCompilationInfo.messages == nullptr);
+    DAWN_ASSERT(!mCompilationInfo->has_value());
 
     for (const auto& diag : diagnostics) {
         DAWN_TRY(AddMessage(diag));
@@ -196,25 +223,30 @@ MaybeError OwnedCompilationMessages::AddMessages(const tint::diag::List& diagnos
 
 void OwnedCompilationMessages::ClearMessages() {
     // Cannot clear messages after GetCompilationInfo has been called.
-    DAWN_ASSERT(mCompilationInfo.messages == nullptr);
+    DAWN_ASSERT(!mCompilationInfo->has_value());
 
     mMessageStrings.clear();
     mMessages.clear();
+    mUtf16.clear();
 }
 
-const WGPUCompilationInfo* OwnedCompilationMessages::GetCompilationInfo() {
-    mCompilationInfo.messageCount = mMessages.size();
-    mCompilationInfo.messages = mMessages.data();
+const CompilationInfo* OwnedCompilationMessages::GetCompilationInfo() {
+    return mCompilationInfo.Use([&](auto info) {
+        if (info->has_value()) {
+            return &info->value();
+        }
 
-    // Ensure every message points at the correct message string. Cannot do this earlier, since
-    // vector reallocations may move the pointers around.
-    for (size_t i = 0; i < mCompilationInfo.messageCount; ++i) {
-        WGPUCompilationMessage& message = mMessages[i];
-        std::string& messageString = mMessageStrings[i];
-        message.message = messageString.c_str();
-    }
+        // Append the UTF16 extension now.
+        DAWN_ASSERT(mMessages.size() == mUtf16.size());
+        for (size_t i = 0; i < mMessages.size(); i++) {
+            mMessages[i].nextInChain = &mUtf16[i];
+        }
 
-    return &mCompilationInfo;
+        (*info).emplace();
+        (*info)->messageCount = mMessages.size();
+        (*info)->messages = mMessages.data();
+        return &info->value();
+    });
 }
 
 const std::vector<std::string>& OwnedCompilationMessages::GetFormattedTintMessages() const {
@@ -223,8 +255,8 @@ const std::vector<std::string>& OwnedCompilationMessages::GetFormattedTintMessag
 
 bool OwnedCompilationMessages::HasWarningsOrErrors() const {
     for (const auto& message : mMessages) {
-        if (message.type == WGPUCompilationMessageType_Error ||
-            message.type == WGPUCompilationMessageType_Warning) {
+        if (message.type == wgpu::CompilationMessageType::Error ||
+            message.type == wgpu::CompilationMessageType::Warning) {
             return true;
         }
     }
@@ -270,7 +302,7 @@ void OwnedCompilationMessages::AddFormattedTintMessages(const tint::diag::List& 
     if (warningCount > 0) {
         t << warningCount << " warning(s) ";
     }
-    t << "generated while compiling the shader:" << std::endl
+    t << "generated while compiling the shader:\n"
       << tint::diag::Formatter{style}.Format(messageList).Plain();
     mFormattedTintMessages.push_back(t.str());
 }

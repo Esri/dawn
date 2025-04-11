@@ -167,9 +167,15 @@ static constexpr std::array<DeviceExtInfo, kDeviceExtCount> sDeviceExtInfos{{
     {DeviceExt::DriverProperties, "VK_KHR_driver_properties", VulkanVersion_1_2},
     {DeviceExt::ImageFormatList, "VK_KHR_image_format_list", VulkanVersion_1_2},
     {DeviceExt::ShaderFloat16Int8, "VK_KHR_shader_float16_int8", VulkanVersion_1_2},
+    {DeviceExt::ShaderSubgroupExtendedTypes, "VK_KHR_shader_subgroup_extended_types",
+     VulkanVersion_1_2},
+    {DeviceExt::DrawIndirectCount, "VK_KHR_draw_indirect_count", NeverPromoted},
+    {DeviceExt::VulkanMemoryModel, "VK_KHR_vulkan_memory_model", VulkanVersion_1_2},
 
     {DeviceExt::ShaderIntegerDotProduct, "VK_KHR_shader_integer_dot_product", VulkanVersion_1_3},
     {DeviceExt::ZeroInitializeWorkgroupMemory, "VK_KHR_zero_initialize_workgroup_memory",
+     VulkanVersion_1_3},
+    {DeviceExt::DemoteToHelperInvocation, "VK_EXT_shader_demote_to_helper_invocation",
      VulkanVersion_1_3},
     {DeviceExt::Maintenance4, "VK_KHR_maintenance4", VulkanVersion_1_3},
     {DeviceExt::SubgroupSizeControl, "VK_EXT_subgroup_size_control", VulkanVersion_1_3},
@@ -179,9 +185,8 @@ static constexpr std::array<DeviceExtInfo, kDeviceExtCount> sDeviceExtInfos{{
     {DeviceExt::Swapchain, "VK_KHR_swapchain", NeverPromoted},
     {DeviceExt::QueueFamilyForeign, "VK_EXT_queue_family_foreign", NeverPromoted},
     {DeviceExt::Robustness2, "VK_EXT_robustness2", NeverPromoted},
-    {DeviceExt::ShaderSubgroupUniformControlFlow, "VK_KHR_shader_subgroup_uniform_control_flow",
-     NeverPromoted},
     {DeviceExt::DisplayTiming, "VK_GOOGLE_display_timing", NeverPromoted},
+    {DeviceExt::CooperativeMatrix, "VK_KHR_cooperative_matrix", NeverPromoted},
 
     {DeviceExt::ExternalMemoryAndroidHardwareBuffer,
      "VK_ANDROID_external_memory_android_hardware_buffer", NeverPromoted},
@@ -233,6 +238,7 @@ DeviceExtSet EnsureDependencies(const DeviceExtSet& advertisedExts,
             case DeviceExt::Maintenance2:
             case DeviceExt::ImageFormatList:
             case DeviceExt::StorageBufferStorageClass:
+            case DeviceExt::DrawIndirectCount:
                 hasDependencies = true;
                 break;
 
@@ -277,6 +283,15 @@ DeviceExtSet EnsureDependencies(const DeviceExtSet& advertisedExts,
 
             case DeviceExt::DriverProperties:
             case DeviceExt::ShaderFloat16Int8:
+            case DeviceExt::DepthClipEnable:
+            case DeviceExt::ShaderIntegerDotProduct:
+            case DeviceExt::ZeroInitializeWorkgroupMemory:
+            case DeviceExt::DemoteToHelperInvocation:
+            case DeviceExt::Maintenance4:
+            case DeviceExt::Robustness2:
+            case DeviceExt::SubgroupSizeControl:
+            case DeviceExt::ShaderSubgroupExtendedTypes:
+            case DeviceExt::VulkanMemoryModel:
                 hasDependencies = HasDep(DeviceExt::GetPhysicalDeviceProperties2);
                 break;
 
@@ -316,18 +331,12 @@ DeviceExtSet EnsureDependencies(const DeviceExtSet& advertisedExts,
                                   HasDep(DeviceExt::StorageBufferStorageClass);
                 break;
 
-            case DeviceExt::DepthClipEnable:
-            case DeviceExt::ShaderIntegerDotProduct:
-            case DeviceExt::ZeroInitializeWorkgroupMemory:
-            case DeviceExt::Maintenance4:
-            case DeviceExt::Robustness2:
-            case DeviceExt::SubgroupSizeControl:
-            case DeviceExt::ShaderSubgroupUniformControlFlow:
-                hasDependencies = HasDep(DeviceExt::GetPhysicalDeviceProperties2);
-                break;
-
             case DeviceExt::DisplayTiming:
                 hasDependencies = HasDep(DeviceExt::Swapchain);
+                break;
+
+            case DeviceExt::CooperativeMatrix:
+                hasDependencies = HasDep(DeviceExt::GetPhysicalDeviceProperties2);
                 break;
 
             case DeviceExt::EnumCount:

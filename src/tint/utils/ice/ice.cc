@@ -28,10 +28,9 @@
 #include "src/tint/utils/ice/ice.h"
 
 #include <iostream>
-#include <memory>
 #include <string>
 
-#include "src/tint/utils/debug/debugger.h"
+#include "src/tint/utils/ice/debugger.h"
 #include "src/tint/utils/macros/compiler.h"
 
 namespace tint {
@@ -53,7 +52,7 @@ InternalCompilerError::~InternalCompilerError() {
     if (ice_reporter) {
         ice_reporter(*this);
     } else {
-        std::cerr << Error() << std::endl << std::endl;
+        std::cerr << Error() << "\n\n";
     }
 
     debugger::Break();

@@ -43,6 +43,7 @@
 #include "dawn/native/opengl/SamplerGL.h"
 #include "dawn/native/opengl/ShaderModuleGL.h"
 #include "dawn/native/opengl/TextureGL.h"
+#include "dawn/native/opengl/UtilsGL.h"
 
 namespace dawn::native::opengl {
 
@@ -53,9 +54,11 @@ PipelineGL::~PipelineGL() = default;
 MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
                                       const PipelineLayout* layout,
                                       const PerStage<ProgrammableStage>& stages,
+                                      bool usesVertexIndex,
                                       bool usesInstanceIndex,
-                                      bool usesFragDepth) {
-    mProgram = gl.CreateProgram();
+                                      bool usesFragDepth,
+                                      VertexAttributeMask bgraSwizzleAttributes) {
+    mProgram = DAWN_GL_TRY(gl, CreateProgram());
 
     // Compute the set of active stages.
     wgpu::ShaderStage activeStages = wgpu::ShaderStage::None;
@@ -70,14 +73,16 @@ MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
     bool needsPlaceholderSampler = false;
     std::vector<GLuint> glShaders;
     for (SingleShaderStage stage : IterateStages(activeStages)) {
-        const ShaderModule* module = ToBackend(stages[stage].module.Get());
+        ShaderModule* module = ToBackend(stages[stage].module.Get());
         GLuint shader;
-        DAWN_TRY_ASSIGN(shader, module->CompileShader(gl, stages[stage], stage, usesInstanceIndex,
-                                                      usesFragDepth, &combinedSamplers[stage],
-                                                      layout, &needsPlaceholderSampler,
-                                                      &mNeedsTextureBuiltinUniformBuffer,
-                                                      &mBindingPointEmulatedBuiltins));
-        gl.AttachShader(mProgram, shader);
+        DAWN_TRY_ASSIGN(
+            shader,
+            module->CompileShader(
+                gl, stages[stage], stage, usesVertexIndex, usesInstanceIndex, usesFragDepth,
+                bgraSwizzleAttributes, &combinedSamplers[stage], layout, &needsPlaceholderSampler,
+                &mNeedsTextureBuiltinUniformBuffer, &mBindingPointEmulatedBuiltins));
+        // XXX transform to flip some attributes from RGBA to BGRA
+        DAWN_GL_TRY(gl, AttachShader(mProgram, shader));
         glShaders.push_back(shader);
     }
 
@@ -101,23 +106,23 @@ MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
     }
 
     // Link all the shaders together.
-    gl.LinkProgram(mProgram);
+    DAWN_GL_TRY(gl, LinkProgram(mProgram));
 
     GLint linkStatus = GL_FALSE;
-    gl.GetProgramiv(mProgram, GL_LINK_STATUS, &linkStatus);
+    DAWN_GL_TRY(gl, GetProgramiv(mProgram, GL_LINK_STATUS, &linkStatus));
     if (linkStatus == GL_FALSE) {
         GLint infoLogLength = 0;
-        gl.GetProgramiv(mProgram, GL_INFO_LOG_LENGTH, &infoLogLength);
+        DAWN_GL_TRY(gl, GetProgramiv(mProgram, GL_INFO_LOG_LENGTH, &infoLogLength));
 
         if (infoLogLength > 1) {
             std::vector<char> buffer(infoLogLength);
-            gl.GetProgramInfoLog(mProgram, infoLogLength, nullptr, &buffer[0]);
+            DAWN_GL_TRY(gl, GetProgramInfoLog(mProgram, infoLogLength, nullptr, &buffer[0]));
             return DAWN_VALIDATION_ERROR("Program link failed:\n%s", buffer.data());
         }
     }
 
     // Compute links between stages for combined samplers, then bind them to texture units
-    gl.UseProgram(mProgram);
+    DAWN_GL_TRY(gl, UseProgram(mProgram));
     const auto& indices = layout->GetBindingIndexInfo();
 
     std::set<CombinedSampler> combinedSamplersSet;
@@ -133,13 +138,13 @@ MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
     GLuint textureUnit = layout->GetTextureUnitsUsed();
     for (const auto& combined : combinedSamplersSet) {
         const std::string& name = combined.GetName();
-        GLint location = gl.GetUniformLocation(mProgram, name.c_str());
+        GLint location = DAWN_GL_TRY(gl, GetUniformLocation(mProgram, name.c_str()));
 
         if (location == -1) {
             continue;
         }
 
-        gl.Uniform1i(location, textureUnit);
+        DAWN_GL_TRY(gl, Uniform1i(location, textureUnit));
 
         bool shouldUseFiltering;
         {
@@ -151,8 +156,9 @@ MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
             mUnitsForTextures[textureIndex].push_back(textureUnit);
 
             const auto& bindingLayout = bgl->GetBindingInfo(bindingIndex).bindingLayout;
-            shouldUseFiltering = std::get<TextureBindingInfo>(bindingLayout).sampleType ==
-                                 wgpu::TextureSampleType::Float;
+            auto sampleType = std::get<TextureBindingInfo>(bindingLayout).sampleType;
+            shouldUseFiltering = sampleType == wgpu::TextureSampleType::Float ||
+                                 sampleType == wgpu::TextureSampleType::Depth;
         }
         {
             if (combined.usePlaceholderSampler) {
@@ -171,8 +177,8 @@ MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
     }
 
     for (GLuint glShader : glShaders) {
-        gl.DetachShader(mProgram, glShader);
-        gl.DeleteShader(glShader);
+        DAWN_GL_TRY(gl, DetachShader(mProgram, glShader));
+        DAWN_GL_TRY(gl, DeleteShader(glShader));
     }
 
     mInternalUniformBufferBinding = layout->GetInternalUniformBinding();
@@ -181,7 +187,7 @@ MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
 }
 
 void PipelineGL::DeleteProgram(const OpenGLFunctions& gl) {
-    gl.DeleteProgram(mProgram);
+    DAWN_GL_TRY_IGNORE_ERRORS(gl, DeleteProgram(mProgram));
 }
 
 const std::vector<PipelineGL::SamplerUnit>& PipelineGL::GetTextureUnitsForSampler(
@@ -199,17 +205,18 @@ GLuint PipelineGL::GetProgramHandle() const {
     return mProgram;
 }
 
-void PipelineGL::ApplyNow(const OpenGLFunctions& gl) {
-    gl.UseProgram(mProgram);
+MaybeError PipelineGL::ApplyNow(const OpenGLFunctions& gl) {
+    DAWN_GL_TRY(gl, UseProgram(mProgram));
     for (GLuint unit : mPlaceholderSamplerUnits) {
         DAWN_ASSERT(mPlaceholderSampler.Get() != nullptr);
-        gl.BindSampler(unit, mPlaceholderSampler->GetNonFilteringHandle());
+        DAWN_GL_TRY(gl, BindSampler(unit, mPlaceholderSampler->GetNonFilteringHandle()));
     }
 
     if (mTextureBuiltinsBuffer.Get() != nullptr) {
-        gl.BindBufferBase(GL_UNIFORM_BUFFER, mInternalUniformBufferBinding,
-                          mTextureBuiltinsBuffer->GetHandle());
+        DAWN_GL_TRY(gl, BindBufferBase(GL_UNIFORM_BUFFER, mInternalUniformBufferBinding,
+                                       mTextureBuiltinsBuffer->GetHandle()));
     }
+    return {};
 }
 
 const Buffer* PipelineGL::GetInternalUniformBuffer() const {

@@ -62,18 +62,23 @@ MaybeError ValidateSpirv(DeviceBase* device,
         }
 
         std::ostringstream ss;
-        ss << "SPIRV line " << position.index << ": " << message << std::endl;
+        ss << "SPIRV line " << position.index << ": " << message << "\n";
         device->EmitLog(wgpuLogLevel, ss.str().c_str());
     });
 
-    const bool valid = spirvTools.Validate(spirv, wordCount);
+    // Don't prepare to emit friendly names. The preparation costs
+    // time by scanning the whole module and building a string table.
+    spvtools::ValidatorOptions val_opts;
+    val_opts.SetFriendlyNames(false);
+
+    const bool valid = spirvTools.Validate(spirv, wordCount, val_opts);
     if (dumpSpirv || !valid) {
         std::ostringstream dumpedMsg;
         std::string disassembly;
         if (spirvTools.Disassemble(
                 spirv, wordCount, &disassembly,
                 SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES | SPV_BINARY_TO_TEXT_OPTION_INDENT)) {
-            dumpedMsg << "/* Dumped generated SPIRV disassembly */" << std::endl << disassembly;
+            dumpedMsg << "/* Dumped generated SPIRV disassembly */\n" << disassembly;
         } else {
             dumpedMsg << "/* Failed to disassemble generated SPIRV */";
         }

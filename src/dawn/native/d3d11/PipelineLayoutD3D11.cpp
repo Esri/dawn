@@ -75,8 +75,10 @@ MaybeError PipelineLayout::Initialize(Device* device) {
                             mUAVBindGroups.set(group);
                             break;
                         case wgpu::BufferBindingType::ReadOnlyStorage:
+                        case kInternalReadOnlyStorageBufferBinding:
                             mIndexInfo[group][bindingIndex] = shaderResourceViewIndex++;
                             break;
+                        case wgpu::BufferBindingType::BindingNotUsed:
                         case wgpu::BufferBindingType::Undefined:
                             DAWN_UNREACHABLE();
                     }
@@ -102,10 +104,12 @@ MaybeError PipelineLayout::Initialize(Device* device) {
                         case wgpu::StorageTextureAccess::ReadOnly:
                             mIndexInfo[group][bindingIndex] = shaderResourceViewIndex++;
                             break;
+                        case wgpu::StorageTextureAccess::BindingNotUsed:
                         case wgpu::StorageTextureAccess::Undefined:
                             DAWN_UNREACHABLE();
                     }
-                });
+                },
+                [](const InputAttachmentBindingInfo&) { DAWN_UNREACHABLE(); });
         }
     }
     mUnusedUAVBindingCount = unorderedAccessViewIndex;

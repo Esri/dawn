@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "dawn/common/WindowsUtils.h"
+#include "dawn/native/ApplyClearColorValueWithDrawHelper.h"
 #include "dawn/native/ChainUtils.h"
 #include "dawn/native/CommandEncoder.h"
 #include "dawn/native/CommandValidation.h"
@@ -77,13 +78,19 @@ class VertexBufferTracker {
         mD3D11Buffers = {};
         mStrides = {};
         mOffsets = {};
-        mCommandContext->GetD3D11DeviceContext4()->IASetVertexBuffers(
+        mCommandContext->GetD3D11DeviceContext3()->IASetVertexBuffers(
             0, kMaxVertexBuffers, mD3D11Buffers.data(), mStrides.data(), mOffsets.data());
     }
 
     void OnSetVertexBuffer(VertexBufferSlot slot, ID3D11Buffer* buffer, uint64_t offset) {
+        if (mD3D11Buffers[slot] == buffer && mOffsets[slot] == offset) {
+            return;
+        }
+
         mD3D11Buffers[slot] = buffer;
         mOffsets[slot] = offset;
+
+        mDirtyVertexBuffers.set(slot);
     }
 
     void Apply(const RenderPipeline* renderPipeline) {
@@ -93,12 +100,24 @@ class VertexBufferTracker {
         if (mLastAppliedRenderPipeline != renderPipeline) {
             mLastAppliedRenderPipeline = renderPipeline;
             for (VertexBufferSlot slot : IterateBitSet(renderPipeline->GetVertexBuffersUsed())) {
+                if (mStrides[slot] == renderPipeline->GetVertexBuffer(slot).arrayStride) {
+                    continue;
+                }
+
                 mStrides[slot] = renderPipeline->GetVertexBuffer(slot).arrayStride;
+                mDirtyVertexBuffers.set(slot);
             }
         }
 
-        mCommandContext->GetD3D11DeviceContext4()->IASetVertexBuffers(
-            0, kMaxVertexBuffers, mD3D11Buffers.data(), mStrides.data(), mOffsets.data());
+        const auto vertexBuffersToApply =
+            mDirtyVertexBuffers & renderPipeline->GetVertexBuffersUsed();
+
+        for (VertexBufferSlot slot : IterateBitSet(vertexBuffersToApply)) {
+            mCommandContext->GetD3D11DeviceContext3()->IASetVertexBuffers(
+                uint8_t(slot), 1, &mD3D11Buffers[slot], &mStrides[slot], &mOffsets[slot]);
+
+            mDirtyVertexBuffers.reset(slot);
+        }
     }
 
   private:
@@ -107,6 +126,7 @@ class VertexBufferTracker {
     PerVertexBuffer<ID3D11Buffer*> mD3D11Buffers = {};
     PerVertexBuffer<UINT> mStrides = {};
     PerVertexBuffer<UINT> mOffsets = {};
+    VertexBufferMask mDirtyVertexBuffers;
 };
 
 // Handle pixel local storage attachments and return a vector of all pixel local storage UAVs.
@@ -119,7 +139,7 @@ HandlePixelLocalStorageAndGetPixelLocalStorageUAVs(
     const BeginRenderPassCmd* renderPass,
     const ScopedSwapStateCommandRecordingContext* commandContext) {
     std::vector<ComPtr<ID3D11UnorderedAccessView>> pixelLocalStorageUAVs;
-    auto d3d11DeviceContext = commandContext->GetD3D11DeviceContext4();
+    auto d3d11DeviceContext = commandContext->GetD3D11DeviceContext3();
 
     const std::vector<wgpu::TextureFormat>& storageAttachmentSlots =
         renderPass->attachmentState->GetStorageAttachmentSlots();
@@ -227,6 +247,7 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
 
         for (BufferBase* buffer : scope.buffers) {
             DAWN_TRY(ToBackend(buffer)->EnsureDataInitialized(commandContext));
+            buffer->MarkUsedInPendingCommands();
         }
 
         return {};
@@ -240,6 +261,10 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
         switch (type) {
             case Command::BeginComputePass: {
                 mCommands.NextCommand<BeginComputePassCmd>();
+                for (BufferBase* buffer :
+                     GetResourceUsages().computePasses[nextComputePassNumber].referencedBuffers) {
+                    buffer->MarkUsedInPendingCommands();
+                }
                 for (TextureBase* texture :
                      GetResourceUsages().computePasses[nextComputePassNumber].referencedTextures) {
                     DAWN_TRY(ToBackend(texture)->SynchronizeTextureBeforeUse(commandContext));
@@ -274,7 +299,6 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
                 }
                 DAWN_TRY(
                     LazyClearSyncScope(GetResourceUsages().renderPasses[nextRenderPassNumber]));
-                LazyClearRenderPassAttachments(cmd);
                 DAWN_TRY(ExecuteRenderPass(cmd, commandContext));
 
                 nextRenderPassNumber++;
@@ -315,7 +339,7 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
                 Ref<BufferBase> stagingBuffer;
                 // If the buffer is not mappable, we need to create a staging buffer and copy the
                 // data from the buffer to the staging buffer.
-                if (!(buffer->GetUsage() & kMappableBufferUsages)) {
+                if (!buffer->IsCPUReadable()) {
                     const TexelBlockInfo& blockInfo =
                         ToBackend(dst.texture)->GetFormat().GetAspectInfo(dst.aspect).block;
                     // TODO(dawn:1768): use compute shader to copy data from buffer to texture.
@@ -335,7 +359,8 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
                 }
 
                 Buffer::ScopedMap scopedMap;
-                DAWN_TRY_ASSIGN(scopedMap, Buffer::ScopedMap::Create(commandContext, buffer));
+                DAWN_TRY_ASSIGN(scopedMap, Buffer::ScopedMap::Create(commandContext, buffer,
+                                                                     wgpu::MapMode::Read));
                 DAWN_TRY(buffer->EnsureDataInitialized(commandContext));
 
                 Texture* texture = ToBackend(dst.texture.Get());
@@ -370,7 +395,8 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
 
                 Buffer* buffer = ToBackend(dst.buffer.Get());
                 Buffer::ScopedMap scopedDstMap;
-                DAWN_TRY_ASSIGN(scopedDstMap, Buffer::ScopedMap::Create(commandContext, buffer));
+                DAWN_TRY_ASSIGN(scopedDstMap, Buffer::ScopedMap::Create(commandContext, buffer,
+                                                                        wgpu::MapMode::Write));
 
                 DAWN_TRY(buffer->EnsureDataInitializedAsDestination(commandContext, copy));
 
@@ -468,7 +494,7 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
 MaybeError CommandBuffer::ExecuteComputePass(
     const ScopedSwapStateCommandRecordingContext* commandContext) {
     ComputePipeline* lastPipeline = nullptr;
-    BindGroupTracker bindGroupTracker(commandContext, /*isRenderPass=*/false);
+    ComputePassBindGroupTracker bindGroupTracker(commandContext);
 
     Command type;
     while (mCommands.NextCommandId(&type)) {
@@ -484,7 +510,7 @@ MaybeError CommandBuffer::ExecuteComputePass(
                 DAWN_TRY(bindGroupTracker.Apply());
 
                 DAWN_TRY(RecordNumWorkgroupsForDispatch(lastPipeline, commandContext, dispatch));
-                commandContext->GetD3D11DeviceContext4()->Dispatch(dispatch->x, dispatch->y,
+                commandContext->GetD3D11DeviceContext3()->Dispatch(dispatch->x, dispatch->y,
                                                                    dispatch->z);
 
                 break;
@@ -495,7 +521,7 @@ MaybeError CommandBuffer::ExecuteComputePass(
 
                 DAWN_TRY(bindGroupTracker.Apply());
 
-                Buffer* indirectBuffer = ToBackend(dispatch->indirectBuffer.Get());
+                auto* indirectBuffer = ToGPUUsableBuffer(dispatch->indirectBuffer.Get());
 
                 if (lastPipeline->UsesNumWorkgroups()) {
                     // Copy indirect args into the uniform buffer for built-in workgroup variables.
@@ -504,9 +530,11 @@ MaybeError CommandBuffer::ExecuteComputePass(
                                           0));
                 }
 
-                commandContext->GetD3D11DeviceContext4()->DispatchIndirect(
-                    indirectBuffer->GetD3D11NonConstantBuffer(), dispatch->indirectOffset);
-
+                ID3D11Buffer* d3dBuffer;
+                DAWN_TRY_ASSIGN(d3dBuffer,
+                                indirectBuffer->GetD3D11NonConstantBuffer(commandContext));
+                commandContext->GetD3D11DeviceContext3()->DispatchIndirect(
+                    d3dBuffer, dispatch->indirectOffset);
                 break;
             }
 
@@ -543,6 +571,9 @@ MaybeError CommandBuffer::ExecuteComputePass(
                 break;
             }
 
+            case Command::SetImmediateData:
+                return DAWN_UNIMPLEMENTED_ERROR("SetImmediateData unimplemented");
+
             default:
                 DAWN_UNREACHABLE();
         }
@@ -555,19 +586,31 @@ MaybeError CommandBuffer::ExecuteComputePass(
 MaybeError CommandBuffer::ExecuteRenderPass(
     BeginRenderPassCmd* renderPass,
     const ScopedSwapStateCommandRecordingContext* commandContext) {
-    auto* d3d11DeviceContext = commandContext->GetD3D11DeviceContext4();
+    // For the color attachments that the clear_color_with_draw workaround has applied, we can skip
+    // the clear for them.
+    for (auto i :
+         IterateBitSet(ClearWithDrawHelper::GetAppliedColorAttachments(GetDevice(), renderPass))) {
+        auto& colorAttachment = renderPass->colorAttachments[i];
+        DAWN_ASSERT(colorAttachment.loadOp == wgpu::LoadOp::Clear);
+        // Skip the clear as it will be handled by the workaround.
+        colorAttachment.loadOp = wgpu::LoadOp::Load;
+        // Mark the resource as initialized to avoid the lazy clear.
+        SubresourceRange range = colorAttachment.view->GetSubresourceRange();
+        colorAttachment.view->GetTexture()->SetIsSubresourceContentInitialized(true, range);
+    }
+    LazyClearRenderPassAttachments(renderPass);
 
+    auto* d3d11DeviceContext = commandContext->GetD3D11DeviceContext3();
     // Hold ID3D11RenderTargetView ComPtr to make attachments alive.
     PerColorAttachment<ID3D11RenderTargetView*> d3d11RenderTargetViews = {};
     ColorAttachmentIndex attachmentCount{};
-    bool clearWithDraw = GetDevice()->IsToggleEnabled(Toggle::ClearColorWithDraw);
     // TODO(dawn:1815): Shrink the sparse attachments to accommodate more UAVs.
     for (auto i : IterateBitSet(renderPass->attachmentState->GetColorAttachmentsMask())) {
         TextureView* colorTextureView = ToBackend(renderPass->colorAttachments[i].view.Get());
         DAWN_TRY_ASSIGN(d3d11RenderTargetViews[i],
                         colorTextureView->GetOrCreateD3D11RenderTargetView(
                             renderPass->colorAttachments[i].depthSlice));
-        if (!clearWithDraw && renderPass->colorAttachments[i].loadOp == wgpu::LoadOp::Clear) {
+        if (renderPass->colorAttachments[i].loadOp == wgpu::LoadOp::Clear) {
             std::array<float, 4> clearColor =
                 ConvertToFloatColor(renderPass->colorAttachments[i].clearColor);
             d3d11DeviceContext->ClearRenderTargetView(d3d11RenderTargetViews[i], clearColor.data());
@@ -629,8 +672,7 @@ MaybeError CommandBuffer::ExecuteRenderPass(
     d3d11DeviceContext->RSSetScissorRects(1, &scissor);
 
     RenderPipeline* lastPipeline = nullptr;
-    BindGroupTracker bindGroupTracker(commandContext, /*isRenderPass=*/true,
-                                      std::move(pixelLocalStorageUAVs));
+    RenderPassBindGroupTracker bindGroupTracker(commandContext, std::move(pixelLocalStorageUAVs));
     VertexBufferTracker vertexBufferTracker(commandContext);
     std::array<float, 4> blendColor = {0.0f, 0.0f, 0.0f, 0.0f};
     uint32_t stencilReference = 0;
@@ -644,7 +686,7 @@ MaybeError CommandBuffer::ExecuteRenderPass(
                 vertexBufferTracker.Apply(lastPipeline);
                 DAWN_TRY(RecordFirstIndexOffset(lastPipeline, commandContext, draw->firstVertex,
                                                 draw->firstInstance));
-                commandContext->GetD3D11DeviceContext4()->DrawInstanced(
+                commandContext->GetD3D11DeviceContext3()->DrawInstanced(
                     draw->vertexCount, draw->instanceCount, draw->firstVertex, draw->firstInstance);
 
                 break;
@@ -657,7 +699,7 @@ MaybeError CommandBuffer::ExecuteRenderPass(
                 vertexBufferTracker.Apply(lastPipeline);
                 DAWN_TRY(RecordFirstIndexOffset(lastPipeline, commandContext, draw->baseVertex,
                                                 draw->firstInstance));
-                commandContext->GetD3D11DeviceContext4()->DrawIndexedInstanced(
+                commandContext->GetD3D11DeviceContext3()->DrawIndexedInstanced(
                     draw->indexCount, draw->instanceCount, draw->firstIndex, draw->baseVertex,
                     draw->firstInstance);
 
@@ -667,7 +709,7 @@ MaybeError CommandBuffer::ExecuteRenderPass(
             case Command::DrawIndirect: {
                 DrawIndirectCmd* draw = iter->NextCommand<DrawIndirectCmd>();
 
-                Buffer* indirectBuffer = ToBackend(draw->indirectBuffer.Get());
+                auto* indirectBuffer = ToGPUUsableBuffer(draw->indirectBuffer.Get());
                 DAWN_ASSERT(indirectBuffer != nullptr);
 
                 DAWN_TRY(bindGroupTracker.Apply());
@@ -684,8 +726,11 @@ MaybeError CommandBuffer::ExecuteRenderPass(
                                           0));
                 }
 
-                commandContext->GetD3D11DeviceContext4()->DrawInstancedIndirect(
-                    indirectBuffer->GetD3D11NonConstantBuffer(), draw->indirectOffset);
+                ID3D11Buffer* d3dBuffer;
+                DAWN_TRY_ASSIGN(d3dBuffer,
+                                indirectBuffer->GetD3D11NonConstantBuffer(commandContext));
+                commandContext->GetD3D11DeviceContext3()->DrawInstancedIndirect(
+                    d3dBuffer, draw->indirectOffset);
 
                 break;
             }
@@ -693,7 +738,7 @@ MaybeError CommandBuffer::ExecuteRenderPass(
             case Command::DrawIndexedIndirect: {
                 DrawIndexedIndirectCmd* draw = iter->NextCommand<DrawIndexedIndirectCmd>();
 
-                Buffer* indirectBuffer = ToBackend(draw->indirectBuffer.Get());
+                auto* indirectBuffer = ToGPUUsableBuffer(draw->indirectBuffer.Get());
                 DAWN_ASSERT(indirectBuffer != nullptr);
 
                 DAWN_TRY(bindGroupTracker.Apply());
@@ -710,8 +755,11 @@ MaybeError CommandBuffer::ExecuteRenderPass(
                                           0));
                 }
 
-                commandContext->GetD3D11DeviceContext4()->DrawIndexedInstancedIndirect(
-                    indirectBuffer->GetD3D11NonConstantBuffer(), draw->indirectOffset);
+                ID3D11Buffer* d3dBuffer;
+                DAWN_TRY_ASSIGN(d3dBuffer,
+                                indirectBuffer->GetD3D11NonConstantBuffer(commandContext));
+                commandContext->GetD3D11DeviceContext3()->DrawIndexedInstancedIndirect(
+                    d3dBuffer, draw->indirectOffset);
 
                 break;
             }
@@ -745,17 +793,21 @@ MaybeError CommandBuffer::ExecuteRenderPass(
                 UINT indexBufferBaseOffset = cmd->offset;
                 DXGI_FORMAT indexBufferFormat = DXGIIndexFormat(cmd->format);
 
-                commandContext->GetD3D11DeviceContext4()->IASetIndexBuffer(
-                    ToBackend(cmd->buffer)->GetD3D11NonConstantBuffer(), indexBufferFormat,
-                    indexBufferBaseOffset);
+                ID3D11Buffer* d3dBuffer;
+                DAWN_TRY_ASSIGN(d3dBuffer, ToGPUUsableBuffer(cmd->buffer.Get())
+                                               ->GetD3D11NonConstantBuffer(commandContext));
+                commandContext->GetD3D11DeviceContext3()->IASetIndexBuffer(
+                    d3dBuffer, indexBufferFormat, indexBufferBaseOffset);
 
                 break;
             }
 
             case Command::SetVertexBuffer: {
                 SetVertexBufferCmd* cmd = iter->NextCommand<SetVertexBufferCmd>();
-                ID3D11Buffer* buffer = ToBackend(cmd->buffer)->GetD3D11NonConstantBuffer();
-                vertexBufferTracker.OnSetVertexBuffer(cmd->slot, buffer, cmd->offset);
+                ID3D11Buffer* d3dBuffer;
+                DAWN_TRY_ASSIGN(d3dBuffer, ToGPUUsableBuffer(cmd->buffer.Get())
+                                               ->GetD3D11NonConstantBuffer(commandContext));
+                vertexBufferTracker.OnSetVertexBuffer(cmd->slot, d3dBuffer, cmd->offset);
                 break;
             }
 
@@ -807,7 +859,8 @@ MaybeError CommandBuffer::ExecuteRenderPass(
                     d3d11DeviceContext->ResolveSubresource(
                         resolveTexture->GetD3D11Resource(), dstSubresource,
                         colorTexture->GetD3D11Resource(), srcSubresource,
-                        d3d::DXGITextureFormat(attachment.resolveTarget->GetFormat().format));
+                        d3d::DXGITextureFormat(GetDevice(),
+                                               attachment.resolveTarget->GetFormat().format));
                 }
 
                 return {};
@@ -832,7 +885,7 @@ MaybeError CommandBuffer::ExecuteRenderPass(
                 viewport.Height = cmd->height;
                 viewport.MinDepth = cmd->minDepth;
                 viewport.MaxDepth = cmd->maxDepth;
-                commandContext->GetD3D11DeviceContext4()->RSSetViewports(1, &viewport);
+                commandContext->GetD3D11DeviceContext3()->RSSetViewports(1, &viewport);
                 break;
             }
 
@@ -842,7 +895,7 @@ MaybeError CommandBuffer::ExecuteRenderPass(
                 D3D11_RECT scissorRect = {static_cast<LONG>(cmd->x), static_cast<LONG>(cmd->y),
                                           static_cast<LONG>(cmd->x + cmd->width),
                                           static_cast<LONG>(cmd->y + cmd->height)};
-                commandContext->GetD3D11DeviceContext4()->RSSetScissorRects(1, &scissorRect);
+                commandContext->GetD3D11DeviceContext3()->RSSetScissorRects(1, &scissorRect);
                 break;
             }
 
@@ -871,19 +924,22 @@ MaybeError CommandBuffer::ExecuteRenderPass(
             case Command::BeginOcclusionQuery: {
                 BeginOcclusionQueryCmd* cmd = mCommands.NextCommand<BeginOcclusionQueryCmd>();
                 QuerySet* querySet = ToBackend(cmd->querySet.Get());
-                querySet->BeginQuery(commandContext->GetD3D11DeviceContext4(), cmd->queryIndex);
+                querySet->BeginQuery(commandContext->GetD3D11DeviceContext3(), cmd->queryIndex);
                 break;
             }
 
             case Command::EndOcclusionQuery: {
                 EndOcclusionQueryCmd* cmd = mCommands.NextCommand<EndOcclusionQueryCmd>();
                 QuerySet* querySet = ToBackend(cmd->querySet.Get());
-                querySet->EndQuery(commandContext->GetD3D11DeviceContext4(), cmd->queryIndex);
+                querySet->EndQuery(commandContext->GetD3D11DeviceContext3(), cmd->queryIndex);
                 break;
             }
 
             case Command::WriteTimestamp:
                 return DAWN_UNIMPLEMENTED_ERROR("WriteTimestamp unimplemented");
+
+            case Command::SetImmediateData:
+                return DAWN_UNIMPLEMENTED_ERROR("SetImmediateData unimplemented");
 
             default: {
                 DAWN_TRY(DoRenderBundleCommand(&mCommands, type));

@@ -60,9 +60,11 @@ PipelineLayout::PipelineLayout(Device* device,
                         case wgpu::BufferBindingType::Storage:
                         case kInternalStorageBufferBinding:
                         case wgpu::BufferBindingType::ReadOnlyStorage:
+                        case kInternalReadOnlyStorageBufferBinding:
                             mIndexInfo[group][bindingIndex] = ssboIndex;
                             ssboIndex++;
                             break;
+                        case wgpu::BufferBindingType::BindingNotUsed:
                         case wgpu::BufferBindingType::Undefined:
                             DAWN_UNREACHABLE();
                     }
@@ -82,7 +84,8 @@ PipelineLayout::PipelineLayout(Device* device,
                 [&](const StorageTextureBindingInfo&) {
                     mIndexInfo[group][bindingIndex] = storageTextureIndex;
                     storageTextureIndex++;
-                });
+                },
+                [](const InputAttachmentBindingInfo&) { DAWN_UNREACHABLE(); });
         }
     }
 

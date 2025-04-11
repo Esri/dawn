@@ -25,14 +25,15 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <gtest/gtest.h>
+#include <webgpu/webgpu_cpp.h>
+#include <webgpu/webgpu_enum_class_bitmasks.h>
+
 #include <cmath>
 #include <limits>
 #include <vector>
 
 #include "dawn/common/Math.h"
-#include "dawn/webgpu_cpp.h"
-#include "gtest/gtest.h"
-#include "webgpu/webgpu_enum_class_bitmasks.h"
 
 namespace wgpu {
 
@@ -54,14 +55,88 @@ namespace {
 
 // Tests for ScanForward
 TEST(Math, ScanForward) {
+    // 8-bit
     // Test extrema
-    ASSERT_EQ(ScanForward(1), 0u);
-    ASSERT_EQ(ScanForward(0x80000000), 31u);
+    ASSERT_EQ(ScanForward(uint8_t(1)), 0u);
+    ASSERT_EQ(ScanForward(uint8_t(0x80)), 7u);
 
     // Test with more than one bit set.
-    ASSERT_EQ(ScanForward(256), 8u);
-    ASSERT_EQ(ScanForward(256 + 32), 5u);
-    ASSERT_EQ(ScanForward(1024 + 256 + 32), 5u);
+    ASSERT_EQ(ScanForward(uint8_t(64)), 6u);
+    ASSERT_EQ(ScanForward(uint8_t(64 + 32)), 5u);
+    ASSERT_EQ(ScanForward(uint8_t(128 + 64 + 32)), 5u);
+
+    // 16-bit
+    // Test extrema
+    ASSERT_EQ(ScanForward(uint16_t(1)), 0u);
+    ASSERT_EQ(ScanForward(uint16_t(0x8000)), 15u);
+
+    // Test with more than one bit set.
+    ASSERT_EQ(ScanForward(uint16_t(256)), 8u);
+    ASSERT_EQ(ScanForward(uint16_t(256 + 32)), 5u);
+    ASSERT_EQ(ScanForward(uint16_t(1024u + 256 + 32)), 5u);
+
+    // 32-bit
+    // Test extrema
+    ASSERT_EQ(ScanForward(1u), 0u);
+    ASSERT_EQ(ScanForward(0x80000000u), 31u);
+
+    // Test with more than one bit set.
+    ASSERT_EQ(ScanForward(256u), 8u);
+    ASSERT_EQ(ScanForward(256u + 32u), 5u);
+    ASSERT_EQ(ScanForward(1024u + 256u + 32u), 5u);
+
+    // 64-bit
+    // Test extrema
+    ASSERT_EQ(ScanForward(uint64_t(1)), 0u);
+    ASSERT_EQ(ScanForward(uint64_t(0x8000000000000000ull)), 63u);
+
+    // Test with more than one bit set.
+    ASSERT_EQ(ScanForward(uint64_t(256ull)), 8u);
+    ASSERT_EQ(ScanForward(uint64_t(256ull + 32ull)), 5u);
+    ASSERT_EQ(ScanForward(uint64_t(0x800000000ull + 256ull + 32ull)), 5u);
+}
+
+// Tests for ScanReverse
+TEST(Math, ScanReverse) {
+    // 8-bit
+    // Test extrema
+    ASSERT_EQ(ScanReverse(uint8_t(1)), 0u);
+    ASSERT_EQ(ScanReverse(uint8_t(0x80)), 7u);
+
+    // Test with more than one bit set.
+    ASSERT_EQ(ScanReverse(uint8_t(64)), 6u);
+    ASSERT_EQ(ScanReverse(uint8_t(64 + 32)), 6u);
+    ASSERT_EQ(ScanReverse(uint8_t(128 + 64 + 32)), 7u);
+
+    // 16-bit
+    // Test extrema
+    ASSERT_EQ(ScanReverse(uint16_t(1)), 0u);
+    ASSERT_EQ(ScanReverse(uint16_t(0x8000)), 15u);
+
+    // Test with more than one bit set.
+    ASSERT_EQ(ScanReverse(uint16_t(256)), 8u);
+    ASSERT_EQ(ScanReverse(uint16_t(256 + 32)), 8u);
+    ASSERT_EQ(ScanReverse(uint16_t(1024u + 256 + 32)), 10u);
+
+    // 32-bit
+    // Test extrema
+    ASSERT_EQ(ScanReverse(1u), 0u);
+    ASSERT_EQ(ScanReverse(0x80000000u), 31u);
+
+    // Test with more than one bit set.
+    ASSERT_EQ(ScanReverse(256u), 8u);
+    ASSERT_EQ(ScanReverse(256u + 32u), 8u);
+    ASSERT_EQ(ScanReverse(1024u + 256u + 32u), 10u);
+
+    // 64-bit
+    // Test extrema
+    ASSERT_EQ(ScanReverse(uint64_t(1)), 0u);
+    ASSERT_EQ(ScanReverse(uint64_t(0x8000000000000000ull)), 63u);
+
+    // Test with more than one bit set.
+    ASSERT_EQ(ScanReverse(uint64_t(256ull)), 8u);
+    ASSERT_EQ(ScanReverse(uint64_t(256ull + 32ull)), 8u);
+    ASSERT_EQ(ScanReverse(uint64_t(0x800000000ull + 256ull + 32ull)), 35u);
 }
 
 // Tests for Log2
@@ -195,6 +270,36 @@ TEST(Math, Align) {
     // Test extrema
     ASSERT_EQ(Align(static_cast<uint64_t>(0xFFFFFFFF), 4), 0x100000000u);
     ASSERT_EQ(Align(static_cast<uint64_t>(0xFFFFFFFFFFFFFFFF), 1), 0xFFFFFFFFFFFFFFFFull);
+}
+
+// Tests for AlignDown
+TEST(Math, AlignDown) {
+    // 0 aligns to 0
+    ASSERT_EQ(AlignDown(0u, 4), 0u);
+    ASSERT_EQ(AlignDown(0u, 256), 0u);
+    ASSERT_EQ(AlignDown(0u, 512), 0u);
+
+    // Multiples align to self
+    ASSERT_EQ(AlignDown(8u, 8), 8u);
+    ASSERT_EQ(AlignDown(16u, 8), 16u);
+    ASSERT_EQ(AlignDown(24u, 8), 24u);
+    ASSERT_EQ(AlignDown(256u, 256), 256u);
+    ASSERT_EQ(AlignDown(512u, 256), 512u);
+    ASSERT_EQ(AlignDown(768u, 256), 768u);
+
+    // Alignment with 1 is self
+    for (uint32_t i = 0; i < 128; ++i) {
+        ASSERT_EQ(AlignDown(i, 1), i);
+    }
+
+    // Everything in the range (align, 2*align - 1) aligns down to align
+    for (uint32_t i = 1; i < 64; ++i) {
+        ASSERT_EQ(AlignDown(64 + i, 64), 64u);
+    }
+
+    // Test extrema
+    ASSERT_EQ(AlignDown(static_cast<uint64_t>(0xFFFFFFFF), 4), 0xFFFFFFFC);
+    ASSERT_EQ(AlignDown(static_cast<uint64_t>(0xFFFFFFFFFFFFFFFF), 1), 0xFFFFFFFFFFFFFFFFull);
 }
 
 TEST(Math, AlignSizeof) {
@@ -370,6 +475,41 @@ TEST(Math, IsSubset) {
     ASSERT_TRUE(IsSubset(wgpu::TestEnum::A, wgpu::TestEnum::A | wgpu::TestEnum::B));
     ASSERT_FALSE(IsSubset(wgpu::TestEnum::C, wgpu::TestEnum::A | wgpu::TestEnum::B));
     ASSERT_FALSE(IsSubset(wgpu::TestEnum::A | wgpu::TestEnum::C, wgpu::TestEnum::A));
+}
+
+// Tests for BitCount
+TEST(Math, BitCount) {
+    // 8-bit
+    ASSERT_EQ(BitCount(uint8_t(0x00)), 0u);
+    ASSERT_EQ(BitCount(uint8_t(0x01)), 1u);
+    ASSERT_EQ(BitCount(uint8_t(0x80)), 1u);
+    ASSERT_EQ(BitCount(uint8_t(0x11)), 2u);
+    ASSERT_EQ(BitCount(uint8_t(0xAA)), 4u);
+    ASSERT_EQ(BitCount(uint8_t(0xFF)), 8u);
+
+    // 16-bit
+    ASSERT_EQ(BitCount(uint16_t(0x0000)), 0u);
+    ASSERT_EQ(BitCount(uint16_t(0x0001)), 1u);
+    ASSERT_EQ(BitCount(uint16_t(0x8000)), 1u);
+    ASSERT_EQ(BitCount(uint16_t(0x1111)), 4u);
+    ASSERT_EQ(BitCount(uint16_t(0xAAAA)), 8u);
+    ASSERT_EQ(BitCount(uint16_t(0xFFFF)), 16u);
+
+    // 32-bit
+    ASSERT_EQ(BitCount(0x00000000u), 0u);
+    ASSERT_EQ(BitCount(0x00000001u), 1u);
+    ASSERT_EQ(BitCount(0x80000000u), 1u);
+    ASSERT_EQ(BitCount(0x11111111u), 8u);
+    ASSERT_EQ(BitCount(0xAAAAAAAAu), 16u);
+    ASSERT_EQ(BitCount(0xFFFFFFFFu), 32u);
+
+    // 64-bit
+    ASSERT_EQ(BitCount(uint64_t(0x0000000000000000ull)), 0u);
+    ASSERT_EQ(BitCount(uint64_t(0x0000000000000001ull)), 1u);
+    ASSERT_EQ(BitCount(uint64_t(0x8000000000000000ull)), 1u);
+    ASSERT_EQ(BitCount(uint64_t(0x1111111111111111ull)), 16u);
+    ASSERT_EQ(BitCount(uint64_t(0xAAAAAAAAAAAAAAAAull)), 32u);
+    ASSERT_EQ(BitCount(uint64_t(0xFFFFFFFFFFFFFFFFull)), 64u);
 }
 
 }  // anonymous namespace

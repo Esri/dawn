@@ -27,17 +27,21 @@
 
 #include "dawn/native/vulkan/QueueVk.h"
 
+#include <limits>
+#include <optional>
+#include <utility>
+
 #include "dawn/common/Math.h"
 #include "dawn/native/Buffer.h"
 #include "dawn/native/CommandValidation.h"
 #include "dawn/native/Commands.h"
 #include "dawn/native/DynamicUploader.h"
 #include "dawn/native/vulkan/CommandBufferVk.h"
-#include "dawn/native/vulkan/CommandRecordingContext.h"
+#include "dawn/native/vulkan/CommandRecordingContextVk.h"
 #include "dawn/native/vulkan/DeviceVk.h"
 #include "dawn/native/vulkan/FencedDeleter.h"
-#include "dawn/native/vulkan/SharedFenceVk.h"
 #include "dawn/native/vulkan/TextureVk.h"
+#include "dawn/native/vulkan/UniqueVkHandle.h"
 #include "dawn/native/vulkan/UtilsVulkan.h"
 #include "dawn/native/vulkan/VulkanError.h"
 #include "dawn/platform/DawnPlatform.h"
@@ -47,27 +51,6 @@
 namespace dawn::native::vulkan {
 
 namespace {
-
-// Destroy the semaphore when out of scope.
-class ScopedSignalSemaphore : public NonCopyable {
-  public:
-    ScopedSignalSemaphore(Device* device, VkSemaphore semaphore)
-        : mDevice(device), mSemaphore(semaphore) {}
-    ScopedSignalSemaphore(ScopedSignalSemaphore&& other)
-        : mDevice(other.mDevice), mSemaphore(std::exchange(other.mSemaphore, VK_NULL_HANDLE)) {}
-    ~ScopedSignalSemaphore() {
-        if (mSemaphore != VK_NULL_HANDLE) {
-            mDevice->GetFencedDeleter()->DeleteWhenUnused(mSemaphore);
-        }
-    }
-
-    VkSemaphore Get() { return mSemaphore; }
-    VkSemaphore* InitializeInto() { return &mSemaphore; }
-
-  private:
-    raw_ptr<Device> mDevice = nullptr;
-    VkSemaphore mSemaphore = VK_NULL_HANDLE;
-};
 
 // Destroys command pool/buffer.
 // TODO(dawn:1601) Revisit this and potentially bake into pool/buffer objects instead.
@@ -161,7 +144,7 @@ ResultOrError<ExecutionSerial> Queue::CheckAndUpdateCompletedSerials() {
             // Update fenceSerial since fence is ready.
             fenceSerial = tentativeSerial;
 
-            mUnusedFences.push_back(fence);
+            mUnusedFences->push_back(fence);
 
             DAWN_ASSERT(fenceSerial > GetCompletedCommandSerial());
             fencesInFlight->pop_front();
@@ -345,50 +328,11 @@ MaybeError Queue::SubmitPendingCommands() {
     if (!mRecordingContext.mappableBuffersForEagerTransition.empty()) {
         // Transition mappable buffers back to map usages with the submit.
         Buffer::TransitionMappableBuffersEagerly(
-            device->fn, &mRecordingContext, mRecordingContext.mappableBuffersForEagerTransition);
-    }
-    std::vector<ScopedSignalSemaphore> externalTextureSemaphores;
-    for (size_t i = 0; i < mRecordingContext.externalTexturesForEagerTransition.size(); ++i) {
-        // Create an external semaphore for each external textures that have been used in the
-        // pending submit.
-        auto& externalTextureSemaphore =
-            externalTextureSemaphores.emplace_back(device, VK_NULL_HANDLE);
-        DAWN_TRY_ASSIGN(*externalTextureSemaphore.InitializeInto(),
-                        device->GetExternalSemaphoreService()->CreateExportableSemaphore());
+            device, &mRecordingContext, mRecordingContext.mappableBuffersForEagerTransition);
     }
 
-    // Transition eagerly all used external textures for export.
-    for (auto* texture : mRecordingContext.externalTexturesForEagerTransition) {
-        texture->TransitionEagerlyForExport(&mRecordingContext);
-        std::vector<VkSemaphore> waitRequirements = texture->AcquireWaitRequirements();
-        mRecordingContext.waitSemaphores.insert(mRecordingContext.waitSemaphores.end(),
-                                                waitRequirements.begin(), waitRequirements.end());
-
-        SharedResourceMemoryContents* contents = texture->GetSharedResourceMemoryContents();
-        if (contents != nullptr) {
-            SharedTextureMemoryBase::PendingFenceList fences;
-            contents->AcquirePendingFences(&fences);
-
-            for (const auto& fence : fences) {
-                // All semaphores are binary semaphores.
-                DAWN_ASSERT(fence.signaledValue == 1u);
-                ExternalSemaphoreHandle semaphoreHandle = [&]() {
-                    if constexpr (std::is_same_v<ExternalSemaphoreHandle, SystemHandle::Handle>) {
-                        return ToBackend(fence.object)->GetHandle().Get();
-                    } else {
-                        // TODO(crbug.com/dawn/1745): Remove this path and make the semaphore
-                        // service use SystemHandle.
-                        DAWN_UNREACHABLE();
-                        return ExternalSemaphoreHandle{};
-                    }
-                }();
-
-                VkSemaphore semaphore;
-                DAWN_TRY_ASSIGN(semaphore, device->GetExternalSemaphoreService()->ImportSemaphore(
-                                               semaphoreHandle));
-                mRecordingContext.waitSemaphores.push_back(semaphore);
-            }
-        }
+    for (auto texture : mRecordingContext.specialSyncTextures) {
+        DAWN_TRY(texture->OnBeforeSubmit(&mRecordingContext));
     }
 
     DAWN_TRY(CheckVkSuccess(device->fn.EndCommandBuffer(mRecordingContext.commandBuffer),
@@ -396,10 +340,6 @@ MaybeError Queue::SubmitPendingCommands() {
 
     std::vector<VkPipelineStageFlags> dstStageMasks(mRecordingContext.waitSemaphores.size(),
                                                     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-
-    for (auto& externalTextureSemaphore : externalTextureSemaphores) {
-        mRecordingContext.signalSemaphores.push_back(externalTextureSemaphore.Get());
-    }
 
     VkSubmitInfo submitInfo;
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -414,13 +354,16 @@ MaybeError Queue::SubmitPendingCommands() {
 
     VkFence fence = VK_NULL_HANDLE;
     DAWN_TRY_ASSIGN(fence, GetUnusedFence());
+
+    TRACE_EVENT_BEGIN0(device->GetPlatform(), Recording, "vkQueueSubmit");
     DAWN_TRY_WITH_CLEANUP(
         CheckVkSuccess(device->fn.QueueSubmit(mQueue, 1, &submitInfo, fence), "vkQueueSubmit"), {
             // If submitting to the queue fails, move the fence back into the unused fence
             // list, as if it were never acquired. Not doing so would leak the fence since
             // it would be neither in the unused list nor in the in-flight list.
-            mUnusedFences.push_back(fence);
+            mUnusedFences->push_back(fence);
         });
+    TRACE_EVENT_END0(device->GetPlatform(), Recording, "vkQueueSubmit");
 
     // Enqueue the semaphores before incrementing the serial, so that they can be deleted as
     // soon as the current submission is finished.
@@ -437,19 +380,9 @@ MaybeError Queue::SubmitPendingCommands() {
         mCommandsInFlight.Enqueue(submittedCommands, lastSubmittedSerial);
     }
 
-    auto externalTextureSemaphoreIter = externalTextureSemaphores.begin();
-    for (auto* texture : mRecordingContext.externalTexturesForEagerTransition) {
-        // Export the signal semaphore.
-        ExternalSemaphoreHandle semaphoreHandle;
-        DAWN_TRY_ASSIGN(semaphoreHandle, device->GetExternalSemaphoreService()->ExportSemaphore(
-                                             externalTextureSemaphoreIter->Get()));
-        ++externalTextureSemaphoreIter;
-
-        // Update all external textures, eagerly transitioned in the submit, with the exported
-        // handles.
-        texture->UpdateExternalSemaphoreHandle(semaphoreHandle);
+    for (auto texture : mRecordingContext.specialSyncTextures) {
+        DAWN_TRY(texture->OnAfterSubmit());
     }
-    DAWN_ASSERT(externalTextureSemaphoreIter == externalTextureSemaphores.end());
 
     mRecordingContext = CommandRecordingContext();
     DAWN_TRY(PrepareRecordingContext());
@@ -461,12 +394,21 @@ ResultOrError<VkFence> Queue::GetUnusedFence() {
     Device* device = ToBackend(GetDevice());
     VkDevice vkDevice = device->GetVkDevice();
 
-    if (!mUnusedFences.empty()) {
-        VkFence fence = mUnusedFences.back();
-        DAWN_TRY(CheckVkSuccess(device->fn.ResetFences(vkDevice, 1, &*fence), "vkResetFences"));
+    auto result =
+        mUnusedFences.Use([&](auto unusedFences) -> std::optional<ResultOrError<VkFence>> {
+            if (!unusedFences->empty()) {
+                VkFence fence = unusedFences->back();
+                DAWN_ASSERT(fence != VK_NULL_HANDLE);
+                DAWN_TRY(
+                    CheckVkSuccess(device->fn.ResetFences(vkDevice, 1, &*fence), "vkResetFences"));
 
-        mUnusedFences.pop_back();
-        return fence;
+                unusedFences->pop_back();
+                return fence;
+            }
+            return std::nullopt;
+        });
+    if (result) {
+        return std::move(*result);
     }
 
     VkFenceCreateInfo createInfo;
@@ -517,10 +459,12 @@ void Queue::DestroyImpl() {
         }
     });
 
-    for (VkFence fence : mUnusedFences) {
-        device->fn.DestroyFence(vkDevice, fence, nullptr);
-    }
-    mUnusedFences.clear();
+    mUnusedFences.Use([&](auto unusedFences) {
+        for (VkFence fence : *unusedFences) {
+            device->fn.DestroyFence(vkDevice, fence, nullptr);
+        }
+        unusedFences->clear();
+    });
 
     QueueBase::DestroyImpl();
 }
@@ -528,32 +472,54 @@ void Queue::DestroyImpl() {
 ResultOrError<bool> Queue::WaitForQueueSerial(ExecutionSerial serial, Nanoseconds timeout) {
     Device* device = ToBackend(GetDevice());
     VkDevice vkDevice = device->GetVkDevice();
-    VkResult waitResult = mFencesInFlight.Use([&](auto fencesInFlight) {
-        // Search from for the first fence >= serial.
-        VkFence waitFence = VK_NULL_HANDLE;
-        for (auto it = fencesInFlight->begin(); it != fencesInFlight->end(); ++it) {
-            if (it->second >= serial) {
-                waitFence = it->first;
-                break;
+    // If the client has passed a finite timeout, the function will eventually return due to
+    // either (1) the fences being signaled, (2) the timeout being reached, or (3) the device
+    // being lost. If the client has passed an infinite timeout, this function might hang forever
+    // if the fences are never signaled (which matches the semantics that the client has
+    // specified).
+    // TODO(crbug.com/344798087): Handle the issue of timeouts in a more general way further up the
+    // stack.
+    while (1) {
+        VkResult waitResult = mFencesInFlight.Use([&](auto fencesInFlight) {
+            // Search from for the first fence >= serial.
+            VkFence waitFence = VK_NULL_HANDLE;
+            for (auto it = fencesInFlight->begin(); it != fencesInFlight->end(); ++it) {
+                if (it->second >= serial) {
+                    waitFence = it->first;
+                    break;
+                }
             }
+            if (waitFence == VK_NULL_HANDLE) {
+                // Fence not found. This serial must have already completed.
+                // Return a VK_SUCCESS status.
+                DAWN_ASSERT(serial <= GetCompletedCommandSerial());
+                return VkResult::WrapUnsafe(VK_SUCCESS);
+            }
+            // Wait for the fence.
+            return VkResult::WrapUnsafe(
+                INJECT_ERROR_OR_RUN(device->fn.WaitForFences(vkDevice, 1, &*waitFence, true,
+                                                             static_cast<uint64_t>(timeout)),
+                                    VK_ERROR_DEVICE_LOST));
+        });
+        if (waitResult == VK_TIMEOUT) {
+            // There is evidence that `VK_TIMEOUT` can get returned even when the
+            // client has specified an infinite timeout (e.g., due to signals). Retry
+            // waiting on the fence in this case in order to satisfy the semantics
+            // that the function should return only when either (a) the fences are
+            // signaled or (b) the passed-in timeout is reached. Note that this can
+            // result in this function busy-looping forever in this case, but the
+            // client has explicitly requested this behavior by passing in an infinite
+            // timeout.
+            // TODO(crbug.com/344798087): Handle the issue of timeouts in a more general way further
+            // up the stack.
+            if (static_cast<uint64_t>(timeout) == std::numeric_limits<uint64_t>::max()) {
+                continue;
+            }
+            return false;
         }
-        if (waitFence == VK_NULL_HANDLE) {
-            // Fence not found. This serial must have already completed.
-            // Return a VK_SUCCESS status.
-            DAWN_ASSERT(serial <= GetCompletedCommandSerial());
-            return VkResult::WrapUnsafe(VK_SUCCESS);
-        }
-        // Wait for the fence.
-        return VkResult::WrapUnsafe(
-            INJECT_ERROR_OR_RUN(device->fn.WaitForFences(vkDevice, 1, &*waitFence, true,
-                                                         static_cast<uint64_t>(timeout)),
-                                VK_ERROR_DEVICE_LOST));
-    });
-    if (waitResult == VK_TIMEOUT) {
-        return false;
+        DAWN_TRY(CheckVkSuccess(::VkResult(waitResult), "vkWaitForFences"));
+        return true;
     }
-    DAWN_TRY(CheckVkSuccess(::VkResult(waitResult), "vkWaitForFences"));
-    return true;
 }
 
 }  // namespace dawn::native::vulkan

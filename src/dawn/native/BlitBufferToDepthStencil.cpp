@@ -88,19 +88,20 @@ fn textureLoadGeneral(tex: texture_2d<u32>, coords: vec2u, level: u32) -> vec4<u
 
 constexpr std::string_view kTexture2DArrayHead = R"(
 fn textureLoadGeneral(tex: texture_2d_array<u32>, coords: vec2u, level: u32) -> vec4<u32> {
-    return textureLoad(tex, coords, 0u, level);
+    return textureLoad(tex, coords, params.layer, level);
 }
 @group(0) @binding(0) var src_tex : texture_2d_array<u32>;
 )";
 
 constexpr std::string_view kBlitStencilShaderCommon = R"(
 struct Params {
-  origin : vec2u
+  origin : vec2u,
+  layer: u32,
 };
 @group(0) @binding(1) var<uniform> params : Params;
 
 struct VertexOutputs {
-  @location(0) @interpolate(flat) stencil_val : u32,
+  @location(0) @interpolate(flat, either) stencil_val : u32,
   @builtin(position) position : vec4f,
 };
 
@@ -147,7 +148,7 @@ ResultOrError<Ref<RenderPipelineBase>> GetOrCreateRG8ToDepth16UnormPipeline(Devi
         return store->blitRG8ToDepth16UnormPipeline;
     }
 
-    ShaderModuleWGSLDescriptor wgslDesc = {};
+    ShaderSourceWGSL wgslDesc = {};
     ShaderModuleDescriptor shaderModuleDesc = {};
     shaderModuleDesc.nextInChain = &wgslDesc;
     wgslDesc.code = kBlitRG8ToDepthShaders;
@@ -161,7 +162,7 @@ ResultOrError<Ref<RenderPipelineBase>> GetOrCreateRG8ToDepth16UnormPipeline(Devi
 
     DepthStencilState dsState = {};
     dsState.format = wgpu::TextureFormat::Depth16Unorm;
-    dsState.depthWriteEnabled = true;
+    dsState.depthWriteEnabled = wgpu::OptionalBool::True;
     dsState.depthCompare = wgpu::CompareFunction::Always;
 
     RenderPipelineDescriptor renderPipelineDesc = {};
@@ -199,7 +200,7 @@ ResultOrError<InternalPipelineStore::BlitR8ToStencilPipelines> GetOrCreateR8ToSt
         DAWN_TRY_ASSIGN(pipelineLayout, device->CreatePipelineLayout(&plDesc));
     }
 
-    ShaderModuleWGSLDescriptor wgslDesc = {};
+    ShaderSourceWGSL wgslDesc = {};
     ShaderModuleDescriptor shaderModuleDesc = {};
     shaderModuleDesc.nextInChain = &wgslDesc;
 
@@ -225,7 +226,7 @@ ResultOrError<InternalPipelineStore::BlitR8ToStencilPipelines> GetOrCreateR8ToSt
 
     DepthStencilState dsState = {};
     dsState.format = format;
-    dsState.depthWriteEnabled = false;
+    dsState.depthWriteEnabled = wgpu::OptionalBool::False;
     dsState.depthCompare = wgpu::CompareFunction::Always;
     dsState.stencilFront.passOp = wgpu::StencilOperation::Replace;
 
@@ -369,10 +370,10 @@ MaybeError BlitR8ToStencil(DeviceBase* device,
 
     // In compat mode view dimension needs to match texture binding view dimension.
     wgpu::TextureViewDimension textureViewDimension;
-    if (device->IsCompatibilityMode()) {
+    if (!device->HasFlexibleTextureViews()) {
         textureViewDimension = dataTexture->GetCompatibilityTextureBindingViewDimension();
     } else {
-        textureViewDimension = wgpu::TextureViewDimension::e2D;
+        textureViewDimension = wgpu::TextureViewDimension::e2DArray;
     }
 
     // This bgl is the same for all the render pipelines.
@@ -388,7 +389,7 @@ MaybeError BlitR8ToStencil(DeviceBase* device,
         bglEntries[1].binding = 1;
         bglEntries[1].visibility = wgpu::ShaderStage::Fragment;
         bglEntries[1].buffer.type = wgpu::BufferBindingType::Uniform;
-        bglEntries[1].buffer.minBindingSize = 2 * sizeof(uint32_t);
+        bglEntries[1].buffer.minBindingSize = 4 * sizeof(uint32_t);
 
         BindGroupLayoutDescriptor bglDesc = {};
         bglDesc.entryCount = bglEntries.size();
@@ -405,27 +406,35 @@ MaybeError BlitR8ToStencil(DeviceBase* device,
     Ref<BufferBase> paramsBuffer;
     {
         BufferDescriptor bufferDesc = {};
-        bufferDesc.size = sizeof(uint32_t) * 2;
-        bufferDesc.usage = wgpu::BufferUsage::Uniform;
+        bufferDesc.size = sizeof(uint32_t) * 4;
+        bufferDesc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
         bufferDesc.mappedAtCreation = true;
         DAWN_TRY_ASSIGN(paramsBuffer, device->CreateBuffer(&bufferDesc));
 
         uint32_t* params = static_cast<uint32_t*>(paramsBuffer->GetMappedRange(0, bufferDesc.size));
         params[0] = dst.origin.x;
         params[1] = dst.origin.y;
+        params[2] = 0;
         DAWN_TRY(paramsBuffer->Unmap());
+    }
+
+    Ref<TextureViewBase> srcView;
+    {
+        TextureViewDescriptor viewDesc = {};
+        viewDesc.dimension = textureViewDimension;
+        // Array layer in texture views used in bind groups must consist of the entire array.
+        viewDesc.baseArrayLayer = 0;
+        viewDesc.arrayLayerCount = dataTexture->GetArrayLayers();
+        viewDesc.mipLevelCount = 1;
+        DAWN_TRY_ASSIGN(srcView, dataTexture->CreateView(&viewDesc));
     }
 
     // For each layer, blit the stencil data.
     for (uint32_t z = 0; z < copyExtent.depthOrArrayLayers; ++z) {
-        Ref<TextureViewBase> srcView;
-        {
-            TextureViewDescriptor viewDesc = {};
-            viewDesc.dimension = textureViewDimension;
-            viewDesc.baseArrayLayer = z;
-            viewDesc.arrayLayerCount = 1;
-            viewDesc.mipLevelCount = 1;
-            DAWN_TRY_ASSIGN(srcView, dataTexture->CreateView(&viewDesc));
+        if (z >= 1) {
+            // Pass the array layer info via the uniform buffer.
+            commandEncoder->APIWriteBuffer(paramsBuffer.Get(), sizeof(uint32_t) * 2,
+                                           reinterpret_cast<const uint8_t*>(&z), sizeof(uint32_t));
         }
 
         Ref<TextureViewBase> dstView;
@@ -498,7 +507,7 @@ MaybeError BlitR8ToStencil(DeviceBase* device,
 
 MaybeError BlitStagingBufferToDepth(DeviceBase* device,
                                     BufferBase* buffer,
-                                    const TextureDataLayout& src,
+                                    const TexelCopyBufferLayout& src,
                                     const TextureCopy& dst,
                                     const Extent3D& copyExtent) {
     const Format& format = dst.texture->GetFormat();
@@ -537,7 +546,7 @@ MaybeError BlitStagingBufferToDepth(DeviceBase* device,
 MaybeError BlitBufferToDepth(DeviceBase* device,
                              CommandEncoder* commandEncoder,
                              BufferBase* buffer,
-                             const TextureDataLayout& src,
+                             const TexelCopyBufferLayout& src,
                              const TextureCopy& dst,
                              const Extent3D& copyExtent) {
     const Format& format = dst.texture->GetFormat();
@@ -551,11 +560,11 @@ MaybeError BlitBufferToDepth(DeviceBase* device,
     Ref<TextureBase> dataTexture;
     DAWN_TRY_ASSIGN(dataTexture, device->CreateTexture(&dataTextureDesc));
     {
-        ImageCopyBuffer bufferSrc;
+        TexelCopyBufferInfo bufferSrc;
         bufferSrc.buffer = buffer;
         bufferSrc.layout = src;
 
-        ImageCopyTexture textureDst;
+        TexelCopyTextureInfo textureDst;
         textureDst.texture = dataTexture.Get();
         commandEncoder->APICopyBufferToTexture(&bufferSrc, &textureDst, &copyExtent);
     }
@@ -566,7 +575,7 @@ MaybeError BlitBufferToDepth(DeviceBase* device,
 
 MaybeError BlitStagingBufferToStencil(DeviceBase* device,
                                       BufferBase* buffer,
-                                      const TextureDataLayout& src,
+                                      const TexelCopyBufferLayout& src,
                                       const TextureCopy& dst,
                                       const Extent3D& copyExtent) {
     TextureDescriptor dataTextureDesc = {};
@@ -601,7 +610,7 @@ MaybeError BlitStagingBufferToStencil(DeviceBase* device,
 MaybeError BlitBufferToStencil(DeviceBase* device,
                                CommandEncoder* commandEncoder,
                                BufferBase* buffer,
-                               const TextureDataLayout& src,
+                               const TexelCopyBufferLayout& src,
                                const TextureCopy& dst,
                                const Extent3D& copyExtent) {
     TextureDescriptor dataTextureDesc = {};
@@ -612,11 +621,11 @@ MaybeError BlitBufferToStencil(DeviceBase* device,
     Ref<TextureBase> dataTexture;
     DAWN_TRY_ASSIGN(dataTexture, device->CreateTexture(&dataTextureDesc));
     {
-        ImageCopyBuffer bufferSrc;
+        TexelCopyBufferInfo bufferSrc;
         bufferSrc.buffer = buffer;
         bufferSrc.layout = src;
 
-        ImageCopyTexture textureDst;
+        TexelCopyTextureInfo textureDst;
         textureDst.texture = dataTexture.Get();
         commandEncoder->APICopyBufferToTexture(&bufferSrc, &textureDst, &copyExtent);
     }

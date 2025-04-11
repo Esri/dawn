@@ -1,50 +1,79 @@
+//
+// fragment_main
+//
 #include <metal_stdlib>
-
 using namespace metal;
-int tint_first_trailing_bit(int v) {
-  uint x = uint(v);
-  uint const b16 = select(16u, 0u, bool((x & 65535u)));
-  x = (x >> b16);
-  uint const b8 = select(8u, 0u, bool((x & 255u)));
-  x = (x >> b8);
-  uint const b4 = select(4u, 0u, bool((x & 15u)));
-  x = (x >> b4);
-  uint const b2 = select(2u, 0u, bool((x & 3u)));
-  x = (x >> b2);
-  uint const b1 = select(1u, 0u, bool((x & 1u)));
-  uint const is_zero = select(0u, 4294967295u, (x == 0u));
-  return int((((((b16 | b8) | b4) | b2) | b1) | is_zero));
-}
 
-void firstTrailingBit_3a2acc(device int* const tint_symbol_1) {
-  int arg_0 = 1;
-  int res = tint_first_trailing_bit(arg_0);
-  *(tint_symbol_1) = res;
-}
-
-struct tint_symbol {
-  float4 value [[position]];
+struct tint_module_vars_struct {
+  device int* prevent_dce;
 };
 
-float4 vertex_main_inner(device int* const tint_symbol_2) {
-  firstTrailingBit_3a2acc(tint_symbol_2);
-  return float4(0.0f);
+int firstTrailingBit_3a2acc() {
+  int arg_0 = 1;
+  uint const v = as_type<uint>(arg_0);
+  int res = as_type<int>(select((select(0u, 16u, ((v & 65535u) == 0u)) | (select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u)) | (select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u)) | (select(0u, 2u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) & 3u) == 0u)) | select(0u, 1u, ((((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) >> select(0u, 2u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) & 3u) == 0u))) & 1u) == 0u)))))), 4294967295u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) >> select(0u, 2u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) & 3u) == 0u))) == 0u)));
+  return res;
 }
 
-vertex tint_symbol vertex_main(device int* tint_symbol_3 [[buffer(0)]]) {
-  float4 const inner_result = vertex_main_inner(tint_symbol_3);
-  tint_symbol wrapper_result = {};
-  wrapper_result.value = inner_result;
-  return wrapper_result;
+fragment void fragment_main(device int* prevent_dce [[buffer(0)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.prevent_dce=prevent_dce};
+  (*tint_module_vars.prevent_dce) = firstTrailingBit_3a2acc();
+}
+//
+// compute_main
+//
+#include <metal_stdlib>
+using namespace metal;
+
+struct tint_module_vars_struct {
+  device int* prevent_dce;
+};
+
+int firstTrailingBit_3a2acc() {
+  int arg_0 = 1;
+  uint const v = as_type<uint>(arg_0);
+  int res = as_type<int>(select((select(0u, 16u, ((v & 65535u) == 0u)) | (select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u)) | (select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u)) | (select(0u, 2u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) & 3u) == 0u)) | select(0u, 1u, ((((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) >> select(0u, 2u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) & 3u) == 0u))) & 1u) == 0u)))))), 4294967295u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) >> select(0u, 2u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) & 3u) == 0u))) == 0u)));
+  return res;
 }
 
-fragment void fragment_main(device int* tint_symbol_4 [[buffer(0)]]) {
-  firstTrailingBit_3a2acc(tint_symbol_4);
-  return;
+kernel void compute_main(device int* prevent_dce [[buffer(0)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.prevent_dce=prevent_dce};
+  (*tint_module_vars.prevent_dce) = firstTrailingBit_3a2acc();
+}
+//
+// vertex_main
+//
+#include <metal_stdlib>
+using namespace metal;
+
+struct VertexOutput {
+  float4 pos;
+  int prevent_dce;
+};
+
+struct vertex_main_outputs {
+  float4 VertexOutput_pos [[position]];
+  int VertexOutput_prevent_dce [[user(locn0)]] [[flat]];
+};
+
+int firstTrailingBit_3a2acc() {
+  int arg_0 = 1;
+  uint const v = as_type<uint>(arg_0);
+  int res = as_type<int>(select((select(0u, 16u, ((v & 65535u) == 0u)) | (select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u)) | (select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u)) | (select(0u, 2u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) & 3u) == 0u)) | select(0u, 1u, ((((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) >> select(0u, 2u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) & 3u) == 0u))) & 1u) == 0u)))))), 4294967295u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) >> select(0u, 2u, (((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) >> select(0u, 4u, ((((v >> select(0u, 16u, ((v & 65535u) == 0u))) >> select(0u, 8u, (((v >> select(0u, 16u, ((v & 65535u) == 0u))) & 255u) == 0u))) & 15u) == 0u))) & 3u) == 0u))) == 0u)));
+  return res;
 }
 
-kernel void compute_main(device int* tint_symbol_5 [[buffer(0)]]) {
-  firstTrailingBit_3a2acc(tint_symbol_5);
-  return;
+VertexOutput vertex_main_inner() {
+  VertexOutput out = {};
+  out.pos = float4(0.0f);
+  out.prevent_dce = firstTrailingBit_3a2acc();
+  return out;
 }
 
+vertex vertex_main_outputs vertex_main() {
+  VertexOutput const v_1 = vertex_main_inner();
+  vertex_main_outputs tint_wrapper_result = {};
+  tint_wrapper_result.VertexOutput_pos = v_1.pos;
+  tint_wrapper_result.VertexOutput_prevent_dce = v_1.prevent_dce;
+  return tint_wrapper_result;
+}

@@ -139,6 +139,10 @@ absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConv
         [&](const StorageTextureBindingInfo& layout) {
             s->Append(absl::StrFormat(*fmt, static_cast<uint32_t>(value.binding), value.visibility,
                                       BindingInfoType::StorageTexture, layout));
+        },
+        [&](const InputAttachmentBindingInfo& layout) {
+            s->Append(absl::StrFormat(*fmt, static_cast<uint32_t>(value.binding), value.visibility,
+                                      BindingInfoType::InputAttachment, layout));
         });
     return {true};
 }
@@ -219,7 +223,15 @@ absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConv
 }
 
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
-    const ImageCopyTexture* value,
+    const InputAttachmentBindingInfo& value,
+    const absl::FormatConversionSpec& spec,
+    absl::FormatSink* s) {
+    s->Append(absl::StrFormat("{sampleType: %s}", value.sampleType));
+    return {true};
+}
+
+absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
+    const TexelCopyTextureInfo* value,
     const absl::FormatConversionSpec& spec,
     absl::FormatSink* s) {
     if (value == nullptr) {
@@ -227,20 +239,20 @@ absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConv
         return {true};
     }
     s->Append(
-        absl::StrFormat("[ImageCopyTexture texture: %s, mipLevel: %u, origin: %s, aspect: %s]",
+        absl::StrFormat("[TexelCopyTextureInfo texture: %s, mipLevel: %u, origin: %s, aspect: %s]",
                         value->texture, value->mipLevel, &value->origin, value->aspect));
     return {true};
 }
 
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
-    const TextureDataLayout* value,
+    const TexelCopyBufferLayout* value,
     const absl::FormatConversionSpec& spec,
     absl::FormatSink* s) {
     if (value == nullptr) {
         s->Append("[null]");
         return {true};
     }
-    s->Append(absl::StrFormat("[TextureDataLayout offset:%u, bytesPerRow:%u, rowsPerImage:%u]",
+    s->Append(absl::StrFormat("[TexelCopyBufferLayout offset:%u, bytesPerRow:%u, rowsPerImage:%u]",
                               value->offset, value->bytesPerRow, value->rowsPerImage));
     return {true};
 }
@@ -336,16 +348,20 @@ absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConv
         }
 
         while (nextColorIndex < i) {
-            s->Append(absl::StrFormat("{format: %s}, ", wgpu::TextureFormat::Undefined));
+            s->Append(absl::StrFormat("%d={format: %s}, ", nextColorIndex,
+                                      wgpu::TextureFormat::Undefined));
             nextColorIndex++;
             needsComma = false;
         }
 
-        s->Append(absl::StrFormat("{format:%s", value->GetColorAttachmentFormat(i)));
+        s->Append(absl::StrFormat("%d={format:%s", i, value->GetColorAttachmentFormat(i)));
 
-        if (value->GetDevice()->HasFeature(Feature::DawnLoadResolveTexture)) {
-            s->Append(absl::StrFormat(", expandResolveTexture:%v",
-                                      value->GetExpandResolveUsingAttachmentsMask().test(i)));
+        if (value->GetDevice()->HasFeature(Feature::DawnLoadResolveTexture) &&
+            value->GetExpandResolveInfo().attachmentsToExpandResolve.any()) {
+            s->Append(
+                absl::StrFormat(", resolve:%v, expandResolve:%v",
+                                value->GetExpandResolveInfo().resolveTargetsMask.test(i),
+                                value->GetExpandResolveInfo().attachmentsToExpandResolve.test(i)));
         }
         s->Append("}");
 
@@ -532,6 +548,9 @@ absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConv
         case BindingInfoType::StaticSampler:
             s->Append("staticSampler");
             break;
+        case BindingInfoType::InputAttachment:
+            s->Append("inputAttachment");
+            break;
     }
     return {true};
 }
@@ -628,6 +647,12 @@ absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConv
         case InterpolationSampling::Sample:
             s->Append("Sample");
             break;
+        case InterpolationSampling::First:
+            s->Append("First");
+            break;
+        case InterpolationSampling::Either:
+            s->Append("Either");
+            break;
     }
     return {true};
 }
@@ -665,6 +690,19 @@ absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConv
             s->Append("f32");
             break;
     }
+    return {true};
+}
+
+absl::FormatConvertResult<absl::FormatConversionCharSet::kString>
+AbslFormatConvert(StringView value, const absl::FormatConversionSpec& spec, absl::FormatSink* s) {
+    if (value.IsUndefined()) {
+        s->Append("[undefined]");
+        return {true};
+    }
+
+    s->Append("\"");
+    s->Append(absl::string_view(value));
+    s->Append("\"");
     return {true};
 }
 

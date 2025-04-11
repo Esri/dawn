@@ -29,6 +29,7 @@
 #define SRC_DAWN_NATIVE_D3D11_COMMANDRECORDINGCONTEXT_D3D11_H_
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/container/inlined_vector.h"
 #include "dawn/common/MutexProtected.h"
 #include "dawn/common/NonCopyable.h"
 #include "dawn/common/Ref.h"
@@ -40,6 +41,7 @@ namespace dawn::native::d3d11 {
 
 class CommandAllocatorManager;
 class Buffer;
+class GPUUsableBuffer;
 class Device;
 
 class CommandRecordingContext;
@@ -82,8 +84,10 @@ class CommandRecordingContext {
     MaybeError Initialize(Device* device);
     void Destroy();
 
+    bool IsValid() const;
+
     static ResultOrError<Ref<BufferBase>> CreateInternalUniformBuffer(DeviceBase* device);
-    void SetInternalUniformBuffer(Ref<BufferBase> uniformBuffer);
+    MaybeError SetInternalUniformBuffer(Ref<BufferBase> uniformBuffer);
 
     void ReleaseKeyedMutexes();
 
@@ -99,6 +103,7 @@ class CommandRecordingContext {
     bool mIsOpen = false;
     ComPtr<ID3D11Device> mD3D11Device;
     ComPtr<ID3DDeviceContextState> mD3D11DeviceContextState;
+    ComPtr<ID3D11DeviceContext3> mD3D11DeviceContext3;
     ComPtr<ID3D11DeviceContext4> mD3D11DeviceContext4;
     ComPtr<ID3D11Multithread> mD3D11Multithread;
     ComPtr<ID3DUserDefinedAnnotation> mD3DUserDefinedAnnotation;
@@ -106,13 +111,17 @@ class CommandRecordingContext {
     // The maximum number of builtin elements is 4 (vec4). It must be multiple of 4.
     static constexpr size_t kMaxNumBuiltinElements = 4;
     // The uniform buffer for built-in variables.
-    Ref<Buffer> mUniformBuffer;
+    Ref<GPUUsableBuffer> mUniformBuffer;
     std::array<uint32_t, kMaxNumBuiltinElements> mUniformBufferData;
     bool mUniformBufferDirty = true;
 
     absl::flat_hash_set<Ref<d3d::KeyedMutex>> mAcquiredKeyedMutexes;
 
     bool mNeedsFence = false;
+
+    // List of buffers to sync their CPU accessible storages.
+    // Use inlined vector to avoid heap allocation when the vector is empty.
+    absl::InlinedVector<GPUUsableBuffer*, 1> mBuffersToSyncWithCPU;
 
     Ref<Device> mDevice;
 };
@@ -164,6 +173,11 @@ class ScopedCommandRecordingContext : public CommandRecordingContext::Guard {
     MaybeError AcquireKeyedMutex(Ref<d3d::KeyedMutex> keyedMutex) const;
 
     void SetNeedsFence() const;
+
+    // Add a buffer to a pending list for syncing CPU storages. The list is typically processed at
+    // the end of a command buffer when it is about to be submitted.
+    void AddBufferForSyncingWithCPU(GPUUsableBuffer* buffer) const;
+    MaybeError FlushBuffersForSyncingWithCPU() const;
 };
 
 // For using ID3D11DeviceContext directly. It swaps and resets ID3DDeviceContextState of
@@ -174,7 +188,7 @@ class ScopedSwapStateCommandRecordingContext : public ScopedCommandRecordingCont
     ~ScopedSwapStateCommandRecordingContext();
 
     ID3D11Device* GetD3D11Device() const;
-    ID3D11DeviceContext4* GetD3D11DeviceContext4() const;
+    ID3D11DeviceContext3* GetD3D11DeviceContext3() const;
     ID3DUserDefinedAnnotation* GetD3DUserDefinedAnnotation() const;
     Buffer* GetUniformBuffer() const;
 

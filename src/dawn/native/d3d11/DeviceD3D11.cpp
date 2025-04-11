@@ -67,14 +67,45 @@ namespace {
 
 static constexpr uint64_t kMaxDebugMessagesToPrint = 5;
 
-void AppendDebugLayerMessagesToError(ID3D11InfoQueue* infoQueue,
-                                     uint64_t totalErrors,
-                                     ErrorData* error) {
+bool SkipDebugMessage(const D3D11_MESSAGE& message) {
+    // Filter out messages that are not errors.
+    switch (message.Severity) {
+        case D3D11_MESSAGE_SEVERITY_INFO:
+        case D3D11_MESSAGE_SEVERITY_MESSAGE:
+        case D3D11_MESSAGE_SEVERITY_WARNING:
+            return true;
+        default:
+            break;
+    }
+
+    switch (message.ID) {
+        // D3D11 Debug layer warns no RTV set, however it is allowed.
+        case D3D11_MESSAGE_ID_DEVICE_DRAW_RENDERTARGETVIEW_NOT_SET:
+        // D3D11 Debug layer warns SetPrivateData() with same name more than once.
+        case D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS:
+            return true;
+        case D3D11_MESSAGE_ID_DEVICE_CHECKFEATURESUPPORT_UNRECOGNIZED_FEATURE:
+        case D3D11_MESSAGE_ID_DEVICE_CHECKFEATURESUPPORT_INVALIDARG_RETURN:
+            // We already handle CheckFeatureSupport() failures so ignore the messages from the
+            // debug layer.
+            return true;
+        case D3D11_MESSAGE_ID_DECODERBEGINFRAME_HAZARD:
+            // This is video decoder's error which must happen externally because Dawn doesn't
+            // handle video directly. So ignore it.
+            return true;
+        default:
+            return false;
+    }
+}
+
+uint64_t AppendDebugLayerMessagesToError(ID3D11InfoQueue* infoQueue,
+                                         uint64_t totalErrors,
+                                         ErrorData* error) {
     DAWN_ASSERT(totalErrors > 0);
     DAWN_ASSERT(error != nullptr);
 
-    uint64_t errorsToPrint = std::min(kMaxDebugMessagesToPrint, totalErrors);
-    for (uint64_t i = 0; i < errorsToPrint; ++i) {
+    uint64_t errorsEmitted = 0;
+    for (uint64_t i = 0; i < totalErrors; ++i) {
         std::ostringstream messageStream;
         SIZE_T messageLength = 0;
         HRESULT hr = infoQueue->GetMessage(i, nullptr, &messageLength);
@@ -93,17 +124,29 @@ void AppendDebugLayerMessagesToError(ID3D11InfoQueue* infoQueue,
             continue;
         }
 
+        if (SkipDebugMessage(*message)) {
+            continue;
+        }
+
         messageStream << "(" << message->ID << ") " << message->pDescription;
         error->AppendBackendMessage(messageStream.str());
+
+        errorsEmitted++;
+        if (errorsEmitted >= kMaxDebugMessagesToPrint) {
+            break;
+        }
     }
-    if (errorsToPrint < totalErrors) {
+
+    if (errorsEmitted < totalErrors) {
         std::ostringstream messages;
-        messages << (totalErrors - errorsToPrint) << " messages silenced";
+        messages << (totalErrors - errorsEmitted) << " messages silenced";
         error->AppendBackendMessage(messages.str());
     }
 
     // We only print up to the first kMaxDebugMessagesToPrint errors
     infoQueue->ClearStoredMessages();
+
+    return errorsEmitted;
 }
 
 }  // namespace
@@ -128,9 +171,13 @@ MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
 
     mIsDebugLayerEnabled = IsDebugLayerEnabled(mD3d11Device);
 
-    // Get the ID3D11Device5 interface which is need for creating fences.
-    // TODO(dawn:1741): Handle the case where ID3D11Device5 is not available.
-    DAWN_TRY(CheckHRESULT(mD3d11Device.As(&mD3d11Device5), "D3D11: getting ID3D11Device5"));
+    DAWN_TRY(CheckHRESULT(mD3d11Device.As(&mD3d11Device3), "D3D11: getting ID3D11Device3"));
+
+    if (!IsToggleEnabled(Toggle::D3D11DisableFence)) {
+        // Get the ID3D11Device5 interface which is need for creating fences. This interface is only
+        // available since Win 10 Creators Update so don't return on error here.
+        mD3d11Device.As(&mD3d11Device5);
+    }
 
     Ref<Queue> queue;
     DAWN_TRY_ASSIGN(queue, Queue::Create(this, &descriptor->defaultQueue));
@@ -149,7 +196,14 @@ ID3D11Device* Device::GetD3D11Device() const {
     return mD3d11Device.Get();
 }
 
+ID3D11Device3* Device::GetD3D11Device3() const {
+    return mD3d11Device3.Get();
+}
+
 ID3D11Device5* Device::GetD3D11Device5() const {
+    // Some older devices don't support ID3D11Device5. Make sure we avoid calling this method in
+    // those cases. An assert here is to verify that.
+    DAWN_ASSERT(mD3d11Device5);
     return mD3d11Device5.Get();
 }
 
@@ -211,9 +265,11 @@ ResultOrError<Ref<SamplerBase>> Device::CreateSamplerImpl(const SamplerDescripto
 
 ResultOrError<Ref<ShaderModuleBase>> Device::CreateShaderModuleImpl(
     const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
+    const std::vector<tint::wgsl::Extension>& internalExtensions,
     ShaderModuleParseResult* parseResult,
-    OwnedCompilationMessages* compilationMessages) {
-    return ShaderModule::Create(this, descriptor, parseResult, compilationMessages);
+    std::unique_ptr<OwnedCompilationMessages>* compilationMessages) {
+    return ShaderModule::Create(this, descriptor, internalExtensions, parseResult,
+                                compilationMessages);
 }
 
 ResultOrError<Ref<SwapChainBase>> Device::CreateSwapChainImpl(Surface* surface,
@@ -306,7 +362,7 @@ MaybeError Device::CopyFromStagingToBufferImpl(BufferBase* source,
 }
 
 MaybeError Device::CopyFromStagingToTextureImpl(const BufferBase* source,
-                                                const TextureDataLayout& src,
+                                                const TexelCopyBufferLayout& src,
                                                 const TextureCopy& dst,
                                                 const Extent3D& copySizePixels) {
     return DAWN_UNIMPLEMENTED_ERROR("CopyFromStagingToTextureImpl");
@@ -324,18 +380,21 @@ MaybeError Device::CheckDebugLayerAndGenerateErrors() {
     ComPtr<ID3D11InfoQueue> infoQueue;
     DAWN_TRY(CheckHRESULT(mD3d11Device.As(&infoQueue),
                           "D3D11 QueryInterface ID3D11Device to ID3D11InfoQueue"));
-    uint64_t totalErrors = infoQueue->GetNumStoredMessagesAllowedByRetrievalFilter();
 
-    // Check if any errors have occurred otherwise we would be creating an empty error. Note
-    // that we use GetNumStoredMessagesAllowedByRetrievalFilter instead of GetNumStoredMessages
-    // because we only convert WARNINGS or higher messages to dawn errors.
+    // We use GetNumStoredMessages instead of applying a retrieval filter because dxcpl.exe
+    // and d3dconfig.exe override any filter settings we apply.
+    const uint64_t totalErrors = infoQueue->GetNumStoredMessages();
     if (totalErrors == 0) {
         return {};
     }
 
     auto error = DAWN_INTERNAL_ERROR("The D3D11 debug layer reported uncaught errors.");
 
-    AppendDebugLayerMessagesToError(infoQueue.Get(), totalErrors, error.get());
+    const uint64_t emittedErrors =
+        AppendDebugLayerMessagesToError(infoQueue.Get(), totalErrors, error.get());
+    if (emittedErrors == 0) {
+        return {};
+    }
 
     return error;
 }
@@ -349,8 +408,8 @@ void Device::AppendDebugLayerMessages(ErrorData* error) {
     if (FAILED(mD3d11Device.As(&infoQueue))) {
         return;
     }
-    uint64_t totalErrors = infoQueue->GetNumStoredMessagesAllowedByRetrievalFilter();
 
+    const uint64_t totalErrors = infoQueue->GetNumStoredMessages();
     if (totalErrors == 0) {
         return;
     }
@@ -408,8 +467,15 @@ uint64_t Device::GetBufferCopyOffsetAlignmentForDepthStencil() const {
     return DeviceBase::GetBufferCopyOffsetAlignmentForDepthStencil();
 }
 
-bool Device::IsResolveTextureBlitWithDrawSupported() const {
+bool Device::CanTextureLoadResolveTargetInTheSameRenderpass() const {
     return true;
+}
+
+bool Device::CanAddStorageUsageToBufferWithoutSideEffects(wgpu::BufferUsage storageUsage,
+                                                          wgpu::BufferUsage originalUsage,
+                                                          size_t bufferSize) const {
+    return d3d11::CanAddStorageUsageToBufferWithoutSideEffects(this, storageUsage, originalUsage,
+                                                               bufferSize);
 }
 
 uint32_t Device::GetUAVSlotCount() const {

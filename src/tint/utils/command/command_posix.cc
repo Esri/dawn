@@ -37,8 +37,12 @@
 #include <sstream>
 #include <vector>
 
-namespace tint {
+#include "src/tint/utils/macros/compiler.h"
+#include "src/tint/utils/system/executable_path.h"
 
+TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
+
+namespace tint {
 namespace {
 
 /// File is a simple wrapper around a POSIX file descriptor
@@ -75,7 +79,7 @@ class File {
     operator int() { return handle_; }
 
     /// @returns true if the file is not closed
-    operator bool() { return handle_ != kClosed; }
+    explicit operator bool() { return handle_ != kClosed; }
 
   private:
     File(const File&) = delete;
@@ -103,7 +107,7 @@ class Pipe {
     }
 
     /// @returns true if the pipe has an open read or write file
-    operator bool() { return read || write; }
+    explicit operator bool() { return read || write; }
 
     /// The reader end of the pipe
     File read;
@@ -117,7 +121,7 @@ bool ExecutableExists(const std::string& path) {
     if (stat(path.c_str(), &s) != 0) {
         return false;
     }
-    return s.st_mode & S_IXUSR;
+    return (s.st_mode & S_IXUSR) != 0u;
 }
 
 std::string GetCWD() {
@@ -131,6 +135,10 @@ std::string FindExecutable(const std::string& name) {
         auto in_cwd = GetCWD() + "/" + name;
         if (ExecutableExists(in_cwd)) {
             return in_cwd;
+        }
+        auto in_exe_path = tint::ExecutableDirectory() + "/" + name;
+        if (ExecutableExists(in_exe_path)) {
+            return in_exe_path;
         }
     }
     if (ExecutableExists(name)) {
@@ -290,3 +298,5 @@ Command::Output Command::Exec(std::initializer_list<std::string> arguments) cons
 }
 
 }  // namespace tint
+
+TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);

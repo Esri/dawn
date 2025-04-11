@@ -28,10 +28,8 @@
 #ifndef SRC_TINT_LANG_CORE_IR_TRANSFORM_BUILTIN_POLYFILL_H_
 #define SRC_TINT_LANG_CORE_IR_TRANSFORM_BUILTIN_POLYFILL_H_
 
-#include <string>
-
-#include "src/tint/utils/reflection/reflection.h"
-#include "src/tint/utils/result/result.h"
+#include "src/tint/utils/reflection.h"
+#include "src/tint/utils/result.h"
 
 // Forward declarations.
 namespace tint::core::ir {
@@ -58,14 +56,22 @@ struct BuiltinPolyfillConfig {
     bool count_leading_zeros = false;
     /// Should `countTrailingZeros()` be polyfilled?
     bool count_trailing_zeros = false;
+    /// Should `degrees()` be polyfilled?
+    bool degrees = false;
     /// How should `extractBits()` be polyfilled?
     BuiltinPolyfillLevel extract_bits = BuiltinPolyfillLevel::kNone;
     /// Should `firstLeadingBit()` be polyfilled?
     bool first_leading_bit = false;
     /// Should `firstTrailingBit()` be polyfilled?
     bool first_trailing_bit = false;
+    /// Should `fwidthFine()` be polyfilled?
+    bool fwidth_fine = false;
     /// How should `insertBits()` be polyfilled?
     BuiltinPolyfillLevel insert_bits = BuiltinPolyfillLevel::kNone;
+    /// Should `radians()` be polyfilled?
+    bool radians = false;
+    /// Should `reflect()` be polyfilled for vec2<f32>?
+    bool reflect_vec2_f32 = false;
     /// Should `saturate()` be polyfilled?
     bool saturate = false;
     /// Should `textureSampleBaseClampToEdge()` be polyfilled for texture_2d<f32> textures?
@@ -78,6 +84,8 @@ struct BuiltinPolyfillConfig {
     /// Should `pack4xU8Clamp()` be polyfilled?
     /// TODO(tint:1497): remove the option once the bug in DXC is fixed.
     bool pack_4xu8_clamp = false;
+    /// Should `pack4x8snorm`, `pack4x8unorm`, `unpack4x8snorm` and `unpack4x8unorm` be polyfilled?
+    bool pack_unpack_4x8_norm = false;
 
     /// Reflection for this class
     TINT_REFLECT(BuiltinPolyfillConfig,

@@ -38,9 +38,11 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/strings/string_view.h"
 #include "dawn/common/Constants.h"
 #include "dawn/common/ContentLessObjectCacheable.h"
 #include "dawn/common/MutexProtected.h"
+#include "dawn/common/RefCountedWithExternalCount.h"
 #include "dawn/common/ityp_array.h"
 #include "dawn/native/BindingInfo.h"
 #include "dawn/native/CachedObject.h"
@@ -52,7 +54,6 @@
 #include "dawn/native/Limits.h"
 #include "dawn/native/ObjectBase.h"
 #include "dawn/native/PerStage.h"
-#include "dawn/native/RefCountedWithExternalCount.h"
 #include "dawn/native/dawn_platform.h"
 #include "tint/tint.h"
 
@@ -92,6 +93,8 @@ enum class InterpolationSampling {
     Center,
     Centroid,
     Sample,
+    First,
+    Either,
 };
 
 enum class PixelLocalMemberType {
@@ -130,22 +133,39 @@ struct ShaderModuleEntryPoint {
     std::string name;
 };
 
-MaybeError ValidateAndParseShaderModule(DeviceBase* device,
-                                        const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
-                                        ShaderModuleParseResult* parseResult,
-                                        OwnedCompilationMessages* outMessages);
+// Parse a shader module from a validated ShaderModuleDescriptor. Errors are generated only if the
+// shader code itself is invalid.
+MaybeError ParseShaderModule(DeviceBase* device,
+                             const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
+                             const std::vector<tint::wgsl::Extension>& internalExtensions,
+                             ShaderModuleParseResult* parseResult,
+                             OwnedCompilationMessages* outMessages);
+
 MaybeError ValidateCompatibilityWithPipelineLayout(DeviceBase* device,
                                                    const EntryPointMetadata& entryPoint,
                                                    const PipelineLayoutBase* layout);
 
-// Return extent3D with workgroup size dimension info if it is valid. Also validate workgroup_size.x
-// is a multiple of maxSubgroupSizeForFullSubgroups if it holds a value.
+// Return extent3D with workgroup size dimension info if it is valid.
 // width = x, height = y, depthOrArrayLength = z.
 ResultOrError<Extent3D> ValidateComputeStageWorkgroupSize(
     const tint::Program& program,
     const char* entryPointName,
+    bool usesSubgroupMatrix,
+    uint32_t maxSubgroupSize,
     const LimitsForCompilationRequest& limits,
-    std::optional<uint32_t> maxSubgroupSizeForFullSubgroups);
+    const LimitsForCompilationRequest& adaterSupportedlimits);
+
+// Return extent3D with workgroup size dimension info if it is valid.
+// width = x, height = y, depthOrArrayLength = z.
+ResultOrError<Extent3D> ValidateComputeStageWorkgroupSize(
+    uint32_t x,
+    uint32_t y,
+    uint32_t z,
+    size_t workgroupStorageSize,
+    bool usesSubgroupMatrix,
+    uint32_t maxSubgroupSize,
+    const LimitsForCompilationRequest& limits,
+    const LimitsForCompilationRequest& adaterSupportedlimits);
 
 RequiredBufferSizes ComputeRequiredBufferSizesForLayout(const EntryPointMetadata& entryPoint,
                                                         const PipelineLayoutBase* layout);
@@ -166,11 +186,12 @@ struct ShaderBindingInfo {
                  SamplerBindingInfo,
                  TextureBindingInfo,
                  StorageTextureBindingInfo,
-                 ExternalTextureBindingInfo>
+                 ExternalTextureBindingInfo,
+                 InputAttachmentBindingInfo>
         bindingInfo;
 };
 
-using BindingGroupInfoMap = std::map<BindingNumber, ShaderBindingInfo>;
+using BindingGroupInfoMap = absl::flat_hash_map<BindingNumber, ShaderBindingInfo>;
 using BindingInfoArray = ityp::array<BindGroupIndex, BindingGroupInfoMap, kMaxBindGroups>;
 
 // The WebGPU override variables only support these scalar types
@@ -230,7 +251,7 @@ struct EntryPointMetadata {
     // inputs and outputs in one shader stage.
     std::vector<bool> usedInterStageVariables;
     std::vector<InterStageVariableInfo> interStageVariables;
-    uint32_t totalInterStageShaderComponents;
+    uint32_t totalInterStageShaderVariables;
 
     // The shader stage for this entry point.
     SingleShaderStage stage;
@@ -246,6 +267,9 @@ struct EntryPointMetadata {
         // Then it is required for the pipeline stage to have a constant record to initialize a
         // value
         bool isInitialized;
+
+        // Set to true if the override is used in the entry point
+        bool isUsed = true;
     };
 
     using OverridesMap = absl::flat_hash_map<std::string, Override>;
@@ -274,36 +298,54 @@ struct EntryPointMetadata {
     bool usesSampleMaskOutput = false;
     bool usesSampleIndex = false;
     bool usesVertexIndex = false;
+    bool usesTextureLoadWithDepthTexture = false;
+    bool usesDepthTextureWithNonComparisonSampler = false;
+    bool usesSubgroupMatrix = false;
+
+    // Immediate Data block byte size
+    uint32_t immediateDataRangeByteSize = 0;
+
+    // Number of texture+sampler combinations, computed as
+    // 1 for every texture+sampler combination + 1 for every texture used
+    // without a sampler that wasn't previously counted.
+    // Note: this is only set in compatibility mode.
+    uint32_t numTextureSamplerCombinations = 0;
 };
 
-class ShaderModuleBase : public RefCountedWithExternalCountBase<ApiObjectBase>,
+class ShaderModuleBase : public RefCountedWithExternalCount<ApiObjectBase>,
                          public CachedObject,
                          public ContentLessObjectCacheable<ShaderModuleBase> {
   public:
-    using Base = RefCountedWithExternalCountBase<ApiObjectBase>;
+    using Base = RefCountedWithExternalCount<ApiObjectBase>;
     ShaderModuleBase(DeviceBase* device,
                      const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
+                     std::vector<tint::wgsl::Extension> internalExtensions,
                      ApiObjectBase::UntrackedByDeviceTag tag);
-    ShaderModuleBase(DeviceBase* device, const UnpackedPtr<ShaderModuleDescriptor>& descriptor);
+    ShaderModuleBase(DeviceBase* device,
+                     const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
+                     std::vector<tint::wgsl::Extension> internalExtensions);
     ~ShaderModuleBase() override;
 
-    static Ref<ShaderModuleBase> MakeError(DeviceBase* device, const char* label);
+    static Ref<ShaderModuleBase> MakeError(
+        DeviceBase* device,
+        StringView label,
+        std::unique_ptr<OwnedCompilationMessages> compilationMessages);
 
     ObjectType GetType() const override;
 
     // Return true iff the program has an entrypoint called `entryPoint`.
-    bool HasEntryPoint(const std::string& entryPoint) const;
+    bool HasEntryPoint(absl::string_view entryPoint) const;
 
     // Return the number of entry points for a stage.
     size_t GetEntryPointCount(SingleShaderStage stage) const { return mEntryPointCounts[stage]; }
 
     // Return the entry point for a stage. If no entry point name, returns the default one.
-    ShaderModuleEntryPoint ReifyEntryPointName(const char* entryPointName,
+    ShaderModuleEntryPoint ReifyEntryPointName(StringView entryPointName,
                                                SingleShaderStage stage) const;
 
     // Return the metadata for the given `entryPoint`. HasEntryPoint with the same argument
     // must be true.
-    const EntryPointMetadata& GetEntryPoint(const std::string& entryPoint) const;
+    const EntryPointMetadata& GetEntryPoint(absl::string_view entryPoint) const;
 
     // Functions necessary for the unordered_set<ShaderModuleBase*>-based cache.
     size_t ComputeContentHash() override;
@@ -317,24 +359,30 @@ class ShaderModuleBase : public RefCountedWithExternalCountBase<ApiObjectBase>,
     using ScopedUseTintProgram = APIRef<ShaderModuleBase>;
     ScopedUseTintProgram UseTintProgram();
 
-    Ref<TintProgram> GetTintProgram() const;
-    Ref<TintProgram> GetTintProgramForTesting() const;
-    int GetTintProgramRecreateCountForTesting() const;
+    // Get tintProgram, (re)create it if necessary.
+    Ref<TintProgram> GetTintProgram();
 
-    void APIGetCompilationInfo(wgpu::CompilationInfoCallback callback, void* userdata);
-    Future APIGetCompilationInfoF(const CompilationInfoCallbackInfo& callbackInfo);
+    Future APIGetCompilationInfo(const WGPUCompilationInfoCallbackInfo& callbackInfo);
 
-    void InjectCompilationMessages(std::unique_ptr<OwnedCompilationMessages> compilationMessages);
     OwnedCompilationMessages* GetCompilationMessages() const;
+    std::string GetCompilationLog() const;
+
+    // Return nullable tintProgram directly without any recreation, can be used for testing the
+    // releasing/recreation behaviors.
+    Ref<TintProgram> GetNullableTintProgramForTesting() const;
+    int GetTintProgramRecreateCountForTesting() const;
 
   protected:
     void DestroyImpl() override;
 
     MaybeError InitializeBase(ShaderModuleParseResult* parseResult,
-                              OwnedCompilationMessages* compilationMessages);
+                              std::unique_ptr<OwnedCompilationMessages>* compilationMessages);
 
   private:
-    ShaderModuleBase(DeviceBase* device, ObjectBase::ErrorTag tag, const char* label);
+    ShaderModuleBase(DeviceBase* device,
+                     ObjectBase::ErrorTag tag,
+                     StringView label,
+                     std::unique_ptr<OwnedCompilationMessages> compilationMessages);
 
     void WillDropLastExternalRef() override;
 
@@ -353,12 +401,15 @@ class ShaderModuleBase : public RefCountedWithExternalCountBase<ApiObjectBase>,
     PerStage<size_t> mEntryPointCounts;
 
     struct TintData {
-        Ref<TintProgram> tintProgram;
+        // tintProgram is nullable so that it can be lazily (re)generated right before actual using.
+        Ref<TintProgram> tintProgram = nullptr;
         int tintProgramRecreateCount = 0;
     };
     MutexProtected<TintData> mTintData;
 
     std::unique_ptr<OwnedCompilationMessages> mCompilationMessages;
+
+    const std::vector<tint::wgsl::Extension> mInternalExtensions;
 };
 
 }  // namespace dawn::native
