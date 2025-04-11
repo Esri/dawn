@@ -2163,9 +2163,15 @@ ResultOrError<Ref<ShaderModuleBase>> DeviceBase::CreateShaderModule(
     // Module type specific validation.
     switch (moduleType) {
         case wgpu::SType::ShaderSourceSPIRV: {
-            DAWN_INVALID_IF(!TINT_BUILD_SPV_READER || IsToggleEnabled(Toggle::DisallowSpirv),
+            DAWN_INVALID_IF(
+                #ifdef TINT_BUILD_SPV_READER
+                !TINT_BUILD_SPV_READER 
+                #else
+                true
+                #endif
+                || IsToggleEnabled(Toggle::DisallowSpirv),
                             "SPIR-V is disallowed.");
-            break;
+                            break;
         }
         case wgpu::SType::ShaderSourceWGSL: {
             DAWN_INVALID_IF(unpacked.Get<ShaderModuleCompilationOptions>() != nullptr &&
