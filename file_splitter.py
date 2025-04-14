@@ -8,7 +8,7 @@ import re
 def file_to_list(file_path, dawn_lines, platform_lines):
     try:
         curr_direct = getcwd()
-        regex = re.compile('\"file\": \"{}/(.*)\",'.format(curr_direct))
+        regex = re.compile('\"file\": \".*/dawn/(src/.*)\",')
         with open(file_path, 'r') as file:
             lines = file.readlines()
             for line in lines:
@@ -16,11 +16,11 @@ def file_to_list(file_path, dawn_lines, platform_lines):
                 match = re.search(regex, line)
                 if(match != None) :
                     line = match.group(1)
-                    if "/metal/" in line:
+                    if "/spirv/" in line:
                         platform_lines[0].append(line)
-                    elif "/msl/" in line:
+                    elif "/vulkan/" in line:
                         platform_lines[1].append(line)
-                    else:
+                    elif "/opengl/" not in line:
                         dawn_lines.append(line)
     except FileNotFoundError:
         return "File not found."
@@ -80,26 +80,22 @@ metal_str = metal_str + "\n"
 msl_str = ""
 platform_lines[1].sort()
 
-msl_str += "    -- CMake target: tint_lang_msl\n"
-nxt = False
 for file in platform_lines[1] :
-    if not nxt and "writer" in file:
-        msl_str += "\n    -- CMake target: tint_lang_msl_writer\n"
-        nxt = True
     msl_str = msl_str + " \"" + file + "\",\n"
 msl_str = msl_str + "\n"
 
-
 with open ('dawn.lua', 'r' ) as fl:
     content = fl.read()
-    content_new = re.sub('files {\n.*--.*?src/dawn/native/(.|\n)*?}', 'files {\n' + result + '}', content)
-    content_new = re.sub('(if \(enable_metal\) then(.|\n)*?files {\n)(.|\n)*?}', r'\1' + metal_str + '}', content_new)
-    content_new = re.sub('(if \(enable_msl\) then(.|\n)*?files {\n)(.|\n)*?}', r'\1' + msl_str + '}', content_new)
+    content_new = re.sub('files {\n.*?--.*?src/dawn/native(.|\n)*?}', 'files {\n' + result + '}', content)
+    if content_new == content:
+        print("didn't sub")
+    content_new = re.sub('(if \(enable_spirv\) then(.|\n)*?files {\n)(.|\n)*?}', r'\1' + metal_str + '}', content_new)
+    content_new = re.sub('(if \(enable_vulkan\) then(.|\n)*?files {\n)(.|\n)*?}', r'\1' + msl_str + '}', content_new)
+    fl.close()
 with open('dawn.lua', 'w') as fl:
     fl.write(content_new)
+    fl.close()
 
 
 print()
 print()
-for line in others:
-    print(line)
