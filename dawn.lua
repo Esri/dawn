@@ -149,9 +149,9 @@ includedirs {
 -- E.g.:
 --
 --   "src/tint/lang/core/ir/function.cc",
---   "src/tint/lang/wgsl/ast/function.cc",
+--   "src/tint/lang/wgsl/ast/function_rtc_shim_1.cc",
 --
--- where the content of "src/tint/lang/wgsl/ast/function.cc"
+-- where the content of "src/tint/lang/wgsl/ast/function_rtc_shim_1.cc"
 -- is simply:
 --
 --   #include "function.cc"
