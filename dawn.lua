@@ -255,7 +255,6 @@ files {
   "src/dawn/native/SharedTextureMemory.cpp",
   "src/dawn/native/Subresource.cpp",
   "src/dawn/native/Surface.cpp",
-  "src/dawn/native/Surface_metal.mm",
   "src/dawn/native/SwapChain.cpp",
   "src/dawn/native/SystemEvent.cpp",
   "src/dawn/native/SystemHandle.cpp",
@@ -279,7 +278,6 @@ files {
   "src/dawn/common/DynamicLib.cpp",
   "src/dawn/common/FutureUtils.cpp",
   "src/dawn/common/GPUInfo.cpp",
-  "src/dawn/common/IOSurfaceUtils.cpp",
   "src/dawn/common/Log.cpp",
   "src/dawn/common/Math.cpp",
   "src/dawn/common/Mutex.cpp",
@@ -289,7 +287,6 @@ files {
   "src/dawn/common/SlabAllocator.cpp",
   "src/dawn/common/StringViewUtils.cpp",
   "src/dawn/common/SystemUtils.cpp",
-  "src/dawn/common/SystemUtils_mac.mm",
   "src/dawn/common/ThreadLocal.cpp",
   "src/dawn/common/WeakRefSupport.cpp",
 
@@ -675,7 +672,6 @@ files {
   "src/tint/utils/symbol/symbol.cc",
   "src/tint/utils/symbol/symbol_table.cc",
   "src/tint/utils/system/env_other.cc",
-  "src/tint/utils/system/executable_file_mac.cc",
   "src/tint/utils/system/terminal_posix.cc",
   "src/tint/utils/text/base64.cc",
   "src/tint/utils/text/color_mode.cc",
@@ -714,6 +710,7 @@ if (enable_apple) then
     -- CMake target: dawn_common
     "src/dawn/common/IOSurfaceUtils.cpp",
     "src/dawn/common/SystemUtils_mac.mm",
+    "src/tint/utils/system/executable_file_mac.cc",
   }
 
 end
@@ -727,6 +724,7 @@ if (enable_linux) then
 
   files {
     "src/dawn/native/X11Functions.cpp",
+    "src/tint/utils/system/executable_path_linux.cc",
   }
 
 end
@@ -861,13 +859,14 @@ if (enable_spirv) then
     "src/tint/lang/spirv/builtin_fn.cc",
     "src/tint/lang/spirv/intrinsic/data.cc",
     "src/tint/lang/spirv/ir/builtin_call.cc",
+    "src/tint/lang/spirv/ir/image_from_texture.cc",
     "src/tint/lang/spirv/ir/literal_operand.cc",
-    "src/tint/lang/spirv/reader/reader.cc",
     "src/tint/lang/spirv/reader/ast_lower/atomics.cc",
     "src/tint/lang/spirv/reader/ast_lower/decompose_strided_array.cc",
     "src/tint/lang/spirv/reader/ast_lower/decompose_strided_matrix.cc",
     "src/tint/lang/spirv/reader/ast_lower/fold_trivial_lets.cc",
     "src/tint/lang/spirv/reader/ast_lower/pass_workgroup_id_as_argument.cc",
+    "src/tint/lang/spirv/reader/ast_lower/transpose_row_major.cc",
     "src/tint/lang/spirv/reader/ast_parser/ast_parser.cc",
     "src/tint/lang/spirv/reader/ast_parser/construct.cc",
     "src/tint/lang/spirv/reader/ast_parser/entry_point_info.cc",
@@ -878,37 +877,39 @@ if (enable_spirv) then
     "src/tint/lang/spirv/reader/ast_parser/type.cc",
     "src/tint/lang/spirv/reader/ast_parser/usage.cc",
     "src/tint/lang/spirv/reader/common/common.cc",
+    "src/tint/lang/spirv/reader/lower/atomics.cc",
+    "src/tint/lang/spirv/reader/lower/builtins.cc",
     "src/tint/lang/spirv/reader/lower/lower.cc",
     "src/tint/lang/spirv/reader/lower/shader_io.cc",
     "src/tint/lang/spirv/reader/lower/vector_element_pointer.cc",
     "src/tint/lang/spirv/reader/parser/parser.cc",
+    "src/tint/lang/spirv/reader/reader.cc",
+    "src/tint/lang/spirv/type/explicit_layout_array.cc",
+    "src/tint/lang/spirv/type/image.cc",
     "src/tint/lang/spirv/type/sampled_image.cc",
     "src/tint/lang/spirv/validate/validate.cc",
-    "src/tint/lang/spirv/writer/output.cc",
-    "src/tint/lang/spirv/writer/writer.cc",
-    "src/tint/lang/spirv/writer/ast_printer/ast_printer.cc",
-    "src/tint/lang/spirv/writer/ast_printer/builder.cc",
     "src/tint/lang/spirv/writer/common/binary_writer.cc",
     "src/tint/lang/spirv/writer/common/function.cc",
     "src/tint/lang/spirv/writer/common/instruction.cc",
     "src/tint/lang/spirv/writer/common/module.cc",
     "src/tint/lang/spirv/writer/common/operand.cc",
     "src/tint/lang/spirv/writer/common/option_helper.cc",
+    "src/tint/lang/spirv/writer/common/output.cc",
+    "src/tint/lang/spirv/writer/helpers/generate_bindings.cc",
     "src/tint/lang/spirv/writer/printer/printer.cc",
     "src/tint/lang/spirv/writer/raise/builtin_polyfill.cc",
     "src/tint/lang/spirv/writer/raise/expand_implicit_splats.cc",
+    "src/tint/lang/spirv/writer/raise/fork_explicit_layout_types.cc",
     "src/tint/lang/spirv/writer/raise/handle_matrix_arithmetic.cc",
     "src/tint/lang/spirv/writer/raise/merge_return.cc",
     "src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.cc",
     "src/tint/lang/spirv/writer/raise/raise.cc",
+    "src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.cc",
     "src/tint/lang/spirv/writer/raise/shader_io.cc",
     "src/tint/lang/spirv/writer/raise/var_for_dynamic_index.cc",
-    "src/tint/lang/spirv/writer/ast_raise/for_loop_to_loop.cc",
-    "src/tint/lang/spirv/writer/ast_raise/merge_return.cc",
-    "src/tint/lang/spirv/writer/ast_raise/var_for_dynamic_index.cc",
-    "src/tint/lang/spirv/writer/ast_raise/vectorize_matrix_conversions.cc",
-    "src/tint/lang/spirv/writer/ast_raise/while_to_loop.cc",
-  }
+    "src/tint/lang/spirv/writer/writer.cc",
+
+}
 
 end
 
@@ -1003,6 +1004,7 @@ if (enable_metal) then
   }
 
   files {
+    "src/dawn/native/Surface_metal.mm",
     "src/dawn/native/metal/BackendMTL.mm",
     "src/dawn/native/metal/BindGroupLayoutMTL.mm",
     "src/dawn/native/metal/BindGroupMTL.mm",
@@ -1049,6 +1051,7 @@ if (enable_vulkan) then
     "src/dawn/native/vulkan/BindGroupVk.cpp",
     "src/dawn/native/vulkan/BufferVk.cpp",
     "src/dawn/native/vulkan/CommandBufferVk.cpp",
+    "src/dawn/native/vulkan/CommandRecordingContextVk.cpp",
     "src/dawn/native/vulkan/ComputePipelineVk.cpp",
     "src/dawn/native/vulkan/DescriptorSetAllocator.cpp",
     "src/dawn/native/vulkan/DeviceVk.cpp",
@@ -1056,10 +1059,12 @@ if (enable_vulkan) then
     "src/dawn/native/vulkan/PhysicalDeviceVk.cpp",
     "src/dawn/native/vulkan/PipelineCacheVk.cpp",
     "src/dawn/native/vulkan/PipelineLayoutVk.cpp",
+    "src/dawn/native/vulkan/PipelineVk.cpp",
     "src/dawn/native/vulkan/QuerySetVk.cpp",
     "src/dawn/native/vulkan/QueueVk.cpp",
     "src/dawn/native/vulkan/RenderPassCache.cpp",
     "src/dawn/native/vulkan/RenderPipelineVk.cpp",
+    "src/dawn/native/vulkan/ResolveTextureLoadingUtilsVk.cpp",
     "src/dawn/native/vulkan/ResourceHeapVk.cpp",
     "src/dawn/native/vulkan/ResourceMemoryAllocatorVk.cpp",
     "src/dawn/native/vulkan/SamplerVk.cpp",
@@ -1070,17 +1075,20 @@ if (enable_vulkan) then
     "src/dawn/native/vulkan/SwapChainVk.cpp",
     "src/dawn/native/vulkan/TextureVk.cpp",
     "src/dawn/native/vulkan/UtilsVulkan.cpp",
+    "src/dawn/native/vulkan/VulkanBackend.cpp",
     "src/dawn/native/vulkan/VulkanError.cpp",
     "src/dawn/native/vulkan/VulkanExtensions.cpp",
     "src/dawn/native/vulkan/VulkanFunctions.cpp",
     "src/dawn/native/vulkan/VulkanInfo.cpp",
     "src/dawn/native/vulkan/external_memory/MemoryService.cpp",
     "src/dawn/native/vulkan/external_memory/MemoryServiceImplementation.cpp",
+    "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf.cpp",
+    "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD.cpp",
     "src/dawn/native/vulkan/external_semaphore/SemaphoreService.cpp",
     "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementation.cpp",
+    "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD.cpp",
 
-    "src/dawn/native/vulkan/VulkanBackend.cpp",
-  }
+}
 
   if (_PLATFORM_ANDROID) then
 
