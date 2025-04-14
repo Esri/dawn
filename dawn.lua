@@ -264,7 +264,6 @@ files {
   "src/dawn/native/ValidationUtils.cpp",
   "src/dawn/native/null/DeviceNull.cpp",
   "src/dawn/native/null/NullBackend.cpp",
-  "src/dawn/native/null/NullBackend.cpp",
   "src/dawn/native/stream/BlobSource.cpp",
   "src/dawn/native/stream/ByteVectorSink.cpp",
   "src/dawn/native/stream/Stream.cpp",
