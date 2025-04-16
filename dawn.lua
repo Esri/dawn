@@ -140,7 +140,7 @@ includedirs {
 -- to the same output location. One will overwrite the other.
 --
 --   "src/tint/lang/core/ir/function.cc",
---   "src/tint/lang/wgsl/ast/function.cc",
+--   "src/tint/lang/wgsl/ast/function_rtc_shim_2.cc",
 --
 -- To remedy this, the runtimecore branch introduces "shim" files with
 -- unique names which simply include the original. We build the shim file
@@ -149,9 +149,9 @@ includedirs {
 -- E.g.:
 --
 --   "src/tint/lang/core/ir/function.cc",
---   "src/tint/lang/wgsl/ast/function_rtc_shim_1.cc",
+--   "src/tint/lang/wgsl/ast/function_rtc_shim_2.cc",
 --
--- where the content of "src/tint/lang/wgsl/ast/function_rtc_shim_1.cc"
+-- where the content of "src/tint/lang/wgsl/ast/function_rtc_shim_2.cc"
 -- is simply:
 --
 --   #include "function.cc"
@@ -204,6 +204,7 @@ files {
   "src/dawn/native/ComputePipeline.cpp",
   "src/dawn/native/CopyTextureForBrowserHelper.cpp",
   "src/dawn/native/CreatePipelineAsyncEvent.cpp",
+  "src/dawn/native/DawnNative_rtc_shim_1.cpp",
   "src/dawn/native/DawnNative_rtc_shim_1.cpp",
   "src/dawn/native/Device.cpp",
   "src/dawn/native/DynamicUploader.cpp",
@@ -287,6 +288,7 @@ files {
   "src/dawn/common/SystemUtils.cpp",
   "src/dawn/common/ThreadLocal.cpp",
   "src/dawn/common/WeakRefSupport.cpp",
+  "src/dawn/common/WindowsUtils_rtc_shim_1.cpp",
 
   -- CMake target: src/dawn/platform
   "src/dawn/platform/DawnPlatform.cpp",
@@ -649,12 +651,12 @@ files {
   "src/tint/utils/bytes/reader_rtc_shim_1.cc",
   "src/tint/utils/command/args.cc",
   "src/tint/utils/command/cli.cc",
-  "src/tint/utils/command/command_posix.cc",
+  "src/tint/utils/command/command_windows.cc",
   "src/tint/utils/containers/containers.cc",
   "src/tint/utils/diagnostic/diagnostic.cc",
   "src/tint/utils/diagnostic/formatter.cc",
   "src/tint/utils/diagnostic/source.cc",
-  "src/tint/utils/file/tmpfile_posix.cc",
+  "src/tint/utils/file/tmpfile_windows.cc",
   "src/tint/utils/generation_id.cc",
   "src/tint/utils/ice/debugger.cc",
   "src/tint/utils/ice/ice.cc",
@@ -669,8 +671,9 @@ files {
   "src/tint/utils/strconv/parse_num.cc",
   "src/tint/utils/symbol/symbol.cc",
   "src/tint/utils/symbol/symbol_table.cc",
-  "src/tint/utils/system/env_other.cc",
-  "src/tint/utils/system/terminal_posix.cc",
+  "src/tint/utils/system/env_windows.cc",
+  "src/tint/utils/system/executable_path_windows.cc",
+  "src/tint/utils/system/terminal_windows.cc",
   "src/tint/utils/text/base64.cc",
   "src/tint/utils/text/color_mode.cc",
   "src/tint/utils/text/string.cc",
@@ -678,7 +681,7 @@ files {
   "src/tint/utils/text/styled_text.cc",
   "src/tint/utils/text/styled_text_printer.cc",
   "src/tint/utils/text/styled_text_printer_ansi.cc",
-  "src/tint/utils/text/styled_text_printer_posix.cc",
+  "src/tint/utils/text/styled_text_printer_windows.cc",
   "src/tint/utils/text/styled_text_theme.cc",
   "src/tint/utils/text/unicode.cc",
   "src/tint/utils/text_generator/text_generator.cc",
@@ -737,7 +740,7 @@ if (enable_win) then
 
   files {
     -- CMake target: dawn_common
-    "src/dawn/common/WindowsUtils.cpp",
+    "src/dawn/common/WindowsUtils_rtc_shim_1.cpp",
   }
 
 end
@@ -780,7 +783,7 @@ if (enable_hlsl) then
     "src/tint/lang/hlsl/validate/validate_rtc_shim_1.cc",
 
     -- CMake target: tint_lang_hlsl_writer
-    "src/tint/lang/hlsl/writer/output_rtc_shim_2.cc",
+    "src/tint/lang/hlsl/writer/common/output_rtc_shim_2.cc",
     "src/tint/lang/hlsl/writer/writer_rtc_shim_2.cc",
     "src/tint/lang/hlsl/writer/ast_printer/ast_printer_rtc_shim_2.cc",
     "src/tint/lang/hlsl/writer/ast_raise/calculate_array_length.cc",
@@ -923,9 +926,15 @@ if (enable_d3d12) then -- or d3d11
     _3RDPARTY_DIR .. "/DirectXShaderCompiler/include",
   }
 
+  defines {
+    "DAWN_ENABLE_BACKEND_D3D12",
+    "D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE))",
+  }
+
   files {
-    "src/dawn/native/d3d/BackendD3D.cpp",
+    "src/dawn/native/d3d/BackendD3D_rtc_shim_1.cpp",
     "src/dawn/native/d3d/BlobD3D.cpp",
+    "src/dawn/native/d3d/D3DBackend_rtc_shim_1.cpp",
     "src/dawn/native/d3d/D3DError.cpp",
     "src/dawn/native/d3d/DeviceD3D.cpp",
     "src/dawn/native/d3d/KeyedMutex.cpp",
@@ -936,22 +945,7 @@ if (enable_d3d12) then -- or d3d11
     "src/dawn/native/d3d/SharedFenceD3D.cpp",
     "src/dawn/native/d3d/SharedTextureMemoryD3D.cpp",
     "src/dawn/native/d3d/SwapChainD3D.cpp",
-    "src/dawn/native/d3d/TextureD3D.cpp",
     "src/dawn/native/d3d/UtilsD3D.cpp",
-
-    "src/dawn/native/d3d/D3DBackend.cpp",
-  }
-
-end
-
-if (enable_d3d12) then
-
-  defines {
-    "DAWN_ENABLE_BACKEND_D3D12",
-    "D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE))",
-  }
-
-  files {
     "src/dawn/native/d3d12/BackendD3D12.cpp",
     "src/dawn/native/d3d12/BindGroupD3D12.cpp",
     "src/dawn/native/d3d12/BindGroupLayoutD3D12.cpp",
@@ -960,6 +954,7 @@ if (enable_d3d12) then
     "src/dawn/native/d3d12/CommandBufferD3D12.cpp",
     "src/dawn/native/d3d12/CommandRecordingContext.cpp",
     "src/dawn/native/d3d12/ComputePipelineD3D12.cpp",
+    "src/dawn/native/d3d12/D3D12Backend_rtc_shim_1.cpp",
     "src/dawn/native/d3d12/D3D12Info.cpp",
     "src/dawn/native/d3d12/DeviceD3D12.cpp",
     "src/dawn/native/d3d12/GPUDescriptorHeapAllocationD3D12.cpp",
@@ -980,18 +975,18 @@ if (enable_d3d12) then
     "src/dawn/native/d3d12/SamplerHeapCacheD3D12.cpp",
     "src/dawn/native/d3d12/ShaderModuleD3D12.cpp",
     "src/dawn/native/d3d12/ShaderVisibleDescriptorAllocatorD3D12.cpp",
-    "src/dawn/native/d3d12/StagingDescriptorAllocatorD3D12.cpp",
     "src/dawn/native/d3d12/SharedBufferMemoryD3D12.cpp",
     "src/dawn/native/d3d12/SharedFenceD3D12.cpp",
     "src/dawn/native/d3d12/SharedTextureMemoryD3D12.cpp",
+    "src/dawn/native/d3d12/StagingDescriptorAllocatorD3D12.cpp",
     "src/dawn/native/d3d12/StreamImplD3D12.cpp",
     "src/dawn/native/d3d12/SwapChainD3D12.cpp",
     "src/dawn/native/d3d12/TextureCopySplitter.cpp",
     "src/dawn/native/d3d12/TextureD3D12.cpp",
     "src/dawn/native/d3d12/UtilsD3D12.cpp",
 
-    "src/dawn/native/d3d12/D3D12Backend.cpp",
-  }
+
+}
 
 end
 
@@ -1073,18 +1068,15 @@ if (enable_vulkan) then
     "src/dawn/native/vulkan/SwapChainVk.cpp",
     "src/dawn/native/vulkan/TextureVk.cpp",
     "src/dawn/native/vulkan/UtilsVulkan.cpp",
-    "src/dawn/native/vulkan/VulkanBackend.cpp",
+    "src/dawn/native/vulkan/VulkanBackend_rtc_shim_1.cpp",
     "src/dawn/native/vulkan/VulkanError.cpp",
     "src/dawn/native/vulkan/VulkanExtensions.cpp",
     "src/dawn/native/vulkan/VulkanFunctions.cpp",
     "src/dawn/native/vulkan/VulkanInfo.cpp",
     "src/dawn/native/vulkan/external_memory/MemoryService.cpp",
     "src/dawn/native/vulkan/external_memory/MemoryServiceImplementation.cpp",
-    "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf_rtc_shim_1.cpp",
-    "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD_rtc_shim_1.cpp",
     "src/dawn/native/vulkan/external_semaphore/SemaphoreService.cpp",
     "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementation.cpp",
-    "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD_rtc_shim_1.cpp",
 
 }
 
@@ -1100,8 +1092,8 @@ if (enable_vulkan) then
   if (_PLATFORM_LINUX) then
 
     files {
-      "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf_rtc_shim_1.cpp",
-      "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD_rtc_shim_1.cpp",
+      "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf.cpp",
+      "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD.cpp",
       "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD_rtc_shim_1.cpp",
     }
   end

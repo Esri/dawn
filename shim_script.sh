@@ -24,5 +24,5 @@ while IFS= read -r line ; do
   done <<< "$var"
 done <<< "$variable"
 
-/usr/local/rtc/python/3.12/bin/python shim_replacer.py
-rm shim_temp_file.txt
+python_dir="${C:/rtc/python/3.12/Scripts/python.exe}"
+${python_dir} ./shim_replacer.py

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 with open ('dawn.lua', 'r') as f1, \
      open ('shim_temp_file.txt', 'r') as f2:
   

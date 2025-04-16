@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from itertools import groupby
 import sys
 from os.path import dirname
@@ -39,6 +41,28 @@ def file_to_list_linux(file_path, dawn_lines, platform_lines):
                 platform_lines[1].append(line)
             elif "opengl" not in line:
                 dawn_lines.append(line)
+                print(line)
+
+def file_to_list_windows(file_path, dawn_lines, platform_lines):
+    regex = re.compile('\"file\": \".*/dawn/(src/.*)\",')
+    file_list = open(file_path, 'r')
+    lines = file_list.readlines()
+
+    for line in lines:
+        line = line.rstrip('\n')
+        line = re.sub(r'\\\\', '/', line)
+        match = re.search(regex, line)
+        if(match != None) :
+            line = match.group(1)
+            if "/vulkan/" in line:
+                platform_lines[0].append(line)
+            elif "/spirv/" in line:
+                platform_lines[1].append(line)
+            elif "/d3d/" in line or "/d3d12/" in line:
+                platform_lines[2].append(line)
+            elif "opengl" not in line:
+                dawn_lines.append(line)
+
 
 def get_platform_result(operating_sys, platform_lines):
     paltform1_lines = ""
@@ -61,6 +85,20 @@ def get_platform_result(operating_sys, platform_lines):
     elif operating_sys == "macos":
         content_new = re.sub(r'(if \(enable_metal\) then(.|\n)*?files {\n)(.|\n)*?}', r'\1' + paltform1_lines + '}', content_new)
         content_new = re.sub(r'(if \(enable_msl\) then(.|\n)*?files {\n.*tint_lang_msl\n)(.|\n)*?}', r'\1' + paltform2_lines + '}', content_new)
+    elif operating_sys == "windows":
+        paltform3_lines = ""
+        platform_lines[2].sort()
+        for line in platform_lines[2] :
+            paltform3_lines = paltform3_lines + "    \"" + line + "\",\n"
+        paltform3_lines = paltform3_lines + "\n"
+
+        platform_lines[3].sort()
+        for line in platform_lines[3] :
+            paltform3_lines = paltform3_lines + "    \"" + line + "\",\n"
+        paltform3_lines = paltform3_lines + "\n"
+        content_new = re.sub(r'(if \(enable_vulkan\) then(.|\n)*?files {\n)(.|\n)*?}', r'\1' + paltform1_lines + '}', content_new)
+        content_new = re.sub(r'(if \(enable_spirv\) then(.|\n)*?files {\n.*tint_lang_spirv\n)(.|\n)*?}', r'\1' + paltform2_lines + '}', content_new)
+        content_new = re.sub(r'(if \(enable_d3d12\) then(.|\n)*?files {\n.*\n)(.|\n)*?}', r'\1' + paltform3_lines + '}', content_new)
 
     lua_file.close()
     return content_new
@@ -77,19 +115,24 @@ parent_paths = {
 
 file_path = "temp_file"
 paths = []
-platform_lines = [[],[]]
+platform_lines = [[],[], [], []]
 operating_sys = sys.argv[1]
+
 if operating_sys == "linux":
     file_to_list_linux(file_path, paths, platform_lines)
 elif operating_sys == "macos":
     file_to_list_macos(file_path, paths, platform_lines)
+elif operating_sys == "windows":
+    file_to_list_windows(file_path, paths, platform_lines)
+
 
 out = {}
 others = []
+print(paths)
 for p in paths:
     found = False
     for parent, files in parent_paths.items():
-        if (commonpath([p, parent]) == parent):
+        if parent in p:
             files.append(p)
             found = True
     if not found:
@@ -107,6 +150,7 @@ for parent, files in parent_paths.items():
     for file in files:
         result = result + "  \"" + file + "\",\n"
     result = result + "\n"
+print(result)
 
 lua_file = open('dawn.lua', 'r')
 content = lua_file.read()
