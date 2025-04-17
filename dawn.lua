@@ -253,6 +253,7 @@ files {
   "src/dawn/native/SharedFence.cpp",
   "src/dawn/native/SharedResourceMemory.cpp",
   "src/dawn/native/SharedTextureMemory.cpp",
+  "src/dawn/native/SpirvValidation.cpp",
   "src/dawn/native/Subresource.cpp",
   "src/dawn/native/Surface.cpp",
   "src/dawn/native/SwapChain.cpp",
@@ -780,11 +781,16 @@ if (enable_hlsl) then
 
   files {
     -- CMake target: tint_lang_hlsl_validate
+    "src/tint/lang/hlsl/builtin_fn_rtc_shim_3.cc",
+    "src/tint/lang/hlsl/intrinsic/data_rtc_shim_3.cc",
+    "src/tint/lang/hlsl/ir/builtin_call_rtc_shim_2.cc",
+    "src/tint/lang/hlsl/ir/member_builtin_call_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/ir/ternary.cc",
+    "src/tint/lang/hlsl/type/byte_address_buffer.cc",
+    "src/tint/lang/hlsl/type/int8_t4_packed.cc",
+    "src/tint/lang/hlsl/type/rasterizer_ordered_texture_2d.cc",
+    "src/tint/lang/hlsl/type/uint8_t4_packed.cc",
     "src/tint/lang/hlsl/validate/validate_rtc_shim_1.cc",
-
-    -- CMake target: tint_lang_hlsl_writer
-    "src/tint/lang/hlsl/writer/common/output_rtc_shim_2.cc",
-    "src/tint/lang/hlsl/writer/writer_rtc_shim_2.cc",
     "src/tint/lang/hlsl/writer/ast_printer/ast_printer_rtc_shim_2.cc",
     "src/tint/lang/hlsl/writer/ast_raise/calculate_array_length.cc",
     "src/tint/lang/hlsl/writer/ast_raise/decompose_memory_access.cc",
@@ -794,8 +800,22 @@ if (enable_hlsl) then
     "src/tint/lang/hlsl/writer/ast_raise/truncate_interstage_variables.cc",
     "src/tint/lang/hlsl/writer/common/option_helpers.cc",
     "src/tint/lang/hlsl/writer/common/options_rtc_shim_2.cc",
+    "src/tint/lang/hlsl/writer/common/output_rtc_shim_2.cc",
     "src/tint/lang/hlsl/writer/helpers/generate_bindings.cc",
-  }
+    "src/tint/lang/hlsl/writer/printer/printer_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/raise/binary_polyfill_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/raise/builtin_polyfill_rtc_shim_2.cc",
+    "src/tint/lang/hlsl/writer/raise/decompose_storage_access.cc",
+    "src/tint/lang/hlsl/writer/raise/decompose_uniform_access.cc",
+    "src/tint/lang/hlsl/writer/raise/localize_struct_array_assignment_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/raise/pixel_local_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/raise/promote_initializers.cc",
+    "src/tint/lang/hlsl/writer/raise/raise_rtc_shim_2.cc",
+    "src/tint/lang/hlsl/writer/raise/replace_default_only_switch.cc",
+    "src/tint/lang/hlsl/writer/raise/replace_non_indexable_mat_vec_stores.cc",
+    "src/tint/lang/hlsl/writer/raise/shader_io_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/writer_rtc_shim_2.cc",
+}
 
 end
 
@@ -807,12 +827,12 @@ if (enable_msl) then
 
   files {
     -- CMake target: tint_lang_msl
-    "src/tint/lang/msl/builtin_fn_rtc_shim_3.cc",
-    "src/tint/lang/msl/intrinsic/data_rtc_shim_3.cc",
+    "src/tint/lang/msl/builtin_fn_rtc_shim_4.cc",
+    "src/tint/lang/msl/intrinsic/data_rtc_shim_4.cc",
     "src/tint/lang/msl/ir/binary_rtc_shim_1.cc",
-    "src/tint/lang/msl/ir/builtin_call_rtc_shim_2.cc",
+    "src/tint/lang/msl/ir/builtin_call_rtc_shim_3.cc",
     "src/tint/lang/msl/ir/component.cc",
-    "src/tint/lang/msl/ir/member_builtin_call_rtc_shim_1.cc",
+    "src/tint/lang/msl/ir/member_builtin_call_rtc_shim_2.cc",
     "src/tint/lang/msl/ir/memory_order.cc",
     "src/tint/lang/msl/ir/transform/flatten_bindings.cc",
     "src/tint/lang/msl/type/bias.cc",
@@ -825,13 +845,13 @@ if (enable_msl) then
     "src/tint/lang/msl/writer/common/output_rtc_shim_3.cc",
     "src/tint/lang/msl/writer/common/printer_support_rtc_shim_1.cc",
     "src/tint/lang/msl/writer/helpers/generate_bindings_rtc_shim_1.cc",
-    "src/tint/lang/msl/writer/printer/printer_rtc_shim_1.cc",
-    "src/tint/lang/msl/writer/raise/binary_polyfill_rtc_shim_1.cc",
-    "src/tint/lang/msl/writer/raise/builtin_polyfill_rtc_shim_2.cc",
+    "src/tint/lang/msl/writer/printer/printer_rtc_shim_2.cc",
+    "src/tint/lang/msl/writer/raise/binary_polyfill_rtc_shim_2.cc",
+    "src/tint/lang/msl/writer/raise/builtin_polyfill_rtc_shim_3.cc",
     "src/tint/lang/msl/writer/raise/module_scope_vars.cc",
     "src/tint/lang/msl/writer/raise/packed_vec3.cc",
-    "src/tint/lang/msl/writer/raise/raise_rtc_shim_2.cc",
-    "src/tint/lang/msl/writer/raise/shader_io_rtc_shim_1.cc",
+    "src/tint/lang/msl/writer/raise/raise_rtc_shim_3.cc",
+    "src/tint/lang/msl/writer/raise/shader_io_rtc_shim_2.cc",
     "src/tint/lang/msl/writer/raise/simd_ballot.cc",
     "src/tint/lang/msl/writer/raise/unary_polyfill.cc",
     "src/tint/lang/msl/writer/writer_rtc_shim_3.cc",
@@ -857,9 +877,9 @@ if (enable_spirv) then
 
   files {
     -- CMake target: tint_lang_spirv
-    "src/tint/lang/spirv/builtin_fn_rtc_shim_4.cc",
-    "src/tint/lang/spirv/intrinsic/data_rtc_shim_4.cc",
-    "src/tint/lang/spirv/ir/builtin_call_rtc_shim_3.cc",
+    "src/tint/lang/spirv/builtin_fn_rtc_shim_5.cc",
+    "src/tint/lang/spirv/intrinsic/data_rtc_shim_5.cc",
+    "src/tint/lang/spirv/ir/builtin_call_rtc_shim_4.cc",
     "src/tint/lang/spirv/ir/image_from_texture.cc",
     "src/tint/lang/spirv/ir/literal_operand.cc",
     "src/tint/lang/spirv/reader/ast_lower/atomics.cc",
@@ -881,7 +901,7 @@ if (enable_spirv) then
     "src/tint/lang/spirv/reader/lower/atomics_rtc_shim_1.cc",
     "src/tint/lang/spirv/reader/lower/builtins.cc",
     "src/tint/lang/spirv/reader/lower/lower_rtc_shim_1.cc",
-    "src/tint/lang/spirv/reader/lower/shader_io_rtc_shim_2.cc",
+    "src/tint/lang/spirv/reader/lower/shader_io_rtc_shim_3.cc",
     "src/tint/lang/spirv/reader/lower/vector_element_pointer.cc",
     "src/tint/lang/spirv/reader/parser/parser_rtc_shim_1.cc",
     "src/tint/lang/spirv/reader/reader_rtc_shim_2.cc",
@@ -897,16 +917,16 @@ if (enable_spirv) then
     "src/tint/lang/spirv/writer/common/option_helper.cc",
     "src/tint/lang/spirv/writer/common/output_rtc_shim_4.cc",
     "src/tint/lang/spirv/writer/helpers/generate_bindings_rtc_shim_2.cc",
-    "src/tint/lang/spirv/writer/printer/printer_rtc_shim_2.cc",
-    "src/tint/lang/spirv/writer/raise/builtin_polyfill_rtc_shim_3.cc",
+    "src/tint/lang/spirv/writer/printer/printer_rtc_shim_3.cc",
+    "src/tint/lang/spirv/writer/raise/builtin_polyfill_rtc_shim_4.cc",
     "src/tint/lang/spirv/writer/raise/expand_implicit_splats.cc",
     "src/tint/lang/spirv/writer/raise/fork_explicit_layout_types.cc",
     "src/tint/lang/spirv/writer/raise/handle_matrix_arithmetic.cc",
     "src/tint/lang/spirv/writer/raise/merge_return.cc",
     "src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.cc",
-    "src/tint/lang/spirv/writer/raise/raise_rtc_shim_3.cc",
+    "src/tint/lang/spirv/writer/raise/raise_rtc_shim_4.cc",
     "src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.cc",
-    "src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_3.cc",
+    "src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_4.cc",
     "src/tint/lang/spirv/writer/raise/var_for_dynamic_index.cc",
     "src/tint/lang/spirv/writer/writer_rtc_shim_4.cc",
 
@@ -928,7 +948,6 @@ if (enable_d3d12) then -- or d3d11
 
   defines {
     "DAWN_ENABLE_BACKEND_D3D12",
-    "D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE))",
   }
 
   files {
@@ -1038,7 +1057,6 @@ if (enable_vulkan) then
   }
 
   files {
-    "src/dawn/native/SpirvValidation.cpp",
     "src/dawn/native/vulkan/BackendVk.cpp",
     "src/dawn/native/vulkan/BindGroupLayoutVk.cpp",
     "src/dawn/native/vulkan/BindGroupVk.cpp",

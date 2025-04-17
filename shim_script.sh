@@ -5,6 +5,7 @@ find . -name "*rtc_shim*" -delete
 
 variable=`grep '\.c.*' dawn.lua | sed -n 's/^\ *\".*\/\([a-zA-Z0-9_]*\.[cp]*\)\"\,/\1/p' | sort | uniq -d`
 
+rm shim_temp_file.txt
 while IFS= read -r line ; do 
   pattern="$line"
   sub="s/^\ *\"\(.*\)\/${line}\"\,/\1/p"

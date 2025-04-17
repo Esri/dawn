@@ -60,6 +60,8 @@ def file_to_list_windows(file_path, dawn_lines, platform_lines):
                 platform_lines[1].append(line)
             elif "/d3d/" in line or "/d3d12/" in line:
                 platform_lines[2].append(line)
+            elif "/hlsl/" in line:
+                platform_lines[3].append(line)
             elif "opengl" not in line:
                 dawn_lines.append(line)
 
@@ -93,12 +95,14 @@ def get_platform_result(operating_sys, platform_lines):
         paltform3_lines = paltform3_lines + "\n"
 
         platform_lines[3].sort()
+        paltform4_lines = ""
         for line in platform_lines[3] :
-            paltform3_lines = paltform3_lines + "    \"" + line + "\",\n"
+            paltform4_lines = paltform4_lines + "    \"" + line + "\",\n"
         paltform3_lines = paltform3_lines + "\n"
         content_new = re.sub(r'(if \(enable_vulkan\) then(.|\n)*?files {\n)(.|\n)*?}', r'\1' + paltform1_lines + '}', content_new)
         content_new = re.sub(r'(if \(enable_spirv\) then(.|\n)*?files {\n.*tint_lang_spirv\n)(.|\n)*?}', r'\1' + paltform2_lines + '}', content_new)
         content_new = re.sub(r'(if \(enable_d3d12\) then(.|\n)*?files {\n.*\n)(.|\n)*?}', r'\1' + paltform3_lines + '}', content_new)
+        content_new = re.sub(r'(if \(enable_hlsl\) then(.|\n)*?files {\n.*\n)(.|\n)*?}', r'\1' + paltform4_lines + '}', content_new)
 
     lua_file.close()
     return content_new

@@ -40,7 +40,7 @@ cmake_path="${cmake_path/\/usr\/local/C:}"
 echo $cmake_path
 python_dir="${C:/rtc/python/3.12/Scripts/python.exe}"
 command="${cmake_path} -GNinja ../dawn -DDAWN_BUILD_TESTS=OFF -DTINT_BUILD_TESTS=OFF -DDAWN_ENABLE_VULKAN=${enable_vulkan} -DTINT_BUILD_GLSL_WRITER=OFF -DTINT_BUILD_GLSL_VALIDATOR=OFF -DDAWN_USE_GLFW=OFF -DDAWN_BUILD_SAMPLES=OFF -DPython3_EXECUTABLE=${python_dir} -DENABLE_NULL=OFF -DDAWN_FETCH_DEPENDENCIES=${fetch_dependencies} -DCMAKE_EXPORT_COMPILE_COMMANDS=1"
-#_run_visual_studio_native_tools_command "x64" "windows" "${command}"
+_run_visual_studio_native_tools_command "x64" "windows" "${command}"
 cd ../dawn
 grep "file" ../temp_dawn_build/compile_commands.json > temp_file
 
