@@ -253,7 +253,6 @@ files {
   "src/dawn/native/SharedFence.cpp",
   "src/dawn/native/SharedResourceMemory.cpp",
   "src/dawn/native/SharedTextureMemory.cpp",
-  "src/dawn/native/SpirvValidation.cpp",
   "src/dawn/native/Subresource.cpp",
   "src/dawn/native/Surface.cpp",
   "src/dawn/native/SwapChain.cpp",
@@ -965,12 +964,22 @@ if (enable_d3d12) then -- or d3d11
     "src/dawn/native/d3d/SharedTextureMemoryD3D.cpp",
     "src/dawn/native/d3d/SwapChainD3D.cpp",
     "src/dawn/native/d3d/UtilsD3D.cpp",
+      }
+
+end
+
+if (enable_d3d12) then
+
+  defines {
+    "DAWN_ENABLE_BACKEND_D3D12",
+  }
+
+  files {
     "src/dawn/native/d3d12/BackendD3D12.cpp",
     "src/dawn/native/d3d12/BindGroupD3D12.cpp",
     "src/dawn/native/d3d12/BindGroupLayoutD3D12.cpp",
     "src/dawn/native/d3d12/BufferD3D12.cpp",
     "src/dawn/native/d3d12/CPUDescriptorHeapAllocationD3D12.cpp",
-    "src/dawn/native/d3d12/CommandBufferD3D12.cpp",
     "src/dawn/native/d3d12/CommandRecordingContext.cpp",
     "src/dawn/native/d3d12/ComputePipelineD3D12.cpp",
     "src/dawn/native/d3d12/D3D12Backend_rtc_shim_1.cpp",
@@ -1001,6 +1010,7 @@ if (enable_d3d12) then -- or d3d11
     "src/dawn/native/d3d12/StreamImplD3D12.cpp",
     "src/dawn/native/d3d12/SwapChainD3D12.cpp",
     "src/dawn/native/d3d12/TextureCopySplitter.cpp",
+    "src/dawn/native/d3d12/CommandBufferD3D12.cpp",
     "src/dawn/native/d3d12/TextureD3D12.cpp",
     "src/dawn/native/d3d12/UtilsD3D12.cpp",
 
@@ -1057,6 +1067,7 @@ if (enable_vulkan) then
   }
 
   files {
+  "src/dawn/native/SpirvValidation.cpp",
     "src/dawn/native/vulkan/BackendVk.cpp",
     "src/dawn/native/vulkan/BindGroupLayoutVk.cpp",
     "src/dawn/native/vulkan/BindGroupVk.cpp",
