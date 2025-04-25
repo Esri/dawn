@@ -38,13 +38,13 @@ echo $cmake_path
 python_dir="${C:/rtc/python/3.12/Scripts/python.exe}"
 command="${cmake_path} -GNinja ../dawn"
 _run_visual_studio_native_tools_command "x64" "windows" "${command}"
-_run_visual_studio_native_tools_command "x64" "windows" "ninja"
+#_run_visual_studio_native_tools_command "x64" "windows" "ninja"
 cd ../dawn
-#grep "file" ../temp_dawn_build/compile_commands.json > temp_file
-#
-#${python_dir} ./file_splitter.py $os
-#
-#rm temp_file
-#git checkout HEAD~1 -- ./third_party/abseil-cpp
+grep "file" ../temp_dawn_build/compile_commands.json > temp_file
+
+${python_dir} ./file_splitter.py $os
+
+rm temp_file
+git checkout HEAD~1 -- ./third_party/abseil-cpp
 
 
