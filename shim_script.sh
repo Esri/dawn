@@ -1,28 +1,22 @@
 #!/bin/bash
+source $(dirname ${BASH_SOURCE})/helpers.sh
 
 find . -name "*rtc_shim*" -delete
 
+repeated_names=`grep '\.c.*' dawn.lua | sed -n 's/^\ *\".*\/\([a-zA-Z0-9_]*\)\.[cp]*\"\,/\1/p' | sort -f | uniq -d -i`
 
-variable=`grep '\.c.*' dawn.lua | sed -n 's/^\ *\".*\/\([a-zA-Z0-9_]*\.[cp]*\)\"\,/\1/p' | sort | uniq -d`
-
-while IFS= read -r line ; do 
-  pattern="$line"
-  sub="s/^\ *\"\(.*\)\/${line}\"\,/\1/p"
-  var=`grep "$pattern" dawn.lua | sed -n "$sub"`
+while IFS= read -r file_name ; do 
   int=0
-  while IFS= read -r file ; do 
+  replace_pattern="s/^\ *\"\(.*\/\)${file_name}\(\.[cp]*\)\"\,/\1 \2/pI"
+  files_to_replace=`grep -i "\/${file_name}\." dawn.lua | sed -n "$replace_pattern"`
+
+  while IFS= read -r line ; do
+    IFS=' ' read -r path extension <<< "$line"
     if ((int > 0)); then
-      search="\(.*\)\.\(.*\)"
-      replace="bla"
-      result="$(sed "s/\(.*\)\.\(.*\)/\1_rtc_shim_${int}.\2/" <<< $line)"
-      shim_path="${file}/${result}"
-      old_path="${file}/${line}"
-      echo "#include \"${line}\"" >> $shim_path
-      echo "${old_path} ${shim_path}" >> "shim_temp_file.txt"
+      replace_pattern2="s|^\(\ *\"$path$file_name\)\([cp]*.*\)|\1_rtc_shim_$int\2|I"
+      _sed_inplace "$replace_pattern2" dawn.lua
+      echo "#include \"${path}${file_name}${extension}\"" >> "${path}${file_name}_rtc_shim_${int}${extension}"
     fi
     int=$((int+1))
-  done <<< "$var"
-done <<< "$variable"
-
-/usr/local/rtc/python/3.12/bin/python shim_replacer.py
-rm shim_temp_file.txt
+  done <<< "$files_to_replace"
+done <<< "$repeated_names"
