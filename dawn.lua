@@ -117,6 +117,7 @@ defines {
   "STRIP_LOG=1", -- Prevent abseil-cpp making restricted windows calls for stack tracing
   "TINT_BUILD_WGSL_READER=1",
   "TINT_BUILD_WGSL_WRITER=1",
+  "TINT_BUILD_SPV_READER=0",
 }
 
 includedirs {
