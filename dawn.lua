@@ -49,7 +49,6 @@ local enable_linux = false
 local enable_win = false
 
 -- Shader languages
-local enable_glsl = false
 local enable_hlsl = false
 local enable_msl = false
 local enable_spirv = false
@@ -714,28 +713,6 @@ end
 --
 -- Shader language specifics
 --
-
-if (enable_glsl) then
-
-  files {
-    -- CMake target: tint_lang_glsl_validate
-    "src/tint/lang/glsl/validate/validate.cc",
-
-    -- CMake target: tint_lang_glsl_writer
-    "src/tint/lang/glsl/writer/output_rtc_shim1.cc",
-    "src/tint/lang/glsl/writer/writer_rtc_shim2.cc",
-    "src/tint/lang/glsl/writer/ast_printer/ast_printer_rtc_shim1.cc",
-    "src/tint/lang/glsl/writer/ast_raise/combine_samplers.cc",
-    "src/tint/lang/glsl/writer/ast_raise/pad_structs.cc",
-    "src/tint/lang/glsl/writer/ast_raise/texture_1d_to_2d.cc",
-    "src/tint/lang/glsl/writer/ast_raise/texture_builtins_from_uniform.cc",
-    "src/tint/lang/glsl/writer/common/options_rtc_shim2.cc",
-    "src/tint/lang/glsl/writer/common/printer_support_rtc_shim.cc",
-    "src/tint/lang/glsl/writer/printer/printer_rtc_shim1.cc",
-    "src/tint/lang/glsl/writer/raise/raise_rtc_shim1.cc",
-  }
-
-end
 
 if (enable_hlsl) then
 
