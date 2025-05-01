@@ -18,7 +18,7 @@ parent_paths = {
 }
 
 # file names that are platform specific but are in the common area
-special_file_names = ["_mac.", "Windows", "linux", "posix", "SpirvValidation", "Surface_metal"]
+special_file_names = ["_mac.", "Windows", "windows", "linux", "posix", "SpirvValidation", "Surface_metal", "IOSurfaceUtils"]
 special_files = []
 
 excludes = ["src/dawn/wire", "src/dawn/utils", "/glsl/", "src/tint/cmd"]
