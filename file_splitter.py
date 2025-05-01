@@ -57,11 +57,11 @@ def prepare():
 
 
         for parent_path in parent_paths:
-            regex = r'(?m)-- {}.*\n((^\ *\"(.|\n)*?)*?)((  -- )|(}}))'.format(parent_path)
+            regex = r'(?m)-- {}.*\n((^\ *\".*\",\n)*?)\n((\ *-- )|(\ *}}))'.format(parent_path)
             regex_pattern = re.compile(regex)
             match = re.search(regex, content)
-            files = match.group(1)
-            if files != None:
+            if match != None:
+                files = match.group(1)
                 print("match")
                 regex = re.compile(r'(?m)^ *\"(src/.*?)\",.*')
                 files = re.sub(regex, r'\1', files)
