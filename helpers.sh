@@ -63,9 +63,9 @@ function _run_visual_studio_native_tools_command() {
   # Parameter 1: the command to run
   local command="${*:1}" # capture the input as a single string to pass along to the native tools
 
-  local arch= uname -m
-  if [ "${arch}" == "x86_64"]; then
-    arch= "x64"
+  local arch=`uname -m`
+  if [ "$arch" == "x86_64" ]; then
+    arch="x64"
   fi
 
   # find the native tools path by checking common installations
@@ -73,10 +73,12 @@ function _run_visual_studio_native_tools_command() {
 
   # arch
   local vcvarsall_parameters="${arch} "
+  windows_target_sdk="10.0.19041.0"
+  vcvarsall_parameters+="${windows_target_sdk} "
+  echo $vcvarsall_parameters
 
   # not sure if these are needed???
   # winsdk_version
-  #vcvarsall_parameters+="${windows_target_sdk} "
   # vcvars_ver
   #vcvarsall_parameters+="-vcvars_ver=${msvc_version}"
 

@@ -4,8 +4,8 @@ import sys
 import re
 
 os = sys.argv[1]
-compile_commands = sys.argv[2]
-overwrite = int(sys.argv[3])
+overwrite = int(sys.argv[2])
+
 
 os_includes = {
     "linux" : ["/vulkan/", "/spirv/"],
@@ -69,7 +69,12 @@ def prepare():
 # It will be dependent on the OS
 # The files that are common to all the operating systems will be put into the global dictionary
 def file_to_list():
+    compile_commands = open('temp_file', 'r')
+    compile_commands = compile_commands.read()
+    if os == "windows":
+        compile_commands = re.sub(r'\\\\', '/', compile_commands)
     lines = compile_commands.splitlines()
+
     regex = re.compile('\"file\": \".*/dawn/(src/.*)\",')
     platform_paths = os_includes[os]
 

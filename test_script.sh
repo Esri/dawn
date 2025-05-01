@@ -42,7 +42,7 @@ cd temp_dawn_build
 # Create command and run it to generate compile_commands.json
 command="../dawn -DDAWN_FETCH_DEPENDENCIES=ON -DDAWN_BUILD_TESTS=OFF -DDAWN_BUILD_SAMPLES=OFF -DTINT_BUILD_TESTS=OFF -DDAWN_USE_GLFW=OFF -DPython3_EXECUTABLE=${python_dir} -DDAWN_ENABLE_OPENGLES=OFF -DDAWN_ENABLE_DESKTOP_GL=OFF"
 if [[ "${os}" == "windows" ]]; then
-  command= "-GNinja ${command}"
+  command="-GNinja ${command}"
   _run_visual_studio_native_tools_command "${cmake_path} ${command}"
 else
   ${cmake_path} ${command}
@@ -50,14 +50,15 @@ fi
 
 cd ../dawn
 
-# Updade dawn.lua file with the correct file includes
-include_files=`grep "file" ../temp_dawn_build/compile_commands.json`
-${python_dir} ./file_splitter.py $os "${include_files}" "${overwrite}"
+# Update dawn.lua file with the correct file includes
+grep "file" ../temp_dawn_build/compile_commands.json > temp_file
+${python_dir} ./file_splitter.py $os "${overwrite}"
 
 # Run the shim script to add shim files for windows
 ./shim_script.sh
 
 # remove temporary build directory
+rm ./temp_file
 rm -r ../temp_dawn_build
 
 
