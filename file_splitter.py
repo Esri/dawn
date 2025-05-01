@@ -21,7 +21,7 @@ parent_paths = {
 special_file_names = ["_mac.", "Windows", "linux", "posix", "SpirvValidation", "Surface_metal"]
 special_files = []
 
-excludes = ["src/dawn/wire", "src/dawn/utils", "/glsl/"]
+excludes = ["src/dawn/wire", "src/dawn/utils", "/glsl/", "src/tint/cmd"]
 for target_os, includes in os_includes.items():
     if target_os != os:
         for include in includes:
