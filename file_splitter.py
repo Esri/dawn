@@ -39,9 +39,9 @@ def prepare():
             all_parents.update(value)
 
         for parent in all_parents:
-            regex = r'(?m)(-- {}(.|\n)*?)^\ *\"(.|\n)*?((  --)|(}}))'.format(parent)
+            regex = r'(?m)(-- {}.*?\n)^\ *\"(.|\n)*?((  --)|(}}))'.format(parent)
             regex_pattern = re.compile(regex)
-            content = re.sub(regex_pattern, r'\1' + r'\n\4', content)
+            content = re.sub(regex_pattern, r'\1' + r'\3', content)
 
         lua_file.close()
         lua_file = open('dawn.lua', 'w')
