@@ -15,21 +15,12 @@ done
 
 python_dir=/usr/local/rtc/python/3.12/bin/python
 cmake_path="/usr/local/rtc/cmake/3.29.2/bin/cmake"
-enable_vulkan="ON"
-fetch_dependencies="ON"
 
 # If on winows update paths
 if [[ "${os}" == "windows" ]]; then
   cmake_path="${cmake_path/\/usr\/local/C:}"
   python_dir="${C:/rtc/python/3.12/Scripts/python.exe}"
 fi
-
-#windows: which is needed???
-#ninja_path="/usr/local/rtc/ninja/1.11.1/bin"
-#ninja_path="${ninja_path/\/usr\/local/c:}"
-#ninja_path="c:/rtc/ninja/1.11.1/bin"
-#export PATH=$PATH':/c/rtc/llvm/19.1.2/bin"'
-#export PATH=$PATH':/c/rtc/ninja/1.11.1/bin' cant remember which one it was
 
 # Delete shim files and revert lua file includes to their normal names
 find . -name "*rtc_shim*" -delete
