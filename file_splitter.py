@@ -6,7 +6,6 @@ import re
 os = sys.argv[1]
 overwrite = int(sys.argv[2])
 
-
 os_includes = {
     "linux" : ["/vulkan/", "/spirv/"],
     "macos" : ["/metal/", "/msl/"],
@@ -14,18 +13,20 @@ os_includes = {
 }
 
 parent_paths = {
-    "src/dawn/native" : set(),
-    "src/dawn/common" : set(),
-    "src/dawn/platform" : set(),
-    "src/tint/api" : set(),
-    "src/tint/lang/core" : set(),
-    "src/tint/lang/wgsl" : set(),
-    "src/tint/utils" : set(),
+    "src/dawn/" : set(),
+    "src/tint/" : set(),
 }
 
 # file names that are platform specific but are in the common area
 special_file_names = ["_mac.", "Windows", "linux", "posix", "SpirvValidation", "Surface_metal"]
 special_files = []
+
+excludes = ["src/dawn/wire", "src/dawn/utils", "/glsl/"]
+for target_os, includes in os_includes.items():
+    if target_os != os:
+        for include in includes:
+            if not include in os_includes[os]:
+                excludes.append(include)
 
 def prepare():
         
@@ -38,7 +39,7 @@ def prepare():
             all_parents.update(value)
 
         for parent in all_parents:
-            regex = r'(?m)(-- CMake target: {}(.|\n)*?)^\ *\"(.|\n)*?((  -- CMake target)|(}}))'.format(parent)
+            regex = r'(?m)(-- {}(.|\n)*?)^\ *\"(.|\n)*?((  --)|(}}))'.format(parent)
             regex_pattern = re.compile(regex)
             content = re.sub(regex_pattern, r'\1' + r'\n\4', content)
 
@@ -56,7 +57,7 @@ def prepare():
 
 
         for parent_path, parent_files in parent_paths.items():
-            regex = r'(?m)-- CMake target: {}(.|\n)*?(^\ *\"(.|\n)*?)*?((  -- CMake target)|(}}))'.format(parent_path)
+            regex = r'(?m)-- {}(.|\n)*?(^\ *\"(.|\n)*?)*?((  -- )|(}}))'.format(parent_path)
             regex_pattern = re.compile(regex)
             match = re.search(regex, content)
             files = match.group(2)
@@ -88,6 +89,11 @@ def file_to_list():
                 if special_file_name in line:
                     special_files.append(line)
                     found = True
+                    break
+            for exclude in excludes:
+                if exclude in line:
+                    found = True
+                    break
             if not found:
                 # need to iterate over the dictionary in reversed order so that the specific os paths will be added to their
                 # correct area instead of the common area
@@ -112,7 +118,7 @@ def update_lua_file():
         if parent_path.startswith("/"):
             whitespace = "    "
         to_insert = create_string(list(parent_files), whitespace)
-        regex = r'(?m)(-- CMake target: {}(.|\n)*?)(^\ *\"(.|\n)*?)*?((  -- CMake target)|(}}))'.format(parent_path)
+        regex = r'(?m)(-- {}(.|\n)*?)(^\ *\"(.|\n)*?)*?((  --)|(}}))'.format(parent_path)
         regex_pattern = re.compile(regex)
         content_new = re.sub(regex_pattern, r'\1' + to_insert + r'\n\5', content_new)
     
