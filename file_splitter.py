@@ -56,15 +56,19 @@ def prepare():
             parent_paths[include] = set()
 
 
-        for parent_path, parent_files in parent_paths.items():
-            regex = r'(?m)-- {}(.|\n)*?(^\ *\"(.|\n)*?)*?((  -- )|(}}))'.format(parent_path)
+        for parent_path in parent_paths:
+            regex = r'(?m)-- {}.*\n((^\ *\"(.|\n)*?)*?)((  -- )|(}}))'.format(parent_path)
             regex_pattern = re.compile(regex)
             match = re.search(regex, content)
-            files = match.group(2)
+            files = match.group(1)
+            if files != None:
+                print("match")
+                regex = re.compile(r'(?m)^ *\"(src/.*?)\",.*')
+                files = re.sub(regex, r'\1', files)
+                parent_paths[parent_path] = set(files.splitlines())
+            else:
+                print("no match")
 
-            regex = re.compile(r'(?m)^ *\"(src/.*?)\",.*')
-            files = re.sub(regex, r'\1' + '\n', files)
-            parent_files = set(files.splitlines())
 
 # Seperate the files we want to include into their parent directories
 # It will be dependent on the OS
@@ -140,6 +144,9 @@ def update_lua_file():
 
 
 prepare()
+to_print = parent_paths["src/tint/"]
+for x in to_print:
+    print(x)
 file_to_list()
 update_lua_file()
 
