@@ -168,8 +168,10 @@ includedirs {
 -- grep '\.c.*' dawn.lua | sed 's/^\ *\".*\/\([a-zA-Z0-9_]*\)\.[cp]*\"\,/\L\1/' | sort | uniq -d
 
 files {
-  -- CMake target: src/dawn/native/
   DAWN_GEN_OUTPUT_DIR.."/src/dawn/native/**.cpp",
+  DAWN_GEN_OUTPUT_DIR.."/src/dawn/common/**.cpp",
+
+  -- src/dawn/
   "src/dawn/native/DawnNative.cpp",
   "src/dawn/native/Adapter.cpp",
   "src/dawn/native/ApplyClearColorValueWithDrawHelper.cpp",
@@ -262,9 +264,6 @@ files {
   "src/dawn/native/stream/ByteVectorSink.cpp",
   "src/dawn/native/stream/Stream.cpp",
   "src/dawn/native/utils/WGPUHelpers.cpp",
-
-  -- CMake target: src/dawn/common
-  DAWN_GEN_OUTPUT_DIR.."/src/dawn/common/**.cpp",
   "src/dawn/common/AlignedAlloc.cpp",
   "src/dawn/common/Assert.cpp",
   "src/dawn/common/DynamicLib.cpp",
@@ -278,19 +277,15 @@ files {
   "src/dawn/common/SlabAllocator.cpp",
   "src/dawn/common/SystemUtils.cpp",
   "src/dawn/common/WeakRefSupport.cpp",
-
-  -- CMake target: src/dawn/platform
   "src/dawn/platform/DawnPlatform.cpp",
   "src/dawn/platform/WorkerThread.cpp",
   "src/dawn/platform/metrics/HistogramMacros.cpp",
   "src/dawn/platform/tracing/EventTracer.cpp",
 
-  -- CMake target: src/tint/api
+  -- src/tint/
   "src/tint/api/tint.cc",
   "src/tint/api/common/common.cc",
   "src/tint/api/options/options.cc",
-
-  -- CMake target: src/tint/lang/core
   "src/tint/lang/core/access.cc",
   "src/tint/lang/core/address_space.cc",
   "src/tint/lang/core/attribute.cc",
@@ -422,8 +417,6 @@ files {
   "src/tint/lang/core/type/unique_node.cc",
   "src/tint/lang/core/type/vector.cc",
   "src/tint/lang/core/type/void.cc",
-
-  -- CMake target: src/tint/lang/wgsl
   "src/tint/lang/wgsl/builtin_fn_rtc_shim1.cc",
   "src/tint/lang/wgsl/diagnostic_rule.cc",
   "src/tint/lang/wgsl/diagnostic_severity.cc",
@@ -619,8 +612,6 @@ files {
   "src/tint/lang/wgsl/writer/raise/rename_conflicts.cc",
   "src/tint/lang/wgsl/writer/raise/value_to_let_rtc_shim.cc",
   "src/tint/lang/wgsl/writer/syntax_tree_printer/syntax_tree_printer.cc",
-
-  -- CMake target: src/tint/utils
   "src/tint/utils/bytes/buffer_reader.cc",
   "src/tint/utils/bytes/bytes.cc",
   "src/tint/utils/bytes/reader_rtc_shim1.cc",
@@ -662,7 +653,6 @@ files {
 if (enable_android) then
 
   files {
-    -- CMake target: dawn_native
     "src/dawn/native/AHBFunctions.cpp",
   }
 
@@ -675,7 +665,6 @@ if (enable_apple) then
   }
 
   files {
-    -- CMake target: dawn_common
     "src/dawn/common/IOSurfaceUtils.cpp",
     "src/dawn/common/SystemUtils_mac.mm",
   }
@@ -704,7 +693,6 @@ if (enable_win) then
   }
 
   files {
-    -- CMake target: dawn_common
     "src/dawn/common/WindowsUtils.cpp",
   }
 
@@ -722,7 +710,7 @@ if (enable_hlsl) then
   }
 
   files {
-    -- CMake target: /hlsl/
+    -- /hlsl/
     "src/tint/lang/hlsl/validate/validate_rtc_shim1.cc",
     "src/tint/lang/hlsl/writer/output_rtc_shim2.cc",
     "src/tint/lang/hlsl/writer/writer_rtc_shim3.cc",
@@ -747,7 +735,7 @@ if (enable_msl) then
   }
 
   files {
-    -- CMake target: /msl/
+    -- /msl/
     "src/tint/lang/msl/builtin_fn_rtc_shim3.cc",
     "src/tint/lang/msl/intrinsic/data_rtc_shim3.cc",
     "src/tint/lang/msl/ir/builtin_call_rtc_shim2.cc",
@@ -788,7 +776,7 @@ if (enable_spirv) then
   }
 
   files {
-    -- CMake target: /spirv/
+    -- /spirv/
     "src/tint/lang/spirv/builtin_fn_rtc_shim4.cc",
     "src/tint/lang/spirv/intrinsic/data_rtc_shim4.cc",
     "src/tint/lang/spirv/ir/builtin_call_rtc_shim3.cc",
@@ -856,7 +844,7 @@ if (enable_d3d12) then -- or d3d11
   }
 
   files {
-    -- CMake target: /d3d/
+    -- /d3d/
     "src/dawn/native/d3d/BackendD3D.cpp",
     "src/dawn/native/d3d/BlobD3D.cpp",
     "src/dawn/native/d3d/D3DError.cpp",
@@ -885,7 +873,7 @@ if (enable_d3d12) then
   }
 
   files {
-    -- CMake target: /d3d12/
+    -- /d3d12/
     "src/dawn/native/d3d12/BackendD3D12.cpp",
     "src/dawn/native/d3d12/BindGroupD3D12.cpp",
     "src/dawn/native/d3d12/BindGroupLayoutD3D12.cpp",
@@ -935,7 +923,7 @@ if (enable_metal) then
   }
 
   files {
-    -- CMake target: /metal/
+    -- /metal/
     "src/dawn/native/Surface_metal.mm",
     "src/dawn/native/metal/BackendMTL.mm",
     "src/dawn/native/metal/BindGroupLayoutMTL.mm",
@@ -974,7 +962,7 @@ if (enable_vulkan) then
   }
 
   files {
-    -- CMake target: /vulkan/
+    -- /vulkan/
     "src/dawn/native/SpirvValidation.cpp",
     "src/dawn/native/vulkan/BackendVk.cpp",
     "src/dawn/native/vulkan/BindGroupLayoutVk.cpp",
@@ -1010,7 +998,6 @@ if (enable_vulkan) then
     "src/dawn/native/vulkan/external_memory/MemoryServiceImplementation.cpp",
     "src/dawn/native/vulkan/external_semaphore/SemaphoreService.cpp",
     "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementation.cpp",
-
     "src/dawn/native/vulkan/VulkanBackend.cpp",
   }
 
