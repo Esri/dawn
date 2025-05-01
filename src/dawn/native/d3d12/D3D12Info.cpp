@@ -35,6 +35,15 @@
 #include "dawn/native/d3d12/PhysicalDeviceD3D12.h"
 #include "dawn/native/d3d12/PlatformFunctionsD3D12.h"
 
+typedef struct D3D12_FEATURE_DATA_D3D12_OPTIONS13 {
+    BOOL UnrestrictedBufferTextureCopyPitchSupported;
+    BOOL UnrestrictedVertexElementAlignmentSupported;
+    BOOL InvertedViewportHeightFlipsYSupported;
+    BOOL InvertedViewportDepthFlipsZSupported;
+    BOOL TextureCopyBetweenDimensionsSupported;
+    BOOL AlphaBlendFactorSupported;
+  } D3D12_FEATURE_DATA_D3D12_OPTIONS13;
+
 namespace dawn::native::d3d12 {
 
 ResultOrError<D3D12DeviceInfo> GatherDeviceInfo(const PhysicalDevice& physicalDevice) {
@@ -110,7 +119,7 @@ ResultOrError<D3D12DeviceInfo> GatherDeviceInfo(const PhysicalDevice& physicalDe
 
     D3D12_FEATURE_DATA_D3D12_OPTIONS13 featureOptions13 = {};
     if (SUCCEEDED(physicalDevice.GetDevice()->CheckFeatureSupport(
-            D3D12_FEATURE_D3D12_OPTIONS13, &featureOptions13, sizeof(featureOptions13)))) {
+            static_cast<D3D12_FEATURE>(D3D12_FEATURE_D3D12_OPTIONS13), &featureOptions13, sizeof(featureOptions13)))) {
         info.supportsTextureCopyBetweenDimensions =
             featureOptions13.TextureCopyBetweenDimensionsSupported;
         info.supportsUnrestrictedBufferTextureCopyPitch =
