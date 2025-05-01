@@ -40,7 +40,7 @@ mkdir temp_dawn_build
 cd temp_dawn_build
 
 # Create command and run it to generate compile_commands.json
-command="../dawn -DDAWN_FETCH_DEPENDENCIES=ON -DDAWN_BUILD_TESTS=OFF -DDAWN_BUILD_SAMPLES=OFF -DTINT_BUILD_TESTS=OFF -DDAWN_USE_GLFW=OFF -DPython3_EXECUTABLE=${python_dir} -DDAWN_ENABLE_OPENGLES=OFF -DDAWN_ENABLE_DESKTOP_GL=OFF"
+command="../dawn -DDAWN_FETCH_DEPENDENCIES=ON -DDAWN_BUILD_TESTS=OFF -DDAWN_BUILD_SAMPLES=OFF -DTINT_BUILD_TESTS=OFF -DDAWN_USE_GLFW=OFF -DPython3_EXECUTABLE=${python_dir} -DDAWN_ENABLE_OPENGLES=OFF -DDAWN_ENABLE_DESKTOP_GL=OFF -DDAWN_ENABLE_D3D11=OFF"
 if [[ "${os}" == "windows" ]]; then
   command="-GNinja ${command}"
   _run_visual_studio_native_tools_command "${cmake_path} ${command}"
