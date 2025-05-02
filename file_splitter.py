@@ -18,7 +18,7 @@ parent_paths = {
 }
 
 # file names that are platform specific but are in the common area
-special_file_names = ["_mac.", "Windows", "windows", "linux", "posix", "SpirvValidation", "Surface_metal", "IOSurfaceUtils"]
+special_file_names = ["_mac.", "Windows", "windows", "linux", "posix", "SpirvValidation", "Surface_metal", "IOSurfaceUtils", "X11"]
 special_files = []
 
 excludes = ["src/dawn/wire", "src/dawn/utils", "/glsl/", "src/tint/cmd"]
@@ -145,8 +145,6 @@ def update_lua_file():
 
 prepare()
 to_print = parent_paths["src/tint/"]
-for x in to_print:
-    print(x)
 file_to_list()
 update_lua_file()
 

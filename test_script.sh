@@ -11,6 +11,11 @@ while getopts "o" flag; do
   esac
 done
 
+c_comp="/usr/local/rtc/llvm/19.1.2/bin/clang"
+cxx_comp="/usr/local/rtc/llvm/19.1.2/bin/clang++"
+x11_include="/usr/local/rtc/sysroot/redhat8.4/x86_64/usr/include"
+x11_lib="/usr/local/rtc/sysroot/redhat8.4/x86_64/usr/lib64/libX11.so"
+
 #export PATH=$PATH:"C:/rtc/ninja/1.11.1/bin/"
 
 python_dir=/usr/local/rtc/python/3.12/bin/python
@@ -31,7 +36,7 @@ mkdir temp_dawn_build
 cd temp_dawn_build
 
 # Create command and run it to generate compile_commands.json
-command="../dawn -DDAWN_FETCH_DEPENDENCIES=ON -DDAWN_BUILD_TESTS=OFF -DDAWN_BUILD_SAMPLES=OFF -DTINT_BUILD_TESTS=OFF -DDAWN_USE_GLFW=OFF -DPython3_EXECUTABLE=${python_dir} -DDAWN_ENABLE_OPENGLES=OFF -DDAWN_ENABLE_DESKTOP_GL=OFF -DDAWN_ENABLE_D3D11=OFF"
+command="../dawn -DDAWN_FETCH_DEPENDENCIES=ON -DX11_X11_INCLUDE_PATH=${x11_include} -DX11_X11_LIB=${x11_lib} -DCMAKE_C_COMPILER=${c_comp} -DCMAKE_CXX_COMPILER=${cxx_comp} -DDAWN_BUILD_TESTS=OFF -DDAWN_BUILD_SAMPLES=OFF -DTINT_BUILD_TESTS=OFF -DDAWN_USE_GLFW=OFF -DPython3_EXECUTABLE=${python_dir} -DDAWN_ENABLE_OPENGLES=OFF -DDAWN_ENABLE_DESKTOP_GL=OFF -DDAWN_ENABLE_D3D11=OFF"
 if [[ "${os}" == "windows" ]]; then
   command="-GNinja ${command}"
   _run_visual_studio_native_tools_command "${cmake_path} ${command}"
