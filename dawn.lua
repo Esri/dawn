@@ -926,11 +926,8 @@ if (enable_vulkan) then
     "src/dawn/native/vulkan/VulkanInfo.cpp",
     "src/dawn/native/vulkan/external_memory/MemoryService.cpp",
     "src/dawn/native/vulkan/external_memory/MemoryServiceImplementation.cpp",
-    "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf_rtc_shim_1.cpp",
-    "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD_rtc_shim_1.cpp",
     "src/dawn/native/vulkan/external_semaphore/SemaphoreService.cpp",
     "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementation.cpp",
-    "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD_rtc_shim_1.cpp",
 
 }
 
@@ -946,8 +943,8 @@ if (enable_vulkan) then
   if (_PLATFORM_LINUX) then
 
     files {
-      "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf_rtc_shim_1.cpp",
-      "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD_rtc_shim_1.cpp",
+      "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf.cpp",
+      "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD.cpp",
       "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD_rtc_shim_1.cpp",
     }
   end
