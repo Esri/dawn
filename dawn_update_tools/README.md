@@ -2,6 +2,37 @@
 
 In this folder, are some tools to automate some of the process of updating the Dawn library. They should help you update `dawn.lua` and create shim files needed by Windows. There could be some extra steps needed that will be explained further down.
 
+## Shim files
+The Dawn library contains many source files that have the same name. This confuses the premake/lua build system on windows currently used by RTC, which assumes each translation unit has a unique file name, discarding the leading path.
+
+E.g. both the following source files lead to a .o file written to
+to the same output location. One will overwrite the other.
+
+  "src/tint/lang/core/ir/function.cc",
+  "src/tint/lang/wgsl/ast/function.cc",
+
+To remedy this, the runtimecore branch introduces "shim" files with unique names which simply include the original. We build the shim file which results in uniquely named .o files.
+
+E.g.:
+
+```lua
+  "src/tint/lang/core/ir/function.cc",
+  "src/tint/lang/wgsl/ast/function_rtc_shim1.cc",
+```
+
+where the content of "src/tint/lang/wgsl/ast/function_rtc_shim1.cc" is simply:
+
+``` cpp
+  #include "function.cc"
+```
+
+This conflict is case and suffix insensitive. E.g. the following files lead to conflicting .o files:
+
+```lua
+ "src/dawn/native/Texture.cpp",
+ "src/tint/lang/core/type/texture.cc",
+```
+
 ## Pre checks
 
 Before running the script, check that all rtc dependencies are up to date in `variables.sh`. These are copied from runtimecore so may need updating.
