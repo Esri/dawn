@@ -2,11 +2,29 @@
 
 source $(dirname ${BASH_SOURCE})/helpers.sh
 
+function _display_help_dialog() {
+  echo "================================================================================"
+  echo "Usage: update_lua_file.sh [OPTION]..."
+  echo
+  echo "Description: The update_lua_file.sh script updates dawn.lua with the necessary includes to build the library."
+  echo "              It also produces shim files for the windows build."
+  echo
+  echo " -o      Remove the current includes in dawn.lua. Run with this option if this is the first OS you are updating on."
+  echo "          Optional"
+  echo
+  echo " -h      Displays this help dialog."
+  echo "          Optional"
+  echo "================================================================================"
+  exit 0
+}
 overwrite=0
-while getopts "o" flag; do
+while getopts "oh" flag; do
   case $flag in 
     o)
     overwrite=1
+    ;;
+    h)
+    _display_help_dialog
     ;;
   esac
 done
