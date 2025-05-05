@@ -2,6 +2,15 @@
 
 source $(dirname ${BASH_SOURCE})/variables.sh
 
+os="$(uname)"
+if [[ "${os}" == *"Darwin"* ]]; then
+  os="macos"
+elif [[ "${os}" == *"Linux"* ]]; then
+  os="linux"
+else
+  os="windows"
+fi
+
 function _sed_inplace() {
   # copied from runtimecore
   # sed helper function to encapsulate the different ways to invoke sed
