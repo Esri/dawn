@@ -19,7 +19,13 @@ include_files = {
 
 # FIle names that are platform specific but have parent directories that are shared between platforms. We need to handle these differently.
 special_file_names = ["_mac.", "Windows", "windows", "linux", "posix", "SpirvValidation", "Surface_metal", "IOSurfaceUtils", "X11"]
+special_file_names_vulkan_linux = [
+    "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf.cpp",
+    "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD.cpp",
+    "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD.cpp",
+]
 special_files = []
+special_file_linux = []
 
 # Exclude the files that are in these parent directories.
 excludes = ["src/dawn/wire", "src/dawn/utils", "/glsl/", "src/tint/cmd"]
@@ -59,7 +65,6 @@ def prepare():
         for include in os_includes[os]:
             include_files[include] = set()
 
-
         for parent_path in include_files:
             regex = r'(?m)-- {}.*\n((^\ *\".*\",\n)*?)\n((\ *-- )|(\ *}}))'.format(parent_path)
             regex_pattern = re.compile(regex)
@@ -92,6 +97,9 @@ def file_to_list():
                     special_files.append(line)
                     found = True
                     break
+            if line in special_file_names_vulkan_linux:
+                special_file_linux.append(line)
+                found = True
             for exclude in excludes:
                 if exclude in line:
                     found = True
@@ -124,7 +132,7 @@ def update_lua_file():
         regex_pattern = re.compile(regex)
         content_new = re.sub(regex_pattern, r'\1' + to_insert + r'\n\5', content_new)
     
-    # Deal with platform specific special files that share the common parent directories.
+    # Deal with platform specific special files that share common parent directories.
     # Add them to their OS group.
     special_area =""
     if os == "windows":
@@ -133,6 +141,9 @@ def update_lua_file():
         special_area = "apple"
     if os == "linux":
         special_area = "linux"
+        # Linux has some special Vulkan files
+        to_insert = create_lua_string(special_file_linux, "    ")
+        content_new = re.sub(r'(if \(enable_vulkan\) then(.|\n)*?if \(_PLATFORM_LINUX\) then(.|\n)*?files {{\n)(.|\n)*?}}', r'\1' + to_insert + '  }', content_new)
     to_insert = create_lua_string(special_files, "    ")
     content_new = re.sub(r'(if \(enable_{}\) then(.|\n)*?files {{\n)(.|\n)*?}}'.format(special_area), r'\1' + to_insert + '  }', content_new)
 
