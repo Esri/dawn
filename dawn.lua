@@ -38,6 +38,12 @@ os.execute(PYTHON_EXE.." "..DAWN_SRC_DIR.."/generator/dawn_json_generator.py --t
 -- WebGPU headers
 os.execute(PYTHON_EXE.." "..DAWN_SRC_DIR.."/generator/dawn_json_generator.py --template-dir "..DAWN_SRC_DIR.."/generator/templates --root-dir "..DAWN_SRC_DIR.." --output-dir "..DAWN_GEN_OUTPUT_DIR.." --dawn-json "..DAWN_SRC_DIR.."/src/dawn/dawn.json --wire-json "..DAWN_SRC_DIR.."/src/dawn/dawn_wire.json --targets webgpu_headers")
 
+if (_PLATFORM_WINDOWS) then
+  -- Generate a fix for Windows SDK
+  os.execute(PYTHON_EXE.." "..DAWN_SRC_DIR.."/windows_fix.py")
+
+end
+
 --
 -- Configure platforms
 --
@@ -950,7 +956,6 @@ if (enable_d3d12) then
   defines {
     "DAWN_ENABLE_BACKEND_D3D12",
     "D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE))",
-    "D3D12_FEATURE_D3D12_OPTIONS13=(42)",
   }
 
   files {
