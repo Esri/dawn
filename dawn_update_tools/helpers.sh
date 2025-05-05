@@ -12,7 +12,7 @@ else
 fi
 
 function _sed_inplace() {
-  # copied from runtimecore
+  # Copied and modified from runtimecore.
   # sed helper function to encapsulate the different ways to invoke sed
   # Parameter ${1}: The sed string
   # Parameter ${2}: The file to run sed on
@@ -28,7 +28,7 @@ function _sed_inplace() {
 visual_studio_install_path=
 
 function _get_visual_studio_install_path() {
-  # Copied from runtimecore
+  # Copied and modified from runtimecore.
   # checks the common installer paths and returns the installer path once it is found. The install paths all have spaces
   # due to Windows using it which needs to then be wrapped in "" once the full path is completed
   if [ -z "${visual_studio_install_path}" ]; then
@@ -51,7 +51,7 @@ function _get_visual_studio_install_path() {
 }
 
 function _run_visual_studio_native_tools_command() {
-  # Copied and modified from runtimecore
+  # Copied and modified from runtimecore.
   # Runs an input command using a native tools prompt. This provides access to the Visual Studio developer environment
   # that is not set on a normal cmd or bash prompt. The vcvarsall script expects and arch, platform_type, winsdk_version
   # and vcvars_ver. The arch and platform_type are required but the winsdk_version and vcvars_ver can be deduced from

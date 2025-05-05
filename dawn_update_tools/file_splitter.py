@@ -12,29 +12,33 @@ os_includes = {
     "windows" : ["/vulkan/", "/spirv/", "/d3d/", "/d3d12/", "/hlsl/"]
 }
 
-parent_paths = {
+include_files = {
     "src/dawn/" : set(),
     "src/tint/" : set(),
 }
 
-# file names that are platform specific but are in the common area
+# FIle names that are platform specific but have parent directories that are shared between platforms. We need to handle these differently.
 special_file_names = ["_mac.", "Windows", "windows", "linux", "posix", "SpirvValidation", "Surface_metal", "IOSurfaceUtils", "X11"]
 special_files = []
 
+# Exclude the files that are in these parent directories.
 excludes = ["src/dawn/wire", "src/dawn/utils", "/glsl/", "src/tint/cmd"]
+# Exclude parent directories that belong to other platforms.
 for target_os, includes in os_includes.items():
     if target_os != os:
         for include in includes:
             if not include in os_includes[os]:
                 excludes.append(include)
 
-def prepare():
-        
+# If overwriting, remove all current includes that have parent directories that are listed in include files and os_includes.
+# This allows you to start "fresh" by removing potentially any old includes that are not used anymore.
+# If not overwriting, it will update the include_files dictionary so that they are present files are not overwritten.
+def prepare(): 
     lua_file = open('../dawn.lua', 'r')
     content = lua_file.read()
 
     if overwrite:
-        all_parents = set(parent_paths.keys())
+        all_parents = set(include_files.keys())
         for key, value in os_includes.items():
             all_parents.update(value)
 
@@ -49,14 +53,14 @@ def prepare():
         lua_file.close()
 
         for include in os_includes[os]:
-            parent_paths[include] = set()
+            include_files[include] = set()
 
     else:
         for include in os_includes[os]:
-            parent_paths[include] = set()
+            include_files[include] = set()
 
 
-        for parent_path in parent_paths:
+        for parent_path in include_files:
             regex = r'(?m)-- {}.*\n((^\ *\".*\",\n)*?)\n((\ *-- )|(\ *}}))'.format(parent_path)
             regex_pattern = re.compile(regex)
             match = re.search(regex, content)
@@ -64,13 +68,11 @@ def prepare():
                 files = match.group(1)
                 regex = re.compile(r'(?m)^ *\"(src/.*?)\",.*')
                 files = re.sub(regex, r'\1', files)
-                parent_paths[parent_path] = set(files.splitlines())
+                include_files[parent_path] = set(files.splitlines())
 
-# Seperate the files we want to include into their parent directories
-# It will be dependent on the OS
-# The files that are common to all the operating systems will be put into the global dictionary
+# Read in the compile_commands.json file and group by their parent directories.
 def file_to_list():
-    compile_commands = open('temp_file', 'r')
+    compile_commands = open('temp_compile_commands', 'r')
     compile_commands = compile_commands.read()
     if os == "windows":
         compile_commands = re.sub(r'\\\\', '/', compile_commands)
@@ -95,14 +97,14 @@ def file_to_list():
                     found = True
                     break
             if not found:
-                # need to iterate over the dictionary in reversed order so that the specific os paths will be added to their
-                # correct area instead of the common area
-                for parent_path, parent_files in reversed(parent_paths.items()):
+                # We need to iterate over the dictionary in reversed order so that the files specific to the platform will
+                # be added to their specific group instead of the groups shared by all platforms.
+                for parent_path, parent_files in reversed(include_files.items()):
                     if parent_path in line:
                         parent_files.add(line)
                         break
 
-def create_string(lines, whitespace):
+def create_lua_string(lines, whitespace):
     result = ""
     lines.sort()
     for line in lines:
@@ -113,16 +115,17 @@ def update_lua_file():
     lua_file = open('../dawn.lua', 'r')
     content_new = lua_file.read()
 
-    for parent_path, parent_files in parent_paths.items():
+    for parent_path, parent_files in include_files.items():
         whitespace = "  "
         if parent_path.startswith("/"):
             whitespace = "    "
-        to_insert = create_string(list(parent_files), whitespace)
+        to_insert = create_lua_string(list(parent_files), whitespace)
         regex = r'(?m)(-- {}(.|\n)*?)(^\ *\"(.|\n)*?)*?((  --)|(}}))'.format(parent_path)
         regex_pattern = re.compile(regex)
         content_new = re.sub(regex_pattern, r'\1' + to_insert + r'\n\5', content_new)
     
-    # deal with edge cases
+    # Deal with platform specific special files that share the common parent directories.
+    # Add them to their OS group.
     special_area =""
     if os == "windows":
         special_area = "win"
@@ -130,8 +133,7 @@ def update_lua_file():
         special_area = "apple"
     if os == "linux":
         special_area = "linux"
-
-    to_insert = create_string(special_files, "    ")
+    to_insert = create_lua_string(special_files, "    ")
     content_new = re.sub(r'(if \(enable_{}\) then(.|\n)*?files {{\n)(.|\n)*?}}'.format(special_area), r'\1' + to_insert + '  }', content_new)
 
     lua_file = open('../dawn.lua', 'w')
@@ -140,7 +142,6 @@ def update_lua_file():
 
 
 prepare()
-to_print = parent_paths["src/tint/"]
 file_to_list()
 update_lua_file()
 

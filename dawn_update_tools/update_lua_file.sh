@@ -31,14 +31,13 @@ done
 
 python_path="/usr/local/rtc/python/${python_version}/bin/python"
 cmake_path="/usr/local/rtc/cmake/${cmake_version}/bin/cmake"
-
-# If on winows update paths
+# If on Windows alter paths.
 if [[ "${os}" == "windows" ]]; then
   cmake_path="${cmake_path/\/usr\/local/C:}"
   python_path="${C:/rtc/python/${python_version}/Scripts/python.exe}"
 fi
 
-# Delete shim files and revert lua file includes to their normal names
+# Delete existing shim files and revert them in dawn.lua to their original names.
 find .. -name "*rtc_shim*" -delete
 _sed_inplace "s|_rtc_shim_.*\.|.|" ../dawn.lua
 
@@ -46,7 +45,7 @@ cd ../..
 mkdir temp_dawn_build
 cd temp_dawn_build
 
-# Create command and run it to generate compile_commands.json
+# Create a build command and run it to generate compile_commands.json.
 command="../dawn "
 
 command_options=(\
@@ -69,6 +68,7 @@ for ((i=0; i<${#command_options[@]}; i++)) do
   command+="${command_options[${i}]} "
 done
 
+# Need to use Ninja on Windows to create the compile_command.json file."
 if [[ "${os}" == "windows" ]]; then
   command="-GNinja ${command}"
   _run_visual_studio_native_tools_command "${cmake_path} ${command}"
@@ -78,15 +78,15 @@ fi
 
 cd ../dawn/dawn_update_tools
 
-# Update dawn.lua file with the correct file includes
-grep "file" ../../temp_dawn_build/compile_commands.json > temp_file
+# Update dawn.lua with the correct file includes.
+grep "file" ../../temp_dawn_build/compile_commands.json > temp_compile_commands
 ${python_path} ./file_splitter.py $os "${overwrite}"
 
-# Run the shim script to add shim files for windows
+# Run the shim script to add shim files for Windows.
 ./shim_script.sh
 
 # remove temporary build directory
-rm ./temp_file
+rm ./temp_compile_commands
 rm -r ../../temp_dawn_build
 
 
