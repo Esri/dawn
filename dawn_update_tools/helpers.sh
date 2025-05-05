@@ -1,13 +1,6 @@
 #!/bin/bash
 
-os="$(uname)"
-if [[ "${os}" == *"Darwin"* ]]; then
-  os="macos"
-elif [[ "${os}" == *"Linux"* ]]; then
-  os="linux"
-else
-  os="windows"
-fi
+source $(dirname ${BASH_SOURCE})/variables.sh
 
 function _sed_inplace() {
   # copied from runtimecore
@@ -23,12 +16,6 @@ function _sed_inplace() {
 
 # Windows helpers
 
-visual_studio_install_paths=(\
-    "C:/Program Files/Microsoft Visual Studio/2022/Enterprise" \
-    "C:/Program Files/Microsoft Visual Studio/2022/Professional" \
-    "C:/Program Files/Microsoft Visual Studio/2022/Preview" \
-    "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools" \
-  )
 visual_studio_install_path=
 
 function _get_visual_studio_install_path() {
@@ -73,14 +60,8 @@ function _run_visual_studio_native_tools_command() {
 
   # arch
   local vcvarsall_parameters="${arch} "
-  windows_target_sdk="10.0.19041.0"
   vcvarsall_parameters+="${windows_target_sdk} "
   echo $vcvarsall_parameters
-
-  # not sure if these are needed???
-  # winsdk_version
-  # vcvars_ver
-  #vcvarsall_parameters+="-vcvars_ver=${msvc_version}"
 
   # windows cannot use the mingwin/cygwin environment as it requires using a windows cmd. Generate the bat file and
   # invoke it in order to correctly configure and run the build

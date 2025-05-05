@@ -30,7 +30,7 @@ for target_os, includes in os_includes.items():
 
 def prepare():
         
-    lua_file = open('dawn.lua', 'r')
+    lua_file = open('../dawn.lua', 'r')
     content = lua_file.read()
 
     if overwrite:
@@ -44,7 +44,7 @@ def prepare():
             content = re.sub(regex_pattern, r'\1' + r'\3', content)
 
         lua_file.close()
-        lua_file = open('dawn.lua', 'w')
+        lua_file = open('../dawn.lua', 'w')
         lua_file.write(content)
         lua_file.close()
 
@@ -62,13 +62,9 @@ def prepare():
             match = re.search(regex, content)
             if match != None:
                 files = match.group(1)
-                print("match")
                 regex = re.compile(r'(?m)^ *\"(src/.*?)\",.*')
                 files = re.sub(regex, r'\1', files)
                 parent_paths[parent_path] = set(files.splitlines())
-            else:
-                print("no match")
-
 
 # Seperate the files we want to include into their parent directories
 # It will be dependent on the OS
@@ -114,7 +110,7 @@ def create_string(lines, whitespace):
     return result
 
 def update_lua_file():
-    lua_file = open('dawn.lua', 'r')
+    lua_file = open('../dawn.lua', 'r')
     content_new = lua_file.read()
 
     for parent_path, parent_files in parent_paths.items():
@@ -138,7 +134,7 @@ def update_lua_file():
     to_insert = create_string(special_files, "    ")
     content_new = re.sub(r'(if \(enable_{}\) then(.|\n)*?files {{\n)(.|\n)*?}}'.format(special_area), r'\1' + to_insert + '  }', content_new)
 
-    lua_file = open('dawn.lua', 'w')
+    lua_file = open('../dawn.lua', 'w')
     lua_file.write(content_new)
     lua_file.close()
 
