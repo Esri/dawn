@@ -44,6 +44,9 @@ class SharedResourceMemoryContents;
 
 enum SharedResourceAccessState { NotAccessed, ExclusiveRead, SimultaneousRead, Write };
 
+// The interface for the resources that can be created from a SharedResourceMemory (SRM).
+// Note that in practice this is only Buffer and Texture and that some internals of SRM assume that
+// with static polymorphism.
 class SharedResource : public ApiObjectBase {
   public:
     using ApiObjectBase::ApiObjectBase;
@@ -77,18 +80,18 @@ class SharedResourceMemory : public ApiObjectBase, public WeakRefSupport<SharedR
     // Returns true if access was acquired. If it returns true, then APIEndAccess must
     // be called to release access. Other errors may occur even if `true` is returned.
     // Use an error scope to catch them.
-    bool APIBeginAccess(TextureBase* texture,
-                        const SharedTextureMemoryBeginAccessDescriptor* descriptor);
+    wgpu::Status APIBeginAccess(TextureBase* texture,
+                                const SharedTextureMemoryBeginAccessDescriptor* descriptor);
     // Returns true if access was released.
-    bool APIEndAccess(TextureBase* texture, SharedTextureMemoryEndAccessState* state);
+    wgpu::Status APIEndAccess(TextureBase* texture, SharedTextureMemoryEndAccessState* state);
 
     // Returns true if access was acquired. If it returns true, then APIEndAccess must
     // be called to release access. Other errors may occur even if `true` is returned.
     // Use an error scope to catch them.
-    bool APIBeginAccess(BufferBase* buffer,
-                        const SharedBufferMemoryBeginAccessDescriptor* descriptor);
+    wgpu::Status APIBeginAccess(BufferBase* buffer,
+                                const SharedBufferMemoryBeginAccessDescriptor* descriptor);
     // Returns true if access was released.
-    bool APIEndAccess(BufferBase* buffer, SharedBufferMemoryEndAccessState* state);
+    wgpu::Status APIEndAccess(BufferBase* buffer, SharedBufferMemoryEndAccessState* state);
 
     // Returns true iff the device passed to this object on creation is now lost.
     // TODO(crbug.com/1506468): Eliminate this API once Chromium has been
@@ -97,21 +100,21 @@ class SharedResourceMemory : public ApiObjectBase, public WeakRefSupport<SharedR
 
     SharedResourceMemoryContents* GetContents() const;
 
-    // Validate that the resource was created from this SharedResourceMemory.
-    MaybeError ValidateResourceCreatedFromSelf(SharedResource* resource);
-
   protected:
-    SharedResourceMemory(DeviceBase* device, ObjectBase::ErrorTag, const char* label);
+    SharedResourceMemory(DeviceBase* device, ObjectBase::ErrorTag, StringView label);
     using ApiObjectBase::ApiObjectBase;
 
   private:
     virtual Ref<SharedResourceMemoryContents> CreateContents();
 
+    // Validate that the resource was created from this SharedResourceMemory.
+    MaybeError ValidateResourceCreatedFromSelf(SharedResource* resource);
+
     template <typename Resource, typename BeginAccessDescriptor>
     MaybeError BeginAccess(Resource* resource, const BeginAccessDescriptor* rawDescriptor);
 
     template <typename Resource, typename EndAccessState>
-    MaybeError EndAccess(Resource* resource, EndAccessState* state, bool* didEnd);
+    MaybeError EndAccess(Resource* resource, EndAccessState* state);
 
     template <typename Resource, typename EndAccessState>
     ResultOrError<FenceAndSignalValue> EndAccessInternal(ExecutionSerial lastUsageSerial,
@@ -138,6 +141,7 @@ class SharedResourceMemory : public ApiObjectBase, public WeakRefSupport<SharedR
         ExecutionSerial lastUsageSerial,
         UnpackedPtr<SharedBufferMemoryEndAccessState>& state);
 
+    // If non-null, the SRM is exclusively accessed from that SR, used for validation.
     Ref<SharedResource> mExclusiveAccess;
     Ref<SharedResourceMemoryContents> mContents;
 };
@@ -163,11 +167,14 @@ class SharedResourceMemoryContents : public RefCounted {
   private:
     friend class SharedResourceMemory;
 
+    // The fences that must be waited on before the next use of the resource, whether that use is
+    // internal to Dawn or external (when exporting on EndAccess).
     PendingFenceList mPendingFences;
 
     SharedResourceAccessState mSharedResourceAccessState = SharedResourceAccessState::NotAccessed;
     int mReadAccessCount = 0;
 
+    // A pointer to the parent SRM that's a weak to prevent potential ref cycles.
     WeakRef<SharedResourceMemory> mSharedResourceMemory;
 };
 

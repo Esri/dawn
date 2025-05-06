@@ -27,10 +27,12 @@
 
 #include "src/tint/lang/core/ir/binary/encode.h"
 
+#include <sstream>
 #include <string>
 #include <utility>
 
 #include "src/tint/lang/core/builtin_fn.h"
+#include "src/tint/lang/core/builtin_type.h"
 #include "src/tint/lang/core/builtin_value.h"
 #include "src/tint/lang/core/constant/composite.h"
 #include "src/tint/lang/core/constant/scalar.h"
@@ -74,6 +76,7 @@
 #include "src/tint/lang/core/type/f16.h"
 #include "src/tint/lang/core/type/f32.h"
 #include "src/tint/lang/core/type/i32.h"
+#include "src/tint/lang/core/type/input_attachment.h"
 #include "src/tint/lang/core/type/matrix.h"
 #include "src/tint/lang/core/type/multisampled_texture.h"
 #include "src/tint/lang/core/type/pointer.h"
@@ -82,11 +85,12 @@
 #include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/lang/core/type/u32.h"
 #include "src/tint/lang/core/type/void.h"
+#include "src/tint/utils/internal_limits.h"
 #include "src/tint/utils/macros/compiler.h"
 #include "src/tint/utils/rtti/switch.h"
 
 TINT_BEGIN_DISABLE_PROTOBUF_WARNINGS();
-#include "src/tint/lang/core/ir/binary/ir.pb.h"
+#include "src/tint/utils/protos/ir/ir.pb.h"
 TINT_END_DISABLE_PROTOBUF_WARNINGS();
 
 namespace tint::core::ir::binary {
@@ -94,13 +98,16 @@ namespace {
 struct Encoder {
     const Module& mod_in_;
     pb::Module& mod_out_;
+
     Hashmap<const core::ir::Function*, uint32_t, 32> functions_{};
     Hashmap<const core::ir::Block*, uint32_t, 32> blocks_{};
     Hashmap<const core::type::Type*, uint32_t, 32> types_{};
     Hashmap<const core::ir::Value*, uint32_t, 32> values_{};
     Hashmap<const core::constant::Value*, uint32_t, 32> constant_values_{};
 
-    void Encode() {
+    std::stringstream err_{};
+
+    Result<SuccessType> Encode() {
         // Encode all user-declared structures first. This is to ensure that the IR disassembly
         // (which prints structure types first) does not reorder after encoding and decoding.
         for (auto* ty : mod_in_.Types()) {
@@ -118,6 +125,12 @@ struct Encoder {
             PopulateFunction(fns_out[i], mod_in_.functions[i]);
         }
         mod_out_.set_root_block(Block(mod_in_.root_block));
+
+        auto err = err_.str();
+        if (!err.empty()) {
+            return Failure{err};
+        }
+        return Success;
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -133,16 +146,19 @@ struct Encoder {
         }
         if (auto wg_size_in = fn_in->WorkgroupSize()) {
             auto& wg_size_out = *fn_out->mutable_workgroup_size();
-            wg_size_out.set_x((*wg_size_in)[0]);
-            wg_size_out.set_y((*wg_size_in)[1]);
-            wg_size_out.set_z((*wg_size_in)[2]);
+            wg_size_out.set_x(Value((*wg_size_in)[0]));
+            wg_size_out.set_y(Value((*wg_size_in)[1]));
+            wg_size_out.set_z(Value((*wg_size_in)[2]));
         }
         for (auto* param_in : fn_in->Params()) {
             fn_out->add_parameters(Value(param_in));
         }
         if (auto ret_loc_in = fn_in->ReturnLocation()) {
-            auto& ret_loc_out = *fn_out->mutable_return_location();
-            Location(ret_loc_out, *ret_loc_in);
+            fn_out->set_return_location(*ret_loc_in);
+        }
+        if (auto ret_interp_in = fn_in->ReturnInterpolation()) {
+            auto& ret_interp_out = *fn_out->mutable_return_interpolation();
+            Interpolation(ret_interp_out, *ret_interp_in);
         }
         if (auto builtin_in = fn_in->ReturnBuiltin()) {
             fn_out->set_return_builtin(BuiltinValue(*builtin_in));
@@ -261,6 +277,9 @@ struct Encoder {
     void InstructionBuiltinCall(pb::InstructionBuiltinCall& call_out,
                                 const ir::CoreBuiltinCall* call_in) {
         call_out.set_builtin(BuiltinFn(call_in->Func()));
+        for (auto* param : call_in->ExplicitTemplateParams()) {
+            call_out.add_explicit_template_params(Type(param));
+        }
     }
 
     void InstructionConstruct(pb::InstructionConstruct&, const ir::Construct*) {}
@@ -343,6 +362,9 @@ struct Encoder {
             auto& bp_out = *var_out.mutable_binding_point();
             BindingPoint(bp_out, *bp_in);
         }
+        if (auto iidx_in = var_in->InputAttachmentIndex()) {
+            var_out.set_input_attachment_index(iidx_in.value());
+        }
     }
 
     void InstructionUnreachable(pb::InstructionUnreachable&, const ir::Unreachable*) {}
@@ -387,6 +409,24 @@ struct Encoder {
                     TypeExternalTexture(*type_out.mutable_external_texture(), t);
                 },
                 [&](const core::type::Sampler* s) { TypeSampler(*type_out.mutable_sampler(), s); },
+                [&](const core::type::InputAttachment* i) {
+                    TypeInputAttachment(*type_out.mutable_input_attachment(), i);
+                },
+                [&]([[maybe_unused]] const core::type::SubgroupMatrix* s) {
+                    switch (s->Kind()) {
+                        case core::SubgroupMatrixKind::kLeft:
+                            TypeSubgroupMatrix(*type_out.mutable_subgroup_matrix_left(), s);
+                            break;
+                        case core::SubgroupMatrixKind::kRight:
+                            TypeSubgroupMatrix(*type_out.mutable_subgroup_matrix_right(), s);
+                            break;
+                        case core::SubgroupMatrixKind::kResult:
+                            TypeSubgroupMatrix(*type_out.mutable_subgroup_matrix_result(), s);
+                            break;
+                        default:
+                            TINT_ICE() << "invalid subgroup matrix kind: " << ToString(s->Kind());
+                    }
+                },
                 TINT_ICE_ON_NO_MATCH);
 
             mod_out_.mutable_types()->Add(std::move(type_out));
@@ -396,13 +436,13 @@ struct Encoder {
 
     void TypeVector(pb::TypeVector& vector_out, const core::type::Vector* vector_in) {
         vector_out.set_width(vector_in->Width());
-        vector_out.set_element_type(Type(vector_in->type()));
+        vector_out.set_element_type(Type(vector_in->Type()));
     }
 
     void TypeMatrix(pb::TypeMatrix& matrix_out, const core::type::Matrix* matrix_in) {
-        matrix_out.set_num_columns(matrix_in->columns());
-        matrix_out.set_num_rows(matrix_in->rows());
-        matrix_out.set_element_type(Type(matrix_in->type()));
+        matrix_out.set_num_columns(matrix_in->Columns());
+        matrix_out.set_num_rows(matrix_in->Rows());
+        matrix_out.set_element_type(Type(matrix_in->Type()));
     }
 
     void TypePointer(pb::TypePointer& pointer_out, const core::type::Pointer* pointer_in) {
@@ -452,44 +492,127 @@ struct Encoder {
         array_out.set_stride(array_in->Stride());
         tint::Switch(
             array_in->Count(),  //
-            [&](const core::type::ConstantArrayCount* c) { array_out.set_count(c->value); },
+            [&](const core::type::ConstantArrayCount* c) {
+                array_out.set_count(c->value);
+                if (c->value >= internal_limits::kMaxArrayElementCount) {
+                    err_ << "array count (" << c->value << ") must be less than "
+                         << internal_limits::kMaxArrayElementCount << "\n";
+                }
+            },
             [&](const core::type::RuntimeArrayCount*) { array_out.set_count(0); },
             TINT_ICE_ON_NO_MATCH);
     }
 
     void TypeDepthTexture(pb::TypeDepthTexture& texture_out,
                           const core::type::DepthTexture* texture_in) {
-        texture_out.set_dimension(TextureDimension(texture_in->dim()));
+        texture_out.set_dimension(TextureDimension(texture_in->Dim()));
     }
 
     void TypeSampledTexture(pb::TypeSampledTexture& texture_out,
                             const core::type::SampledTexture* texture_in) {
-        texture_out.set_dimension(TextureDimension(texture_in->dim()));
-        texture_out.set_sub_type(Type(texture_in->type()));
+        texture_out.set_dimension(TextureDimension(texture_in->Dim()));
+        texture_out.set_sub_type(Type(texture_in->Type()));
     }
 
     void TypeMultisampledTexture(pb::TypeMultisampledTexture& texture_out,
                                  const core::type::MultisampledTexture* texture_in) {
-        texture_out.set_dimension(TextureDimension(texture_in->dim()));
-        texture_out.set_sub_type(Type(texture_in->type()));
+        texture_out.set_dimension(TextureDimension(texture_in->Dim()));
+        texture_out.set_sub_type(Type(texture_in->Type()));
     }
 
     void TypeDepthMultisampledTexture(pb::TypeDepthMultisampledTexture& texture_out,
                                       const core::type::DepthMultisampledTexture* texture_in) {
-        texture_out.set_dimension(TextureDimension(texture_in->dim()));
+        texture_out.set_dimension(TextureDimension(texture_in->Dim()));
     }
 
     void TypeStorageTexture(pb::TypeStorageTexture& texture_out,
                             const core::type::StorageTexture* texture_in) {
-        texture_out.set_dimension(TextureDimension(texture_in->dim()));
-        texture_out.set_texel_format(TexelFormat(texture_in->texel_format()));
-        texture_out.set_access(AccessControl(texture_in->access()));
+        texture_out.set_dimension(TextureDimension(texture_in->Dim()));
+        texture_out.set_texel_format(TexelFormat(texture_in->TexelFormat()));
+        texture_out.set_access(AccessControl(texture_in->Access()));
     }
 
     void TypeExternalTexture(pb::TypeExternalTexture&, const core::type::ExternalTexture*) {}
+    void TypeInputAttachment(pb::TypeInputAttachment& input_attachment_out,
+                             const core::type::InputAttachment* input_attachment_in) {
+        input_attachment_out.set_sub_type(Type(input_attachment_in->Type()));
+    }
 
     void TypeSampler(pb::TypeSampler& sampler_out, const core::type::Sampler* sampler_in) {
-        sampler_out.set_kind(SamplerKind(sampler_in->kind()));
+        sampler_out.set_kind(SamplerKind(sampler_in->Kind()));
+    }
+
+    void TypeSubgroupMatrix(pb::TypeSubgroupMatrix& subgroup_matrix_out,
+                            const core::type::SubgroupMatrix* subgroup_matrix_in) {
+        subgroup_matrix_out.set_sub_type(Type(subgroup_matrix_in->Type()));
+        subgroup_matrix_out.set_columns(subgroup_matrix_in->Columns());
+        subgroup_matrix_out.set_rows(subgroup_matrix_in->Rows());
+    }
+
+    [[maybe_unused]] void TypeBuitinStruct(pb::Type& builtin_struct_out,
+                                           const core::type::Struct* builtin_struct_in) {
+        auto name = builtin_struct_in->Name().NameView();
+        auto builtin = ParseBuiltinType(name);
+        switch (builtin) {
+            case BuiltinType::kAtomicCompareExchangeResultI32:
+                builtin_struct_out.set_builtin_struct(
+                    pb::TypeBuiltinStruct::AtomicCompareExchangeResultI32);
+                break;
+            case BuiltinType::kAtomicCompareExchangeResultU32:
+                builtin_struct_out.set_builtin_struct(
+                    pb::TypeBuiltinStruct::AtomicCompareExchangeResultU32);
+                break;
+            case BuiltinType::kFrexpResultF16:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::FrexpResultF16);
+                break;
+            case BuiltinType::kFrexpResultF32:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::FrexpResultF32);
+                break;
+            case BuiltinType::kFrexpResultVec2F16:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::FrexpResultVec2F16);
+                break;
+            case BuiltinType::kFrexpResultVec2F32:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::FrexpResultVec2F32);
+                break;
+            case BuiltinType::kFrexpResultVec3F16:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::FrexpResultVec3F16);
+                break;
+            case BuiltinType::kFrexpResultVec3F32:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::FrexpResultVec3F32);
+                break;
+            case BuiltinType::kFrexpResultVec4F16:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::FrexpResultVec4F16);
+                break;
+            case BuiltinType::kFrexpResultVec4F32:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::FrexpResultVec4F32);
+                break;
+            case BuiltinType::kModfResultF16:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::ModfResultF16);
+                break;
+            case BuiltinType::kModfResultF32:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::ModfResultF32);
+                break;
+            case BuiltinType::kModfResultVec2F16:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::ModfResultVec2F16);
+                break;
+            case BuiltinType::kModfResultVec2F32:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::ModfResultVec2F32);
+                break;
+            case BuiltinType::kModfResultVec3F16:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::ModfResultVec3F16);
+                break;
+            case BuiltinType::kModfResultVec3F32:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::ModfResultVec3F32);
+                break;
+            case BuiltinType::kModfResultVec4F16:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::ModfResultVec4F16);
+                break;
+            case BuiltinType::kModfResultVec4F32:
+                builtin_struct_out.set_builtin_struct(pb::TypeBuiltinStruct::ModfResultVec4F32);
+                break;
+            default:
+                TINT_ICE() << "unhandled builtin struct " << name;
+        }
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -539,8 +662,14 @@ struct Encoder {
             BindingPoint(bp_out, *bp_in);
         }
         if (auto location_in = param_in->Location()) {
-            auto& location_out = *param_out.mutable_attributes()->mutable_location();
-            Location(location_out, *location_in);
+            param_out.mutable_attributes()->set_location(*location_in);
+        }
+        if (auto color_in = param_in->Color()) {
+            param_out.mutable_attributes()->set_color(*color_in);
+        }
+        if (auto interpolation_in = param_in->Interpolation()) {
+            auto& interpolation_out = *param_out.mutable_attributes()->mutable_interpolation();
+            Interpolation(interpolation_out, *interpolation_in);
         }
         if (auto builtin_in = param_in->Builtin()) {
             param_out.mutable_attributes()->set_builtin(BuiltinValue(*builtin_in));
@@ -605,6 +734,10 @@ struct Encoder {
     void ConstantValueSplat(pb::ConstantValueSplat& splat_out,
                             const core::constant::Splat* splat_in) {
         splat_out.set_type(Type(splat_in->type));
+        if (DAWN_UNLIKELY(splat_in->count > internal_limits::kMaxArrayConstructorElements)) {
+            err_ << "array constructor has excessive number of elements (>"
+                 << internal_limits::kMaxArrayConstructorElements << ")\n";
+        }
         splat_out.set_elements(ConstantValue(splat_in->el));
         splat_out.set_count(static_cast<uint32_t>(splat_in->count));
     }
@@ -612,14 +745,6 @@ struct Encoder {
     ////////////////////////////////////////////////////////////////////////////
     // Attributes
     ////////////////////////////////////////////////////////////////////////////
-    void Location(pb::Location& location_out, const ir::Location& location_in) {
-        if (auto interpolation_in = location_in.interpolation) {
-            auto& interpolation_out = *location_out.mutable_interpolation();
-            Interpolation(interpolation_out, *interpolation_in);
-        }
-        location_out.set_value(location_in.value);
-    }
-
     void Interpolation(pb::Interpolation& interpolation_out,
                        const core::Interpolation& interpolation_in) {
         interpolation_out.set_type(InterpolationType(interpolation_in.type));
@@ -835,6 +960,10 @@ struct Encoder {
                 return pb::InterpolationSampling::centroid;
             case core::InterpolationSampling::kSample:
                 return pb::InterpolationSampling::sample;
+            case core::InterpolationSampling::kFirst:
+                return pb::InterpolationSampling::first;
+            case core::InterpolationSampling::kEither:
+                return pb::InterpolationSampling::either;
             case core::InterpolationSampling::kUndefined:
                 break;
         }
@@ -845,6 +974,8 @@ struct Encoder {
         switch (in) {
             case core::BuiltinValue::kPointSize:
                 return pb::BuiltinValue::point_size;
+            case core::BuiltinValue::kCullDistance:
+                return pb::BuiltinValue::cull_distance;
             case core::BuiltinValue::kFragDepth:
                 return pb::BuiltinValue::frag_depth;
             case core::BuiltinValue::kFrontFacing:
@@ -873,6 +1004,8 @@ struct Encoder {
                 return pb::BuiltinValue::vertex_index;
             case core::BuiltinValue::kWorkgroupId:
                 return pb::BuiltinValue::workgroup_id;
+            case core::BuiltinValue::kClipDistances:
+                return pb::BuiltinValue::clip_distances;
             case core::BuiltinValue::kUndefined:
                 break;
         }
@@ -1121,8 +1254,64 @@ struct Encoder {
                 return pb::BuiltinFn::atomic_compare_exchange_weak;
             case core::BuiltinFn::kSubgroupBallot:
                 return pb::BuiltinFn::subgroup_ballot;
+            case core::BuiltinFn::kSubgroupElect:
+                return pb::BuiltinFn::subgroup_elect;
             case core::BuiltinFn::kSubgroupBroadcast:
                 return pb::BuiltinFn::subgroup_broadcast;
+            case core::BuiltinFn::kSubgroupBroadcastFirst:
+                return pb::BuiltinFn::subgroup_broadcast_first;
+            case core::BuiltinFn::kSubgroupShuffle:
+                return pb::BuiltinFn::subgroup_shuffle;
+            case core::BuiltinFn::kSubgroupShuffleXor:
+                return pb::BuiltinFn::subgroup_shuffle_xor;
+            case core::BuiltinFn::kSubgroupShuffleUp:
+                return pb::BuiltinFn::subgroup_shuffle_up;
+            case core::BuiltinFn::kSubgroupShuffleDown:
+                return pb::BuiltinFn::subgroup_shuffle_down;
+            case core::BuiltinFn::kInputAttachmentLoad:
+                return pb::BuiltinFn::input_attachment_load;
+            case core::BuiltinFn::kSubgroupAdd:
+                return pb::BuiltinFn::subgroup_add;
+            case core::BuiltinFn::kSubgroupInclusiveAdd:
+                return pb::BuiltinFn::subgroup_inclusive_add;
+            case core::BuiltinFn::kSubgroupExclusiveAdd:
+                return pb::BuiltinFn::subgroup_exclusive_add;
+            case core::BuiltinFn::kSubgroupMul:
+                return pb::BuiltinFn::subgroup_mul;
+            case core::BuiltinFn::kSubgroupInclusiveMul:
+                return pb::BuiltinFn::subgroup_inclusive_mul;
+            case core::BuiltinFn::kSubgroupExclusiveMul:
+                return pb::BuiltinFn::subgroup_exclusive_mul;
+            case core::BuiltinFn::kSubgroupAnd:
+                return pb::BuiltinFn::subgroup_and;
+            case core::BuiltinFn::kSubgroupOr:
+                return pb::BuiltinFn::subgroup_or;
+            case core::BuiltinFn::kSubgroupXor:
+                return pb::BuiltinFn::subgroup_xor;
+            case core::BuiltinFn::kSubgroupMin:
+                return pb::BuiltinFn::subgroup_min;
+            case core::BuiltinFn::kSubgroupMax:
+                return pb::BuiltinFn::subgroup_max;
+            case core::BuiltinFn::kSubgroupAll:
+                return pb::BuiltinFn::subgroup_all;
+            case core::BuiltinFn::kSubgroupAny:
+                return pb::BuiltinFn::subgroup_any;
+            case core::BuiltinFn::kQuadBroadcast:
+                return pb::BuiltinFn::quad_broadcast;
+            case core::BuiltinFn::kQuadSwapX:
+                return pb::BuiltinFn::quad_swap_x;
+            case core::BuiltinFn::kQuadSwapY:
+                return pb::BuiltinFn::quad_swap_y;
+            case core::BuiltinFn::kQuadSwapDiagonal:
+                return pb::BuiltinFn::quad_swap_diagonal;
+            case core::BuiltinFn::kSubgroupMatrixLoad:
+                return pb::BuiltinFn::subgroup_matrix_load;
+            case core::BuiltinFn::kSubgroupMatrixStore:
+                return pb::BuiltinFn::subgroup_matrix_store;
+            case core::BuiltinFn::kSubgroupMatrixMultiply:
+                return pb::BuiltinFn::subgroup_matrix_multiply;
+            case core::BuiltinFn::kSubgroupMatrixMultiplyAccumulate:
+                return pb::BuiltinFn::subgroup_matrix_multiply_accumulate;
             case core::BuiltinFn::kNone:
                 break;
         }
@@ -1132,30 +1321,33 @@ struct Encoder {
 
 }  // namespace
 
-Result<Vector<std::byte, 0>> Encode(const Module& mod_in) {
+Result<std::unique_ptr<pb::Module>> EncodeToProto(const Module& mod_in) {
     GOOGLE_PROTOBUF_VERIFY_VERSION;
 
     pb::Module mod_out;
-    Encoder{mod_in, mod_out}.Encode();
+    auto res = Encoder{mod_in, mod_out}.Encode();
+    if (res != Success) {
+        return res.Failure();
+    }
+
+    return std::make_unique<pb::Module>(mod_out);
+}
+
+Result<Vector<std::byte, 0>> EncodeToBinary(const Module& mod_in) {
+    auto mod_out = EncodeToProto(mod_in);
+    if (mod_out != Success) {
+        return mod_out.Failure();
+    }
 
     Vector<std::byte, 0> buffer;
-    size_t len = mod_out.ByteSizeLong();
+    size_t len = mod_out.Get()->ByteSizeLong();
     buffer.Resize(len);
     if (len > 0) {
-        if (!mod_out.SerializeToArray(&buffer[0], static_cast<int>(len))) {
+        if (!mod_out.Get()->SerializeToArray(&buffer[0], static_cast<int>(len))) {
             return Failure{"failed to serialize protobuf"};
         }
     }
     return buffer;
-}
-
-Result<std::string> EncodeDebug(const Module& mod_in) {
-    GOOGLE_PROTOBUF_VERIFY_VERSION;
-
-    pb::Module mod_out;
-    Encoder{mod_in, mod_out}.Encode();
-
-    return mod_out.DebugString();
 }
 
 }  // namespace tint::core::ir::binary

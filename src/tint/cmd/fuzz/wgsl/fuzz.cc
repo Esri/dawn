@@ -32,14 +32,16 @@
 #include <string_view>
 #include <thread>
 
+#include "src/tint/lang/core/address_space.h"
 #include "src/tint/lang/core/builtin_type.h"
+#include "src/tint/lang/wgsl/allowed_features.h"
 #include "src/tint/lang/wgsl/ast/alias.h"
 #include "src/tint/lang/wgsl/ast/function.h"
 #include "src/tint/lang/wgsl/ast/identifier.h"
+#include "src/tint/lang/wgsl/ast/module.h"
 #include "src/tint/lang/wgsl/ast/struct.h"
 #include "src/tint/lang/wgsl/ast/variable.h"
 #include "src/tint/lang/wgsl/builtin_fn.h"
-#include "src/tint/lang/wgsl/common/allowed_features.h"
 #include "src/tint/lang/wgsl/reader/options.h"
 #include "src/tint/lang/wgsl/reader/reader.h"
 #include "src/tint/utils/containers/vector.h"
@@ -65,10 +67,8 @@ Vector<ProgramFuzzer, 32>& Fuzzers() {
 
 thread_local std::string_view currently_running;
 
-[[noreturn]] void TintInternalCompilerErrorReporter(const tint::InternalCompilerError& err) {
-    std::cerr << "ICE while running fuzzer: '" << currently_running << "'" << std::endl;
-    std::cerr << err.Error() << std::endl;
-    __builtin_trap();
+bool IsAddressSpace(std::string_view name) {
+    return tint::core::ParseAddressSpace(name) != tint::core::AddressSpace::kUndefined;
 }
 
 bool IsBuiltinFn(std::string_view name) {
@@ -83,6 +83,9 @@ bool IsBuiltinType(std::string_view name) {
 EnumSet<ProgramProperties> ScanProgramProperties(const Program& program) {
     EnumSet<ProgramProperties> out;
     auto check = [&](std::string_view name) {
+        if (IsAddressSpace(name)) {
+            out.Add(ProgramProperties::kAddressSpacesShadowed);
+        }
         if (IsBuiltinFn(name)) {
             out.Add(ProgramProperties::kBuiltinFnsShadowed);
         }
@@ -104,6 +107,19 @@ EnumSet<ProgramProperties> ScanProgramProperties(const Program& program) {
             break;  // Early exit - nothing more to find.
         }
     }
+
+    // Check for multiple entry points
+    bool entry_point_found = false;
+    for (auto* fn : program.AST().Functions()) {
+        if (fn->IsEntryPoint()) {
+            if (entry_point_found) {
+                out.Add(ProgramProperties::kMultipleEntryPoints);
+                break;
+            }
+            entry_point_found = true;
+        }
+    }
+
     return out;
 }
 
@@ -114,18 +130,20 @@ void Register(const ProgramFuzzer& fuzzer) {
 }
 
 void Run(std::string_view wgsl, const Options& options, Slice<const std::byte> data) {
-    tint::SetInternalCompilerErrorReporter(&TintInternalCompilerErrorReporter);
-
 #if TINT_BUILD_WGSL_WRITER
     // Register the Program printer. This is used for debugging purposes.
     tint::Program::printer = [](const tint::Program& program) {
         auto result = tint::wgsl::writer::Generate(program, {});
         if (result != Success) {
-            return result.Failure().reason.Str();
+            return result.Failure().reason;
         }
         return result->wgsl;
     };
 #endif
+
+    if (options.dump) {
+        std::cout << "Dumping input WGSL:\n" << wgsl << "\n";
+    }
 
     // Ensure that fuzzers are sorted. Without this, the fuzzers may be registered in any order,
     // leading to non-determinism, which we must avoid.
@@ -140,8 +158,7 @@ void Run(std::string_view wgsl, const Options& options, Slice<const std::byte> d
     auto program = tint::wgsl::reader::Parse(&file, parse_options);
     if (!program.IsValid()) {
         if (options.verbose) {
-            std::cerr << "invalid WGSL program: " << std::endl
-                      << program.Diagnostics() << std::endl;
+            std::cerr << "invalid WGSL program:\n" << program.Diagnostics() << "\n";
         }
         return;
     }
@@ -149,6 +166,8 @@ void Run(std::string_view wgsl, const Options& options, Slice<const std::byte> d
     Context context;
     context.options = options;
     context.program_properties = ScanProgramProperties(program);
+
+    bool ran_atleast_once = false;
 
     // Run each of the program fuzzer functions
     if (options.run_concurrently) {
@@ -160,11 +179,13 @@ void Run(std::string_view wgsl, const Options& options, Slice<const std::byte> d
                 Fuzzers()[i].name.find(options.filter) == std::string::npos) {
                 continue;
             }
+            ran_atleast_once = true;
+
             threads.Push(std::thread([i, &program, &data, &context] {
                 auto& fuzzer = Fuzzers()[i];
                 currently_running = fuzzer.name;
                 if (context.options.verbose) {
-                    std::cout << " • [" << i << "] Running: " << currently_running << std::endl;
+                    std::cout << " • [" << i << "] Running: " << currently_running << "\n";
                 }
                 fuzzer.fn(program, context, data);
             }));
@@ -178,13 +199,19 @@ void Run(std::string_view wgsl, const Options& options, Slice<const std::byte> d
             if (!options.filter.empty() && fuzzer.name.find(options.filter) == std::string::npos) {
                 continue;
             }
+            ran_atleast_once = true;
 
             currently_running = fuzzer.name;
             if (options.verbose) {
-                std::cout << " • Running: " << currently_running << std::endl;
+                std::cout << " • Running: " << currently_running << "\n";
             }
             fuzzer.fn(program, context, data);
         }
+    }
+
+    if (!options.filter.empty() && !ran_atleast_once) {
+        std::cerr << "ERROR: --filter=" << options.filter << " did not match any fuzzers\n";
+        exit(EXIT_FAILURE);
     }
 }
 

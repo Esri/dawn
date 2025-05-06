@@ -39,7 +39,7 @@
 
 #include <cstdint>
 
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/rtti/traits.h"
 
 namespace tint::core {
 
@@ -73,7 +73,8 @@ std::string_view ToString(TexelFormat value);
 /// @param out the stream to write to
 /// @param value the TexelFormat
 /// @returns @p out so calls can be chained
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, TexelFormat value) {
     return out << ToString(value);
 }

@@ -2,21 +2,15 @@
 precision highp float;
 precision highp int;
 
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+layout(binding = 0, std430)
+buffer f_prevent_dce_block_ssbo {
   float inner;
-} prevent_dce;
-
-void fwidthFine_f1742d() {
+} v;
+float fwidthFine_f1742d() {
   float arg_0 = 1.0f;
   float res = fwidth(arg_0);
-  prevent_dce.inner = res;
+  return res;
 }
-
-void fragment_main() {
-  fwidthFine_f1742d();
-}
-
 void main() {
-  fragment_main();
-  return;
+  v.inner = fwidthFine_f1742d();
 }

@@ -39,8 +39,9 @@ using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
 
 using IR_LetTest = IRTestHelper;
+using IR_LetDeathTest = IR_LetTest;
 
-TEST_F(IR_LetTest, Fail_NullValue) {
+TEST_F(IR_LetDeathTest, Fail_NullValue) {
     EXPECT_DEATH_IF_SUPPORTED(
         {
             Module mod;
@@ -48,16 +49,16 @@ TEST_F(IR_LetTest, Fail_NullValue) {
             ir::Value* value = nullptr;
             b.Let("l", value);
         },
-        "");
+        "internal compiler error");
 }
 
 TEST_F(IR_LetTest, Results) {
     auto* value = b.Constant(1_f);
     auto* let = b.Let("l", value);
     EXPECT_EQ(let->Results().Length(), 1u);
-    EXPECT_TRUE(let->Result(0)->Is<InstructionResult>());
-    EXPECT_EQ(let->Result(0)->Instruction(), let);
-    EXPECT_EQ(let->Result(0)->Type(), value->Type());
+    EXPECT_TRUE(let->Result()->Is<InstructionResult>());
+    EXPECT_EQ(let->Result()->Instruction(), let);
+    EXPECT_EQ(let->Result()->Type(), value->Type());
 }
 
 TEST_F(IR_LetTest, Clone) {
@@ -67,15 +68,15 @@ TEST_F(IR_LetTest, Clone) {
     auto* new_let = clone_ctx.Clone(let);
 
     EXPECT_NE(let, new_let);
-    EXPECT_NE(nullptr, new_let->Result(0));
-    EXPECT_NE(let->Result(0), new_let->Result(0));
+    EXPECT_NE(nullptr, new_let->Result());
+    EXPECT_NE(let->Result(), new_let->Result());
 
     auto new_val = new_let->Value()->As<Constant>()->Value();
     ASSERT_TRUE(new_val->Is<core::constant::Scalar<f32>>());
     EXPECT_FLOAT_EQ(4_f, new_val->As<core::constant::Scalar<f32>>()->ValueAs<f32>());
 
     EXPECT_EQ(std::string("l"), mod.NameOf(new_let).Name());
-    EXPECT_EQ(std::string("l"), mod.NameOf(new_let->Result(0)).Name());
+    EXPECT_EQ(std::string("l"), mod.NameOf(new_let->Result()).Name());
 }
 
 }  // namespace

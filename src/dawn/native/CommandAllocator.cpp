@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <climits>
 #include <cstdlib>
+#include <new>
 #include <utility>
 
 #include "dawn/common/Assert.h"
@@ -72,10 +73,16 @@ CommandIterator::CommandIterator(CommandAllocator allocator) : mBlocks(allocator
 void CommandIterator::AcquireCommandBlocks(std::vector<CommandAllocator> allocators) {
     DAWN_ASSERT(IsEmpty());
     mBlocks.clear();
+
+    size_t totalBlocksCount = 0;
+    for (CommandAllocator& allocator : allocators) {
+        totalBlocksCount += allocator.GetCommandBlocksCount();
+    }
+
+    mBlocks.reserve(totalBlocksCount);
     for (CommandAllocator& allocator : allocators) {
         CommandBlocks blocks = allocator.AcquireBlocks();
         if (!blocks.empty()) {
-            mBlocks.reserve(mBlocks.size() + blocks.size());
             for (BlockDef& block : blocks) {
                 mBlocks.push_back(std::move(block));
             }
@@ -172,6 +179,10 @@ void CommandAllocator::Reset() {
 
 bool CommandAllocator::IsEmpty() const {
     return mCurrentPtr == reinterpret_cast<const char*>(&mPlaceholderSpace[0]);
+}
+
+size_t CommandAllocator::GetCommandBlocksCount() const {
+    return mBlocks.size();
 }
 
 CommandBlocks&& CommandAllocator::AcquireBlocks() {

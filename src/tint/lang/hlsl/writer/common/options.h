@@ -30,16 +30,14 @@
 
 #include <bitset>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "src/tint/api/common/binding_point.h"
-#include "src/tint/api/options/binding_remapper.h"
-#include "src/tint/api/options/external_texture.h"
-#include "src/tint/api/options/pixel_local.h"
 #include "src/tint/lang/core/access.h"
 #include "src/tint/utils/math/hash.h"
-#include "src/tint/utils/reflection/reflection.h"
+#include "src/tint/utils/reflection.h"
 
 namespace tint::hlsl::writer {
 
@@ -152,8 +150,46 @@ struct ArrayLengthFromUniformOptions {
     TINT_REFLECT(ArrayLengthFromUniformOptions, ubo_binding, bindpoint_to_size_index);
 };
 
+/// Data for a single pixel local attachment
+struct PixelLocalAttachment {
+    /// The supported pixel local storage attachment formats
+    enum class TexelFormat : uint8_t {
+        kR32Sint,
+        kR32Uint,
+        kR32Float,
+        kUndefined,
+    };
+
+    // Pixel local storage attachment index
+    uint32_t index = uint32_t(-1);
+
+    // Pixel local storage attachment format
+    TexelFormat format = TexelFormat::kUndefined;
+
+    /// Reflect the fields of this class so that it can be used by tint::ForeachField()
+    TINT_REFLECT(PixelLocalAttachment, index, format);
+};
+
+/// Data used to specify pixel local mappings
+struct PixelLocalOptions {
+    // Index of pixel_local structure member index to attachment info
+    std::unordered_map<uint32_t, PixelLocalAttachment> attachments;
+
+    /// The bind group index of all pixel local storage attachments
+    uint32_t group_index = 0;
+
+    /// Reflect the fields of this class so that it can be used by tint::ForeachField()
+    TINT_REFLECT(PixelLocalOptions, attachments, group_index);
+};
+
 /// Configuration options used for generating HLSL.
 struct Options {
+    /// The downstream compiler to be used
+    enum class Compiler : uint8_t {
+        kFXC,
+        kDXC,
+    };
+
     /// Constructor
     Options();
     /// Destructor
@@ -163,6 +199,12 @@ struct Options {
     /// Copy assignment
     /// @returns this Options
     Options& operator=(const Options&);
+
+    /// An optional remapped name to use when emitting the entry point.
+    std::string remapped_entry_point_name = {};
+
+    /// Set to `true` to strip all user-declared identifiers from the module.
+    bool strip_all_names = false;
 
     /// Set to `true` to disable software robustness that prevents out-of-bounds accesses.
     bool disable_robustness = false;
@@ -186,6 +228,9 @@ struct Options {
     /// `unpack4xI8` and `unpack4xU8` builtins
     bool polyfill_pack_unpack_4x8 = false;
 
+    /// The downstream compiler which will be used
+    Compiler compiler = Compiler::kDXC;
+
     /// Options used to specify a mapping of binding points to indices into a UBO
     /// from which to load buffer sizes.
     ArrayLengthFromUniformOptions array_length_from_uniform = {};
@@ -200,11 +245,13 @@ struct Options {
     /// The bindings
     Bindings bindings;
 
-    /// Options used to deal with pixel local storage variables
-    PixelLocalOptions pixel_local_options = {};
+    /// Pixel local configuration
+    PixelLocalOptions pixel_local;
 
     /// Reflect the fields of this class so that it can be used by tint::ForeachField()
     TINT_REFLECT(Options,
+                 remapped_entry_point_name,
+                 strip_all_names,
                  disable_robustness,
                  disable_workgroup_init,
                  truncate_interstage_variables,
@@ -212,13 +259,22 @@ struct Options {
                  polyfill_dot_4x8_packed,
                  disable_polyfill_integer_div_mod,
                  polyfill_pack_unpack_4x8,
+                 compiler,
                  array_length_from_uniform,
                  interstage_locations,
                  root_constant_binding_point,
                  bindings,
-                 pixel_local_options);
+                 pixel_local);
 };
 
 }  // namespace tint::hlsl::writer
+
+namespace tint {
+
+/// Reflect valid value ranges for the PixelLocalAttachment::TexelFormat enum.
+TINT_REFLECT_ENUM_RANGE(hlsl::writer::PixelLocalAttachment::TexelFormat, kR32Sint, kR32Float);
+TINT_REFLECT_ENUM_RANGE(hlsl::writer::Options::Compiler, kFXC, kDXC);
+
+}  // namespace tint
 
 #endif  // SRC_TINT_LANG_HLSL_WRITER_COMMON_OPTIONS_H_

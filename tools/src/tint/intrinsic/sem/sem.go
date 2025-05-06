@@ -78,6 +78,7 @@ func New() *Sem {
 type Enum struct {
 	Decl    ast.EnumDecl
 	Name    string
+	NS      string
 	Entries []*EnumEntry
 }
 
@@ -137,10 +138,9 @@ type Type struct {
 
 // TypeMatcher declares a type matcher
 type TypeMatcher struct {
-	TemplateParams []TemplateParam
-	Decl           ast.MatcherDecl
-	Name           string
-	Types          []*Type
+	Decl  ast.MatcherDecl
+	Name  string
+	Types []*Type
 }
 
 func (t TypeMatcher) PrecedenceSortedTypes() []*Type {
@@ -264,6 +264,7 @@ type Overload struct {
 	Parameters        []Parameter
 	CanBeUsedInStage  StageUses
 	MustUse           bool   // True if function cannot be used as a statement
+	MemberFunction    bool   // True if function is a member function
 	IsDeprecated      bool   // True if this overload is deprecated
 	ConstEvalFunction string // Name of the function used to evaluate the intrinsic at shader creation time
 }

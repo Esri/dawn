@@ -35,9 +35,9 @@
 #include <optional>
 
 #include "src/tint/utils/macros/compiler.h"
-#include "src/tint/utils/result/result.h"
+#include "src/tint/utils/result.h"
+#include "src/tint/utils/rtti/traits.h"
 #include "src/tint/utils/text/string_stream.h"
-#include "src/tint/utils/traits/traits.h"
 
 // Forward declaration
 namespace tint::core {
@@ -191,7 +191,8 @@ struct Number : NumberBase<Number<T>> {
 /// @param out the stream to write to
 /// @param num the Number
 /// @return the stream so calls can be chained
-template <typename STREAM, typename T, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM, typename T>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, Number<T> num) {
     return out << num.value;
 }
@@ -278,10 +279,16 @@ using AInt = Number<int64_t>;
 /// `AFloat` is a type alias to `Number<double>`.
 using AFloat = Number<double>;
 
+/// `i8` is a type alias to `Number<int8_t>`.
+using i8 = Number<int8_t>;
 /// `i32` is a type alias to `Number<int32_t>`.
 using i32 = Number<int32_t>;
+/// `u8` is a type alias to `Number<uint8_t>`.
+using u8 = Number<uint8_t>;
 /// `u32` is a type alias to `Number<uint32_t>`.
 using u32 = Number<uint32_t>;
+/// `u64` is a type alias to `Number<uint64_t>`.
+using u64 = Number<uint64_t>;
 /// `f32` is a type alias to `Number<float>`
 using f32 = Number<float>;
 /// `f16` is a type alias to `Number<detail::NumberKindF16>`, which should be IEEE 754 binary16.
@@ -295,7 +302,7 @@ static_assert(std::numeric_limits<float>::has_quiet_NaN);
 static_assert(std::numeric_limits<double>::has_infinity);
 static_assert(std::numeric_limits<double>::has_quiet_NaN);
 
-template <typename T, tint::traits::EnableIf<IsFloatingPoint<T>>* = nullptr>
+template <typename T, std::enable_if_t<IsFloatingPoint<T>>* = nullptr>
 inline const auto kPi = T(UnwrapNumber<T>(3.14159265358979323846));
 
 /// True iff T is an abstract number type
@@ -303,7 +310,7 @@ template <typename T>
 constexpr bool IsAbstract = std::is_same_v<T, AInt> || std::is_same_v<T, AFloat>;
 
 /// @returns the friendly name of Number type T
-template <typename T, tint::traits::EnableIf<IsNumber<T>>* = nullptr>
+template <typename T, std::enable_if_t<IsNumber<T>>* = nullptr>
 const char* FriendlyName() {
     if constexpr (std::is_same_v<T, AInt>) {
         return "abstract-int";
@@ -323,7 +330,7 @@ const char* FriendlyName() {
 }
 
 /// @returns the friendly name of T when T is bool
-template <typename T, tint::traits::EnableIf<std::is_same_v<T, bool>>* = nullptr>
+template <typename T, std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
 const char* FriendlyName() {
     return "bool";
 }
@@ -338,7 +345,8 @@ enum class ConversionFailure {
 /// @param out the stream to write to
 /// @param failure the ConversionFailure
 /// @return the stream so calls can be chained
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, ConversionFailure failure) {
     switch (failure) {
         case ConversionFailure::kExceedsPositiveLimit:
@@ -358,11 +366,32 @@ tint::Result<TO, ConversionFailure> CheckedConvert(Number<FROM> num) {
     using T = std::conditional_t<IsFloatingPoint<UnwrapNumber<TO>> || IsFloatingPoint<FROM>,
                                  AFloat::type, AInt::type>;
     const auto value = static_cast<T>(num.value);
-    if (value > static_cast<T>(TO::kHighestValue)) {
-        return ConversionFailure::kExceedsPositiveLimit;
-    }
-    if (value < static_cast<T>(TO::kLowestValue)) {
-        return ConversionFailure::kExceedsNegativeLimit;
+    // Float to integral conversions clamp to the target range.
+    // https://gpuweb.github.io/gpuweb/wgsl/#scalar-floating-point-to-integral-conversion
+    constexpr auto float_to_integral = IsFloatingPoint<FROM> && IsIntegral<UnwrapNumber<TO>>;
+    if constexpr (std::is_same_v<TO, u64>) {
+        // Special case checks for u64 as its range does not fit into an AInt.
+        if (value < 0) {
+            if constexpr (float_to_integral) {
+                return TO(0);
+            }
+            if constexpr (IsSignedIntegral<FROM>) {
+                return ConversionFailure::kExceedsNegativeLimit;
+            }
+        }
+    } else {
+        if (value > static_cast<T>(TO::kHighestValue)) {
+            if (float_to_integral) {
+                return TO(TO::kHighestValue);
+            }
+            return ConversionFailure::kExceedsPositiveLimit;
+        }
+        if (value < static_cast<T>(TO::kLowestValue)) {
+            if (float_to_integral) {
+                return TO(TO::kLowestValue);
+            }
+            return ConversionFailure::kExceedsNegativeLimit;
+        }
     }
     return TO(value);  // Success
 }
@@ -467,8 +496,7 @@ inline std::optional<AInt> CheckedAdd(AInt a, AInt b) {
 /// @param a the LHS number
 /// @param b the RHS number
 /// @returns a + b, or an empty optional if the resulting value overflowed the float value
-template <typename FloatingPointT,
-          typename = tint::traits::EnableIf<IsFloatingPoint<FloatingPointT>>>
+template <typename FloatingPointT, typename = std::enable_if_t<IsFloatingPoint<FloatingPointT>>>
 inline std::optional<FloatingPointT> CheckedAdd(FloatingPointT a, FloatingPointT b) {
     auto result = FloatingPointT{a.value + b.value};
     if (!std::isfinite(result.value)) {
@@ -504,8 +532,7 @@ inline std::optional<AInt> CheckedSub(AInt a, AInt b) {
 /// @param a the LHS number
 /// @param b the RHS number
 /// @returns a + b, or an empty optional if the resulting value overflowed the float value
-template <typename FloatingPointT,
-          typename = tint::traits::EnableIf<IsFloatingPoint<FloatingPointT>>>
+template <typename FloatingPointT, typename = std::enable_if_t<IsFloatingPoint<FloatingPointT>>>
 inline std::optional<FloatingPointT> CheckedSub(FloatingPointT a, FloatingPointT b) {
     auto result = FloatingPointT{a.value - b.value};
     if (!std::isfinite(result.value)) {
@@ -553,8 +580,7 @@ inline std::optional<AInt> CheckedMul(AInt a, AInt b) {
 /// @param a the LHS number
 /// @param b the RHS number
 /// @returns a * b, or an empty optional if the resulting value overflowed the float value
-template <typename FloatingPointT,
-          typename = tint::traits::EnableIf<IsFloatingPoint<FloatingPointT>>>
+template <typename FloatingPointT, typename = std::enable_if_t<IsFloatingPoint<FloatingPointT>>>
 inline std::optional<FloatingPointT> CheckedMul(FloatingPointT a, FloatingPointT b) {
     auto result = FloatingPointT{a.value * b.value};
     if (!std::isfinite(result.value)) {
@@ -581,8 +607,7 @@ inline std::optional<AInt> CheckedDiv(AInt a, AInt b) {
 /// @param a the LHS number
 /// @param b the RHS number
 /// @returns a / b, or an empty optional if the resulting value overflowed the float value
-template <typename FloatingPointT,
-          typename = tint::traits::EnableIf<IsFloatingPoint<FloatingPointT>>>
+template <typename FloatingPointT, typename = std::enable_if_t<IsFloatingPoint<FloatingPointT>>>
 inline std::optional<FloatingPointT> CheckedDiv(FloatingPointT a, FloatingPointT b) {
     if (b == FloatingPointT{0.0}) {
         return {};
@@ -628,8 +653,7 @@ inline std::optional<AInt> CheckedMod(AInt a, AInt b) {
 /// @param b the RHS number
 /// @returns the remainder of a / b, or an empty optional if the resulting value overflowed the
 /// float value
-template <typename FloatingPointT,
-          typename = tint::traits::EnableIf<IsFloatingPoint<FloatingPointT>>>
+template <typename FloatingPointT, typename = std::enable_if_t<IsFloatingPoint<FloatingPointT>>>
 inline std::optional<FloatingPointT> CheckedMod(FloatingPointT a, FloatingPointT b) {
     if (b == FloatingPointT{0.0}) {
         return {};
@@ -656,8 +680,7 @@ inline std::optional<AInt> CheckedMadd(AInt a, AInt b, AInt c) {
 /// @param exp the exponent
 /// @returns the value of `base` raised to the power `exp`, or an empty optional if the operation
 /// cannot be performed.
-template <typename FloatingPointT,
-          typename = tint::traits::EnableIf<IsFloatingPoint<FloatingPointT>>>
+template <typename FloatingPointT, typename = std::enable_if_t<IsFloatingPoint<FloatingPointT>>>
 inline std::optional<FloatingPointT> CheckedPow(FloatingPointT base, FloatingPointT exp) {
     static_assert(IsNumber<FloatingPointT>);
     if ((base < 0) || (base == 0 && exp <= 0)) {

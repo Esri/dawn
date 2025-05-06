@@ -35,9 +35,12 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/control_instruction.h"
 #include "src/tint/lang/core/ir/module.h"
+#include "src/tint/lang/core/type/builtin_structs.h"
 #include "src/tint/lang/core/type/depth_multisampled_texture.h"
 #include "src/tint/lang/core/type/depth_texture.h"
 #include "src/tint/lang/core/type/external_texture.h"
+#include "src/tint/lang/core/type/function.h"
+#include "src/tint/lang/core/type/input_attachment.h"
 #include "src/tint/lang/core/type/invalid.h"
 #include "src/tint/lang/core/type/multisampled_texture.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
@@ -46,13 +49,14 @@
 #include "src/tint/utils/containers/hashset.h"
 #include "src/tint/utils/containers/transform.h"
 #include "src/tint/utils/diagnostic/diagnostic.h"
+#include "src/tint/utils/internal_limits.h"
 #include "src/tint/utils/macros/compiler.h"
-#include "src/tint/utils/result/result.h"
+#include "src/tint/utils/result.h"
 #include "src/tint/utils/text/string.h"
 #include "src/tint/utils/text/text_style.h"
 
 TINT_BEGIN_DISABLE_PROTOBUF_WARNINGS();
-#include "src/tint/lang/core/ir/binary/ir.pb.h"
+#include "src/tint/utils/protos/ir/ir.pb.h"
 TINT_END_DISABLE_PROTOBUF_WARNINGS();
 
 using namespace tint::core::fluent_types;  // NOLINT
@@ -77,7 +81,7 @@ struct Decoder {
     Vector<ir::BreakIf*, 32> break_ifs_{};
     Vector<ir::Continue*, 32> continues_{};
 
-    diag::List diags_{};
+    std::stringstream err_{};
     Hashset<std::string, 4> struct_names_{};
 
     Result<Module> Decode() {
@@ -129,9 +133,10 @@ struct Decoder {
             PopulateBlock(blocks_[i], mod_in_.blocks()[static_cast<int>(i)]);
         }
 
-        if (diags_.ContainsErrors()) {
+        auto err = err_.str();
+        if (!err.empty()) {
             // Note: Its not safe to call InferControlInstruction() with a broken IR.
-            return Failure{std::move(diags_)};
+            return Failure{err};
         }
 
         if (CheckBlocks()) {
@@ -155,21 +160,19 @@ struct Decoder {
             }
         }
 
-        if (diags_.ContainsErrors()) {
-            return Failure{std::move(diags_)};
+        err = err_.str();
+        if (!err.empty()) {
+            return Failure{err};
         }
         return std::move(mod_out_);
     }
-
-    /// Adds a new error to the diagnostics and returns a reference to it
-    diag::Diagnostic& Error() { return diags_.AddError(Source{}); }
 
     /// Errors if @p number is not finite.
     /// @returns @p number if finite, otherwise 0.
     template <typename T>
     Number<T> CheckFinite(Number<T> number) {
-        if (TINT_UNLIKELY(!std::isfinite(number.value))) {
-            Error() << "value must be finite";
+        if (DAWN_UNLIKELY(!std::isfinite(number.value))) {
+            err_ << "value must be finite\n";
             return Number<T>{};
         }
         return number;
@@ -190,11 +193,11 @@ struct Decoder {
             const auto* block = block_depth.first;
             const size_t depth = block_depth.second;
             if (!seen.Add(block)) {
-                Error() << "cyclic nesting of blocks";
+                err_ << "cyclic nesting of blocks\n";
                 return false;
             }
             if (depth > kMaxBlockDepth) {
-                Error() << "block nesting exceeds " << kMaxBlockDepth;
+                err_ << "block nesting exceeds " << kMaxBlockDepth << "\n";
                 return false;
             }
             for (auto* inst = block->Instructions(); inst; inst = inst->next) {
@@ -208,7 +211,7 @@ struct Decoder {
 
         for (auto* block : blocks_) {
             if (!seen.Contains(block)) {
-                Error() << "unreachable block";
+                err_ << "unreachable block\n";
                 return false;
             }
         }
@@ -235,12 +238,19 @@ struct Decoder {
     // Functions
     ////////////////////////////////////////////////////////////////////////////
     ir::Function* CreateFunction(const pb::Function&) {
-        return mod_out_.allocators.values.Create<ir::Function>();
+        auto* result = mod_out_.CreateValue<ir::Function>();
+        result->SetType(mod_out_.Types().function());
+        return result;
     }
 
     void PopulateFunction(ir::Function* fn_out, const pb::Function& fn_in) {
         if (!fn_in.name().empty()) {
-            mod_out_.SetName(fn_out, fn_in.name());
+            if (DAWN_UNLIKELY(fn_in.name().find('\0') != std::string::npos)) {
+                err_ << "function name '" << fn_in.name()
+                     << "' contains '\\0' before end of the string\n";
+            } else {
+                mod_out_.SetName(fn_out, fn_in.name());
+            }
         }
         fn_out->SetReturnType(Type(fn_in.return_type()));
         if (fn_in.has_pipeline_stage()) {
@@ -248,18 +258,24 @@ struct Decoder {
         }
         if (fn_in.has_workgroup_size()) {
             auto& wg_size_in = fn_in.workgroup_size();
-            fn_out->SetWorkgroupSize(wg_size_in.x(), wg_size_in.y(), wg_size_in.z());
+            // TODO(dsinclair): When overrides are supported we should add support for generating
+            // override expressions here.
+            fn_out->SetWorkgroupSize(Value(wg_size_in.x()), Value(wg_size_in.y()),
+                                     Value(wg_size_in.z()));
         }
 
         Vector<FunctionParam*, 8> params_out;
         for (auto param_in : fn_in.parameters()) {
             auto* param_out = ValueAs<FunctionParam>(param_in);
-            if (TINT_LIKELY(param_out)) {
+            if (DAWN_LIKELY(param_out)) {
                 params_out.Push(param_out);
             }
         }
         if (fn_in.has_return_location()) {
-            fn_out->SetReturnLocation(Location(fn_in.return_location()));
+            fn_out->SetReturnLocation(fn_in.return_location());
+        }
+        if (fn_in.has_return_interpolation()) {
+            fn_out->SetReturnInterpolation(Interpolation(fn_in.return_interpolation()));
         }
         if (fn_in.has_return_builtin()) {
             fn_out->SetReturnBuiltin(BuiltinValue(fn_in.return_builtin()));
@@ -272,8 +288,8 @@ struct Decoder {
     }
 
     ir::Function* Function(uint32_t id) {
-        if (TINT_UNLIKELY(id >= mod_out_.functions.Length())) {
-            Error() << "function id " << id << " out of range";
+        if (DAWN_UNLIKELY(id >= mod_out_.functions.Length())) {
+            err_ << "function id " << id << " out of range\n";
             return nullptr;
         }
         return mod_out_.functions[id];
@@ -307,7 +323,7 @@ struct Decoder {
             Vector<ir::BlockParam*, 8> params;
             for (auto param_in : block_in.parameters()) {
                 auto* param_out = ValueAs<BlockParam>(param_in);
-                if (TINT_LIKELY(param_out)) {
+                if (DAWN_LIKELY(param_out)) {
                     params.Push(param_out);
                 }
             }
@@ -319,8 +335,8 @@ struct Decoder {
     }
 
     ir::Block* Block(uint32_t id) {
-        if (TINT_UNLIKELY(id >= blocks_.Length())) {
-            Error() << "block id " << id << " out of range";
+        if (DAWN_UNLIKELY(id >= blocks_.Length())) {
+            err_ << "block id " << id << " out of range\n";
             return b.Block();
         }
         return blocks_[id];
@@ -329,11 +345,11 @@ struct Decoder {
     template <typename T>
     T* BlockAs(uint32_t id) {
         auto* block = Block(id);
-        if (auto cast = As<T>(block); TINT_LIKELY(cast)) {
+        if (auto cast = As<T>(block); DAWN_LIKELY(cast)) {
             return cast;
         }
-        Error() << "block " << id << " is " << (block ? block->TypeInfo().name : "<null>")
-                << " expected " << TypeInfo::Of<T>().name;
+        err_ << "block " << id << " is " << (block ? block->TypeInfo().name : "<null>")
+             << " expected " << TypeInfo::Of<T>().name << "\n";
         return nullptr;
     }
 
@@ -428,7 +444,7 @@ struct Decoder {
                 break;
         }
         if (!inst_out) {
-            Error() << "invalid Instruction.kind: " << std::to_string(inst_in.kind_case());
+            err_ << "invalid Instruction.kind: " << std::to_string(inst_in.kind_case()) << "\n";
             return b.Let(mod_out_.Types().invalid());
         }
 
@@ -450,11 +466,11 @@ struct Decoder {
             auto num_next_iter_values = inst_in.break_if().num_next_iter_values();
             bool is_valid =
                 inst_out->Operands().Length() >= num_next_iter_values + BreakIf::kArgsOperandOffset;
-            if (TINT_LIKELY(is_valid)) {
+            if (DAWN_LIKELY(is_valid)) {
                 static_cast<BreakIf*>(inst_out)->SetNumNextIterValues(
                     inst_in.break_if().num_next_iter_values());
             } else {
-                Error() << "invalid value for num_next_iter_values()";
+                err_ << "invalid value for num_next_iter_values()\n";
             }
         }
 
@@ -462,89 +478,94 @@ struct Decoder {
     }
 
     ir::Access* CreateInstructionAccess(const pb::InstructionAccess&) {
-        return mod_out_.allocators.instructions.Create<ir::Access>();
+        return mod_out_.CreateInstruction<ir::Access>();
     }
 
     ir::CoreBinary* CreateInstructionBinary(const pb::InstructionBinary& binary_in) {
-        auto* binary_out = mod_out_.allocators.instructions.Create<ir::CoreBinary>();
+        auto* binary_out = mod_out_.CreateInstruction<ir::CoreBinary>();
         binary_out->SetOp(BinaryOp(binary_in.op()));
         return binary_out;
     }
 
     ir::Bitcast* CreateInstructionBitcast(const pb::InstructionBitcast&) {
-        return mod_out_.allocators.instructions.Create<ir::Bitcast>();
+        return mod_out_.CreateInstruction<ir::Bitcast>();
     }
 
     ir::BreakIf* CreateInstructionBreakIf(const pb::InstructionBreakIf&) {
-        auto* break_if_out = mod_out_.allocators.instructions.Create<ir::BreakIf>();
+        auto* break_if_out = mod_out_.CreateInstruction<ir::BreakIf>();
         break_ifs_.Push(break_if_out);
         return break_if_out;
     }
 
     ir::CoreBuiltinCall* CreateInstructionBuiltinCall(const pb::InstructionBuiltinCall& call_in) {
-        auto* call_out = mod_out_.allocators.instructions.Create<ir::CoreBuiltinCall>();
+        auto* call_out = mod_out_.CreateInstruction<ir::CoreBuiltinCall>();
         call_out->SetFunc(BuiltinFn(call_in.builtin()));
+        Vector<const core::type::Type*, 1> params;
+        for (auto param : call_in.explicit_template_params()) {
+            params.Push(Type(param));
+        }
+        call_out->SetExplicitTemplateParams(params);
         return call_out;
     }
 
     ir::Construct* CreateInstructionConstruct(const pb::InstructionConstruct&) {
-        return mod_out_.allocators.instructions.Create<ir::Construct>();
+        return mod_out_.CreateInstruction<ir::Construct>();
     }
 
     ir::Continue* CreateInstructionContinue(const pb::InstructionContinue&) {
-        auto* continue_ = mod_out_.allocators.instructions.Create<ir::Continue>();
+        auto* continue_ = mod_out_.CreateInstruction<ir::Continue>();
         continues_.Push(continue_);
         return continue_;
     }
 
     ir::Convert* CreateInstructionConvert(const pb::InstructionConvert&) {
-        return mod_out_.allocators.instructions.Create<ir::Convert>();
+        return mod_out_.CreateInstruction<ir::Convert>();
     }
 
     ir::ExitIf* CreateInstructionExitIf(const pb::InstructionExitIf&) {
-        auto* exit_out = mod_out_.allocators.instructions.Create<ir::ExitIf>();
+        auto* exit_out = mod_out_.CreateInstruction<ir::ExitIf>();
         exit_ifs_.Push(exit_out);
         return exit_out;
     }
 
     ir::ExitLoop* CreateInstructionExitLoop(const pb::InstructionExitLoop&) {
-        auto* exit_out = mod_out_.allocators.instructions.Create<ir::ExitLoop>();
+        auto* exit_out = mod_out_.CreateInstruction<ir::ExitLoop>();
         exit_loops_.Push(exit_out);
         return exit_out;
     }
 
     ir::ExitSwitch* CreateInstructionExitSwitch(const pb::InstructionExitSwitch&) {
-        auto* exit_out = mod_out_.allocators.instructions.Create<ir::ExitSwitch>();
+        auto* exit_out = mod_out_.CreateInstruction<ir::ExitSwitch>();
         exit_switches_.Push(exit_out);
         return exit_out;
     }
 
     ir::Discard* CreateInstructionDiscard(const pb::InstructionDiscard&) {
-        return mod_out_.allocators.instructions.Create<ir::Discard>();
+        return mod_out_.CreateInstruction<ir::Discard>();
     }
 
     ir::If* CreateInstructionIf(const pb::InstructionIf& if_in) {
-        auto* if_out = mod_out_.allocators.instructions.Create<ir::If>();
+        auto* if_out = mod_out_.CreateInstruction<ir::If>();
         if_out->SetTrue(if_in.has_true_() ? Block(if_in.true_()) : b.Block());
         if_out->SetFalse(if_in.has_false_() ? Block(if_in.false_()) : b.Block());
         return if_out;
     }
 
     ir::Let* CreateInstructionLet(const pb::InstructionLet&) {
-        return mod_out_.allocators.instructions.Create<ir::Let>();
+        return mod_out_.CreateInstruction<ir::Let>();
     }
 
     ir::Load* CreateInstructionLoad(const pb::InstructionLoad&) {
-        return mod_out_.allocators.instructions.Create<ir::Load>();
+        return mod_out_.CreateInstruction<ir::Load>();
     }
 
     ir::LoadVectorElement* CreateInstructionLoadVectorElement(
         const pb::InstructionLoadVectorElement&) {
-        return mod_out_.allocators.instructions.Create<ir::LoadVectorElement>();
+        return mod_out_.CreateInstruction<ir::LoadVectorElement>();
     }
 
     ir::Loop* CreateInstructionLoop(const pb::InstructionLoop& loop_in) {
-        auto* loop_out = mod_out_.allocators.instructions.Create<ir::Loop>();
+        auto* loop_out = mod_out_.CreateInstruction<ir::Loop>();
         if (loop_in.has_initializer()) {
             loop_out->SetInitializer(Block(loop_in.initializer()));
         } else {
@@ -560,26 +581,26 @@ struct Decoder {
     }
 
     ir::NextIteration* CreateInstructionNextIteration(const pb::InstructionNextIteration&) {
-        auto* next_it_out = mod_out_.allocators.instructions.Create<ir::NextIteration>();
+        auto* next_it_out = mod_out_.CreateInstruction<ir::NextIteration>();
         next_iterations_.Push(next_it_out);
         return next_it_out;
     }
 
     ir::Return* CreateInstructionReturn(const pb::InstructionReturn&) {
-        return mod_out_.allocators.instructions.Create<ir::Return>();
+        return mod_out_.CreateInstruction<ir::Return>();
     }
 
     ir::Store* CreateInstructionStore(const pb::InstructionStore&) {
-        return mod_out_.allocators.instructions.Create<ir::Store>();
+        return mod_out_.CreateInstruction<ir::Store>();
     }
 
     ir::StoreVectorElement* CreateInstructionStoreVectorElement(
         const pb::InstructionStoreVectorElement&) {
-        return mod_out_.allocators.instructions.Create<ir::StoreVectorElement>();
+        return mod_out_.CreateInstruction<ir::StoreVectorElement>();
     }
 
     ir::Swizzle* CreateInstructionSwizzle(const pb::InstructionSwizzle& swizzle_in) {
-        auto* swizzle_out = mod_out_.allocators.instructions.Create<ir::Swizzle>();
+        auto* swizzle_out = mod_out_.CreateInstruction<ir::Swizzle>();
         Vector<uint32_t, 4> indices;
         for (auto idx : swizzle_in.indices()) {
             indices.Push(idx);
@@ -589,7 +610,7 @@ struct Decoder {
     }
 
     ir::Switch* CreateInstructionSwitch(const pb::InstructionSwitch& switch_in) {
-        auto* switch_out = mod_out_.allocators.instructions.Create<ir::Switch>();
+        auto* switch_out = mod_out_.CreateInstruction<ir::Switch>();
         for (auto& case_in : switch_in.cases()) {
             ir::Switch::Case case_out{};
             case_out.block = Block(case_in.block());
@@ -609,20 +630,23 @@ struct Decoder {
     }
 
     ir::CoreUnary* CreateInstructionUnary(const pb::InstructionUnary& unary_in) {
-        auto* unary_out = mod_out_.allocators.instructions.Create<ir::CoreUnary>();
+        auto* unary_out = mod_out_.CreateInstruction<ir::CoreUnary>();
         unary_out->SetOp(UnaryOp(unary_in.op()));
         return unary_out;
     }
 
     ir::UserCall* CreateInstructionUserCall(const pb::InstructionUserCall&) {
-        return mod_out_.allocators.instructions.Create<ir::UserCall>();
+        return mod_out_.CreateInstruction<ir::UserCall>();
     }
 
     ir::Var* CreateInstructionVar(const pb::InstructionVar& var_in) {
-        auto* var_out = mod_out_.allocators.instructions.Create<ir::Var>();
+        auto* var_out = mod_out_.CreateInstruction<ir::Var>();
         if (var_in.has_binding_point()) {
             auto& bp_in = var_in.binding_point();
             var_out->SetBindingPoint(bp_in.group(), bp_in.binding());
+        }
+        if (var_in.has_input_attachment_index()) {
+            var_out->SetInputAttachmentIndex(var_in.input_attachment_index());
         }
         return var_out;
     }
@@ -664,42 +688,55 @@ struct Decoder {
                 return CreateTypeExternalTexture(type_in.external_texture());
             case pb::Type::KindCase::kSampler:
                 return CreateTypeSampler(type_in.sampler());
+            case pb::Type::KindCase::kInputAttachment:
+                return CreateTypeInputAttachment(type_in.input_attachment());
+            case pb::Type::KindCase::kSubgroupMatrixLeft:
+                return CreateTypeSubgroupMatrix(SubgroupMatrixKind::kLeft,
+                                                type_in.subgroup_matrix_left());
+            case pb::Type::KindCase::kSubgroupMatrixRight:
+                return CreateTypeSubgroupMatrix(SubgroupMatrixKind::kRight,
+                                                type_in.subgroup_matrix_right());
+            case pb::Type::KindCase::kSubgroupMatrixResult:
+                return CreateTypeSubgroupMatrix(SubgroupMatrixKind::kResult,
+                                                type_in.subgroup_matrix_result());
+            case pb::Type::KindCase::kBuiltinStruct:
+                return CreateTypeBuiltinStruct(type_in.builtin_struct());
             case pb::Type::KindCase::KIND_NOT_SET:
                 break;
         }
 
-        Error() << "invalid Type.kind: " << std::to_string(type_in.kind_case());
+        err_ << "invalid Type.kind: " << std::to_string(type_in.kind_case()) << "\n";
         return mod_out_.Types().invalid();
     }
 
     const type::Type* CreateTypeBasic(pb::TypeBasic basic_in) {
         switch (basic_in) {
             case pb::TypeBasic::void_:
-                return mod_out_.Types().Get<void>();
+                return mod_out_.Types().void_();
             case pb::TypeBasic::bool_:
-                return mod_out_.Types().Get<bool>();
+                return mod_out_.Types().bool_();
             case pb::TypeBasic::i32:
-                return mod_out_.Types().Get<i32>();
+                return mod_out_.Types().i32();
             case pb::TypeBasic::u32:
-                return mod_out_.Types().Get<u32>();
+                return mod_out_.Types().u32();
             case pb::TypeBasic::f32:
-                return mod_out_.Types().Get<f32>();
+                return mod_out_.Types().f32();
             case pb::TypeBasic::f16:
-                return mod_out_.Types().Get<f16>();
+                return mod_out_.Types().f16();
 
             case pb::TypeBasic::TypeBasic_INT_MIN_SENTINEL_DO_NOT_USE_:
             case pb::TypeBasic::TypeBasic_INT_MAX_SENTINEL_DO_NOT_USE_:
                 break;
         }
 
-        Error() << "invalid TypeBasic: " << std::to_string(basic_in);
+        err_ << "invalid TypeBasic: " << std::to_string(basic_in) << "\n";
         return mod_out_.Types().invalid();
     }
 
     const type::Type* CreateTypeVector(const pb::TypeVector& vector_in) {
         const auto width = vector_in.width();
-        if (TINT_UNLIKELY(width < 2 || width > 4)) {
-            Error() << "invalid vector width";
+        if (DAWN_UNLIKELY(width < 2 || width > 4)) {
+            err_ << "invalid vector width\n";
             return mod_out_.Types().invalid();
         }
         auto* el_ty = Type(vector_in.element_type());
@@ -709,8 +746,8 @@ struct Decoder {
     const type::Type* CreateTypeMatrix(const pb::TypeMatrix& matrix_in) {
         const auto rows = matrix_in.num_rows();
         const auto cols = matrix_in.num_columns();
-        if (TINT_UNLIKELY(rows < 2 || rows > 4 || cols < 2 || cols > 4)) {
-            Error() << "invalid matrix dimensions";
+        if (DAWN_UNLIKELY(rows < 2 || rows > 4 || cols < 2 || cols > 4)) {
+            err_ << "invalid matrix dimensions\n";
             return mod_out_.Types().invalid();
         }
         auto* el_ty = Type(matrix_in.element_type());
@@ -727,12 +764,19 @@ struct Decoder {
 
     const type::Type* CreateTypeStruct(const pb::TypeStruct& struct_in) {
         auto struct_name = struct_in.name();
-        if (TINT_UNLIKELY(struct_name.empty())) {
-            Error() << "struct must have a name";
+        if (DAWN_UNLIKELY(struct_name.empty())) {
+            err_ << "struct must have a name\n";
             return mod_out_.Types().invalid();
         }
+
+        if (DAWN_UNLIKELY(struct_name.find('\0') != std::string::npos)) {
+            err_ << "structure name '" << struct_name
+                 << "' contains '\\0' before end of the string\n";
+            return mod_out_.Types().invalid();
+        }
+
         if (!struct_names_.Add(struct_name)) {
-            Error() << "duplicate struct name: " << style::Type(struct_name);
+            err_ << "duplicate struct name: " << struct_name << "\n";
             return mod_out_.Types().invalid();
         }
 
@@ -740,24 +784,31 @@ struct Decoder {
         uint32_t offset = 0;
         for (auto& member_in : struct_in.member()) {
             auto member_name = member_in.name();
-            if (TINT_UNLIKELY(member_name.empty())) {
-                Error() << "struct member must have a name";
+            if (DAWN_UNLIKELY(member_name.empty())) {
+                err_ << "struct member must have a name\n";
                 return mod_out_.Types().invalid();
             }
+
+            if (DAWN_UNLIKELY(member_name.find('\0') != std::string::npos)) {
+                err_ << "member name '" << member_name
+                     << "' contains '\\0' before end of the string\n";
+                return mod_out_.Types().invalid();
+            }
+
             auto symbol = mod_out_.symbols.Register(member_name);
             auto* type = Type(member_in.type());
             auto index = static_cast<uint32_t>(members_out.Length());
             auto align = member_in.align();
             auto size = member_in.size();
-            if (TINT_UNLIKELY(align == 0)) {
-                Error() << "struct member must have non-zero alignment";
+            if (DAWN_UNLIKELY(align == 0)) {
+                err_ << "struct member must have non-zero alignment\n";
                 align = 1;
             }
-            if (TINT_UNLIKELY(size == 0)) {
-                Error() << "struct member must have non-zero size";
+            if (DAWN_UNLIKELY(size == 0)) {
+                err_ << "struct member must have non-zero size\n";
                 size = 1;
             }
-            core::type::StructMemberAttributes attributes_out{};
+            core::IOAttributes attributes_out{};
             if (member_in.has_attributes()) {
                 auto& attributes_in = member_in.attributes();
                 if (attributes_in.has_location()) {
@@ -784,8 +835,8 @@ struct Decoder {
             offset += size;
             members_out.Push(member_out);
         }
-        if (TINT_UNLIKELY(members_out.IsEmpty())) {
-            Error() << "struct requires at least one member";
+        if (DAWN_UNLIKELY(members_out.IsEmpty())) {
+            err_ << "struct requires at least one member\n";
             return mod_out_.Types().invalid();
         }
         auto name = mod_out_.symbols.Register(struct_name);
@@ -801,14 +852,20 @@ struct Decoder {
         uint32_t stride = array_in.stride();
         uint32_t count = array_in.count();
         if (element->Align() == 0 || element->Size() == 0) {
-            Error() << "cannot create an array of an unsized type";
+            err_ << "cannot create an array of an unsized type\n";
             return mod_out_.Types().invalid();
         }
         uint32_t implicit_stride = tint::RoundUp(element->Align(), element->Size());
         if (stride < implicit_stride) {
-            Error() << "array element stride is smaller than the implicit stride";
+            err_ << "array element stride is smaller than the implicit stride\n";
             return mod_out_.Types().invalid();
         }
+        if (count >= internal_limits::kMaxArrayElementCount) {
+            err_ << "array count (" << count << ") must be less than "
+                 << internal_limits::kMaxArrayElementCount << "\n";
+            return mod_out_.Types().invalid();
+        }
+
         return count > 0 ? mod_out_.Types().array(element, count, stride)
                          : mod_out_.Types().runtime_array(element, stride);
     }
@@ -816,46 +873,44 @@ struct Decoder {
     const type::Type* CreateTypeDepthTexture(const pb::TypeDepthTexture& texture_in) {
         auto dimension = TextureDimension(texture_in.dimension());
         if (!type::DepthTexture::IsValidDimension(dimension)) {
-            Error() << "invalid DepthTexture dimension";
+            err_ << "invalid DepthTexture dimension\n";
             return mod_out_.Types().invalid();
         }
-        return mod_out_.Types().Get<type::DepthTexture>(dimension);
+        return mod_out_.Types().depth_texture(dimension);
     }
 
     const type::SampledTexture* CreateTypeSampledTexture(const pb::TypeSampledTexture& texture_in) {
         auto dimension = TextureDimension(texture_in.dimension());
         auto sub_type = Type(texture_in.sub_type());
-        return mod_out_.Types().Get<type::SampledTexture>(dimension, sub_type);
+        return mod_out_.Types().sampled_texture(dimension, sub_type);
     }
 
     const type::MultisampledTexture* CreateTypeMultisampledTexture(
         const pb::TypeMultisampledTexture& texture_in) {
         auto dimension = TextureDimension(texture_in.dimension());
         auto sub_type = Type(texture_in.sub_type());
-        return mod_out_.Types().Get<type::MultisampledTexture>(dimension, sub_type);
+        return mod_out_.Types().multisampled_texture(dimension, sub_type);
     }
 
     const type::Type* CreateTypeDepthMultisampledTexture(
         const pb::TypeDepthMultisampledTexture& texture_in) {
         auto dimension = TextureDimension(texture_in.dimension());
         if (!type::DepthMultisampledTexture::IsValidDimension(dimension)) {
-            Error() << "invalid DepthMultisampledTexture dimension";
+            err_ << "invalid DepthMultisampledTexture dimension\n";
             return mod_out_.Types().invalid();
         }
-        return mod_out_.Types().Get<type::DepthMultisampledTexture>(dimension);
+        return mod_out_.Types().depth_multisampled_texture(dimension);
     }
 
     const type::StorageTexture* CreateTypeStorageTexture(const pb::TypeStorageTexture& texture_in) {
         auto dimension = TextureDimension(texture_in.dimension());
         auto texel_format = TexelFormat(texture_in.texel_format());
         auto access = AccessControl(texture_in.access());
-        return mod_out_.Types().Get<type::StorageTexture>(
-            dimension, texel_format, access,
-            type::StorageTexture::SubtypeFor(texel_format, b.ir.Types()));
+        return mod_out_.Types().storage_texture(dimension, texel_format, access);
     }
 
     const type::ExternalTexture* CreateTypeExternalTexture(const pb::TypeExternalTexture&) {
-        return mod_out_.Types().Get<type::ExternalTexture>();
+        return mod_out_.Types().external_texture();
     }
 
     const type::Sampler* CreateTypeSampler(const pb::TypeSampler& sampler_in) {
@@ -863,9 +918,71 @@ struct Decoder {
         return mod_out_.Types().Get<type::Sampler>(kind);
     }
 
+    const type::InputAttachment* CreateTypeInputAttachment(
+        const pb::TypeInputAttachment& input_in) {
+        auto sub_type = Type(input_in.sub_type());
+        return mod_out_.Types().input_attachment(sub_type);
+    }
+
+    const type::SubgroupMatrix* CreateTypeSubgroupMatrix(
+        SubgroupMatrixKind kind,
+        const pb::TypeSubgroupMatrix& subgroup_matrix) {
+        return mod_out_.Types().subgroup_matrix(kind, Type(subgroup_matrix.sub_type()),
+                                                subgroup_matrix.columns(), subgroup_matrix.rows());
+    }
+
+    const type::Type* CreateTypeBuiltinStruct(pb::TypeBuiltinStruct builtin_struct_in) {
+        auto& ty = mod_out_.Types();
+        switch (builtin_struct_in) {
+            case pb::TypeBuiltinStruct::AtomicCompareExchangeResultI32:
+                return type::CreateAtomicCompareExchangeResult(ty, mod_out_.symbols, ty.i32());
+            case pb::TypeBuiltinStruct::AtomicCompareExchangeResultU32:
+                return type::CreateAtomicCompareExchangeResult(ty, mod_out_.symbols, ty.u32());
+            case pb::TypeBuiltinStruct::FrexpResultF16:
+                return type::CreateFrexpResult(ty, mod_out_.symbols, ty.f16());
+            case pb::TypeBuiltinStruct::FrexpResultF32:
+                return type::CreateFrexpResult(ty, mod_out_.symbols, ty.f32());
+            case pb::TypeBuiltinStruct::FrexpResultVec2F16:
+                return type::CreateFrexpResult(ty, mod_out_.symbols, ty.vec2<f16>());
+            case pb::TypeBuiltinStruct::FrexpResultVec2F32:
+                return type::CreateFrexpResult(ty, mod_out_.symbols, ty.vec2<f32>());
+            case pb::TypeBuiltinStruct::FrexpResultVec3F16:
+                return type::CreateFrexpResult(ty, mod_out_.symbols, ty.vec3<f16>());
+            case pb::TypeBuiltinStruct::FrexpResultVec3F32:
+                return type::CreateFrexpResult(ty, mod_out_.symbols, ty.vec3<f32>());
+            case pb::TypeBuiltinStruct::FrexpResultVec4F16:
+                return type::CreateFrexpResult(ty, mod_out_.symbols, ty.vec4<f16>());
+            case pb::TypeBuiltinStruct::FrexpResultVec4F32:
+                return type::CreateFrexpResult(ty, mod_out_.symbols, ty.vec4<f32>());
+            case pb::TypeBuiltinStruct::ModfResultF16:
+                return type::CreateModfResult(ty, mod_out_.symbols, ty.f16());
+            case pb::TypeBuiltinStruct::ModfResultF32:
+                return type::CreateModfResult(ty, mod_out_.symbols, ty.f32());
+            case pb::TypeBuiltinStruct::ModfResultVec2F16:
+                return type::CreateModfResult(ty, mod_out_.symbols, ty.vec2<f16>());
+            case pb::TypeBuiltinStruct::ModfResultVec2F32:
+                return type::CreateModfResult(ty, mod_out_.symbols, ty.vec2<f32>());
+            case pb::TypeBuiltinStruct::ModfResultVec3F16:
+                return type::CreateModfResult(ty, mod_out_.symbols, ty.vec2<f16>());
+            case pb::TypeBuiltinStruct::ModfResultVec3F32:
+                return type::CreateModfResult(ty, mod_out_.symbols, ty.vec3<f32>());
+            case pb::TypeBuiltinStruct::ModfResultVec4F16:
+                return type::CreateModfResult(ty, mod_out_.symbols, ty.vec2<f16>());
+            case pb::TypeBuiltinStruct::ModfResultVec4F32:
+                return type::CreateModfResult(ty, mod_out_.symbols, ty.vec4<f32>());
+
+            case pb::TypeBuiltinStruct::TypeBuiltinStruct_INT_MIN_SENTINEL_DO_NOT_USE_:
+            case pb::TypeBuiltinStruct::TypeBuiltinStruct_INT_MAX_SENTINEL_DO_NOT_USE_:
+                break;
+        }
+
+        err_ << "invalid TypeBuiltinStruct: " << std::to_string(builtin_struct_in) << "\n";
+        return mod_out_.Types().invalid();
+    }
+
     const type::Type* Type(size_t id) {
-        if (TINT_UNLIKELY(id >= types_.Length())) {
-            Error() << "type id " << id << " out of range";
+        if (DAWN_UNLIKELY(id >= types_.Length())) {
+            err_ << "type id " << id << " out of range\n";
             return mod_out_.Types().invalid();
         }
         return types_[id];
@@ -897,7 +1014,7 @@ struct Decoder {
         }
 
         if (!value_out) {
-            Error() << "invalid value kind: " << std::to_string(value_in.kind_case());
+            err_ << "invalid value kind: " << std::to_string(value_in.kind_case()) << "\n";
             return b.InvalidConstant();
         }
 
@@ -908,6 +1025,11 @@ struct Decoder {
         auto* type = Type(res_in.type());
         auto* res_out = b.InstructionResult(type);
         if (!res_in.name().empty()) {
+            if (DAWN_UNLIKELY(res_in.name().find('\0') != std::string::npos)) {
+                err_ << "result name '" << res_in.name()
+                     << "' contains '\\0' before end of the string\n";
+                return nullptr;
+            }
             mod_out_.SetName(res_out, res_in.name());
         }
         return res_out;
@@ -917,6 +1039,11 @@ struct Decoder {
         auto* type = Type(param_in.type());
         auto* param_out = b.FunctionParam(type);
         if (!param_in.name().empty()) {
+            if (DAWN_UNLIKELY(param_in.name().find('\0') != std::string::npos)) {
+                err_ << "param name '" << param_in.name()
+                     << "' contains '\\0' before end of the string\n";
+                return nullptr;
+            }
             mod_out_.SetName(param_out, param_in.name());
         }
 
@@ -927,7 +1054,13 @@ struct Decoder {
                 param_out->SetBindingPoint(bp_in.group(), bp_in.binding());
             }
             if (attrs_in.has_location()) {
-                param_out->SetLocation(Location(attrs_in.location()));
+                param_out->SetLocation(attrs_in.location());
+            }
+            if (attrs_in.has_color()) {
+                param_out->SetColor(attrs_in.color());
+            }
+            if (attrs_in.has_interpolation()) {
+                param_out->SetInterpolation(Interpolation(attrs_in.interpolation()));
             }
             if (attrs_in.has_builtin()) {
                 param_out->SetBuiltin(BuiltinValue(attrs_in.builtin()));
@@ -944,6 +1077,11 @@ struct Decoder {
         auto* type = Type(param_in.type());
         auto* param_out = b.BlockParam(type);
         if (!param_in.name().empty()) {
+            if (DAWN_UNLIKELY(param_in.name().find('\0') != std::string::npos)) {
+                err_ << "param name '" << param_in.name()
+                     << "' contains '\\0' before end of the string\n";
+                return nullptr;
+            }
             mod_out_.SetName(param_out, param_in.name());
         }
         return param_out;
@@ -952,8 +1090,8 @@ struct Decoder {
     ir::Constant* Constant(uint32_t value_id) { return b.Constant(ConstantValue(value_id)); }
 
     ir::Value* Value(uint32_t id) {
-        if (TINT_UNLIKELY(id > values_.Length())) {
-            Error() << "value id " << id << " out of range";
+        if (DAWN_UNLIKELY(id > values_.Length())) {
+            err_ << "value id " << id << " out of range\n";
             return nullptr;
         }
         return id > 0 ? values_[id - 1] : nullptr;
@@ -962,11 +1100,11 @@ struct Decoder {
     template <typename T>
     T* ValueAs(uint32_t id) {
         auto* value = Value(id);
-        if (auto cast = As<T>(value); TINT_LIKELY(cast)) {
+        if (auto cast = As<T>(value); DAWN_LIKELY(cast)) {
             return cast;
         }
-        Error() << "value " << id << " is " << (value ? value->TypeInfo().name : "<null>")
-                << " expected " << TypeInfo::Of<T>().name;
+        err_ << "value " << id << " is " << (value ? value->TypeInfo().name : "<null>")
+             << " expected " << TypeInfo::Of<T>().name << "\n";
         return nullptr;
     }
 
@@ -984,7 +1122,7 @@ struct Decoder {
             case pb::ConstantValue::KindCase::KIND_NOT_SET:
                 break;
         }
-        Error() << "invalid ConstantValue.kind: " << std::to_string(value_in.kind_case());
+        err_ << "invalid ConstantValue.kind: " << std::to_string(value_in.kind_case()) << "\n";
         return b.InvalidConstant()->Value();
     }
 
@@ -1003,7 +1141,8 @@ struct Decoder {
             case pb::ConstantValueScalar::KindCase::KIND_NOT_SET:
                 break;
         }
-        Error() << "invalid ConstantValueScalar.kind: " << std::to_string(value_in.kind_case());
+        err_ << "invalid ConstantValueScalar.kind: " << std::to_string(value_in.kind_case())
+             << "\n";
         return b.InvalidConstant()->Value();
     }
 
@@ -1012,22 +1151,22 @@ struct Decoder {
         auto* type = Type(composite_in.type());
         auto type_elements = type->Elements();
         size_t num_values = static_cast<size_t>(composite_in.elements().size());
-        if (TINT_UNLIKELY(type_elements.count == 0)) {
-            Error() << "cannot create a composite of type " << type->FriendlyName();
+        if (DAWN_UNLIKELY(type_elements.count == 0)) {
+            err_ << "cannot create a composite of type " << type->FriendlyName() << "\n";
             return b.InvalidConstant()->Value();
         }
-        if (TINT_UNLIKELY(type_elements.count != num_values)) {
-            Error() << "constant composite type " << type->FriendlyName() << " expects "
-                    << type_elements.count << " elements, but " << num_values << " values encoded";
+        if (DAWN_UNLIKELY(type_elements.count != num_values)) {
+            err_ << "constant composite type " << type->FriendlyName() << " expects "
+                 << type_elements.count << " elements, but " << num_values << " values encoded\n";
             return b.InvalidConstant()->Value();
         }
         Vector<const core::constant::Value*, 8> elements_out;
         for (auto element_id : composite_in.elements()) {
             uint32_t i = static_cast<uint32_t>(elements_out.Length());
             auto* value = ConstantValue(element_id);
-            if (auto* el_type = type->Element(i); TINT_UNLIKELY(value->Type() != el_type)) {
-                Error() << "constant composite element value type " << value->Type()->FriendlyName()
-                        << " does not match element type " << el_type->FriendlyName();
+            if (auto* el_type = type->Element(i); DAWN_UNLIKELY(value->Type() != el_type)) {
+                err_ << "constant composite element value type " << value->Type()->FriendlyName()
+                     << " does not match element type " << el_type->FriendlyName() << "\n";
                 return b.InvalidConstant()->Value();
             }
             elements_out.Push(value);
@@ -1038,16 +1177,22 @@ struct Decoder {
     const core::constant::Value* CreateConstantSplat(const pb::ConstantValueSplat& splat_in) {
         auto* type = Type(splat_in.type());
         uint32_t num_elements = type->Elements().count;
-        if (TINT_UNLIKELY(num_elements == 0)) {
-            Error() << "cannot create a splat of type " << type->FriendlyName();
+        if (DAWN_UNLIKELY(num_elements == 0)) {
+            err_ << "cannot create a splat of type " << type->FriendlyName() << "\n";
+            return b.InvalidConstant()->Value();
+        }
+        if (DAWN_UNLIKELY(num_elements > internal_limits::kMaxArrayConstructorElements)) {
+            err_ << "array constructor has excessive number of elements (>"
+                 << internal_limits::kMaxArrayConstructorElements << ")\n";
             return b.InvalidConstant()->Value();
         }
         auto* value = ConstantValue(splat_in.elements());
         for (uint32_t i = 0; i < num_elements; i++) {
             auto* el_type = type->Element(i);
-            if (TINT_UNLIKELY(el_type != value->Type())) {
-                Error() << "constant splat element value type " << value->Type()->FriendlyName()
-                        << " does not match element " << i << " type " << el_type->FriendlyName();
+            if (DAWN_UNLIKELY(el_type != value->Type())) {
+                err_ << "constant splat element value type " << value->Type()->FriendlyName()
+                     << " does not match element " << i << " type " << el_type->FriendlyName()
+                     << "\n";
                 return b.InvalidConstant()->Value();
             }
         }
@@ -1055,8 +1200,8 @@ struct Decoder {
     }
 
     const core::constant::Value* ConstantValue(uint32_t id) {
-        if (TINT_UNLIKELY(id >= constant_values_.Length())) {
-            Error() << "constant value id " << id << " out of range";
+        if (DAWN_UNLIKELY(id >= constant_values_.Length())) {
+            err_ << "constant value id " << id << " out of range\n";
             return b.InvalidConstant()->Value();
         }
         return constant_values_[id];
@@ -1065,15 +1210,6 @@ struct Decoder {
     ////////////////////////////////////////////////////////////////////////////
     // Attributes
     ////////////////////////////////////////////////////////////////////////////
-    ir::Location Location(const pb::Location& location_in) {
-        core::ir::Location location_out{};
-        location_out.value = location_in.value();
-        if (location_in.has_interpolation()) {
-            location_out.interpolation = Interpolation(location_in.interpolation());
-        }
-        return location_out;
-    }
-
     core::Interpolation Interpolation(const pb::Interpolation& interpolation_in) {
         core::Interpolation interpolation_out{};
         interpolation_out.type = InterpolationType(interpolation_in.type());
@@ -1303,6 +1439,10 @@ struct Decoder {
                 return core::InterpolationSampling::kCentroid;
             case pb::InterpolationSampling::sample:
                 return core::InterpolationSampling::kSample;
+            case pb::InterpolationSampling::first:
+                return core::InterpolationSampling::kFirst;
+            case pb::InterpolationSampling::either:
+                return core::InterpolationSampling::kEither;
 
             case pb::InterpolationSampling::InterpolationSampling_INT_MIN_SENTINEL_DO_NOT_USE_:
             case pb::InterpolationSampling::InterpolationSampling_INT_MAX_SENTINEL_DO_NOT_USE_:
@@ -1315,6 +1455,8 @@ struct Decoder {
         switch (in) {
             case pb::BuiltinValue::point_size:
                 return core::BuiltinValue::kPointSize;
+            case pb::BuiltinValue::cull_distance:
+                return core::BuiltinValue::kCullDistance;
             case pb::BuiltinValue::frag_depth:
                 return core::BuiltinValue::kFragDepth;
             case pb::BuiltinValue::front_facing:
@@ -1343,7 +1485,8 @@ struct Decoder {
                 return core::BuiltinValue::kVertexIndex;
             case pb::BuiltinValue::workgroup_id:
                 return core::BuiltinValue::kWorkgroupId;
-
+            case pb::BuiltinValue::clip_distances:
+                return core::BuiltinValue::kClipDistances;
             case pb::BuiltinValue::BuiltinValue_INT_MIN_SENTINEL_DO_NOT_USE_:
             case pb::BuiltinValue::BuiltinValue_INT_MAX_SENTINEL_DO_NOT_USE_:
                 break;
@@ -1593,8 +1736,64 @@ struct Decoder {
                 return core::BuiltinFn::kAtomicCompareExchangeWeak;
             case pb::BuiltinFn::subgroup_ballot:
                 return core::BuiltinFn::kSubgroupBallot;
+            case pb::BuiltinFn::subgroup_elect:
+                return core::BuiltinFn::kSubgroupElect;
             case pb::BuiltinFn::subgroup_broadcast:
                 return core::BuiltinFn::kSubgroupBroadcast;
+            case pb::BuiltinFn::subgroup_broadcast_first:
+                return core::BuiltinFn::kSubgroupBroadcastFirst;
+            case pb::BuiltinFn::subgroup_shuffle:
+                return core::BuiltinFn::kSubgroupShuffle;
+            case pb::BuiltinFn::subgroup_shuffle_xor:
+                return core::BuiltinFn::kSubgroupShuffleXor;
+            case pb::BuiltinFn::subgroup_shuffle_up:
+                return core::BuiltinFn::kSubgroupShuffleUp;
+            case pb::BuiltinFn::subgroup_shuffle_down:
+                return core::BuiltinFn::kSubgroupShuffleDown;
+            case pb::BuiltinFn::input_attachment_load:
+                return core::BuiltinFn::kInputAttachmentLoad;
+            case pb::BuiltinFn::subgroup_add:
+                return core::BuiltinFn::kSubgroupAdd;
+            case pb::BuiltinFn::subgroup_inclusive_add:
+                return core::BuiltinFn::kSubgroupInclusiveAdd;
+            case pb::BuiltinFn::subgroup_exclusive_add:
+                return core::BuiltinFn::kSubgroupExclusiveAdd;
+            case pb::BuiltinFn::subgroup_mul:
+                return core::BuiltinFn::kSubgroupMul;
+            case pb::BuiltinFn::subgroup_inclusive_mul:
+                return core::BuiltinFn::kSubgroupInclusiveMul;
+            case pb::BuiltinFn::subgroup_exclusive_mul:
+                return core::BuiltinFn::kSubgroupExclusiveMul;
+            case pb::BuiltinFn::subgroup_and:
+                return core::BuiltinFn::kSubgroupAnd;
+            case pb::BuiltinFn::subgroup_or:
+                return core::BuiltinFn::kSubgroupOr;
+            case pb::BuiltinFn::subgroup_xor:
+                return core::BuiltinFn::kSubgroupXor;
+            case pb::BuiltinFn::subgroup_min:
+                return core::BuiltinFn::kSubgroupMin;
+            case pb::BuiltinFn::subgroup_max:
+                return core::BuiltinFn::kSubgroupMax;
+            case pb::BuiltinFn::subgroup_all:
+                return core::BuiltinFn::kSubgroupAll;
+            case pb::BuiltinFn::subgroup_any:
+                return core::BuiltinFn::kSubgroupAny;
+            case pb::BuiltinFn::quad_broadcast:
+                return core::BuiltinFn::kQuadBroadcast;
+            case pb::BuiltinFn::quad_swap_x:
+                return core::BuiltinFn::kQuadSwapX;
+            case pb::BuiltinFn::quad_swap_y:
+                return core::BuiltinFn::kQuadSwapY;
+            case pb::BuiltinFn::quad_swap_diagonal:
+                return core::BuiltinFn::kQuadSwapDiagonal;
+            case pb::BuiltinFn::subgroup_matrix_load:
+                return core::BuiltinFn::kSubgroupMatrixLoad;
+            case pb::BuiltinFn::subgroup_matrix_store:
+                return core::BuiltinFn::kSubgroupMatrixStore;
+            case pb::BuiltinFn::subgroup_matrix_multiply:
+                return core::BuiltinFn::kSubgroupMatrixMultiply;
+            case pb::BuiltinFn::subgroup_matrix_multiply_accumulate:
+                return core::BuiltinFn::kSubgroupMatrixMultiply;
 
             case pb::BuiltinFn::BuiltinFn_INT_MIN_SENTINEL_DO_NOT_USE_:
             case pb::BuiltinFn::BuiltinFn_INT_MAX_SENTINEL_DO_NOT_USE_:

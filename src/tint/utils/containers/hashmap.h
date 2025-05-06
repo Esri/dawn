@@ -71,10 +71,8 @@ inline static bool operator==(const HashmapEntry<K1, V1>& lhs, const HashmapEntr
 /// @param out the stream to write to
 /// @param key_value the HashmapEntry to write
 /// @returns out so calls can be chained
-template <typename STREAM,
-          typename KEY,
-          typename VALUE,
-          typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM, typename KEY, typename VALUE>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, const HashmapEntry<KEY, VALUE>& key_value) {
     return out << "[" << key_value.key << ": " << key_value.value << "]";
 }
@@ -90,7 +88,7 @@ struct GetResult {
     T* value = nullptr;
 
     /// @returns `true` if #value is not null.
-    operator bool() const { return value; }
+    explicit operator bool() const { return value; }
 
     /// @returns the dereferenced value, which must not be null.
     T& operator*() const { return *value; }
@@ -129,7 +127,7 @@ struct AddResult {
     bool added = false;
 
     /// @returns #added
-    operator bool() const { return added; }
+    explicit operator bool() const { return added; }
 };
 
 /// An unordered hashmap, with a fixed-size capacity that avoids heap allocations.
@@ -346,13 +344,8 @@ struct Hasher<Hashmap<K, V, N, HASH, EQUAL>> {
 /// @param out the stream to write to
 /// @param map the Hashmap to write
 /// @returns out so calls can be chained
-template <typename STREAM,
-          typename KEY,
-          typename VALUE,
-          size_t N,
-          typename HASH,
-          typename EQUAL,
-          typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM, typename KEY, typename VALUE, size_t N, typename HASH, typename EQUAL>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, const Hashmap<KEY, VALUE, N, HASH, EQUAL>& map) {
     out << "Hashmap{";
     bool first = true;

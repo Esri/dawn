@@ -103,9 +103,9 @@ using AccessOp = std::variant<MemberAccess, IndexAccess>;
 /// A AccessShape describes the static "path" from a root variable to an element within the
 /// variable.
 ///
-/// Functions that have pointer parameters which need transforming will be forked into one or more
-/// 'variants'. Each variant has different AccessShapes for the pointer parameters - the transform
-/// will only emit one variant when the shapes of the pointer parameter accesses match.
+/// Functions that have parameters which need transforming will be forked into one or more
+/// 'variants'. Each variant has different AccessShapes for the parameters - the transform will only
+/// emit one variant when the shapes of the parameter accesses match.
 ///
 /// Array accessors index expressions are held externally to the AccessShape, so
 /// AccessShape will be considered equal even if the array or matrix index values differ.
@@ -260,13 +260,15 @@ struct State {
     /// transforming. These functions will be replaced with variants based on the access shapes.
     void GatherFnsThatNeedForking() {
         for (auto& fn : ir.functions) {
-            if (fn->Alive()) {
-                for (auto* param : fn->Params()) {
-                    if (ParamNeedsTransforming(param)) {
-                        need_forking.Add(fn, fn_info_allocator.Create());
-                        break;
-                    }
+            if (!fn->Alive()) {
+                continue;
+            }
+            for (auto* param : fn->Params()) {
+                if (!NeedsTransforming(param)) {
+                    continue;
                 }
+                need_forking.Add(fn, fn_info_allocator.Create());
+                break;
             }
         }
     }
@@ -311,7 +313,17 @@ struct State {
             for (size_t i = 0, n = call->Args().Length(); i < n; i++) {
                 auto* arg = call->Args()[i];
                 auto* param = target->Params()[i];
-                if (ParamNeedsTransforming(param)) {
+
+                if (HandleNeedsTransforming(param)) {
+                    b.InsertBefore(call, [&] {
+                        // Get the handle chain for the pointer argument.
+                        auto chain = HandleChainFor(arg);
+                        // Record the parameter shape for the variant's signature.
+                        signature.Add(i, chain.shape);
+                    });
+                    // Record that this handle argument has been replaced.
+                    replaced_args.Push(arg);
+                } else if (ParamNeedsTransforming(param)) {
                     // This argument needs replacing with:
                     // * Nothing: root is a module-scope var and the access chain has no indicies.
                     // * A single pointer argument to the root variable: The root is a pointer
@@ -333,7 +345,7 @@ struct State {
                         if (size_t array_len = chain.indices.Length(); array_len > 0) {
                             auto* array = ty.array(ty.u32(), static_cast<uint32_t>(array_len));
                             auto* indices = b.Construct(array, std::move(chain.indices));
-                            new_args.Push(indices->Result(0));
+                            new_args.Push(indices->Result());
                         }
                         // Record the parameter shape for the variant's signature.
                         signature.Add(i, chain.shape);
@@ -394,6 +406,35 @@ struct State {
         }
     }
 
+    /// Walks the instructions that built `value` to obtain the root variable.
+    /// @param value the value to get the root for
+    /// @return an AccessChain
+    AccessChain HandleChainFor(Value* value) {
+        AccessChain chain;
+        TINT_ASSERT(value->Alive());
+
+        tint::Switch(
+            value,  //
+            [&](InstructionResult* res) {
+                auto* inst = res->Instruction()->As<Load>();
+                TINT_ASSERT(inst);
+
+                auto* var_res = inst->From()->As<InstructionResult>();
+                TINT_ASSERT(var_res);
+
+                auto* var = var_res->Instruction()->As<Var>();
+                TINT_ASSERT(var);
+                TINT_ASSERT(var->Block() == ir.root_block);
+
+                // Root handle is a module-scope 'var'
+                chain.shape.root = RootModuleScopeVar{var};
+                chain.root_ptr = var->Result();
+            },
+            TINT_ICE_ON_NO_MATCH);
+
+        return chain;
+    }
+
     /// Walks the instructions that built #value to obtain the root variable and the pointer
     /// accesses.
     /// @param value the pointer value to get the access chain for
@@ -433,7 +474,7 @@ struct State {
                                 // Array or matrix access.
                                 // Convert index to u32 if it isn't already.
                                 if (!idx->Type()->Is<type::U32>()) {
-                                    idx = b.Convert(ty.u32(), idx)->Result(0);
+                                    idx = b.Convert(ty.u32(), idx)->Result();
                                 }
 
                                 ops.Push(IndexAccess{});
@@ -452,7 +493,7 @@ struct State {
                                 chain.indices.Push(idx);
                             }
 
-                            TINT_ASSERT(obj_ty == access->Result(0)->Type()->UnwrapPtr());
+                            TINT_ASSERT(obj_ty == access->Result()->Type()->UnwrapPtr());
                             return access->Object();
                         },
                         [&](Var* var) {
@@ -463,9 +504,9 @@ struct State {
                             } else {
                                 // Root pointer is a function-scope 'var'
                                 chain.shape.root =
-                                    RootPtrParameter{var->Result(0)->Type()->As<type::Pointer>()};
+                                    RootPtrParameter{var->Result()->Type()->As<type::Pointer>()};
                             }
-                            chain.root_ptr = var->Result(0);
+                            chain.root_ptr = var->Result();
                             return nullptr;
                         },
                         [&](Let* let) { return let->Value(); },  //
@@ -500,7 +541,7 @@ struct State {
             // For each parameter in the original function...
             for (size_t param_idx = 0; param_idx < old_params.Length(); param_idx++) {
                 auto* old_param = old_params[param_idx];
-                if (!ParamNeedsTransforming(old_param)) {
+                if (!NeedsTransforming(old_param)) {
                     // Parameter does not need transforming.
                     new_params.Push(old_param);
                     continue;
@@ -521,43 +562,55 @@ struct State {
                     root_ptr = root_ptr_param;
                 } else if (auto* global = std::get_if<RootModuleScopeVar>(&shape->root)) {
                     // Root pointer is a module-scope var
-                    root_ptr = global->var->Result(0);
+                    root_ptr = global->var->Result();
                 } else {
                     TINT_ICE() << "unhandled AccessShape root variant";
                 }
 
-                // Build the access indices parameter, if required.
-                ir::FunctionParam* indices_param = nullptr;
-                if (uint32_t n = shape->NumIndexAccesses(); n > 0) {
-                    // Indices are passed as an array of u32
-                    indices_param = b.FunctionParam(ty.array(ty.u32(), n));
-                    new_params.Push(indices_param);
+                if (ParamNeedsTransforming(old_param)) {
+                    // Build the access indices parameter, if required.
+                    ir::FunctionParam* indices_param = nullptr;
+                    if (uint32_t n = shape->NumIndexAccesses(); n > 0) {
+                        // Indices are passed as an array of u32
+                        indices_param = b.FunctionParam(ty.array(ty.u32(), n));
+                        new_params.Push(indices_param);
+                    }
+
+                    // Generate names for the new parameter(s) based on the replaced parameter name.
+                    if (auto param_name = ir.NameOf(old_param); param_name.IsValid()) {
+                        // Propagate old parameter name to the new parameters
+                        if (root_ptr_param) {
+                            ir.SetName(root_ptr_param, param_name.Name() + "_root");
+                        }
+                        if (indices_param) {
+                            ir.SetName(indices_param, param_name.Name() + "_indices");
+                        }
+                    }
+
+                    // Rebuild the pointer from the root pointer and accesses.
+                    uint32_t index_index = 0;
+                    auto chain = Transform(shape->ops, [&](const AccessOp& op) -> Value* {
+                        if (auto* m = std::get_if<MemberAccess>(&op)) {
+                            return b.Constant(u32(m->member->Index()));
+                        }
+                        auto* access = b.Access(ty.u32(), indices_param, u32(index_index++));
+                        return access->Result();
+                    });
+
+                    auto* new_ptr = root_ptr;
+                    if (!chain.IsEmpty()) {
+                        new_ptr = b.Access(old_param->Type(), root_ptr, std::move(chain))->Result();
+                    }
+
+                    // Replace the now removed parameter value with the access instruction
+                    old_param->ReplaceAllUsesWith(new_ptr);
+                } else if (HandleNeedsTransforming(old_param)) {
+                    auto* load = b.Load(root_ptr);
+
+                    // Replace the now removed parameter value with the load instruction
+                    old_param->ReplaceAllUsesWith(load->Result());
                 }
 
-                // Generate names for the new parameter(s) based on the replaced parameter name.
-                if (auto param_name = ir.NameOf(old_param); param_name.IsValid()) {
-                    // Propagate old parameter name to the new parameters
-                    if (root_ptr_param) {
-                        ir.SetName(root_ptr_param, param_name.Name() + "_root");
-                    }
-                    if (indices_param) {
-                        ir.SetName(indices_param, param_name.Name() + "_indices");
-                    }
-                }
-
-                // Rebuild the pointer from the root pointer and accesses.
-                uint32_t index_index = 0;
-                auto chain = Transform(shape->ops, [&](const AccessOp& op) -> Value* {
-                    if (auto* m = std::get_if<MemberAccess>(&op)) {
-                        return b.Constant(u32(m->member->Index()));
-                    }
-                    auto* access = b.Access(ty.u32(), indices_param, u32(index_index++));
-                    return access->Result(0);
-                });
-                auto* access = b.Access(old_param->Type(), root_ptr, std::move(chain));
-
-                // Replace the now removed parameter value with the access instruction
-                old_param->ReplaceAllUsesWith(access->Result(0));
                 old_param->Destroy();
             }
 
@@ -581,6 +634,20 @@ struct State {
                 ir.functions.Push(fn);
             }
         }
+    }
+
+    /// @return true if @p param is a parameter that requires transforming, based on the
+    /// transform options.
+    /// @param param the function parameter
+    bool NeedsTransforming(FunctionParam* param) const {
+        return HandleNeedsTransforming(param) || ParamNeedsTransforming(param);
+    }
+
+    /// @return true if @p param is a handle parameter that requires transforming, based on the
+    /// transform options.
+    /// @param param the function parameter
+    bool HandleNeedsTransforming(FunctionParam* param) const {
+        return options.transform_handle && param->Type()->IsHandle();
     }
 
     /// @return true if @p param is a pointer parameter that requires transforming, based on the
@@ -608,7 +675,7 @@ struct State {
     /// @param value the pointer value that was used as a now replaced pointer argument.
     void DeleteDeadInstructions(ir::Value* value) {
         // While value has no uses...
-        while (value && value->Usages().Count() == 0) {
+        while (value && !value->IsUsed()) {
             auto* inst_res = value->As<InstructionResult>();
             if (!inst_res) {
                 return;  // Only instructions can be removed.
@@ -622,6 +689,12 @@ struct State {
                 [&](Let* let) {
                     TINT_DEFER(let->Destroy());
                     return let->Value();
+                },
+                [&](Load* load) {
+                    if (options.transform_handle) {
+                        TINT_DEFER(load->Destroy());
+                    }
+                    return nullptr;
                 });
         }
     }
@@ -630,7 +703,8 @@ struct State {
 }  // namespace
 
 Result<SuccessType> DirectVariableAccess(Module& ir, const DirectVariableAccessOptions& options) {
-    auto result = ValidateAndDumpIfNeeded(ir, "DirectVariableAccess transform");
+    auto result =
+        ValidateAndDumpIfNeeded(ir, "core.DirectVariableAccess", kDirectVariableAccessCapabilities);
     if (result != Success) {
         return result;
     }

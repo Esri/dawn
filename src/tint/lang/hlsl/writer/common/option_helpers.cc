@@ -29,14 +29,14 @@
 
 #include <utility>
 
-#include "src/tint/utils/containers/hashset.h"
+#include "src/tint/utils/containers/hashmap.h"
 
 namespace tint::hlsl::writer {
 
 /// binding::BindingInfo to tint::BindingPoint map
 using InfoToPointMap = tint::Hashmap<binding::BindingInfo, tint::BindingPoint, 8>;
 
-Result<SuccessType> ValidateBindingOptions(const Options& options) {
+diag::Result<SuccessType> ValidateBindingOptions(const Options& options) {
     diag::List diagnostics;
 
     tint::Hashmap<tint::BindingPoint, binding::BindingInfo, 8> seen_wgsl_bindings{};
@@ -94,27 +94,27 @@ Result<SuccessType> ValidateBindingOptions(const Options& options) {
     // Storage and uniform are both [[buffer()]]
     if (!valid(seen_hlsl_buffer_bindings, options.bindings.uniform)) {
         diagnostics.AddNote(Source{}) << "when processing uniform";
-        return Failure{std::move(diagnostics)};
+        return diag::Failure{std::move(diagnostics)};
     }
     if (!valid(seen_hlsl_buffer_bindings, options.bindings.storage)) {
         diagnostics.AddNote(Source{}) << "when processing storage";
-        return Failure{std::move(diagnostics)};
+        return diag::Failure{std::move(diagnostics)};
     }
 
     // Sampler is [[sampler()]]
     if (!valid(seen_hlsl_sampler_bindings, options.bindings.sampler)) {
         diagnostics.AddNote(Source{}) << "when processing sampler";
-        return Failure{std::move(diagnostics)};
+        return diag::Failure{std::move(diagnostics)};
     }
 
     // Texture and storage texture are [[texture()]]
     if (!valid(seen_hlsl_texture_bindings, options.bindings.texture)) {
         diagnostics.AddNote(Source{}) << "when processing texture";
-        return Failure{std::move(diagnostics)};
+        return diag::Failure{std::move(diagnostics)};
     }
     if (!valid(seen_hlsl_texture_bindings, options.bindings.storage_texture)) {
         diagnostics.AddNote(Source{}) << "when processing storage_texture";
-        return Failure{std::move(diagnostics)};
+        return diag::Failure{std::move(diagnostics)};
     }
 
     for (const auto& it : options.bindings.external_texture) {
@@ -126,22 +126,22 @@ Result<SuccessType> ValidateBindingOptions(const Options& options) {
         // Validate with the actual source regardless of what the remapper will do
         if (wgsl_seen(src_binding, plane0)) {
             diagnostics.AddNote(Source{}) << "when processing external_texture";
-            return Failure{std::move(diagnostics)};
+            return diag::Failure{std::move(diagnostics)};
         }
 
         // Plane0 & Plane1 are [[texture()]]
         if (hlsl_seen(seen_hlsl_texture_bindings, plane0, src_binding)) {
             diagnostics.AddNote(Source{}) << "when processing external_texture";
-            return Failure{std::move(diagnostics)};
+            return diag::Failure{std::move(diagnostics)};
         }
         if (hlsl_seen(seen_hlsl_texture_bindings, plane1, src_binding)) {
             diagnostics.AddNote(Source{}) << "when processing external_texture";
-            return Failure{std::move(diagnostics)};
+            return diag::Failure{std::move(diagnostics)};
         }
         // Metadata is [[buffer()]]
         if (hlsl_seen(seen_hlsl_buffer_bindings, metadata, src_binding)) {
             diagnostics.AddNote(Source{}) << "when processing external_texture";
-            return Failure{std::move(diagnostics)};
+            return diag::Failure{std::move(diagnostics)};
         }
     }
 
@@ -157,7 +157,7 @@ Result<SuccessType> ValidateBindingOptions(const Options& options) {
 void PopulateBindingRelatedOptions(
     const Options& options,
     RemapperData& remapper_data,
-    ExternalTextureOptions& external_texture,
+    tint::transform::multiplanar::BindingsMap& multiplanar_map,
     ArrayLengthFromUniformOptions& array_length_from_uniform_options) {
     auto create_remappings = [&remapper_data](const auto& hsh) {
         for (const auto& it : hsh) {
@@ -188,14 +188,14 @@ void PopulateBindingRelatedOptions(
         const binding::BindingInfo& plane1 = it.second.plane1;
         const binding::BindingInfo& metadata = it.second.metadata;
 
-        BindingPoint plane0_binding_point{plane0.group, plane0.binding};
-        BindingPoint plane1_binding_point{plane1.group, plane1.binding};
-        BindingPoint metadata_binding_point{metadata.group, metadata.binding};
+        const BindingPoint plane0_binding_point{plane0.group, plane0.binding};
+        const BindingPoint plane1_binding_point{plane1.group, plane1.binding};
+        const BindingPoint metadata_binding_point{metadata.group, metadata.binding};
 
         // Use the re-bound HLSL plane0 value for the lookup key.
-        external_texture.bindings_map.emplace(
-            plane0_binding_point,
-            ExternalTextureOptions::BindingPoints{plane1_binding_point, metadata_binding_point});
+        multiplanar_map.emplace(plane0_binding_point,
+                                tint::transform::multiplanar::BindingPoints{
+                                    plane1_binding_point, metadata_binding_point});
 
         // Bindings which go to the same slot in HLSL do not need to be re-bound.
         if (src_binding_point == plane0_binding_point) {

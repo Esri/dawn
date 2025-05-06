@@ -28,7 +28,6 @@
 #include "src/tint/lang/core/ir/transform/conversion_polyfill.h"
 
 #include <cmath>
-#include <utility>
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
@@ -71,10 +70,10 @@ struct State {
         for (auto* inst : ir.Instructions()) {
             if (auto* convert = inst->As<ir::Convert>()) {
                 auto* src_ty = convert->Args()[0]->Type();
-                auto* res_ty = convert->Result(0)->Type();
-                if (config.ftoi &&                          //
-                    src_ty->is_float_scalar_or_vector() &&  //
-                    res_ty->is_integer_scalar_or_vector()) {
+                auto* res_ty = convert->Result()->Type();
+                if (config.ftoi &&                      //
+                    src_ty->IsFloatScalarOrVector() &&  //
+                    res_ty->IsIntegerScalarOrVector()) {
                     ftoi_worklist.Push(convert);
                 }
             }
@@ -91,7 +90,7 @@ struct State {
     /// result to within the limit of the destination type.
     /// @param convert the conversion instruction
     void ftoi(ir::Convert* convert) {
-        auto* res_ty = convert->Result(0)->Type();
+        auto* res_ty = convert->Result()->Type();
         auto* src_ty = convert->Args()[0]->Type();
         auto* src_el_ty = src_ty->DeepestElement();
 
@@ -101,13 +100,13 @@ struct State {
             StringStream name;
             name << "tint_";
             if (auto* src_vec = src_ty->As<type::Vector>()) {
-                name << "v" << src_vec->Width() << src_vec->type()->FriendlyName();
+                name << "v" << src_vec->Width() << src_vec->Type()->FriendlyName();
             } else {
                 name << src_ty->FriendlyName();
             }
             name << "_to_";
             if (auto* res_vec = res_ty->As<type::Vector>()) {
-                name << "v" << res_vec->Width() << res_vec->type()->FriendlyName();
+                name << "v" << res_vec->Width() << res_vec->Type()->FriendlyName();
             } else {
                 name << res_ty->FriendlyName();
             }
@@ -121,38 +120,38 @@ struct State {
             } limits;
 
             // Integer limits.
-            if (res_ty->is_signed_integer_scalar_or_vector()) {
-                limits.low_limit_i = MatchWidth(b.Constant(i32(INT32_MIN)), res_ty);
-                limits.high_limit_i = MatchWidth(b.Constant(i32(INT32_MAX)), res_ty);
+            if (res_ty->IsSignedIntegerScalarOrVector()) {
+                limits.low_limit_i = b.MatchWidth(i32(INT32_MIN), res_ty);
+                limits.high_limit_i = b.MatchWidth(i32(INT32_MAX), res_ty);
             } else {
-                limits.low_limit_i = MatchWidth(b.Constant(u32(0)), res_ty);
-                limits.high_limit_i = MatchWidth(b.Constant(u32(UINT32_MAX)), res_ty);
+                limits.low_limit_i = b.MatchWidth(u32(0), res_ty);
+                limits.high_limit_i = b.MatchWidth(u32(UINT32_MAX), res_ty);
             }
 
             // Largest integers representable in the source floating point format.
             if (src_el_ty->Is<type::F32>()) {
-                if (res_ty->is_signed_integer_scalar_or_vector()) {
+                if (res_ty->IsSignedIntegerScalarOrVector()) {
                     // INT32_MIN is -(2^31), which is exactly representable as an f32.
                     // INT32_MAX is (2^31 - 1), which is not exactly representable as an f32, so we
                     // instead use the next highest integer value in the f32 domain.
                     const float kMaxI32AsF32 = std::nexttowardf(0x1p+31f, 0.0L);
-                    limits.low_limit_f = MatchWidth(b.Constant(f32(INT32_MIN)), res_ty);
-                    limits.high_limit_f = MatchWidth(b.Constant(f32(kMaxI32AsF32)), res_ty);
+                    limits.low_limit_f = b.MatchWidth(f32(INT32_MIN), res_ty);
+                    limits.high_limit_f = b.MatchWidth(f32(kMaxI32AsF32), res_ty);
                 } else {
                     // UINT32_MAX is (2^32 - 1), which is not exactly representable as an f32, so we
                     // instead use the next highest integer value in the f32 domain.
                     const float kMaxU32AsF32 = std::nexttowardf(0x1p+32f, 0.0L);
-                    limits.low_limit_f = MatchWidth(b.Constant(f32(0)), res_ty);
-                    limits.high_limit_f = MatchWidth(b.Constant(f32(kMaxU32AsF32)), res_ty);
+                    limits.low_limit_f = b.MatchWidth(f32(0), res_ty);
+                    limits.high_limit_f = b.MatchWidth(f32(kMaxU32AsF32), res_ty);
                 }
             } else if (src_el_ty->Is<type::F16>()) {
                 constexpr float MAX_F16 = 65504;
-                if (res_ty->is_signed_integer_scalar_or_vector()) {
-                    limits.low_limit_f = MatchWidth(b.Constant(f16(-MAX_F16)), res_ty);
-                    limits.high_limit_f = MatchWidth(b.Constant(f16(MAX_F16)), res_ty);
+                if (res_ty->IsSignedIntegerScalarOrVector()) {
+                    limits.low_limit_f = b.MatchWidth(f16(-MAX_F16), res_ty);
+                    limits.high_limit_f = b.MatchWidth(f16(MAX_F16), res_ty);
                 } else {
-                    limits.low_limit_f = MatchWidth(b.Constant(f16(0)), res_ty);
-                    limits.high_limit_f = MatchWidth(b.Constant(f16(MAX_F16)), res_ty);
+                    limits.low_limit_f = b.MatchWidth(f16(0), res_ty);
+                    limits.high_limit_f = b.MatchWidth(f16(MAX_F16), res_ty);
                 }
             } else {
                 TINT_UNIMPLEMENTED() << "unhandled floating-point type";
@@ -163,8 +162,7 @@ struct State {
             auto* value = b.FunctionParam("value", src_ty);
             func->SetParams({value});
             b.Append(func->Block(), [&] {
-                auto* bool_ty = MatchWidth(ty.bool_(), res_ty);
-
+                auto* bool_ty = ty.MatchWidth(ty.bool_(), res_ty);
                 auto* converted = b.Convert(res_ty, value);
 
                 // low = select(low_limit_i, i32(value), value >= low_limit_f)
@@ -177,7 +175,7 @@ struct State {
                 auto* select_high = b.Call(res_ty, core::BuiltinFn::kSelect, limits.high_limit_i,
                                            select_low, high_cond);
 
-                b.Return(func, select_high->Result(0));
+                b.Return(func, select_high->Result());
             });
             return func;
         });
@@ -186,37 +184,12 @@ struct State {
         auto* call = b.CallWithResult(convert->DetachResult(), helper, convert->Args()[0]);
         call->InsertBefore(convert);
     }
-
-    /// Return a type with element type @p type that has the same number of vector components as
-    /// @p match. If @p match is scalar just return @p type.
-    /// @param el_ty the type to extend
-    /// @param match the type to match the component count of
-    /// @returns a type with the same number of vector components as @p match
-    const core::type::Type* MatchWidth(const core::type::Type* el_ty,
-                                       const core::type::Type* match) {
-        if (auto* vec = match->As<core::type::Vector>()) {
-            return ty.vec(el_ty, vec->Width());
-        }
-        return el_ty;
-    }
-
-    /// Return a constant that has the same number of vector components as @p match, each with the
-    /// value @p element. If @p match is scalar just return @p element.
-    /// @param element the value to extend
-    /// @param match the type to match the component count of
-    /// @returns a value with the same number of vector components as @p match
-    ir::Constant* MatchWidth(ir::Constant* element, const core::type::Type* match) {
-        if (auto* vec = match->As<core::type::Vector>()) {
-            return b.Splat(MatchWidth(element->Type(), match), element);
-        }
-        return element;
-    }
 };
 
 }  // namespace
 
 Result<SuccessType> ConversionPolyfill(Module& ir, const ConversionPolyfillConfig& config) {
-    auto result = ValidateAndDumpIfNeeded(ir, "ConversionPolyfill transform");
+    auto result = ValidateAndDumpIfNeeded(ir, "core.ConversionPolyfill");
     if (result != Success) {
         return result;
     }

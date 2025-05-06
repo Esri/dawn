@@ -43,79 +43,79 @@ class DeviceInitializationTest : public testing::Test {
 
     void TearDown() override { dawnProcSetProcs(nullptr); }
 
-    // Test that the device can still be used by testing a buffer copy.
+    // Test that the device can still be used by creating an async pipeline. Note that this test
+    // would be better if we did something like a buffer copy instead, but that can only be done
+    // once wgpu::CallbackMode::AllowSpontaneous is completely implemented.
+    // TODO(crbug.com/42241003): Update this test do a buffer copy instead.
     void ExpectDeviceUsable(wgpu::Device device) {
-        wgpu::Buffer src =
-            utils::CreateBufferFromData<uint32_t>(device, wgpu::BufferUsage::CopySrc, {1, 2, 3, 4});
+        device.PushErrorScope(wgpu::ErrorFilter::Validation);
 
-        wgpu::Buffer dst = utils::CreateBufferFromData<uint32_t>(
-            device, wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::MapRead, {0, 0, 0, 0});
+        wgpu::ComputePipelineDescriptor desc;
+        desc.compute.module = utils::CreateShaderModule(device, R"(
+            @compute @workgroup_size(1) fn main() {}
+        )");
 
-        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        encoder.CopyBufferToBuffer(src, 0, dst, 0, 4 * sizeof(uint32_t));
+        std::atomic<uint8_t> callbacks = 0;
+        device.CreateComputePipelineAsync(
+            &desc, wgpu::CallbackMode::AllowSpontaneous,
+            [&callbacks](wgpu::CreatePipelineAsyncStatus status, wgpu::ComputePipeline pipeline,
+                         wgpu::StringView) {
+                EXPECT_EQ(status, wgpu::CreatePipelineAsyncStatus::Success);
+                EXPECT_NE(pipeline, nullptr);
+                callbacks++;
+            });
 
-        wgpu::CommandBuffer commands = encoder.Finish();
-        device.GetQueue().Submit(1, &commands);
+        device.PopErrorScope(
+            wgpu::CallbackMode::AllowSpontaneous,
+            [&callbacks](wgpu::PopErrorScopeStatus status, wgpu::ErrorType type, wgpu::StringView) {
+                EXPECT_EQ(status, wgpu::PopErrorScopeStatus::Success);
+                EXPECT_EQ(type, wgpu::ErrorType::NoError);
+                callbacks++;
+            });
 
-        bool done = false;
-        dst.MapAsync(
-            wgpu::MapMode::Read, 0, 4 * sizeof(uint32_t),
-            [](WGPUBufferMapAsyncStatus status, void* userdata) {
-                EXPECT_EQ(status, WGPUBufferMapAsyncStatus_Success);
-                *static_cast<bool*>(userdata) = true;
-            },
-            &done);
-
-        // Note: we can't actually test this if Tick moves over to
-        // wgpuInstanceProcessEvents. We can still test that object creation works
-        // without crashing.
-        while (!done) {
-            device.Tick();
+        while (callbacks != 2) {
             utils::USleep(100);
         }
-
-        const uint32_t* mapping = static_cast<const uint32_t*>(dst.GetConstMappedRange());
-        EXPECT_EQ(mapping[0], 1u);
-        EXPECT_EQ(mapping[1], 2u);
-        EXPECT_EQ(mapping[2], 3u);
-        EXPECT_EQ(mapping[3], 4u);
     }
 };
 
 // Test that device operations are still valid if the reference to the instance
 // is dropped.
 TEST_F(DeviceInitializationTest, DeviceOutlivesInstance) {
-    // Get properties of all available adapters and then free the instance.
+    // Get info of all available adapters and then free the instance.
     // We want to create a device on a fresh instance and adapter each time.
-    std::vector<wgpu::AdapterProperties> availableAdapterProperties;
+    std::vector<wgpu::AdapterInfo> availableAdapterInfo;
     {
         auto instance = std::make_unique<native::Instance>();
-        for (const native::Adapter& adapter : instance->EnumerateAdapters()) {
-            wgpu::AdapterProperties properties;
-            adapter.GetProperties(&properties);
+        // TODO(347047627): Use a webgpu.h version of enumerateAdapters
+        for (const native::Adapter& nativeAdapter : instance->EnumerateAdapters()) {
+            wgpu::Adapter adapter = wgpu::Adapter(nativeAdapter.Get());
+            wgpu::AdapterInfo info;
+            adapter.GetInfo(&info);
 
-            if (properties.backendType == wgpu::BackendType::Null) {
+            if (info.backendType == wgpu::BackendType::Null) {
                 continue;
             }
 
-            availableAdapterProperties.push_back(std::move(properties));
+            availableAdapterInfo.push_back(std::move(info));
         }
     }
 
-    for (const wgpu::AdapterProperties& desiredProperties : availableAdapterProperties) {
+    for (const wgpu::AdapterInfo& desiredInfo : availableAdapterInfo) {
         wgpu::Device device;
 
         auto instance = std::make_unique<native::Instance>();
-        for (native::Adapter& adapter : instance->EnumerateAdapters()) {
-            wgpu::AdapterProperties properties;
-            adapter.GetProperties(&properties);
+        // TODO(347047627): Use a webgpu.h version of enumerateAdapters
+        for (native::Adapter& nativeAdapter : instance->EnumerateAdapters()) {
+            wgpu::Adapter adapter = wgpu::Adapter(nativeAdapter.Get());
+            wgpu::AdapterInfo info;
+            adapter.GetInfo(&info);
 
-            if (properties.deviceID == desiredProperties.deviceID &&
-                properties.vendorID == desiredProperties.vendorID &&
-                properties.adapterType == desiredProperties.adapterType &&
-                properties.backendType == desiredProperties.backendType) {
+            if (info.deviceID == desiredInfo.deviceID && info.vendorID == desiredInfo.vendorID &&
+                info.adapterType == desiredInfo.adapterType &&
+                info.backendType == desiredInfo.backendType) {
                 // Create the device, destroy the instance, and break out of the loop.
-                device = wgpu::Device::Acquire(adapter.CreateDevice());
+                device = wgpu::Device::Acquire(nativeAdapter.CreateDevice());
                 instance.reset();
                 break;
             }
@@ -130,34 +130,36 @@ TEST_F(DeviceInitializationTest, DeviceOutlivesInstance) {
 // Test that it is still possible to create a device from an adapter after the reference to the
 // instance is dropped.
 TEST_F(DeviceInitializationTest, AdapterOutlivesInstance) {
-    // Get properties of all available adapters and then free the instance.
+    // Get info of all available adapters and then free the instance.
     // We want to create a device on a fresh instance and adapter each time.
-    std::vector<wgpu::AdapterProperties> availableAdapterProperties;
+    std::vector<wgpu::AdapterInfo> availableAdapterInfo;
     {
         auto instance = std::make_unique<native::Instance>();
-        for (const native::Adapter& adapter : instance->EnumerateAdapters()) {
-            wgpu::AdapterProperties properties;
-            adapter.GetProperties(&properties);
+        // TODO(347047627): Use a webgpu.h version of enumerateAdapters
+        for (const native::Adapter& nativeAdapter : instance->EnumerateAdapters()) {
+            wgpu::Adapter adapter = wgpu::Adapter(nativeAdapter.Get());
+            wgpu::AdapterInfo info;
+            adapter.GetInfo(&info);
 
-            if (properties.backendType == wgpu::BackendType::Null) {
+            if (info.backendType == wgpu::BackendType::Null) {
                 continue;
             }
-            availableAdapterProperties.push_back(std::move(properties));
+            availableAdapterInfo.push_back(std::move(info));
         }
     }
 
-    for (const wgpu::AdapterProperties& desiredProperties : availableAdapterProperties) {
+    for (const wgpu::AdapterInfo& desiredInfo : availableAdapterInfo) {
         wgpu::Adapter adapter;
 
         auto instance = std::make_unique<native::Instance>();
+        // TODO(347047627): Use a webgpu.h version of enumerateAdapters
         for (native::Adapter& nativeAdapter : instance->EnumerateAdapters()) {
-            wgpu::AdapterProperties properties;
-            nativeAdapter.GetProperties(&properties);
+            wgpu::AdapterInfo info;
+            wgpu::Adapter(nativeAdapter.Get()).GetInfo(&info);
 
-            if (properties.deviceID == desiredProperties.deviceID &&
-                properties.vendorID == desiredProperties.vendorID &&
-                properties.adapterType == desiredProperties.adapterType &&
-                properties.backendType == desiredProperties.backendType) {
+            if (info.deviceID == desiredInfo.deviceID && info.vendorID == desiredInfo.vendorID &&
+                info.adapterType == desiredInfo.adapterType &&
+                info.backendType == desiredInfo.backendType) {
                 // Save the adapter, and reset the instance.
                 adapter = wgpu::Adapter(nativeAdapter.Get());
                 instance.reset();

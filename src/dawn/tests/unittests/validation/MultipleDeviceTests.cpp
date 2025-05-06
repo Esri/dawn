@@ -27,6 +27,7 @@
 
 #include "dawn/tests/unittests/validation/ValidationTest.h"
 
+#include "dawn/native/DawnNative.h"
 #include "dawn/tests/MockCallback.h"
 
 namespace dawn {
@@ -50,7 +51,7 @@ TEST_F(MultipleDeviceTest, ValidatesSameDevice) {
 // Test that CreatePipelineAsync fails creation with an Error status if it uses
 // objects from a different device.
 TEST_F(MultipleDeviceTest, ValidatesSameDeviceCreatePipelineAsync) {
-    wgpu::ShaderModuleWGSLDescriptor wgslDesc = {};
+    wgpu::ShaderSourceWGSL wgslDesc = {};
     wgslDesc.code = R"(
          @compute @workgroup_size(1, 1, 1) fn main() {
         }
@@ -60,7 +61,7 @@ TEST_F(MultipleDeviceTest, ValidatesSameDeviceCreatePipelineAsync) {
     shaderModuleDesc.nextInChain = &wgslDesc;
 
     using MockComputePipelineAsyncCallback = MockCppCallback<void (*)(
-        wgpu::CreatePipelineAsyncStatus, wgpu::ComputePipeline, const char*)>;
+        wgpu::CreatePipelineAsyncStatus, wgpu::ComputePipeline, wgpu::StringView)>;
 
     // Base case: CreateComputePipelineAsync succeeds.
     {
@@ -77,7 +78,7 @@ TEST_F(MultipleDeviceTest, ValidatesSameDeviceCreatePipelineAsync) {
                                                      : wgpu::CallbackMode::AllowProcessEvents,
                                           creationCallback.Callback());
 
-        WaitForAllOperations(device);
+        WaitForAllOperations();
     }
 
     // CreateComputePipelineAsync errors if the shader module is created on a different device.
@@ -97,7 +98,7 @@ TEST_F(MultipleDeviceTest, ValidatesSameDeviceCreatePipelineAsync) {
                                                      : wgpu::CallbackMode::AllowProcessEvents,
                                           creationCallback.Callback());
 
-        WaitForAllOperations(device);
+        WaitForAllOperations();
     }
 }
 

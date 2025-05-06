@@ -27,8 +27,7 @@
 
 #include "src/tint/lang/spirv/writer/raise/raise.h"
 
-#include <utility>
-
+#include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/transform/add_empty_entry_point.h"
 #include "src/tint/lang/core/ir/transform/bgra8unorm_polyfill.h"
 #include "src/tint/lang/core/ir/transform/binary_polyfill.h"
@@ -40,17 +39,22 @@
 #include "src/tint/lang/core/ir/transform/demote_to_helper.h"
 #include "src/tint/lang/core/ir/transform/direct_variable_access.h"
 #include "src/tint/lang/core/ir/transform/multiplanar_external_texture.h"
+#include "src/tint/lang/core/ir/transform/prepare_push_constants.h"
 #include "src/tint/lang/core/ir/transform/preserve_padding.h"
+#include "src/tint/lang/core/ir/transform/prevent_infinite_loops.h"
 #include "src/tint/lang/core/ir/transform/robustness.h"
 #include "src/tint/lang/core/ir/transform/std140.h"
 #include "src/tint/lang/core/ir/transform/vectorize_scalar_matrix_constructors.h"
 #include "src/tint/lang/core/ir/transform/zero_init_workgroup_memory.h"
+#include "src/tint/lang/core/type/f32.h"
 #include "src/tint/lang/spirv/writer/common/option_helpers.h"
 #include "src/tint/lang/spirv/writer/raise/builtin_polyfill.h"
 #include "src/tint/lang/spirv/writer/raise/expand_implicit_splats.h"
+#include "src/tint/lang/spirv/writer/raise/fork_explicit_layout_types.h"
 #include "src/tint/lang/spirv/writer/raise/handle_matrix_arithmetic.h"
 #include "src/tint/lang/spirv/writer/raise/merge_return.h"
 #include "src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.h"
+#include "src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.h"
 #include "src/tint/lang/spirv/writer/raise/shader_io.h"
 #include "src/tint/lang/spirv/writer/raise/var_for_dynamic_index.h"
 
@@ -65,11 +69,31 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
         }                                \
     } while (false)
 
-    ExternalTextureOptions external_texture_options{};
+    tint::transform::multiplanar::BindingsMap multiplanar_map{};
     RemapperData remapper_data{};
-    PopulateRemapperAndMultiplanarOptions(options, remapper_data, external_texture_options);
+    PopulateRemapperAndMultiplanarOptions(options, remapper_data, multiplanar_map);
 
     RUN_TRANSFORM(core::ir::transform::BindingRemapper, module, remapper_data);
+
+    if (!options.disable_robustness) {
+        RUN_TRANSFORM(core::ir::transform::PreventInfiniteLoops, module);
+    }
+
+    // PreparePushConstants must come before any transform that needs internal push constants.
+    core::ir::transform::PreparePushConstantsConfig push_constant_config;
+    if (options.depth_range_offsets) {
+        push_constant_config.AddInternalConstant(options.depth_range_offsets.value().min,
+                                                 module.symbols.New("tint_frag_depth_min"),
+                                                 module.Types().f32());
+        push_constant_config.AddInternalConstant(options.depth_range_offsets.value().max,
+                                                 module.symbols.New("tint_frag_depth_max"),
+                                                 module.Types().f32());
+    }
+    auto push_constant_layout =
+        core::ir::transform::PreparePushConstants(module, push_constant_config);
+    if (push_constant_layout != Success) {
+        return push_constant_layout.Failure();
+    }
 
     core::ir::transform::BinaryPolyfillConfig binary_polyfills;
     binary_polyfills.bitshift_modulo = true;
@@ -89,6 +113,7 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
     core_polyfills.dot_4x8_packed = options.polyfill_dot_4x8_packed;
     core_polyfills.pack_unpack_4x8 = true;
     core_polyfills.pack_4xu8_clamp = true;
+    core_polyfills.pack_unpack_4x8_norm = options.polyfill_pack_unpack_4x8_norm;
     RUN_TRANSFORM(core::ir::transform::BuiltinPolyfill, module, core_polyfills);
 
     core::ir::transform::ConversionPolyfillConfig conversion_polyfills;
@@ -105,8 +130,7 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
         RUN_TRANSFORM(core::ir::transform::Robustness, module, config);
     }
 
-    RUN_TRANSFORM(core::ir::transform::MultiplanarExternalTexture, module,
-                  external_texture_options);
+    RUN_TRANSFORM(core::ir::transform::MultiplanarExternalTexture, module, multiplanar_map);
 
     if (!options.disable_workgroup_init &&
         !options.use_zero_initialize_workgroup_memory_extension) {
@@ -136,17 +160,26 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
     // produce pointers to matrices.
     RUN_TRANSFORM(core::ir::transform::CombineAccessInstructions, module);
 
-    // DemoteToHelper must come before any transform that introduces non-core instructions.
-    RUN_TRANSFORM(core::ir::transform::DemoteToHelper, module);
+    if (!options.use_demote_to_helper_invocation_extensions) {
+        // DemoteToHelper must come before any transform that introduces non-core instructions.
+        RUN_TRANSFORM(core::ir::transform::DemoteToHelper, module);
+    }
 
-    RUN_TRANSFORM(raise::BuiltinPolyfill, module);
+    RUN_TRANSFORM(raise::BuiltinPolyfill, module, options.use_vulkan_memory_model);
     RUN_TRANSFORM(raise::ExpandImplicitSplats, module);
     RUN_TRANSFORM(raise::HandleMatrixArithmetic, module);
     RUN_TRANSFORM(raise::MergeReturn, module);
-    RUN_TRANSFORM(raise::ShaderIO, module,
-                  raise::ShaderIOConfig{options.clamp_frag_depth, options.emit_vertex_point_size,
-                                        !options.use_storage_input_output_16});
+    RUN_TRANSFORM(raise::RemoveUnreachableInLoopContinuing, module);
+    RUN_TRANSFORM(
+        raise::ShaderIO, module,
+        raise::ShaderIOConfig{push_constant_layout.Get(), options.emit_vertex_point_size,
+                              !options.use_storage_input_output_16, options.depth_range_offsets});
     RUN_TRANSFORM(core::ir::transform::Std140, module);
+
+    // ForkExplicitLayoutTypes must come after Std140, since it rewrites host-shareable array types
+    // to use the explicitly laid array type defined by the SPIR-V dialect.
+    RUN_TRANSFORM(raise::ForkExplicitLayoutTypes, module);
+
     RUN_TRANSFORM(raise::VarForDynamicIndex, module);
 
     return Success;

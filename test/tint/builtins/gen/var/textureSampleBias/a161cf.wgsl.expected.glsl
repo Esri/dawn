@@ -2,24 +2,17 @@
 precision highp float;
 precision highp int;
 
-uniform highp sampler2D arg_0_arg_1;
-
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+layout(binding = 0, std430)
+buffer f_prevent_dce_block_ssbo {
   vec4 inner;
-} prevent_dce;
-
-void textureSampleBias_a161cf() {
+} v;
+uniform highp sampler2D f_arg_0_arg_1;
+vec4 textureSampleBias_a161cf() {
   vec2 arg_2 = vec2(1.0f);
   float arg_3 = 1.0f;
-  vec4 res = textureOffset(arg_0_arg_1, arg_2, ivec2(1), arg_3);
-  prevent_dce.inner = res;
+  vec4 res = textureOffset(f_arg_0_arg_1, arg_2, ivec2(1), clamp(arg_3, -16.0f, 15.9899997711181640625f));
+  return res;
 }
-
-void fragment_main() {
-  textureSampleBias_a161cf();
-}
-
 void main() {
-  fragment_main();
-  return;
+  v.inner = textureSampleBias_a161cf();
 }

@@ -66,7 +66,9 @@ group("abseil") {
       "${dawn_root}/third_party/gn/abseil-cpp:flat_hash_map",
       "${dawn_root}/third_party/gn/abseil-cpp:flat_hash_set",
       "${dawn_root}/third_party/gn/abseil-cpp:inlined_vector",
+      "${dawn_root}/third_party/gn/abseil-cpp:span",
       "${dawn_root}/third_party/gn/abseil-cpp:str_format",
+      "${dawn_root}/third_party/gn/abseil-cpp:string_view",
       "${dawn_root}/third_party/gn/abseil-cpp:strings",
     ]
   }
@@ -170,12 +172,12 @@ source_set("sources") {
     ":utils_gen",
     "${dawn_root}/src/dawn/common",
     "${dawn_root}/src/tint/api",
-    "${dawn_root}/src/tint/lang/wgsl/features",
+    "${dawn_root}/src/tint/lang/wgsl",
   ]
   defines = []
   libs = []
   data_deps = []
-
+  public_configs = []
   configs += [
     ":internal",
     "${dawn_root}/src/tint:tint_public_config",
@@ -219,6 +221,8 @@ source_set("sources") {
     "BindingInfo.h",
     "BlitBufferToDepthStencil.cpp",
     "BlitBufferToDepthStencil.h",
+    "BlitBufferToTexture.cpp",
+    "BlitBufferToTexture.h",
     "BlitColorToColorWithDraw.cpp",
     "BlitColorToColorWithDraw.h",
     "BlitDepthToDepth.cpp",
@@ -296,6 +300,9 @@ source_set("sources") {
     "Format.cpp",
     "Format.h",
     "Forward.h",
+    "ImmediateConstantsLayout.h",
+    "ImmediateConstantsTracker.cpp",
+    "ImmediateConstantsTracker.h",
     "IndirectDrawMetadata.cpp",
     "IndirectDrawMetadata.h",
     "IndirectDrawValidationEncoder.cpp",
@@ -335,7 +342,6 @@ source_set("sources") {
     "QuerySet.h",
     "Queue.cpp",
     "Queue.h",
-    "RefCountedWithExternalCount.h",
     "RenderBundle.cpp",
     "RenderBundle.h",
     "RenderBundleEncoder.cpp",
@@ -344,6 +350,8 @@ source_set("sources") {
     "RenderEncoderBase.h",
     "RenderPassEncoder.cpp",
     "RenderPassEncoder.h",
+    "RenderPassWorkaroundsHelper.cpp",
+    "RenderPassWorkaroundsHelper.h",
     "RenderPipeline.cpp",
     "RenderPipeline.h",
     "ResourceHeap.h",
@@ -386,8 +394,12 @@ source_set("sources") {
     "Toggles.cpp",
     "Toggles.h",
     "UsageValidationMode.h",
+    "ValidationUtils.cpp",
+    "ValidationUtils.h",
     "VisitableMembers.h",
     "WaitAnySystemEvent.h",
+    "WaitListEvent.cpp",
+    "WaitListEvent.h",
     "dawn_platform.h",
     "stream/BlobSource.cpp",
     "stream/BlobSource.h",
@@ -418,13 +430,13 @@ source_set("sources") {
   }
 
   # Only win32 app needs to link with user32.lib
-  # In UWP, all availiable APIs are defined in WindowsApp.lib
+  # In UWP, all available APIs are defined in WindowsApp.lib
   if (is_win && !dawn_is_winuwp) {
     libs += [
       "user32.lib",
       "delayimp.lib",
     ]
-    public_configs = [ ":win_delayload" ]
+    public_configs += [ ":win_delayload" ]
   }
 
   if (dawn_is_winuwp && is_debug) {
@@ -471,8 +483,6 @@ source_set("sources") {
       "d3d/SharedTextureMemoryD3D.h",
       "d3d/SwapChainD3D.cpp",
       "d3d/SwapChainD3D.h",
-      "d3d/TextureD3D.cpp",
-      "d3d/TextureD3D.h",
       "d3d/UtilsD3D.cpp",
       "d3d/UtilsD3D.h",
       "d3d/d3d_platform.h",
@@ -621,13 +631,15 @@ source_set("sources") {
 
   if (dawn_enable_metal) {
     frameworks = [
-      "IOKit.framework",
       "IOSurface.framework",
       "Metal.framework",
       "QuartzCore.framework",
     ]
     if (is_mac) {
-      frameworks += [ "Cocoa.framework" ]
+      frameworks += [
+        "Cocoa.framework",
+        "IOKit.framework",
+      ]
     }
     sources += [
       "Surface_metal.mm",
@@ -648,6 +660,8 @@ source_set("sources") {
       "metal/DeviceMTL.h",
       "metal/DeviceMTL.mm",
       "metal/Forward.h",
+      "metal/MultiDrawEncoder.h",
+      "metal/MultiDrawEncoder.mm",
       "metal/PhysicalDeviceMTL.h",
       "metal/PhysicalDeviceMTL.mm",
       "metal/PipelineLayoutMTL.h",
@@ -725,6 +739,8 @@ source_set("sources") {
       "opengl/ContextEGL.h",
       "opengl/DeviceGL.cpp",
       "opengl/DeviceGL.h",
+      "opengl/DisplayEGL.cpp",
+      "opengl/DisplayEGL.h",
       "opengl/EGLFunctions.cpp",
       "opengl/EGLFunctions.h",
       "opengl/Forward.h",
@@ -752,6 +768,16 @@ source_set("sources") {
       "opengl/SamplerGL.h",
       "opengl/ShaderModuleGL.cpp",
       "opengl/ShaderModuleGL.h",
+      "opengl/SharedFenceEGL.cpp",
+      "opengl/SharedFenceEGL.h",
+      "opengl/SharedFenceGL.cpp",
+      "opengl/SharedFenceGL.h",
+      "opengl/SharedTextureMemoryEGL.cpp",
+      "opengl/SharedTextureMemoryEGL.h",
+      "opengl/SharedTextureMemoryGL.cpp",
+      "opengl/SharedTextureMemoryGL.h",
+      "opengl/SwapChainEGL.cpp",
+      "opengl/SwapChainEGL.h",
       "opengl/TextureGL.cpp",
       "opengl/TextureGL.h",
       "opengl/UtilsEGL.cpp",
@@ -777,7 +803,8 @@ source_set("sources") {
       "vulkan/BufferVk.h",
       "vulkan/CommandBufferVk.cpp",
       "vulkan/CommandBufferVk.h",
-      "vulkan/CommandRecordingContext.h",
+      "vulkan/CommandRecordingContextVk.cpp",
+      "vulkan/CommandRecordingContextVk.h",
       "vulkan/ComputePipelineVk.cpp",
       "vulkan/ComputePipelineVk.h",
       "vulkan/DescriptorSetAllocation.h",
@@ -795,6 +822,8 @@ source_set("sources") {
       "vulkan/PipelineCacheVk.h",
       "vulkan/PipelineLayoutVk.cpp",
       "vulkan/PipelineLayoutVk.h",
+      "vulkan/PipelineVk.cpp",
+      "vulkan/PipelineVk.h",
       "vulkan/QuerySetVk.cpp",
       "vulkan/QuerySetVk.h",
       "vulkan/QueueVk.cpp",
@@ -804,6 +833,8 @@ source_set("sources") {
       "vulkan/RenderPassCache.h",
       "vulkan/RenderPipelineVk.cpp",
       "vulkan/RenderPipelineVk.h",
+      "vulkan/ResolveTextureLoadingUtilsVk.cpp",
+      "vulkan/ResolveTextureLoadingUtilsVk.h",
       "vulkan/ResourceHeapVk.cpp",
       "vulkan/ResourceHeapVk.h",
       "vulkan/ResourceMemoryAllocatorVk.cpp",
@@ -821,6 +852,7 @@ source_set("sources") {
       "vulkan/SwapChainVk.h",
       "vulkan/TextureVk.cpp",
       "vulkan/TextureVk.h",
+      "vulkan/UniqueVkHandle.h",
       "vulkan/UtilsVulkan.cpp",
       "vulkan/UtilsVulkan.h",
       "vulkan/VulkanError.cpp",
@@ -897,7 +929,7 @@ source_set("sources") {
 dawn_component("native") {
   DEFINE_PREFIX = "DAWN_NATIVE"
 
-  #Make headers publically visible
+  #Make headers publicly visible
   public_deps = [ ":headers" ]
 
   deps = [

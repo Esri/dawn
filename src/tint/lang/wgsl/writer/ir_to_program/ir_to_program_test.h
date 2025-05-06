@@ -67,13 +67,13 @@ class IRToProgramTest : public core::ir::IRTestHelper {
             !traits::IsTypeOrDerived<std::remove_pointer_t<std::decay_t<VALUE>>, core::type::Type>>>
     core::ir::Var* Var(std::string_view name, VALUE&& init) {
         auto* val = b.Value(std::forward<VALUE>(init));
-        if (TINT_UNLIKELY(!val)) {
+        if (DAWN_UNLIKELY(!val)) {
             TINT_ASSERT(val);
             return nullptr;
         }
         auto* var = b.Var(name, mod.Types().ref(SPACE, val->Type(), ACCESS));
         var->SetInitializer(val);
-        mod.SetName(var->Result(0), name);
+        mod.SetName(var->Result(), name);
         return var;
     }
 
@@ -99,19 +99,17 @@ class IRToProgramTest : public core::ir::IRTestHelper {
     }
 };
 
-#define EXPECT_WGSL(expected_wgsl)                                       \
-    do {                                                                 \
-        if (auto got = Run(); got.err.empty()) {                         \
-            auto expected = std::string(tint::TrimSpace(expected_wgsl)); \
-            if (!expected.empty()) {                                     \
-                expected = "\n" + expected + "\n";                       \
-            }                                                            \
-            EXPECT_EQ(expected, got.wgsl) << "IR: " << got.ir;           \
-        } else {                                                         \
-            FAIL() << got.err << std::endl                               \
-                   << "IR: " << got.ir << std::endl                      \
-                   << "AST: " << got.ast << std::endl;                   \
-        }                                                                \
+#define EXPECT_WGSL(expected_wgsl)                                                   \
+    do {                                                                             \
+        if (auto got = Run(); got.err.empty()) {                                     \
+            auto expected = std::string(tint::TrimSpace(expected_wgsl));             \
+            if (!expected.empty()) {                                                 \
+                expected = "\n" + expected + "\n";                                   \
+            }                                                                        \
+            EXPECT_EQ(expected, got.wgsl) << "IR: " << got.ir;                       \
+        } else {                                                                     \
+            FAIL() << got.err << "\nIR: " << got.ir << "\nAST: " << got.ast << "\n"; \
+        }                                                                            \
     } while (false)
 
 }  // namespace tint::wgsl::writer

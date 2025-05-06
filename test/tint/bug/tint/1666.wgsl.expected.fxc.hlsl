@@ -1,26 +1,27 @@
-SKIP: FAILED
-
 void tint_symbol() {
-  const int idx = 3;
-  const int x = int2(1, 2)[idx];
+  int idx = 3;
+  int x = int2(1, 2)[min(uint(idx), 1u)];
 }
 
 void tint_symbol_1() {
-  const int idx = 4;
-  const float2 x = float2x2(float2(1.0f, 2.0f), float2(3.0f, 4.0f))[idx];
+  int idx = 4;
+  float2 x = float2x2(float2(1.0f, 2.0f), float2(3.0f, 4.0f))[min(uint(idx), 1u)];
 }
 
 void fixed_size_array() {
-  const int arr[2] = {1, 2};
-  const int idx = 3;
-  const int x = arr[idx];
+  int arr[2] = {1, 2};
+  int idx = 3;
+  int x = arr[min(uint(idx), 1u)];
 }
 
 ByteAddressBuffer rarr : register(t0);
 
 void runtime_size_array() {
-  const int idx = -1;
-  const float x = asfloat(rarr.Load((4u * uint(idx))));
+  uint tint_symbol_3 = 0u;
+  rarr.GetDimensions(tint_symbol_3);
+  uint tint_symbol_4 = (tint_symbol_3 / 4u);
+  int idx = -1;
+  float x = asfloat(rarr.Load((4u * min(uint(idx), (tint_symbol_4 - 1u)))));
 }
 
 [numthreads(1, 1, 1)]

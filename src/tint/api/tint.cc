@@ -31,6 +31,7 @@
 // The following includes are used by './tools/run gen' to add an implicit
 // dependency from 'tint/api' to the libraries used to make up the Tint API.
 ////////////////////////////////////////////////////////////////////////////////
+// IWYU pragma: begin_keep
 #include "src/tint/api/common/override_id.h"
 
 #if TINT_BUILD_GLSL_WRITER
@@ -54,12 +55,15 @@
 #endif
 
 #if TINT_BUILD_WGSL_READER
-#include "src/tint/lang/wgsl/reader/reader.h"  // nogncheck
+#include "src/tint/lang/wgsl/inspector/inspector.h"  // nogncheck
+#include "src/tint/lang/wgsl/reader/reader.h"        // nogncheck
 #endif
 
 #if TINT_BUILD_WGSL_WRITER
 #include "src/tint/lang/wgsl/writer/writer.h"  // nogncheck
 #endif
+
+// IWYU pragma: end_keep
 
 namespace tint {
 
@@ -70,7 +74,7 @@ void Initialize() {
     tint::Program::printer = [](const tint::Program& program) {
         auto result = wgsl::writer::Generate(program, {});
         if (result != Success) {
-            return result.Failure().reason.Str();
+            return result.Failure().reason;
         }
         return result->wgsl;
     };

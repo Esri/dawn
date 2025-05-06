@@ -38,10 +38,9 @@
 #define SRC_TINT_LANG_WGSL_DIAGNOSTIC_RULE_H_
 
 #include <cstdint>
-#include <string>
 #include <variant>
 
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/rtti/traits.h"
 
 namespace tint::wgsl {
 
@@ -49,6 +48,7 @@ namespace tint::wgsl {
 enum class CoreDiagnosticRule : uint8_t {
     kUndefined,
     kDerivativeUniformity,
+    kSubgroupUniformity,
 };
 
 /// @param value the enum value
@@ -58,7 +58,8 @@ std::string_view ToString(CoreDiagnosticRule value);
 /// @param out the stream to write to
 /// @param value the CoreDiagnosticRule
 /// @returns @p out so calls can be chained
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, CoreDiagnosticRule value) {
     return out << ToString(value);
 }
@@ -70,11 +71,13 @@ CoreDiagnosticRule ParseCoreDiagnosticRule(std::string_view str);
 
 constexpr std::string_view kCoreDiagnosticRuleStrings[] = {
     "derivative_uniformity",
+    "subgroup_uniformity",
 };
 
 /// Chromium-specific diagnostic rules.
 enum class ChromiumDiagnosticRule : uint8_t {
     kUndefined,
+    kSubgroupMatrixUniformity,
     kUnreachableCode,
 };
 
@@ -85,7 +88,8 @@ std::string_view ToString(ChromiumDiagnosticRule value);
 /// @param out the stream to write to
 /// @param value the ChromiumDiagnosticRule
 /// @returns @p out so calls can be chained
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, ChromiumDiagnosticRule value) {
     return out << ToString(value);
 }
@@ -97,6 +101,7 @@ auto& operator<<(STREAM& out, ChromiumDiagnosticRule value) {
 ChromiumDiagnosticRule ParseChromiumDiagnosticRule(std::string_view str);
 
 constexpr std::string_view kChromiumDiagnosticRuleStrings[] = {
+    "subgroup_matrix_uniformity",
     "unreachable_code",
 };
 

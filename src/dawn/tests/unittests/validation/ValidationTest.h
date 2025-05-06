@@ -28,6 +28,10 @@
 #ifndef SRC_DAWN_TESTS_UNITTESTS_VALIDATION_VALIDATIONTEST_H_
 #define SRC_DAWN_TESTS_UNITTESTS_VALIDATION_VALIDATIONTEST_H_
 
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <webgpu/webgpu_cpp.h>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -35,9 +39,6 @@
 #include "dawn/common/Log.h"
 #include "dawn/native/BindGroupLayout.h"
 #include "dawn/native/DawnNative.h"
-#include "dawn/webgpu_cpp.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 
 // Argument helpers to allow macro overriding.
 #define UNIMPLEMENTED_MACRO(...) DAWN_UNREACHABLE()
@@ -91,16 +92,16 @@
         }                                                       \
     } while (0)
 
-#define EXPECT_DEPRECATION_WARNINGS(statement, n)                                        \
-    do {                                                                                 \
-        FlushWire();                                                                     \
-        uint64_t warningsBefore = mDawnInstance->GetDeprecationWarningCountForTesting(); \
-        EXPECT_EQ(mLastWarningCount, warningsBefore);                                    \
-        statement;                                                                       \
-        FlushWire();                                                                     \
-        uint64_t warningsAfter = mDawnInstance->GetDeprecationWarningCountForTesting();  \
-        EXPECT_EQ(warningsAfter, warningsBefore + n);                                    \
-        mLastWarningCount = warningsAfter;                                               \
+#define EXPECT_DEPRECATION_WARNINGS(statement, n)                          \
+    do {                                                                   \
+        FlushWire();                                                       \
+        uint64_t warningsBefore = GetInstanceDeprecationCountForTesting(); \
+        EXPECT_EQ(mLastWarningCount, warningsBefore);                      \
+        statement;                                                         \
+        FlushWire();                                                       \
+        uint64_t warningsAfter = GetInstanceDeprecationCountForTesting();  \
+        EXPECT_EQ(warningsAfter, warningsBefore + n);                      \
+        mLastWarningCount = warningsAfter;                                 \
     } while (0)
 #define EXPECT_DEPRECATION_WARNING(statement) EXPECT_DEPRECATION_WARNINGS(statement, 1)
 
@@ -144,7 +145,7 @@ class ValidationTest : public testing::Test {
     bool UsesWire() const;
 
     void FlushWire();
-    void WaitForAllOperations(const wgpu::Device& device);
+    void WaitForAllOperations();
 
     // Helper functions to create objects to test validation.
 
@@ -162,7 +163,7 @@ class ValidationTest : public testing::Test {
 
     const dawn::native::ToggleInfo* GetToggleInfo(const char* name) const;
     bool HasToggleEnabled(const char* toggle) const;
-    wgpu::SupportedLimits GetSupportedLimits() const;
+    wgpu::Limits GetSupportedLimits() const;
     dawn::utils::WireHelper* GetWireHelper() const;
 
   protected:
@@ -172,6 +173,7 @@ class ValidationTest : public testing::Test {
     // Override these appropriately for different tests.
     virtual bool AllowUnsafeAPIs();
     virtual std::vector<wgpu::FeatureName> GetRequiredFeatures();
+    virtual wgpu::Limits GetRequiredLimits(const wgpu::Limits&);
     virtual std::vector<const char*> GetEnabledToggles();
     virtual std::vector<const char*> GetDisabledToggles();
 
@@ -179,12 +181,12 @@ class ValidationTest : public testing::Test {
     void SetUp(const wgpu::InstanceDescriptor* nativeDesc,
                const wgpu::InstanceDescriptor* wireDesc = nullptr);
 
+    uint64_t GetInstanceDeprecationCountForTesting();
+    // Helps compute expected deprecated warning count for creating device with given descriptor.
+    uint32_t GetDeviceCreationDeprecationWarningExpectation(
+        const wgpu::DeviceDescriptor& descriptor);
+    // Request device and handle deprecation warning emitted during creating device.
     wgpu::Device RequestDeviceSync(const wgpu::DeviceDescriptor& deviceDesc);
-    static void OnDeviceError(WGPUErrorType type, const char* message, void* userdata);
-    static void OnDeviceLost(WGPUDevice const* device,
-                             WGPUDeviceLostReason reason,
-                             const char* message,
-                             void* userdata);
 
     virtual bool UseCompatibilityMode() const;
 
