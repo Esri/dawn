@@ -28,18 +28,15 @@
 #ifndef SRC_DAWN_NATIVE_FEATURES_H_
 #define SRC_DAWN_NATIVE_FEATURES_H_
 
+#include <webgpu/webgpu_cpp.h>
+
 #include <bitset>
-#include <string>
-#include <vector>
 
 #include "dawn/common/ityp_bitset.h"
 #include "dawn/native/DawnNative.h"
 #include "dawn/native/Features_autogen.h"
-#include "dawn/webgpu_cpp.h"
 
 namespace dawn::native {
-
-enum class FeatureLevel { Compatibility, Core };
 
 extern const ityp::array<Feature, FeatureInfo, kEnumCount<Feature>> kFeatureNameAndInfoList;
 
@@ -55,10 +52,7 @@ struct FeaturesSet {
     void EnableFeature(wgpu::FeatureName feature);
     bool IsEnabled(Feature feature) const;
     bool IsEnabled(wgpu::FeatureName feature) const;
-    // Returns |count|, the number of features. Writes out all |count| values if |features| is
-    // non-null.
-    size_t EnumerateFeatures(wgpu::FeatureName* features) const;
-    std::vector<const char*> GetEnabledFeatureNames() const;
+    void ToSupportedFeatures(SupportedFeatures* supportedFeatures) const;
 };
 
 }  // namespace dawn::native

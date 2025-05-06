@@ -19,7 +19,7 @@ See:
 #include <cstdint>
 #include <string>
 
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/rtti/traits.h"
 
 // \cond DO_NOT_DOCUMENT
 namespace tint::wgsl {
@@ -44,7 +44,8 @@ const char* str(BuiltinFn i);
 
 /// Emits the name of the builtin function type. The spelling, including case,
 /// matches the name in the WGSL spec.
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& o, BuiltinFn i) {
   return o << str(i);
 }
@@ -119,6 +120,16 @@ bool IsPacked4x8IntegerDotProductBuiltin(BuiltinFn f);
 /// @param f the builtin type
 /// @returns true if the given `f` is a subgroup builtin
 bool IsSubgroup(BuiltinFn f);
+
+/// Determines if the given `f` is a subgroup matrix builtin.
+/// @param f the builtin type
+/// @returns true if the given `f` is a subgroup matrix builtin
+bool IsSubgroupMatrix(BuiltinFn f);
+
+/// Determines if the given `f` is a quadSwap* builtin.
+/// @param f the builtin type
+/// @returns true if the given `f` is a quadSwap* builtin
+bool IsQuadSwap(BuiltinFn f);
 
 /// Determines if the given `f` may have side-effects (i.e. writes to at least one of its inputs)
 /// @returns true if intrinsic may have side-effects

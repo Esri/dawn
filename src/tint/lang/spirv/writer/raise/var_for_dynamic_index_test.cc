@@ -177,7 +177,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, DynamicIndex_ArrayValue) {
     auto* expect = R"(
 %foo = func(%2:array<i32, 4>, %3:i32):i32 {
   $B1: {
-    %4:ptr<function, array<i32, 4>, read_write> = var, %2
+    %4:ptr<function, array<i32, 4>, read_write> = var %2
     %5:ptr<function, i32, read_write> = access %4, %3
     %6:i32 = load %5
     ret %6
@@ -203,7 +203,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, DynamicIndex_MatrixValue) {
     auto* expect = R"(
 %foo = func(%2:mat2x2<f32>, %3:i32):vec2<f32> {
   $B1: {
-    %4:ptr<function, mat2x2<f32>, read_write> = var, %2
+    %4:ptr<function, mat2x2<f32>, read_write> = var %2
     %5:ptr<function, vec2<f32>, read_write> = access %4, %3
     %6:vec2<f32> = load %5
     ret %6
@@ -229,7 +229,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, DynamicIndex_VectorValue) {
     auto* expect = R"(
 %foo = func(%2:mat2x2<f32>, %3:i32):f32 {
   $B1: {
-    %4:ptr<function, mat2x2<f32>, read_write> = var, %2
+    %4:ptr<function, mat2x2<f32>, read_write> = var %2
     %5:ptr<function, vec2<f32>, read_write> = access %4, %3
     %6:f32 = load_vector_element %5, %3
     ret %6
@@ -255,7 +255,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, AccessChain) {
     auto* expect = R"(
 %foo = func(%2:array<array<array<i32, 4>, 4>, 4>, %3:i32):i32 {
   $B1: {
-    %4:ptr<function, array<array<array<i32, 4>, 4>, 4>, read_write> = var, %2
+    %4:ptr<function, array<array<array<i32, 4>, 4>, 4>, read_write> = var %2
     %5:ptr<function, i32, read_write> = access %4, %3, 1u, %3
     %6:i32 = load %5
     ret %6
@@ -282,7 +282,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, AccessChain_SkipConstantIndices) {
 %foo = func(%2:array<array<array<i32, 4>, 4>, 4>, %3:i32):i32 {
   $B1: {
     %4:array<i32, 4> = access %2, 1u, 2u
-    %5:ptr<function, array<i32, 4>, read_write> = var, %4
+    %5:ptr<function, array<i32, 4>, read_write> = var %4
     %6:ptr<function, i32, read_write> = access %5, %3
     %7:i32 = load %6
     ret %7
@@ -309,7 +309,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, AccessChain_SkipConstantIndices_Inter
 %foo = func(%2:array<array<array<array<i32, 4>, 4>, 4>, 4>, %3:i32):i32 {
   $B1: {
     %4:array<array<array<i32, 4>, 4>, 4> = access %2, 1u
-    %5:ptr<function, array<array<array<i32, 4>, 4>, 4>, read_write> = var, %4
+    %5:ptr<function, array<array<array<i32, 4>, 4>, 4>, read_write> = var %4
     %6:ptr<function, i32, read_write> = access %5, %3, 2u, %3
     %7:i32 = load %6
     ret %7
@@ -348,7 +348,7 @@ MyStruct = struct @align(16) {
 %foo = func(%2:MyStruct, %3:i32):f32 {
   $B1: {
     %4:mat4x4<f32> = access %2, 1u
-    %5:ptr<function, mat4x4<f32>, read_write> = var, %4
+    %5:ptr<function, mat4x4<f32>, read_write> = var %4
     %6:ptr<function, vec4<f32>, read_write> = access %5, %3
     %7:f32 = load_vector_element %6, 0u
     ret %7
@@ -378,7 +378,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, MultipleAccessesFromSameSource) {
     auto* expect = R"(
 %foo = func(%2:array<i32, 4>, %3:i32, %4:i32, %5:i32):i32 {
   $B1: {
-    %6:ptr<function, array<i32, 4>, read_write> = var, %2
+    %6:ptr<function, array<i32, 4>, read_write> = var %2
     %7:ptr<function, i32, read_write> = access %6, %3
     %8:i32 = load %7
     %9:ptr<function, i32, read_write> = access %6, %4
@@ -413,7 +413,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, MultipleAccessesFromSameSource_SkipCo
 %foo = func(%2:array<array<array<i32, 4>, 4>, 4>, %3:i32, %4:i32, %5:i32):i32 {
   $B1: {
     %6:array<i32, 4> = access %2, 1u, 2u
-    %7:ptr<function, array<i32, 4>, read_write> = var, %6
+    %7:ptr<function, array<i32, 4>, read_write> = var %6
     %8:ptr<function, i32, read_write> = access %7, %3
     %9:i32 = load %8
     %10:ptr<function, i32, read_write> = access %7, %4
@@ -470,7 +470,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, MultipleAccessesToFuncParam_FromDiffe
     auto* expect = R"(
 %func = func(%2:array<i32, 4>, %3:bool, %4:i32, %5:i32):i32 {
   $B1: {
-    %6:ptr<function, array<i32, 4>, read_write> = var, %2
+    %6:ptr<function, array<i32, 4>, read_write> = var %2
     if %3 [t: $B2, f: $B3] {  # if_1
       $B2: {  # true
         %7:ptr<function, i32, read_write> = access %6, %4
@@ -535,7 +535,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest,
 %func = func(%2:array<array<i32, 4>, 4>, %3:bool, %4:i32, %5:i32):i32 {
   $B1: {
     %6:array<i32, 4> = access %2, 0u
-    %7:ptr<function, array<i32, 4>, read_write> = var, %6
+    %7:ptr<function, array<i32, 4>, read_write> = var %6
     if %3 [t: $B2, f: $B3] {  # if_1
       $B2: {  # true
         %8:ptr<function, i32, read_write> = access %7, %4
@@ -566,6 +566,9 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, MultipleAccessesToBlockParam_FromDiff
     func->SetParams({cond, idx_a, idx_b});
     b.Append(func->Block(), [&] {  //
         auto* loop = b.Loop();
+        b.Append(loop->Initializer(), [&] {  //
+            b.NextIteration(loop, b.Splat(arr->Type(), 0_i));
+        });
         loop->Body()->SetParams({arr});
         b.Append(loop->Body(), [&] {
             auto* if_ = b.If(cond);
@@ -583,14 +586,17 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, MultipleAccessesToBlockParam_FromDiff
     auto* src = R"(
 %func = func(%2:bool, %3:i32, %4:i32):i32 {
   $B1: {
-    loop [b: $B2] {  # loop_1
-      $B2 (%5:array<i32, 4>): {  # body
-        if %2 [t: $B3, f: $B4] {  # if_1
-          $B3: {  # true
+    loop [i: $B2, b: $B3] {  # loop_1
+      $B2: {  # initializer
+        next_iteration array<i32, 4>(0i)  # -> $B3
+      }
+      $B3 (%5:array<i32, 4>): {  # body
+        if %2 [t: $B4, f: $B5] {  # if_1
+          $B4: {  # true
             %6:i32 = access %5, %3
             ret %6
           }
-          $B4: {  # false
+          $B5: {  # false
             %7:i32 = access %5, %4
             ret %7
           }
@@ -607,16 +613,19 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, MultipleAccessesToBlockParam_FromDiff
     auto* expect = R"(
 %func = func(%2:bool, %3:i32, %4:i32):i32 {
   $B1: {
-    loop [b: $B2] {  # loop_1
-      $B2 (%5:array<i32, 4>): {  # body
-        %6:ptr<function, array<i32, 4>, read_write> = var, %5
-        if %2 [t: $B3, f: $B4] {  # if_1
-          $B3: {  # true
+    loop [i: $B2, b: $B3] {  # loop_1
+      $B2: {  # initializer
+        next_iteration array<i32, 4>(0i)  # -> $B3
+      }
+      $B3 (%5:array<i32, 4>): {  # body
+        %6:ptr<function, array<i32, 4>, read_write> = var %5
+        if %2 [t: $B4, f: $B5] {  # if_1
+          $B4: {  # true
             %7:ptr<function, i32, read_write> = access %6, %3
             %8:i32 = load %7
             ret %8
           }
-          $B4: {  # false
+          $B5: {  # false
             %9:ptr<function, i32, read_write> = access %6, %4
             %10:i32 = load %9
             ret %10
@@ -637,7 +646,8 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, MultipleAccessesToBlockParam_FromDiff
 
 TEST_F(SpirvWriter_VarForDynamicIndexTest,
        MultipleAccessesToBlockParam_FromDifferentBlocks_WithLeadingConstantIndex) {
-    auto* arr = b.BlockParam(ty.array(ty.array<i32, 4>(), 4));
+    auto* inner_ty = ty.array<i32, 4>();
+    auto* arr = b.BlockParam(ty.array(inner_ty, 4));
     auto* cond = b.FunctionParam(ty.bool_());
     auto* idx_a = b.FunctionParam(ty.i32());
     auto* idx_b = b.FunctionParam(ty.i32());
@@ -645,6 +655,9 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest,
     func->SetParams({cond, idx_a, idx_b});
     b.Append(func->Block(), [&] {  //
         auto* loop = b.Loop();
+        b.Append(loop->Initializer(), [&] {  //
+            b.NextIteration(loop, b.Splat(arr->Type(), b.Splat(inner_ty, 0_i)));
+        });
         loop->Body()->SetParams({arr});
         b.Append(loop->Body(), [&] {
             auto* if_ = b.If(cond);
@@ -662,14 +675,17 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest,
     auto* src = R"(
 %func = func(%2:bool, %3:i32, %4:i32):i32 {
   $B1: {
-    loop [b: $B2] {  # loop_1
-      $B2 (%5:array<array<i32, 4>, 4>): {  # body
-        if %2 [t: $B3, f: $B4] {  # if_1
-          $B3: {  # true
+    loop [i: $B2, b: $B3] {  # loop_1
+      $B2: {  # initializer
+        next_iteration array<array<i32, 4>, 4>(array<i32, 4>(0i))  # -> $B3
+      }
+      $B3 (%5:array<array<i32, 4>, 4>): {  # body
+        if %2 [t: $B4, f: $B5] {  # if_1
+          $B4: {  # true
             %6:i32 = access %5, 0u, %3
             ret %6
           }
-          $B4: {  # false
+          $B5: {  # false
             %7:i32 = access %5, 0u, %4
             ret %7
           }
@@ -686,17 +702,20 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest,
     auto* expect = R"(
 %func = func(%2:bool, %3:i32, %4:i32):i32 {
   $B1: {
-    loop [b: $B2] {  # loop_1
-      $B2 (%5:array<array<i32, 4>, 4>): {  # body
+    loop [i: $B2, b: $B3] {  # loop_1
+      $B2: {  # initializer
+        next_iteration array<array<i32, 4>, 4>(array<i32, 4>(0i))  # -> $B3
+      }
+      $B3 (%5:array<array<i32, 4>, 4>): {  # body
         %6:array<i32, 4> = access %5, 0u
-        %7:ptr<function, array<i32, 4>, read_write> = var, %6
-        if %2 [t: $B3, f: $B4] {  # if_1
-          $B3: {  # true
+        %7:ptr<function, array<i32, 4>, read_write> = var %6
+        if %2 [t: $B4, f: $B5] {  # if_1
+          $B4: {  # true
             %8:ptr<function, i32, read_write> = access %7, %3
             %9:i32 = load %8
             ret %9
           }
-          $B4: {  # false
+          $B5: {  # false
             %10:ptr<function, i32, read_write> = access %7, %4
             %11:i32 = load %10
             ret %11
@@ -763,7 +782,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest, MultipleAccessesToConstant_FromDiffer
 
     auto* expect = R"(
 $B1: {  # root
-  %1:ptr<private, array<i32, 4>, read_write> = var, array<i32, 4>(0i)
+  %1:ptr<private, array<i32, 4>, read_write> = var array<i32, 4>(0i)
 }
 
 %func_a = func(%3:i32):i32 {
@@ -843,7 +862,7 @@ TEST_F(SpirvWriter_VarForDynamicIndexTest,
 
     auto* expect = R"(
 $B1: {  # root
-  %1:ptr<private, array<i32, 4>, read_write> = var, array<i32, 4>(0i)
+  %1:ptr<private, array<i32, 4>, read_write> = var array<i32, 4>(0i)
 }
 
 %func_a = func(%3:i32):i32 {

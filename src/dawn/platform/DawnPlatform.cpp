@@ -62,8 +62,7 @@ uint64_t Platform::AddTraceEvent(char phase,
                                  const uint64_t* argValues,
                                  unsigned char flags) {
     // AddTraceEvent cannot be called if events are disabled.
-    DAWN_ASSERT(false);
-    return 0;
+    DAWN_UNREACHABLE();
 }
 
 void Platform::HistogramCustomCounts(const char* name,
@@ -101,6 +100,12 @@ bool Platform::IsFeatureEnabled(Features feature) {
             return false;
 #endif
         case Features::kWebGPUUseTintIR:
+#if defined(DAWN_OS_CHROMEOS)
+            return true;
+#else
+            return false;
+#endif
+        case Features::kWebGPUUseVulkanMemoryModel:
             return false;
     }
     return false;

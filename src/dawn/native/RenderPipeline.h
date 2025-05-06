@@ -35,6 +35,7 @@
 #include "dawn/common/ContentLessObjectCacheable.h"
 #include "dawn/native/AttachmentState.h"
 #include "dawn/native/Forward.h"
+#include "dawn/native/ImmediateConstantsLayout.h"
 #include "dawn/native/IntegerTypes.h"
 #include "dawn/native/Pipeline.h"
 
@@ -49,7 +50,6 @@ enum class VertexFormatBaseType {
 };
 
 struct VertexFormatInfo {
-    wgpu::VertexFormat format;
     uint32_t byteSize;
     uint32_t componentCount;
     VertexFormatBaseType baseType;
@@ -92,7 +92,7 @@ class RenderPipelineBase : public PipelineBase,
     RenderPipelineBase(DeviceBase* device, const UnpackedPtr<RenderPipelineDescriptor>& descriptor);
     ~RenderPipelineBase() override;
 
-    static Ref<RenderPipelineBase> MakeError(DeviceBase* device, const char* label);
+    static Ref<RenderPipelineBase> MakeError(DeviceBase* device, StringView label);
 
     ObjectType GetType() const override;
 
@@ -154,7 +154,7 @@ class RenderPipelineBase : public PipelineBase,
     void DestroyImpl() override;
 
   private:
-    RenderPipelineBase(DeviceBase* device, ObjectBase::ErrorTag tag, const char* label);
+    RenderPipelineBase(DeviceBase* device, ObjectBase::ErrorTag tag, StringView label);
 
     // Vertex state
     uint32_t mVertexBufferCount;
@@ -174,7 +174,6 @@ class RenderPipelineBase : public PipelineBase,
     PrimitiveState mPrimitive;
     DepthStencilState mDepthStencil;
     MultisampleState mMultisample;
-    bool mUnclippedDepth = false;
     bool mWritesDepth = false;
     bool mWritesStencil = false;
     bool mUsesFragDepth = false;

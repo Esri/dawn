@@ -71,8 +71,14 @@ struct State {
     /// Process the function.
     /// @param fn the function to process
     void Process(core::ir::Function* fn) {
+        if (fn->IsEntryPoint()) {
+            // Entry points are not called and do not require this transformation to ensure
+            // convergence.
+            return;
+        }
+
         // Find all of the nested return instructions in the function.
-        for (const auto& usage : fn->Usages()) {
+        for (const auto& usage : fn->UsagesUnsorted()) {
             if (auto* ret = usage->instruction->As<core::ir::Return>()) {
                 TransitivelyMarkAsReturning(ret->Block()->Parent());
             }
@@ -129,6 +135,7 @@ struct State {
     /// @param block the block to process
     void ProcessBlock(core::ir::Block* block) {
         core::ir::If* inner_if = nullptr;
+        Vector<core::ir::If*, 4> inner_if_stack;
         for (auto* inst = *block->begin(); inst;) {  // For each instruction in 'block'
             // As we're modifying the block that we're iterating over, grab the pointer to the next
             // instruction before (potentially) moving 'inst' to another block.
@@ -167,6 +174,7 @@ struct State {
                     if (next && (next != fn_return || fn_return->Value()) &&
                         !tint::IsAnyOf<core::ir::Exit, core::ir::Unreachable>(next)) {
                         inner_if = CreateIfContinueExecution(ctrl);
+                        inner_if_stack.Push(inner_if);
                     }
                 }
             }
@@ -195,9 +203,10 @@ struct State {
                 inner_if->True()->Append(b.ExitIf(inner_if));
             }
 
-            // Loop over the 'if' instructions, starting with the inner-most, and add any missing
-            // terminating instructions to the blocks holding the 'if'.
-            for (auto* i = inner_if; i; i = tint::As<core::ir::If>(i->Block()->Parent())) {
+            // Walk back down the stack of 'if' instructions that were created, and add any missing
+            // terminating instructions to the blocks holding them.
+            while (!inner_if_stack.IsEmpty()) {
+                auto* i = inner_if_stack.Pop();
                 if (!i->Block()->Terminator() && i->Block()->Parent()) {
                     // Append the exit instruction to the block holding the 'if'.
                     Vector<core::ir::InstructionResult*, 8> exit_args = i->Results();
@@ -250,7 +259,7 @@ struct State {
         // Change the function return to unconditionally load 'return_val' and return it
         auto* load = b.Load(return_val);
         load->InsertBefore(ret);
-        ret->SetValue(load->Result(0));
+        ret->SetValue(load->Result());
     }
 
     /// Transforms the return instruction that is found in a control instruction.
@@ -313,7 +322,7 @@ struct State {
 }  // namespace
 
 Result<SuccessType> MergeReturn(core::ir::Module& ir) {
-    auto result = ValidateAndDumpIfNeeded(ir, "MergeReturn transform");
+    auto result = ValidateAndDumpIfNeeded(ir, "spirv.MergeReturn");
     if (result != Success) {
         return result;
     }

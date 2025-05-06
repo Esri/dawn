@@ -61,7 +61,7 @@
 #include "src/tint/lang/wgsl/program/program.h"
 #include "src/tint/lang/wgsl/sem/array_count.h"
 #include "src/tint/lang/wgsl/sem/struct.h"
-#include "src/tint/utils/id/generation_id.h"
+#include "src/tint/utils/generation_id.h"
 #include "src/tint/utils/text/string.h"
 
 #ifdef CURRENTLY_IN_TINT_PUBLIC_HEADER
@@ -155,9 +155,9 @@ class ProgramBuilder : public ast::Builder {
     /// @param args the arguments to pass to the constructor
     /// @returns the node pointer
     template <typename T, typename... ARGS>
-    tint::traits::EnableIf<tint::traits::IsTypeOrDerived<T, sem::Node> &&
-                               !tint::traits::IsTypeOrDerived<T, core::type::Node>,
-                           T>*
+    std::enable_if_t<tint::traits::IsTypeOrDerived<T, sem::Node> &&
+                         !tint::traits::IsTypeOrDerived<T, core::type::Node>,
+                     T>*
     create(ARGS&&... args) {
         AssertNotMoved();
         return sem_nodes_.Create<T>(std::forward<ARGS>(args)...);
@@ -170,7 +170,8 @@ class ProgramBuilder : public ast::Builder {
     /// @param args the arguments to pass to the constructor
     /// @returns the new, or existing node
     template <typename T, typename... ARGS>
-    tint::traits::EnableIfIsType<T, core::type::Node>* create(ARGS&&... args) {
+        requires(traits::IsTypeOrDerived<T, core::type::Node>)
+    T* create(ARGS&&... args) {
         AssertNotMoved();
         return constants.types.Get<T>(std::forward<ARGS>(args)...);
     }

@@ -38,7 +38,7 @@ TINT_INSTANTIATE_TYPEINFO(tint::core::type::InputAttachment);
 
 namespace tint::core::type {
 
-InputAttachment::InputAttachment(const Type* type)
+InputAttachment::InputAttachment(const type::Type* type)
     : Base(Hash(TypeCode::Of<InputAttachment>().bits, type), TextureDimension::k2d), type_(type) {
     TINT_ASSERT(type_);
 }
@@ -54,8 +54,7 @@ bool InputAttachment::Equals(const UniqueNode& other) const {
 
 std::string InputAttachment::FriendlyName() const {
     StringStream out;
-    out << "input_attachment"
-        << "<" << type_->FriendlyName() << ">";
+    out << "input_attachment" << "<" << type_->FriendlyName() << ">";
     return out.str();
 }
 

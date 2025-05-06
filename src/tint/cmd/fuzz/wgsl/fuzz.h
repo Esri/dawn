@@ -49,18 +49,23 @@ struct Options {
     bool run_concurrently = false;
     /// If true, print the fuzzer name to stdout before running.
     bool verbose = false;
-    /// If not empty, load DXC from this path when fuzzing HLSL generation, and fail the fuzzer if
-    /// not found, or if DXC fails to compile.
+    /// If not empty, load DXC from this path when fuzzing HLSL generation.
     std::string dxc;
+    /// If true, dump shader input/output text to stdout
+    bool dump = false;
 };
 
 /// ProgramProperties is an enumerator of flags used to describe characteristics of the input
 /// program.
 enum class ProgramProperties {
+    /// The program has address spaces which have been shadowed
+    kAddressSpacesShadowed,
     /// The program has builtin functions which have been shadowed
     kBuiltinFnsShadowed,
     /// The program has builtin types which have been shadowed
     kBuiltinTypesShadowed,
+    /// The program has multiple entry points
+    kMultipleEntryPoints,
 };
 
 /// Context holds information about the fuzzer options and the input program.
@@ -99,8 +104,8 @@ struct ProgramFuzzer {
         } else {
             return ProgramFuzzer{
                 name,
-                [fn](const Program& program, const Context& options, Slice<const std::byte>) {
-                    fn(program, options);
+                [fn](const Program& program, const Context& context, Slice<const std::byte>) {
+                    fn(program, context);
                 },
             };
         }

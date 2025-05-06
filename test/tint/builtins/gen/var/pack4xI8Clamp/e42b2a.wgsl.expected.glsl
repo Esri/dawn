@@ -1,101 +1,90 @@
-#version 310 es
-
-uint tint_int_dot(uvec4 a, uvec4 b) {
-  return a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
-}
-
-uint tint_pack_4xi8_clamp(ivec4 a) {
-  ivec4 a_clamp = clamp(a, ivec4(-128), ivec4(127));
-  uvec4 a_u32 = uvec4(a_clamp);
-  uvec4 a_u8 = ((a_u32 & uvec4(255u)) << uvec4(0u, 8u, 16u, 24u));
-  return tint_int_dot(a_u8, uvec4(1u));
-}
-
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
-  uint inner;
-} prevent_dce;
-
-void pack4xI8Clamp_e42b2a() {
-  ivec4 arg_0 = ivec4(1);
-  uint res = tint_pack_4xi8_clamp(arg_0);
-  prevent_dce.inner = res;
-}
-
-vec4 vertex_main() {
-  pack4xI8Clamp_e42b2a();
-  return vec4(0.0f);
-}
-
-void main() {
-  gl_PointSize = 1.0;
-  vec4 inner_result = vertex_main();
-  gl_Position = inner_result;
-  gl_Position.y = -(gl_Position.y);
-  gl_Position.z = ((2.0f * gl_Position.z) - gl_Position.w);
-  return;
-}
+//
+// fragment_main
+//
 #version 310 es
 precision highp float;
 precision highp int;
 
-uint tint_int_dot(uvec4 a, uvec4 b) {
-  return a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
-}
-
-uint tint_pack_4xi8_clamp(ivec4 a) {
-  ivec4 a_clamp = clamp(a, ivec4(-128), ivec4(127));
-  uvec4 a_u32 = uvec4(a_clamp);
-  uvec4 a_u8 = ((a_u32 & uvec4(255u)) << uvec4(0u, 8u, 16u, 24u));
-  return tint_int_dot(a_u8, uvec4(1u));
-}
-
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+layout(binding = 0, std430)
+buffer f_prevent_dce_block_ssbo {
   uint inner;
-} prevent_dce;
-
-void pack4xI8Clamp_e42b2a() {
+} v;
+uint tint_int_dot(uvec4 x, uvec4 y) {
+  return ((((x.x * y.x) + (x.y * y.y)) + (x.z * y.z)) + (x.w * y.w));
+}
+uint pack4xI8Clamp_e42b2a() {
   ivec4 arg_0 = ivec4(1);
-  uint res = tint_pack_4xi8_clamp(arg_0);
-  prevent_dce.inner = res;
+  ivec4 v_1 = arg_0;
+  uvec4 v_2 = uvec4(0u, 8u, 16u, 24u);
+  ivec4 v_3 = ivec4(-128);
+  uvec4 v_4 = uvec4(clamp(v_1, v_3, ivec4(127)));
+  uvec4 v_5 = ((v_4 & uvec4(255u)) << v_2);
+  uint res = tint_int_dot(v_5, uvec4(1u));
+  return res;
 }
-
-void fragment_main() {
-  pack4xI8Clamp_e42b2a();
-}
-
 void main() {
-  fragment_main();
-  return;
+  v.inner = pack4xI8Clamp_e42b2a();
 }
+//
+// compute_main
+//
 #version 310 es
 
-uint tint_int_dot(uvec4 a, uvec4 b) {
-  return a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
-}
-
-uint tint_pack_4xi8_clamp(ivec4 a) {
-  ivec4 a_clamp = clamp(a, ivec4(-128), ivec4(127));
-  uvec4 a_u32 = uvec4(a_clamp);
-  uvec4 a_u8 = ((a_u32 & uvec4(255u)) << uvec4(0u, 8u, 16u, 24u));
-  return tint_int_dot(a_u8, uvec4(1u));
-}
-
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+layout(binding = 0, std430)
+buffer prevent_dce_block_1_ssbo {
   uint inner;
-} prevent_dce;
-
-void pack4xI8Clamp_e42b2a() {
+} v;
+uint tint_int_dot(uvec4 x, uvec4 y) {
+  return ((((x.x * y.x) + (x.y * y.y)) + (x.z * y.z)) + (x.w * y.w));
+}
+uint pack4xI8Clamp_e42b2a() {
   ivec4 arg_0 = ivec4(1);
-  uint res = tint_pack_4xi8_clamp(arg_0);
-  prevent_dce.inner = res;
+  ivec4 v_1 = arg_0;
+  uvec4 v_2 = uvec4(0u, 8u, 16u, 24u);
+  ivec4 v_3 = ivec4(-128);
+  uvec4 v_4 = uvec4(clamp(v_1, v_3, ivec4(127)));
+  uvec4 v_5 = ((v_4 & uvec4(255u)) << v_2);
+  uint res = tint_int_dot(v_5, uvec4(1u));
+  return res;
 }
-
-void compute_main() {
-  pack4xI8Clamp_e42b2a();
-}
-
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
-  compute_main();
-  return;
+  v.inner = pack4xI8Clamp_e42b2a();
+}
+//
+// vertex_main
+//
+#version 310 es
+
+
+struct VertexOutput {
+  vec4 pos;
+  uint prevent_dce;
+};
+
+layout(location = 0) flat out uint tint_interstage_location0;
+uint tint_int_dot(uvec4 x, uvec4 y) {
+  return ((((x.x * y.x) + (x.y * y.y)) + (x.z * y.z)) + (x.w * y.w));
+}
+uint pack4xI8Clamp_e42b2a() {
+  ivec4 arg_0 = ivec4(1);
+  ivec4 v = arg_0;
+  uvec4 v_1 = uvec4(0u, 8u, 16u, 24u);
+  ivec4 v_2 = ivec4(-128);
+  uvec4 v_3 = uvec4(clamp(v, v_2, ivec4(127)));
+  uvec4 v_4 = ((v_3 & uvec4(255u)) << v_1);
+  uint res = tint_int_dot(v_4, uvec4(1u));
+  return res;
+}
+VertexOutput vertex_main_inner() {
+  VertexOutput v_5 = VertexOutput(vec4(0.0f), 0u);
+  v_5.pos = vec4(0.0f);
+  v_5.prevent_dce = pack4xI8Clamp_e42b2a();
+  return v_5;
+}
+void main() {
+  VertexOutput v_6 = vertex_main_inner();
+  gl_Position = vec4(v_6.pos.x, -(v_6.pos.y), ((2.0f * v_6.pos.z) - v_6.pos.w), v_6.pos.w);
+  tint_interstage_location0 = v_6.prevent_dce;
+  gl_PointSize = 1.0f;
 }

@@ -28,30 +28,37 @@
 #ifndef SRC_DAWN_NATIVE_OPENGL_PHYSICALDEVICEGL_H_
 #define SRC_DAWN_NATIVE_OPENGL_PHYSICALDEVICEGL_H_
 
+#include <memory>
+
+#include "dawn/native/Forward.h"
 #include "dawn/native/PhysicalDevice.h"
 #include "dawn/native/opengl/EGLFunctions.h"
 #include "dawn/native/opengl/OpenGLFunctions.h"
 
 namespace dawn::native::opengl {
 
+class DisplayEGL;
+
 class PhysicalDevice : public PhysicalDeviceBase {
   public:
     static ResultOrError<Ref<PhysicalDevice>> Create(wgpu::BackendType backendType,
-                                                     void* (*getProc)(const char*),
-                                                     EGLDisplay display);
+                                                     Ref<DisplayEGL> display,
+                                                     bool forceES31AndMinExtensions);
 
     ~PhysicalDevice() override = default;
 
+    DisplayEGL* GetDisplay() const;
+
     // PhysicalDeviceBase Implementation
     bool SupportsExternalImages() const override;
-    bool SupportsFeatureLevel(FeatureLevel featureLevel) const override;
+    bool SupportsFeatureLevel(wgpu::FeatureLevel featureLevel,
+                              InstanceBase* instance) const override;
     ResultOrError<PhysicalDeviceSurfaceCapabilities> GetSurfaceCapabilities(
         InstanceBase* instance,
         const Surface* surface) const override;
 
   private:
-    PhysicalDevice(wgpu::BackendType backendType, EGLDisplay display);
-    MaybeError InitializeGLFunctions(void* (*getProc)(const char*));
+    PhysicalDevice(wgpu::BackendType backendType, Ref<DisplayEGL> display);
 
     MaybeError InitializeImpl() override;
     void InitializeSupportedFeaturesImpl() override;
@@ -71,11 +78,10 @@ class PhysicalDevice : public PhysicalDeviceBase {
         const TogglesState& deviceToggles,
         Ref<DeviceBase::DeviceLostEvent>&& lostEvent) override;
 
-    void PopulateBackendProperties(UnpackedPtr<AdapterProperties>& properties) const override;
+    void PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info) const override;
 
     OpenGLFunctions mFunctions;
-    EGLDisplay mDisplay;
-    EGLFunctions mEGLFunctions;
+    Ref<DisplayEGL> mDisplay;
 };
 
 }  // namespace dawn::native::opengl

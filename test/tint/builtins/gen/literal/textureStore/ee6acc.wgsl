@@ -34,18 +34,14 @@
 //                       Do not modify this file directly
 ////////////////////////////////////////////////////////////////////////////////
 
+
+// flags: --glsl-desktop
 @group(1) @binding(0) var arg_0: texture_storage_3d<rg32float, write>;
 
 // fn textureStore(texture: texture_storage_3d<rg32float, write>, coords: vec3<i32>, value: vec4<f32>)
 fn textureStore_ee6acc() {
   textureStore(arg_0, vec3<i32>(1i), vec4<f32>(1.f));
 }
-@vertex
-fn vertex_main() -> @builtin(position) vec4<f32> {
-  textureStore_ee6acc();
-  return vec4<f32>();
-}
-
 @fragment
 fn fragment_main() {
   textureStore_ee6acc();

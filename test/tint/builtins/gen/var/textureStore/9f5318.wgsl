@@ -34,6 +34,8 @@
 //                       Do not modify this file directly
 ////////////////////////////////////////////////////////////////////////////////
 
+
+// flags: --glsl-desktop
 @group(1) @binding(0) var arg_0: texture_storage_2d<rg32sint, write>;
 
 // fn textureStore(texture: texture_storage_2d<rg32sint, write>, coords: vec2<u32>, value: vec4<i32>)
@@ -42,12 +44,6 @@ fn textureStore_9f5318() {
   var arg_2 = vec4<i32>(1i);
   textureStore(arg_0, arg_1, arg_2);
 }
-@vertex
-fn vertex_main() -> @builtin(position) vec4<f32> {
-  textureStore_9f5318();
-  return vec4<f32>();
-}
-
 @fragment
 fn fragment_main() {
   textureStore_9f5318();

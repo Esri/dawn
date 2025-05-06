@@ -27,6 +27,9 @@
 
 #include "dawn/native/ExecutionQueue.h"
 
+#include <atomic>
+#include <utility>
+
 namespace dawn::native {
 
 ExecutionSerial ExecutionQueueBase::GetPendingCommandSerial() const {
@@ -38,7 +41,7 @@ ExecutionSerial ExecutionQueueBase::GetLastSubmittedCommandSerial() const {
 }
 
 ExecutionSerial ExecutionQueueBase::GetCompletedCommandSerial() const {
-    return mCompletedSerial;
+    return ExecutionSerial(mCompletedSerial.load(std::memory_order_acquire));
 }
 
 MaybeError ExecutionQueueBase::CheckPassedSerials() {
@@ -47,15 +50,32 @@ MaybeError ExecutionQueueBase::CheckPassedSerials() {
 
     DAWN_ASSERT(completedSerial <=
                 ExecutionSerial(mLastSubmittedSerial.load(std::memory_order_acquire)));
-    // completedSerial should not be less than mCompletedSerial unless it is 0.
-    // It can be 0 when there's no fences to check.
-    DAWN_ASSERT(completedSerial >= mCompletedSerial || completedSerial == ExecutionSerial(0));
 
-    if (completedSerial > mCompletedSerial) {
-        mCompletedSerial = completedSerial;
-    }
-
+    UpdateCompletedSerial(completedSerial);
     return {};
+}
+
+void ExecutionQueueBase::TrackSerialTask(ExecutionSerial serial, Task&& task) {
+    if (serial <= GetCompletedCommandSerial()) {
+        task();
+        return;
+    }
+    mWaitingTasks->Enqueue(std::move(task), serial);
+}
+
+void ExecutionQueueBase::UpdateCompletedSerial(ExecutionSerial completedSerial) {
+    // Atomically set mCompletedSerial to completedSerial if completedSerial is larger.
+    uint64_t current = mCompletedSerial.load(std::memory_order_acquire);
+    while (uint64_t(completedSerial) > current &&
+           !mCompletedSerial.compare_exchange_weak(current, uint64_t(completedSerial),
+                                                   std::memory_order_acq_rel)) {
+    }
+    mWaitingTasks.Use([&](auto tasks) {
+        for (auto task : tasks->IterateUpTo(completedSerial)) {
+            task();
+        }
+        tasks->ClearUpTo(completedSerial);
+    });
 }
 
 MaybeError ExecutionQueueBase::EnsureCommandsFlushed(ExecutionSerial serial) {
@@ -70,8 +90,11 @@ MaybeError ExecutionQueueBase::EnsureCommandsFlushed(ExecutionSerial serial) {
 
 void ExecutionQueueBase::AssumeCommandsComplete() {
     // Bump serials so any pending callbacks can be fired.
-    uint64_t prev = mLastSubmittedSerial.fetch_add(1u, std::memory_order_release);
-    mCompletedSerial = ExecutionSerial(prev + 1);
+    // TODO(crbug.com/dawn/831): This is called during device destroy, which is not
+    // thread-safe yet. Two threads calling destroy would race setting these serials.
+    ExecutionSerial completed =
+        ExecutionSerial(mLastSubmittedSerial.fetch_add(1u, std::memory_order_release) + 1);
+    UpdateCompletedSerial(completed);
 }
 
 void ExecutionQueueBase::IncrementLastSubmittedCommandSerial() {
@@ -79,8 +102,8 @@ void ExecutionQueueBase::IncrementLastSubmittedCommandSerial() {
 }
 
 bool ExecutionQueueBase::HasScheduledCommands() const {
-    return ExecutionSerial(mLastSubmittedSerial.load(std::memory_order_acquire)) >
-               mCompletedSerial ||
+    return mLastSubmittedSerial.load(std::memory_order_acquire) >
+               mCompletedSerial.load(std::memory_order_acquire) ||
            HasPendingCommands();
 }
 

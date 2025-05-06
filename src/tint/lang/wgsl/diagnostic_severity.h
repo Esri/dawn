@@ -42,7 +42,7 @@
 #include "src/tint/lang/wgsl/diagnostic_rule.h"
 #include "src/tint/utils/containers/hashmap.h"
 #include "src/tint/utils/diagnostic/diagnostic.h"
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/rtti/traits.h"
 
 namespace tint::wgsl {
 
@@ -62,7 +62,8 @@ std::string_view ToString(DiagnosticSeverity value);
 /// @param out the stream to write to
 /// @param value the DiagnosticSeverity
 /// @returns @p out so calls can be chained
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, DiagnosticSeverity value) {
     return out << ToString(value);
 }

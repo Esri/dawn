@@ -37,6 +37,7 @@
 #include "dawn/native/d3d12/CommandRecordingContext.h"
 #include "dawn/native/d3d12/D3D12Info.h"
 #include "dawn/native/d3d12/Forward.h"
+#include "dawn/native/d3d12/ResourceAllocatorManagerD3D12.h"
 #include "dawn/native/d3d12/TextureD3D12.h"
 
 namespace dawn::native::d3d {
@@ -47,7 +48,6 @@ namespace dawn::native::d3d12 {
 
 class PlatformFunctions;
 class ResidencyManager;
-class ResourceAllocatorManager;
 class SamplerHeapCache;
 class ShaderVisibleDescriptorAllocator;
 class StagingDescriptorAllocator;
@@ -108,12 +108,12 @@ class Device final : public d3d::Device {
                                        uint64_t size);
 
     MaybeError CopyFromStagingToTextureImpl(const BufferBase* source,
-                                            const TextureDataLayout& src,
+                                            const TexelCopyBufferLayout& src,
                                             const TextureCopy& dst,
                                             const Extent3D& copySizePixels) override;
 
     ResultOrError<ResourceHeapAllocation> AllocateMemory(
-        D3D12_HEAP_TYPE heapType,
+        ResourceHeapKind resourceHeapKind,
         const D3D12_RESOURCE_DESC& resourceDescriptor,
         D3D12_RESOURCE_STATES initialUsage,
         uint32_t formatBytesPerBlock,
@@ -170,6 +170,8 @@ class Device final : public d3d::Device {
 
     const PerStage<std::wstring>& GetDxcShaderProfiles() const;
 
+    uint32_t GetResourceHeapTier() const;
+
   private:
     using Base = d3d::Device;
 
@@ -191,8 +193,9 @@ class Device final : public d3d::Device {
     ResultOrError<Ref<SamplerBase>> CreateSamplerImpl(const SamplerDescriptor* descriptor) override;
     ResultOrError<Ref<ShaderModuleBase>> CreateShaderModuleImpl(
         const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
+        const std::vector<tint::wgsl::Extension>& internalExtensions,
         ShaderModuleParseResult* parseResult,
-        OwnedCompilationMessages* compilationMessages) override;
+        std::unique_ptr<OwnedCompilationMessages>* compilationMessages) override;
     ResultOrError<Ref<SwapChainBase>> CreateSwapChainImpl(
         Surface* surface,
         SwapChainBase* previousSwapChain,
@@ -230,6 +233,7 @@ class Device final : public d3d::Device {
     MaybeError CreateZeroBuffer();
 
     ComPtr<ID3D12Device> mD3d12Device;  // Device is owned by adapter and will not be outlived.
+    bool mIsDebugLayerEnabled = false;
 
     // 11on12 device corresponding to queue's mCommandQueue.
     ComPtr<ID3D11On12Device> mD3d11On12Device;

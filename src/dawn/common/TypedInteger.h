@@ -30,6 +30,7 @@
 
 #include <limits>
 #include <type_traits>
+#include <utility>
 
 #include "dawn/common/Assert.h"
 #include "dawn/common/UnderlyingType.h"
@@ -89,12 +90,11 @@ class alignas(T) TypedIntegerImpl {
     }
 
     // Construction from non-narrowing integral types.
-    template <typename I,
-              typename =
-                  std::enable_if_t<std::is_integral<I>::value &&
-                                   std::numeric_limits<I>::max() <= std::numeric_limits<T>::max() &&
-                                   std::numeric_limits<I>::min() >= std::numeric_limits<T>::min()>>
-    explicit constexpr TypedIntegerImpl(I rhs) : mValue(static_cast<T>(rhs)) {}
+    template <typename I, typename = std::enable_if_t<std::is_integral<I>::value>>
+    explicit constexpr TypedIntegerImpl(I rhs) : mValue(static_cast<T>(rhs)) {
+        static_assert(std::numeric_limits<I>::max() <= std::numeric_limits<T>::max());
+        static_assert(std::numeric_limits<I>::min() >= std::numeric_limits<T>::min());
+    }
 
     // Allow explicit casts only to the underlying type. If you're casting out of an
     // TypedInteger, you should know what what you're doing, and exactly what type you
@@ -219,6 +219,12 @@ class alignas(T) TypedIntegerImpl {
         auto result = SubImpl(*this, rhs);
         static_assert(std::is_same<T, decltype(result)>::value, "Use ityp::Sub instead.");
         return TypedIntegerImpl(result);
+    }
+
+    template <typename H>
+    friend H AbslHashValue(H state, const TypedIntegerImpl& value) {
+        H::combine(std::move(state), value.mValue);
+        return std::move(state);
     }
 };
 

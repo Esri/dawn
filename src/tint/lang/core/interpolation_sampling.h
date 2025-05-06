@@ -40,7 +40,7 @@
 #include <cstdint>
 #include <string>
 
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/rtti/traits.h"
 
 namespace tint::core {
 
@@ -49,6 +49,8 @@ enum class InterpolationSampling : uint8_t {
     kUndefined,
     kCenter,
     kCentroid,
+    kEither,
+    kFirst,
     kSample,
 };
 
@@ -59,7 +61,8 @@ std::string_view ToString(InterpolationSampling value);
 /// @param out the stream to write to
 /// @param value the InterpolationSampling
 /// @returns @p out so calls can be chained
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, InterpolationSampling value) {
     return out << ToString(value);
 }
@@ -71,9 +74,7 @@ auto& operator<<(STREAM& out, InterpolationSampling value) {
 InterpolationSampling ParseInterpolationSampling(std::string_view str);
 
 constexpr std::string_view kInterpolationSamplingStrings[] = {
-    "center",
-    "centroid",
-    "sample",
+    "center", "centroid", "either", "first", "sample",
 };
 
 }  // namespace tint::core

@@ -52,7 +52,7 @@ namespace {
 bool ShouldRun(const Program& program) {
     for (auto* node : program.ASTNodes().Objects()) {
         if (auto* attr = node->As<ast::BuiltinAttribute>()) {
-            if (program.Sem().Get(attr)->Value() == core::BuiltinValue::kNumWorkgroups) {
+            if (attr->builtin == core::BuiltinValue::kNumWorkgroups) {
                 return true;
             }
         }
@@ -193,7 +193,7 @@ ast::transform::Transform::ApplyResult NumWorkgroupsFromUniform::Apply(
             continue;
         }
 
-        if (to_replace.count({ident->identifier->symbol, accessor->member->symbol})) {
+        if (to_replace.count({ident->identifier->symbol, accessor->member->symbol}) != 0u) {
             ctx.Replace(accessor,
                         b.MemberAccessor(get_ubo()->name->symbol, kNumWorkgroupsMemberName));
         }

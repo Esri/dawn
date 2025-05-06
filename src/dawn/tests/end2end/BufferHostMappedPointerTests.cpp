@@ -27,6 +27,7 @@
 
 #include "dawn/tests/end2end/BufferHostMappedPointerTests.h"
 
+#include "dawn/common/Math.h"
 #include "dawn/utils/WGPUHelpers.h"
 
 namespace dawn {
@@ -50,12 +51,13 @@ void BufferHostMappedPointerTests::SetUp() {
     DawnTestWithParams<BufferHostMappedPointerTestParams>::SetUp();
     DAWN_TEST_UNSUPPORTED_IF(!SupportsFeatures({wgpu::FeatureName::HostMappedPointer}));
 
-    // TODO(crbug.com/dawn/2018): Expose a proper limit for the alignment.
-    if (IsD3D12()) {
-        mRequiredAlignment = 65536;
-    } else {
-        mRequiredAlignment = 4096;
-    }
+    wgpu::Limits limits;
+    wgpu::DawnHostMappedPointerLimits hostAlignmentLimits;
+    limits.nextInChain = &hostAlignmentLimits;
+    device.GetLimits(&limits);
+    ASSERT_TRUE(dawn::IsPowerOfTwo(hostAlignmentLimits.hostMappedPointerAlignment));
+
+    mRequiredAlignment = hostAlignmentLimits.hostMappedPointerAlignment;
 }
 
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(BufferHostMappedPointerTests);
@@ -156,6 +158,10 @@ TEST_P(BufferHostMappedPointerTests, InitialDataAndCopySrc) {
 // Create a host-mapped buffer with CopyDst usage. Test that changes on the GPU
 // are visible to the host.
 TEST_P(BufferHostMappedPointerTests, CopyDst) {
+    // TODO(crbug.com/358296955): Re-enable when this no longer causes
+    // subsequent tests to flakily crash.
+    DAWN_SUPPRESS_TEST_IF(IsMacOS() && IsAMD() && IsMetal());
+
     // Set up expected data.
     uint32_t bufferSize = mRequiredAlignment;
     std::vector<uint32_t> expected(bufferSize / sizeof(uint32_t));
@@ -263,9 +269,10 @@ TEST_P(BufferHostMappedPointerTests, Mapping) {
     ASSERT_DEVICE_ERROR(buffer.Unmap());
 
     // Invalid to map a persistently host mapped buffer.
-    ASSERT_DEVICE_ERROR_MSG(
-        buffer.MapAsync(wgpu::MapMode::Write, 0, wgpu::kWholeMapSize, nullptr, nullptr),
-        testing::HasSubstr("cannot be mapped"));
+    ASSERT_DEVICE_ERROR_MSG(buffer.MapAsync(wgpu::MapMode::Write, 0, wgpu::kWholeMapSize,
+                                            wgpu::CallbackMode::AllowSpontaneous,
+                                            [](wgpu::MapAsyncStatus, wgpu::StringView) {}),
+                            testing::HasSubstr("cannot be mapped"));
 
     // Still invalid to GetMappedRange() or Unmap.
     ASSERT_EQ(buffer.GetMappedRange(), nullptr);

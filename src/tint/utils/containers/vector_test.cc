@@ -40,6 +40,9 @@
 // MSVC claims there's unreachable code in some of the EXPECT_DEATH cases, but scoping the
 // DISABLE_WARNING to the test is not sufficient to suppress the warning.
 TINT_BEGIN_DISABLE_WARNING(UNREACHABLE_CODE);
+// Some of these tests are inspecting the underlying pointers being used by iterators, so there is
+// no simple way to avoid unsafe buffer usage warnings.
+TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 
 namespace tint {
 namespace {
@@ -2109,7 +2112,7 @@ TEST(TintVectorTest, ostream) {
     EXPECT_EQ(ss.str(), "[1, 2, 3]");
 }
 
-TEST(TintVectorTest, AssertOOBs) {
+TEST(TintVectorDeathTest, AssertOOBs) {
     EXPECT_DEATH_IF_SUPPORTED(
         {
             Vector vec{1};
@@ -2119,7 +2122,7 @@ TEST(TintVectorTest, AssertOOBs) {
 }
 
 #if TINT_VECTOR_MUTATION_CHECKS_ENABLED
-TEST(TintVectorTest, AssertPushWhileIterating) {
+TEST(TintVectorDeathTest, AssertPushWhileIterating) {
     using V = Vector<int, 4>;
     EXPECT_DEATH_IF_SUPPORTED(
         {
@@ -2134,7 +2137,7 @@ TEST(TintVectorTest, AssertPushWhileIterating) {
         "internal compiler error");
 }
 
-TEST(TintVectorTest, AssertPopWhileIterating) {
+TEST(TintVectorDeathTest, AssertPopWhileIterating) {
     using V = Vector<int, 4>;
     EXPECT_DEATH_IF_SUPPORTED(
         {
@@ -2149,7 +2152,7 @@ TEST(TintVectorTest, AssertPopWhileIterating) {
         "internal compiler error");
 }
 
-TEST(TintVectorTest, AssertClearWhileIterating) {
+TEST(TintVectorDeathTest, AssertClearWhileIterating) {
     using V = Vector<int, 4>;
     EXPECT_DEATH_IF_SUPPORTED(
         {
@@ -2445,7 +2448,7 @@ TEST(TintVectorRefTest, ostream) {
     EXPECT_EQ(ss.str(), "[1, 2, 3]");
 }
 
-TEST(TintVectorRefTest, AssertOOBs) {
+TEST(TintVectorRefDeathTest, AssertOOBs) {
     EXPECT_DEATH_IF_SUPPORTED(
         {
             Vector vec{1};
@@ -2463,4 +2466,5 @@ TINT_INSTANTIATE_TYPEINFO(tint::C1);
 TINT_INSTANTIATE_TYPEINFO(tint::C2a);
 TINT_INSTANTIATE_TYPEINFO(tint::C2b);
 
+TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 TINT_END_DISABLE_WARNING(UNREACHABLE_CODE);

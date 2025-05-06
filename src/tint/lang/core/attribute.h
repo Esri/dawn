@@ -39,7 +39,7 @@
 
 #include <cstdint>
 
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/rtti/traits.h"
 
 /// \cond DO_NOT_DOCUMENT
 /// There is a bug in doxygen where this enum conflicts with the ast::Attribute
@@ -76,7 +76,8 @@ std::string_view ToString(Attribute value);
 /// @param out the stream to write to
 /// @param value the Attribute
 /// @returns @p out so calls can be chained
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, Attribute value) {
     return out << ToString(value);
 }

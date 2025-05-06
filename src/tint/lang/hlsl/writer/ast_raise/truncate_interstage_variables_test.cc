@@ -129,8 +129,6 @@ fn f() -> @builtin(position) vec4<f32> {
     ast::transform::DataMap data;
     data.Add<TruncateInterstageVariables::Config>(cfg);
 
-    data.Add<ast::transform::CanonicalizeEntryPointIO::Config>(
-        ast::transform::CanonicalizeEntryPointIO::ShaderStyle::kHlsl);
     auto got = Run<ast::transform::CanonicalizeEntryPointIO>(src, data);
 
     // Inevitably entry point can write only one variable if not using struct
@@ -609,6 +607,33 @@ fn f(@builtin(vertex_index) vid : u32) -> tint_symbol {
 
     auto got = Run<TruncateInterstageVariables>(src, data);
 
+    EXPECT_EQ(expect, str(got));
+}
+
+TEST_F(TruncateInterstageVariablesTest, LocationOutOfRange) {
+    auto* src = R"(
+struct ShaderIO {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) f_0: f32,
+  @location(30) f_2: f32,
+}
+@vertex
+fn f() -> ShaderIO {
+  var io: ShaderIO;
+  io.f_0 = 1.0;
+  io.f_2 = io.f_2 + 3.0;
+  return io;
+}
+)";
+
+    // Return error when location >= 30 (maximum supported number of inter-stage shader variables)
+    auto* expect = "error: The location (30) of f_2 in ShaderIO exceeds the maximum value (29).";
+
+    TruncateInterstageVariables::Config cfg;
+    ast::transform::DataMap data;
+    data.Add<TruncateInterstageVariables::Config>(cfg);
+
+    auto got = Run<TruncateInterstageVariables>(src, data);
     EXPECT_EQ(expect, str(got));
 }
 

@@ -28,13 +28,14 @@
 #ifndef SRC_DAWN_NATIVE_COMPILATIONMESSAGES_H_
 #define SRC_DAWN_NATIVE_COMPILATIONMESSAGES_H_
 
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "dawn/common/MutexProtected.h"
+#include "dawn/common/NonCopyable.h"
 #include "dawn/native/Error.h"
 #include "dawn/native/dawn_platform.h"
-
-#include "dawn/common/NonCopyable.h"
 
 namespace tint::diag {
 class Diagnostic;
@@ -52,12 +53,12 @@ class OwnedCompilationMessages : public NonCopyable {
 
     // Adds a message on line 0 (before the first line).
     void AddUnanchoredMessage(
-        std::string message,
+        std::string_view message,
         wgpu::CompilationMessageType type = wgpu::CompilationMessageType::Info);
     // For testing only. Uses the linePos/offset/length for both utf8 and utf16
     // (which is incorrect for non-ASCII strings).
     void AddMessageForTesting(
-        std::string message,
+        std::string_view message,
         wgpu::CompilationMessageType type = wgpu::CompilationMessageType::Info,
         uint64_t lineNum = 0,
         uint64_t linePos = 0,
@@ -66,18 +67,19 @@ class OwnedCompilationMessages : public NonCopyable {
     MaybeError AddMessages(const tint::diag::List& diagnostics);
     void ClearMessages();
 
-    const WGPUCompilationInfo* GetCompilationInfo();
+    const CompilationInfo* GetCompilationInfo();
     const std::vector<std::string>& GetFormattedTintMessages() const;
     bool HasWarningsOrErrors() const;
 
   private:
     MaybeError AddMessage(const tint::diag::Diagnostic& diagnostic);
-    void AddMessage(std::string messageString, const WGPUCompilationMessage& message);
+    void AddMessage(const CompilationMessage& message);
     void AddFormattedTintMessages(const tint::diag::List& diagnostics);
 
-    WGPUCompilationInfo mCompilationInfo;
-    std::vector<std::string> mMessageStrings;
-    std::vector<WGPUCompilationMessage> mMessages;
+    MutexProtected<std::optional<CompilationInfo>> mCompilationInfo = std::nullopt;
+    std::vector<std::unique_ptr<std::string>> mMessageStrings;
+    std::vector<CompilationMessage> mMessages;
+    std::vector<DawnCompilationMessageUtf16> mUtf16;
     std::vector<std::string> mFormattedTintMessages;
 };
 

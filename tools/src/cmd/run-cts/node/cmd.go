@@ -40,7 +40,6 @@ import (
 	"dawn.googlesource.com/dawn/tools/src/cov"
 	"dawn.googlesource.com/dawn/tools/src/dawn/node"
 	"dawn.googlesource.com/dawn/tools/src/fileutils"
-	"dawn.googlesource.com/dawn/tools/src/subcmd"
 )
 
 type flags struct {
@@ -53,12 +52,16 @@ type flags struct {
 	build                bool
 	validate             bool
 	dumpShaders          bool
+	dumpShadersPretty    bool
 	fxc                  bool
 	useIR                bool
 	unrollConstEvalLoops bool
 	genCoverage          bool
 	compatibilityMode    bool
+	debugCTS             bool
 	skipVSCodeInfo       bool
+	enforceDefaultLimits bool
+	blockAllFeatures     bool
 	dawn                 node.Flags
 }
 
@@ -101,13 +104,17 @@ func (c *cmd) RegisterFlags(ctx context.Context, cfg common.Config) ([]string, e
 		" set to 'vulkan' if VK_ICD_FILENAMES environment variable is set, 'default' otherwise")
 	flag.StringVar(&c.flags.adapterName, "adapter", "", "name (or substring) of the GPU adapter to use")
 	flag.BoolVar(&c.flags.dumpShaders, "dump-shaders", false, "dump WGSL shaders. Enables --verbose")
+	flag.BoolVar(&c.flags.dumpShadersPretty, "dump-shaders-pretty", false, "dump WGSL shaders, but don't run symbol renaming. May fail tests that shadow predeclared builtins. Enables --verbose")
 	flag.BoolVar(&c.flags.fxc, "fxc", false, "Use FXC instead of DXC. Disables 'use_dxc' Dawn flag")
 	flag.BoolVar(&c.flags.useIR, "use-ir", false, "Use Tint's IR generator code path")
 	flag.BoolVar(&c.flags.unrollConstEvalLoops, "unroll-const-eval-loops", unrollConstEvalLoopsDefault, "unroll loops in const-eval tests")
 	flag.BoolVar(&c.flags.genCoverage, "coverage", false, "displays coverage data")
 	flag.StringVar(&c.flags.coverageFile, "export-coverage", "", "write coverage data to the given path")
 	flag.BoolVar(&c.flags.compatibilityMode, "compat", false, "run tests in compatibility mode")
+	flag.BoolVar(&c.flags.debugCTS, "debug-cts", false, "enable CTS debugging option")
 	flag.BoolVar(&c.flags.skipVSCodeInfo, "skip-vs-code-info", false, "skips emitting VS Code information")
+	flag.BoolVar(&c.flags.enforceDefaultLimits, "enforce-default-limits", false, "enforce the default limits (note: powerPreference tests may fail)")
+	flag.BoolVar(&c.flags.blockAllFeatures, "block-all-features", false, "block all features (except 'core-features-and-limits')")
 
 	return []string{"[query]"}, nil
 }
@@ -122,8 +129,10 @@ func (c *cmd) Run(ctx context.Context, cfg common.Config) error {
 		return err
 	}
 
-	if err := c.state.CTS.Node.BuildIfRequired(c.flags.Verbose); err != nil {
-		return err
+	if c.flags.build {
+		if err := c.state.CTS.Node.BuildIfRequired(c.flags.Verbose); err != nil {
+			return err
+		}
 	}
 
 	// Find all the test cases that match r.query.
@@ -169,7 +178,7 @@ func (c *cmd) Run(ctx context.Context, cfg common.Config) error {
 func (c *cmd) processFlags() error {
 	// Check mandatory arguments
 	if c.flags.bin == "" {
-		return subcmd.InvalidCLA()
+		return fmt.Errorf("-bin is not set. It defaults to <dawn>/out/active (%v) which does not exist", filepath.Join(fileutils.DawnRoot(), "out/active"))
 	}
 	if !fileutils.IsDir(c.flags.bin) {
 		return fmt.Errorf("'%v' is not a directory", c.flags.bin)
@@ -198,17 +207,21 @@ func (c *cmd) processFlags() error {
 	}
 
 	c.flags.dawn.SetOptions(node.Options{
-		BinDir:          c.flags.bin,
-		Backend:         c.flags.backend,
-		Adapter:         c.flags.adapterName,
-		Validate:        c.flags.validate,
-		AllowUnsafeAPIs: true,
-		DumpShaders:     c.flags.dumpShaders,
-		UseFXC:          c.flags.fxc,
-		UseIR:           c.flags.useIR,
+		BinDir:            c.flags.bin,
+		Backend:           c.flags.backend,
+		Adapter:           c.flags.adapterName,
+		Validate:          c.flags.validate,
+		AllowUnsafeAPIs:   true,
+		DumpShaders:       c.flags.dumpShaders,
+		DumpShadersPretty: c.flags.dumpShadersPretty,
+		UseFXC:            c.flags.fxc,
+		UseIR:             c.flags.useIR,
 	})
 
 	if c.flags.dumpShaders {
+		c.flags.Verbose = true
+	}
+	if c.flags.dumpShadersPretty {
 		c.flags.Verbose = true
 	}
 

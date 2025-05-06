@@ -39,7 +39,7 @@
 namespace dawn::native::d3d {
 
 SharedTextureMemory::SharedTextureMemory(d3d::Device* device,
-                                         const char* label,
+                                         StringView label,
                                          SharedTextureMemoryProperties properties)
     : SharedTextureMemoryBase(device, label, properties) {}
 
@@ -71,9 +71,10 @@ ResultOrError<FenceAndSignalValue> SharedTextureMemory::EndAccessImpl(
     ExecutionSerial lastUsageSerial,
     UnpackedPtr<EndAccessState>& state) {
     DAWN_TRY(state.ValidateSubset<>());
-    DAWN_INVALID_IF(!GetDevice()->HasFeature(Feature::SharedFenceDXGISharedHandle),
-                    "Required feature (%s) is missing.",
-                    wgpu::FeatureName::SharedFenceDXGISharedHandle);
+
+    if (!GetDevice()->HasFeature(Feature::SharedFenceDXGISharedHandle)) {
+        return FenceAndSignalValue{nullptr, 0};
+    }
 
     Ref<SharedFence> sharedFence;
     DAWN_TRY_ASSIGN(sharedFence, ToBackend(GetDevice()->GetQueue())->GetOrCreateSharedFence());

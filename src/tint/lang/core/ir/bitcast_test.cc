@@ -39,12 +39,13 @@ namespace tint::core::ir {
 namespace {
 
 using IR_BitcastTest = IRTestHelper;
+using IR_BitcastDeathTest = IR_BitcastTest;
 
 TEST_F(IR_BitcastTest, Bitcast) {
     auto* inst = b.Bitcast(mod.Types().i32(), 4_i);
 
     ASSERT_TRUE(inst->Is<ir::Bitcast>());
-    ASSERT_NE(inst->Result(0)->Type(), nullptr);
+    ASSERT_NE(inst->Result()->Type(), nullptr);
 
     auto args = inst->Args();
     ASSERT_EQ(args.Length(), 1u);
@@ -58,8 +59,8 @@ TEST_F(IR_BitcastTest, Result) {
     auto* a = b.Bitcast(mod.Types().i32(), 4_i);
 
     EXPECT_EQ(a->Results().Length(), 1u);
-    EXPECT_TRUE(a->Result(0)->Is<InstructionResult>());
-    EXPECT_EQ(a, a->Result(0)->Instruction());
+    EXPECT_TRUE(a->Result()->Is<InstructionResult>());
+    EXPECT_EQ(a, a->Result()->Instruction());
 }
 
 TEST_F(IR_BitcastTest, Bitcast_Usage) {
@@ -68,17 +69,17 @@ TEST_F(IR_BitcastTest, Bitcast_Usage) {
     auto args = inst->Args();
     ASSERT_EQ(args.Length(), 1u);
     ASSERT_NE(args[0], nullptr);
-    EXPECT_THAT(args[0]->Usages(), testing::UnorderedElementsAre(Usage{inst, 0u}));
+    EXPECT_THAT(args[0]->UsagesUnsorted(), testing::UnorderedElementsAre(Usage{inst, 0u}));
 }
 
-TEST_F(IR_BitcastTest, Fail_NullType) {
+TEST_F(IR_BitcastDeathTest, Fail_NullType) {
     EXPECT_DEATH_IF_SUPPORTED(
         {
             Module mod;
             Builder b{mod};
             b.Bitcast(nullptr, 1_i);
         },
-        "");
+        "internal compiler error");
 }
 
 TEST_F(IR_BitcastTest, Clone) {
@@ -88,7 +89,7 @@ TEST_F(IR_BitcastTest, Clone) {
 
     EXPECT_NE(inst, n);
 
-    EXPECT_EQ(mod.Types().i32(), n->Result(0)->Type());
+    EXPECT_EQ(mod.Types().i32(), n->Result()->Type());
 
     auto new_val = n->Val()->As<Constant>()->Value();
     ASSERT_TRUE(new_val->Is<core::constant::Scalar<i32>>());

@@ -40,15 +40,14 @@ using namespace tint::core::number_suffixes;  // NOLINT
 using SpirvWriter_ShaderIOTest = core::ir::transform::TransformTest;
 
 TEST_F(SpirvWriter_ShaderIOTest, NoInputsOrOutputs) {
-    auto* ep = b.Function("foo", ty.void_());
-    ep->SetStage(core::ir::Function::PipelineStage::kCompute);
+    auto* ep = b.ComputeFunction("foo");
 
     b.Append(ep->Block(), [&] {  //
         b.Return(ep);
     });
 
     auto* src = R"(
-%foo = @compute func():void {
+%foo = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B1: {
     ret
   }
@@ -58,8 +57,8 @@ TEST_F(SpirvWriter_ShaderIOTest, NoInputsOrOutputs) {
 
     auto* expect = src;
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -73,10 +72,11 @@ TEST_F(SpirvWriter_ShaderIOTest, Parameters_NonStruct) {
     position->SetBuiltin(core::BuiltinValue::kPosition);
     position->SetInvariant(true);
     auto* color1 = b.FunctionParam("color1", ty.f32());
-    color1->SetLocation(0, {});
+    color1->SetLocation(0);
     auto* color2 = b.FunctionParam("color2", ty.f32());
-    color2->SetLocation(1, core::Interpolation{core::InterpolationType::kLinear,
-                                               core::InterpolationSampling::kSample});
+    color2->SetLocation(1);
+    color2->SetInterpolation(core::Interpolation{core::InterpolationType::kLinear,
+                                                 core::InterpolationSampling::kSample});
 
     ep->SetParams({front_facing, position, color1, color2});
     ep->SetStage(core::ir::Function::PipelineStage::kFragment);
@@ -108,10 +108,10 @@ TEST_F(SpirvWriter_ShaderIOTest, Parameters_NonStruct) {
 
     auto* expect = R"(
 $B1: {  # root
-  %foo_front_facing_Input:ptr<__in, bool, read> = var @builtin(front_facing)
-  %foo_position_Input:ptr<__in, vec4<f32>, read> = var @invariant @builtin(position)
-  %foo_loc0_Input:ptr<__in, f32, read> = var @location(0)
-  %foo_loc1_Input:ptr<__in, f32, read> = var @location(1) @interpolate(linear, sample)
+  %foo_front_facing_Input:ptr<__in, bool, read> = var undef @builtin(front_facing)
+  %foo_position_Input:ptr<__in, vec4<f32>, read> = var undef @invariant @builtin(position)
+  %foo_loc0_Input:ptr<__in, f32, read> = var undef @location(0)
+  %foo_loc1_Input:ptr<__in, f32, read> = var undef @location(1) @interpolate(linear, sample)
 }
 
 %foo_inner = func(%front_facing:bool, %position:vec4<f32>, %color1:f32, %color2:f32):void {
@@ -138,8 +138,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -151,9 +151,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Parameters_Struct) {
                                  {
                                      mod.symbols.New("front_facing"),
                                      ty.bool_(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ std::nullopt,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ core::BuiltinValue::kFrontFacing,
                                          /* interpolation */ std::nullopt,
@@ -163,9 +163,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Parameters_Struct) {
                                  {
                                      mod.symbols.New("position"),
                                      ty.vec4<f32>(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ std::nullopt,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ core::BuiltinValue::kPosition,
                                          /* interpolation */ std::nullopt,
@@ -175,9 +175,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Parameters_Struct) {
                                  {
                                      mod.symbols.New("color1"),
                                      ty.f32(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ 0u,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ std::nullopt,
                                          /* interpolation */ std::nullopt,
@@ -187,9 +187,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Parameters_Struct) {
                                  {
                                      mod.symbols.New("color2"),
                                      ty.f32(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ 1u,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ std::nullopt,
                                          /* interpolation */
@@ -255,10 +255,10 @@ Inputs = struct @align(16) {
 }
 
 $B1: {  # root
-  %foo_front_facing_Input:ptr<__in, bool, read> = var @builtin(front_facing)
-  %foo_position_Input:ptr<__in, vec4<f32>, read> = var @invariant @builtin(position)
-  %foo_loc0_Input:ptr<__in, f32, read> = var @location(0)
-  %foo_loc1_Input:ptr<__in, f32, read> = var @location(1) @interpolate(linear, sample)
+  %foo_front_facing_Input:ptr<__in, bool, read> = var undef @builtin(front_facing)
+  %foo_position_Input:ptr<__in, vec4<f32>, read> = var undef @invariant @builtin(position)
+  %foo_loc0_Input:ptr<__in, f32, read> = var undef @location(0)
+  %foo_loc1_Input:ptr<__in, f32, read> = var undef @location(1) @interpolate(linear, sample)
 }
 
 %foo_inner = func(%inputs:Inputs):void {
@@ -290,8 +290,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -303,9 +303,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Parameters_Mixed) {
                                  {
                                      mod.symbols.New("position"),
                                      ty.vec4<f32>(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ std::nullopt,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ core::BuiltinValue::kPosition,
                                          /* interpolation */ std::nullopt,
@@ -315,9 +315,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Parameters_Mixed) {
                                  {
                                      mod.symbols.New("color1"),
                                      ty.f32(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ 0u,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ std::nullopt,
                                          /* interpolation */ std::nullopt,
@@ -331,8 +331,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Parameters_Mixed) {
     front_facing->SetBuiltin(core::BuiltinValue::kFrontFacing);
     auto* str_param = b.FunctionParam("inputs", str_ty);
     auto* color2 = b.FunctionParam("color2", ty.f32());
-    color2->SetLocation(1, core::Interpolation{core::InterpolationType::kLinear,
-                                               core::InterpolationSampling::kSample});
+    color2->SetLocation(1);
+    color2->SetInterpolation(core::Interpolation{core::InterpolationType::kLinear,
+                                                 core::InterpolationSampling::kSample});
 
     ep->SetParams({front_facing, str_param, color2});
     ep->SetStage(core::ir::Function::PipelineStage::kFragment);
@@ -378,10 +379,10 @@ Inputs = struct @align(16) {
 }
 
 $B1: {  # root
-  %foo_front_facing_Input:ptr<__in, bool, read> = var @builtin(front_facing)
-  %foo_position_Input:ptr<__in, vec4<f32>, read> = var @invariant @builtin(position)
-  %foo_loc0_Input:ptr<__in, f32, read> = var @location(0)
-  %foo_loc1_Input:ptr<__in, f32, read> = var @location(1) @interpolate(linear, sample)
+  %foo_front_facing_Input:ptr<__in, bool, read> = var undef @builtin(front_facing)
+  %foo_position_Input:ptr<__in, vec4<f32>, read> = var undef @invariant @builtin(position)
+  %foo_loc0_Input:ptr<__in, f32, read> = var undef @location(0)
+  %foo_loc1_Input:ptr<__in, f32, read> = var undef @location(1) @interpolate(linear, sample)
 }
 
 %foo_inner = func(%front_facing:bool, %inputs:Inputs, %color2:f32):void {
@@ -411,8 +412,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -440,7 +441,7 @@ TEST_F(SpirvWriter_ShaderIOTest, ReturnValue_NonStructBuiltin) {
 
     auto* expect = R"(
 $B1: {  # root
-  %foo_position_Output:ptr<__out, vec4<f32>, write> = var @invariant @builtin(position)
+  %foo_position_Output:ptr<__out, vec4<f32>, write> = var undef @invariant @builtin(position)
 }
 
 %foo_inner = func():vec4<f32> {
@@ -458,8 +459,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -467,7 +468,7 @@ $B1: {  # root
 
 TEST_F(SpirvWriter_ShaderIOTest, ReturnValue_NonStructLocation) {
     auto* ep = b.Function("foo", ty.vec4<f32>());
-    ep->SetReturnLocation(1u, {});
+    ep->SetReturnLocation(1u);
     ep->SetStage(core::ir::Function::PipelineStage::kFragment);
 
     b.Append(ep->Block(), [&] {  //
@@ -486,7 +487,7 @@ TEST_F(SpirvWriter_ShaderIOTest, ReturnValue_NonStructLocation) {
 
     auto* expect = R"(
 $B1: {  # root
-  %foo_loc1_Output:ptr<__out, vec4<f32>, write> = var @location(1)
+  %foo_loc1_Output:ptr<__out, vec4<f32>, write> = var undef @location(1)
 }
 
 %foo_inner = func():vec4<f32> {
@@ -504,8 +505,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -517,9 +518,9 @@ TEST_F(SpirvWriter_ShaderIOTest, ReturnValue_Struct) {
                                  {
                                      mod.symbols.New("position"),
                                      ty.vec4<f32>(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ std::nullopt,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ core::BuiltinValue::kPosition,
                                          /* interpolation */ std::nullopt,
@@ -529,9 +530,9 @@ TEST_F(SpirvWriter_ShaderIOTest, ReturnValue_Struct) {
                                  {
                                      mod.symbols.New("color1"),
                                      ty.f32(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ 0u,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ std::nullopt,
                                          /* interpolation */ std::nullopt,
@@ -541,9 +542,9 @@ TEST_F(SpirvWriter_ShaderIOTest, ReturnValue_Struct) {
                                  {
                                      mod.symbols.New("color2"),
                                      ty.f32(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ 1u,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ std::nullopt,
                                          /* interpolation */
@@ -588,9 +589,9 @@ Outputs = struct @align(16) {
 }
 
 $B1: {  # root
-  %foo_position_Output:ptr<__out, vec4<f32>, write> = var @invariant @builtin(position)
-  %foo_loc0_Output:ptr<__out, f32, write> = var @location(0)
-  %foo_loc1_Output:ptr<__out, f32, write> = var @location(1) @interpolate(linear, sample)
+  %foo_position_Output:ptr<__out, vec4<f32>, write> = var undef @invariant @builtin(position)
+  %foo_loc0_Output:ptr<__out, f32, write> = var undef @location(0)
+  %foo_loc1_Output:ptr<__out, f32, write> = var undef @location(1) @interpolate(linear, sample)
 }
 
 %foo_inner = func():Outputs {
@@ -614,8 +615,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -627,9 +628,9 @@ TEST_F(SpirvWriter_ShaderIOTest, ReturnValue_DualSourceBlending) {
                                                  {
                                                      mod.symbols.New("color1"),
                                                      ty.f32(),
-                                                     core::type::StructMemberAttributes{
+                                                     core::IOAttributes{
                                                          /* location */ 0u,
-                                                         /* index */ 0u,
+                                                         /* blend_src */ 0u,
                                                          /* color */ std::nullopt,
                                                          /* builtin */ std::nullopt,
                                                          /* interpolation */ std::nullopt,
@@ -639,9 +640,9 @@ TEST_F(SpirvWriter_ShaderIOTest, ReturnValue_DualSourceBlending) {
                                                  {
                                                      mod.symbols.New("color2"),
                                                      ty.f32(),
-                                                     core::type::StructMemberAttributes{
+                                                     core::IOAttributes{
                                                          /* location */ 0u,
-                                                         /* index */ 1u,
+                                                         /* blend_src */ 1u,
                                                          /* color */ std::nullopt,
                                                          /* builtin */ std::nullopt,
                                                          /* interpolation */ std::nullopt,
@@ -659,8 +660,8 @@ TEST_F(SpirvWriter_ShaderIOTest, ReturnValue_DualSourceBlending) {
 
     auto* src = R"(
 Output = struct @align(4) {
-  color1:f32 @offset(0), @location(0)
-  color2:f32 @offset(4), @location(0)
+  color1:f32 @offset(0), @location(0), @blend_src(0)
+  color2:f32 @offset(4), @location(0), @blend_src(1)
 }
 
 %foo = @fragment func():Output {
@@ -679,8 +680,8 @@ Output = struct @align(4) {
 }
 
 $B1: {  # root
-  %foo_loc0_idx0_Output:ptr<__out, f32, write> = var @location(0) @blend_src(0)
-  %foo_loc0_idx1_Output:ptr<__out, f32, write> = var @location(0) @blend_src(1)
+  %foo_loc0_idx0_Output:ptr<__out, f32, write> = var undef @location(0) @blend_src(0)
+  %foo_loc0_idx1_Output:ptr<__out, f32, write> = var undef @location(0) @blend_src(1)
 }
 
 %foo_inner = func():Output {
@@ -701,8 +702,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -715,9 +716,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Struct_SharedByVertexAndFragment) {
                                  {
                                      mod.symbols.New("position"),
                                      vec4f,
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ std::nullopt,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ core::BuiltinValue::kPosition,
                                          /* interpolation */ std::nullopt,
@@ -727,9 +728,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Struct_SharedByVertexAndFragment) {
                                  {
                                      mod.symbols.New("color"),
                                      vec4f,
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ 0u,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ std::nullopt,
                                          /* interpolation */ std::nullopt,
@@ -756,7 +757,7 @@ TEST_F(SpirvWriter_ShaderIOTest, Struct_SharedByVertexAndFragment) {
         auto* inputs = b.FunctionParam("inputs", str_ty);
         ep->SetStage(core::ir::Function::PipelineStage::kFragment);
         ep->SetParams({inputs});
-        ep->SetReturnLocation(0u, {});
+        ep->SetReturnLocation(0u);
 
         b.Append(ep->Block(), [&] {  //
             auto* position = b.Access(vec4f, inputs, 0_u);
@@ -797,11 +798,11 @@ Interface = struct @align(16) {
 }
 
 $B1: {  # root
-  %vert_position_Output:ptr<__out, vec4<f32>, write> = var @builtin(position)
-  %vert_loc0_Output:ptr<__out, vec4<f32>, write> = var @location(0)
-  %frag_position_Input:ptr<__in, vec4<f32>, read> = var @builtin(position)
-  %frag_loc0_Input:ptr<__in, vec4<f32>, read> = var @location(0)
-  %frag_loc0_Output:ptr<__out, vec4<f32>, write> = var @location(0)
+  %vert_position_Output:ptr<__out, vec4<f32>, write> = var undef @builtin(position)
+  %vert_loc0_Output:ptr<__out, vec4<f32>, write> = var undef @location(0)
+  %frag_position_Input:ptr<__in, vec4<f32>, read> = var undef @builtin(position)
+  %frag_loc0_Input:ptr<__in, vec4<f32>, read> = var undef @location(0)
+  %frag_loc0_Output:ptr<__out, vec4<f32>, write> = var undef @location(0)
 }
 
 %vert_inner = func():Interface {
@@ -842,8 +843,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -856,9 +857,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Struct_SharedWithBuffer) {
                                  {
                                      mod.symbols.New("position"),
                                      vec4f,
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ std::nullopt,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ core::BuiltinValue::kPosition,
                                          /* interpolation */ std::nullopt,
@@ -868,9 +869,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Struct_SharedWithBuffer) {
                                  {
                                      mod.symbols.New("color"),
                                      vec4f,
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ 0u,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ std::nullopt,
                                          /* interpolation */ std::nullopt,
@@ -879,7 +880,9 @@ TEST_F(SpirvWriter_ShaderIOTest, Struct_SharedWithBuffer) {
                                  },
                              });
 
-    auto* buffer = mod.root_block->Append(b.Var(ty.ptr(storage, str_ty, read)));
+    auto* var = b.Var(ty.ptr(storage, str_ty, read));
+    var->SetBindingPoint(0, 0);
+    auto* buffer = mod.root_block->Append(var);
 
     auto* ep = b.Function("vert", str_ty);
     ep->SetStage(core::ir::Function::PipelineStage::kVertex);
@@ -895,7 +898,7 @@ Outputs = struct @align(16) {
 }
 
 $B1: {  # root
-  %1:ptr<storage, Outputs, read> = var
+  %1:ptr<storage, Outputs, read> = var undef @binding_point(0, 0)
 }
 
 %vert = @vertex func():Outputs {
@@ -914,9 +917,9 @@ Outputs = struct @align(16) {
 }
 
 $B1: {  # root
-  %1:ptr<storage, Outputs, read> = var
-  %vert_position_Output:ptr<__out, vec4<f32>, write> = var @builtin(position)
-  %vert_loc0_Output:ptr<__out, vec4<f32>, write> = var @location(0)
+  %1:ptr<storage, Outputs, read> = var undef @binding_point(0, 0)
+  %vert_position_Output:ptr<__out, vec4<f32>, write> = var undef @builtin(position)
+  %vert_loc0_Output:ptr<__out, vec4<f32>, write> = var undef @location(0)
 }
 
 %vert_inner = func():Outputs {
@@ -937,8 +940,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -951,9 +954,9 @@ TEST_F(SpirvWriter_ShaderIOTest, SampleMask) {
                                  {
                                      mod.symbols.New("color"),
                                      ty.f32(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ 0u,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ std::nullopt,
                                          /* interpolation */ std::nullopt,
@@ -963,9 +966,9 @@ TEST_F(SpirvWriter_ShaderIOTest, SampleMask) {
                                  {
                                      mod.symbols.New("mask"),
                                      ty.u32(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ std::nullopt,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ core::BuiltinValue::kSampleMask,
                                          /* interpolation */ std::nullopt,
@@ -1007,9 +1010,9 @@ Outputs = struct @align(4) {
 }
 
 $B1: {  # root
-  %foo_sample_mask_Input:ptr<__in, array<u32, 1>, read> = var @builtin(sample_mask)
-  %foo_loc0_Output:ptr<__out, f32, write> = var @location(0)
-  %foo_sample_mask_Output:ptr<__out, array<u32, 1>, write> = var @builtin(sample_mask)
+  %foo_sample_mask_Input:ptr<__in, array<u32, 1>, read> = var undef @builtin(sample_mask)
+  %foo_loc0_Output:ptr<__out, f32, write> = var undef @location(0)
+  %foo_sample_mask_Output:ptr<__out, array<u32, 1>, write> = var undef @builtin(sample_mask)
 }
 
 %foo_inner = func(%mask_in:u32):Outputs {
@@ -1033,8 +1036,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -1047,9 +1050,9 @@ TEST_F(SpirvWriter_ShaderIOTest, InterpolationOnVertexInputOrFragmentOutput) {
                                                    {
                                                        mod.symbols.New("color"),
                                                        ty.f32(),
-                                                       core::type::StructMemberAttributes{
+                                                       core::IOAttributes{
                                                            /* location */ 1u,
-                                                           /* index */ std::nullopt,
+                                                           /* blend_src */ std::nullopt,
                                                            /* color */ std::nullopt,
                                                            /* builtin */ std::nullopt,
                                                            /* interpolation */
@@ -1071,7 +1074,8 @@ TEST_F(SpirvWriter_ShaderIOTest, InterpolationOnVertexInputOrFragmentOutput) {
 
         auto* str_param = b.FunctionParam("input", str_ty);
         auto* ival = b.FunctionParam("ival", ty.i32());
-        ival->SetLocation(1, core::Interpolation{core::InterpolationType::kFlat});
+        ival->SetLocation(1);
+        ival->SetInterpolation(core::Interpolation{core::InterpolationType::kFlat});
         ep->SetParams({str_param, ival});
 
         b.Append(ep->Block(), [&] {  //
@@ -1093,7 +1097,8 @@ TEST_F(SpirvWriter_ShaderIOTest, InterpolationOnVertexInputOrFragmentOutput) {
     {
         auto* ep = b.Function("frag2", ty.i32());
         ep->SetStage(core::ir::Function::PipelineStage::kFragment);
-        ep->SetReturnLocation(0, core::Interpolation{core::InterpolationType::kFlat});
+        ep->SetReturnLocation(0);
+        ep->SetReturnInterpolation(core::Interpolation{core::InterpolationType::kFlat});
 
         b.Append(ep->Block(), [&] {  //
             b.Return(ep, b.Constant(42_i));
@@ -1131,11 +1136,11 @@ MyStruct = struct @align(4) {
 }
 
 $B1: {  # root
-  %vert_loc1_Input:ptr<__in, f32, read> = var @location(1)
-  %vert_loc1_Input_1:ptr<__in, i32, read> = var @location(1)  # %vert_loc1_Input_1: 'vert_loc1_Input'
-  %vert_position_Output:ptr<__out, vec4<f32>, write> = var @invariant @builtin(position)
-  %frag1_loc1_Output:ptr<__out, f32, write> = var @location(1)
-  %frag2_loc0_Output:ptr<__out, i32, write> = var @location(0)
+  %vert_loc1_Input:ptr<__in, f32, read> = var undef @location(1)
+  %vert_loc1_Input_1:ptr<__in, i32, read> = var undef @location(1)  # %vert_loc1_Input_1: 'vert_loc1_Input'
+  %vert_position_Output:ptr<__out, vec4<f32>, write> = var undef @invariant @builtin(position)
+  %frag1_loc1_Output:ptr<__out, f32, write> = var undef @location(1)
+  %frag2_loc0_Output:ptr<__out, i32, write> = var undef @location(0)
 }
 
 %vert_inner = func(%input:MyStruct, %ival:i32):vec4<f32> {
@@ -1182,8 +1187,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = false;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -1195,9 +1200,9 @@ TEST_F(SpirvWriter_ShaderIOTest, ClampFragDepth) {
                                  {
                                      mod.symbols.New("color"),
                                      ty.f32(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ 0u,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ std::nullopt,
                                          /* interpolation */ std::nullopt,
@@ -1207,9 +1212,9 @@ TEST_F(SpirvWriter_ShaderIOTest, ClampFragDepth) {
                                  {
                                      mod.symbols.New("depth"),
                                      ty.f32(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ std::nullopt,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ core::BuiltinValue::kFragDepth,
                                          /* interpolation */ std::nullopt,
@@ -1246,15 +1251,15 @@ Outputs = struct @align(4) {
   depth:f32 @offset(4)
 }
 
-FragDepthClampArgs = struct @align(4), @block {
-  min:f32 @offset(0)
-  max:f32 @offset(4)
+tint_push_constant_struct = struct @align(4), @block {
+  depth_min:f32 @offset(4)
+  depth_max:f32 @offset(8)
 }
 
 $B1: {  # root
-  %foo_loc0_Output:ptr<__out, f32, write> = var @location(0)
-  %foo_frag_depth_Output:ptr<__out, f32, write> = var @builtin(frag_depth)
-  %tint_frag_depth_clamp_args:ptr<push_constant, FragDepthClampArgs, read> = var
+  %tint_push_constants:ptr<push_constant, tint_push_constant_struct, read> = var undef
+  %foo_loc0_Output:ptr<__out, f32, write> = var undef @location(0)
+  %foo_frag_depth_Output:ptr<__out, f32, write> = var undef @builtin(frag_depth)
 }
 
 %foo_inner = func():Outputs {
@@ -1269,18 +1274,25 @@ $B1: {  # root
     %8:f32 = access %7, 0u
     store %foo_loc0_Output, %8
     %9:f32 = access %7, 1u
-    %10:FragDepthClampArgs = load %tint_frag_depth_clamp_args
-    %11:f32 = access %10, 0u
-    %12:f32 = access %10, 1u
-    %13:f32 = clamp %9, %11, %12
-    store %foo_frag_depth_Output, %13
+    %10:ptr<push_constant, f32, read> = access %tint_push_constants, 0u
+    %11:f32 = load %10
+    %12:ptr<push_constant, f32, read> = access %tint_push_constants, 1u
+    %13:f32 = load %12
+    %14:f32 = clamp %9, %11, %13
+    store %foo_frag_depth_Output, %14
     ret
   }
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = true;
+    core::ir::transform::PreparePushConstantsConfig push_constants_config;
+    push_constants_config.AddInternalConstant(4, mod.symbols.New("depth_min"), ty.f32());
+    push_constants_config.AddInternalConstant(8, mod.symbols.New("depth_max"), ty.f32());
+    auto push_constants = PreparePushConstants(mod, push_constants_config);
+    EXPECT_EQ(push_constants, Success);
+
+    ShaderIOConfig config{push_constants.Get()};
+    config.depth_range_offsets = {4, 8};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -1292,9 +1304,9 @@ TEST_F(SpirvWriter_ShaderIOTest, ClampFragDepth_MultipleFragmentShaders) {
                                  {
                                      mod.symbols.New("color"),
                                      ty.f32(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ 0u,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ std::nullopt,
                                          /* interpolation */ std::nullopt,
@@ -1304,9 +1316,9 @@ TEST_F(SpirvWriter_ShaderIOTest, ClampFragDepth_MultipleFragmentShaders) {
                                  {
                                      mod.symbols.New("depth"),
                                      ty.f32(),
-                                     core::type::StructMemberAttributes{
+                                     core::IOAttributes{
                                          /* location */ std::nullopt,
-                                         /* index */ std::nullopt,
+                                         /* blend_src */ std::nullopt,
                                          /* color */ std::nullopt,
                                          /* builtin */ core::BuiltinValue::kFragDepth,
                                          /* interpolation */ std::nullopt,
@@ -1359,19 +1371,19 @@ Outputs = struct @align(4) {
   depth:f32 @offset(4)
 }
 
-FragDepthClampArgs = struct @align(4), @block {
-  min:f32 @offset(0)
-  max:f32 @offset(4)
+tint_push_constant_struct = struct @align(4), @block {
+  depth_min:f32 @offset(4)
+  depth_max:f32 @offset(8)
 }
 
 $B1: {  # root
-  %ep1_loc0_Output:ptr<__out, f32, write> = var @location(0)
-  %ep1_frag_depth_Output:ptr<__out, f32, write> = var @builtin(frag_depth)
-  %tint_frag_depth_clamp_args:ptr<push_constant, FragDepthClampArgs, read> = var
-  %ep2_loc0_Output:ptr<__out, f32, write> = var @location(0)
-  %ep2_frag_depth_Output:ptr<__out, f32, write> = var @builtin(frag_depth)
-  %ep3_loc0_Output:ptr<__out, f32, write> = var @location(0)
-  %ep3_frag_depth_Output:ptr<__out, f32, write> = var @builtin(frag_depth)
+  %tint_push_constants:ptr<push_constant, tint_push_constant_struct, read> = var undef
+  %ep1_loc0_Output:ptr<__out, f32, write> = var undef @location(0)
+  %ep1_frag_depth_Output:ptr<__out, f32, write> = var undef @builtin(frag_depth)
+  %ep2_loc0_Output:ptr<__out, f32, write> = var undef @location(0)
+  %ep2_frag_depth_Output:ptr<__out, f32, write> = var undef @builtin(frag_depth)
+  %ep3_loc0_Output:ptr<__out, f32, write> = var undef @location(0)
+  %ep3_frag_depth_Output:ptr<__out, f32, write> = var undef @builtin(frag_depth)
 }
 
 %ep1_inner = func():Outputs {
@@ -1398,46 +1410,55 @@ $B1: {  # root
     %16:f32 = access %15, 0u
     store %ep1_loc0_Output, %16
     %17:f32 = access %15, 1u
-    %18:FragDepthClampArgs = load %tint_frag_depth_clamp_args
-    %19:f32 = access %18, 0u
-    %20:f32 = access %18, 1u
-    %21:f32 = clamp %17, %19, %20
-    store %ep1_frag_depth_Output, %21
+    %18:ptr<push_constant, f32, read> = access %tint_push_constants, 0u
+    %19:f32 = load %18
+    %20:ptr<push_constant, f32, read> = access %tint_push_constants, 1u
+    %21:f32 = load %20
+    %22:f32 = clamp %17, %19, %21
+    store %ep1_frag_depth_Output, %22
     ret
   }
 }
 %ep2 = @fragment func():void {
   $B6: {
-    %23:Outputs = call %ep2_inner
-    %24:f32 = access %23, 0u
-    store %ep2_loc0_Output, %24
-    %25:f32 = access %23, 1u
-    %26:FragDepthClampArgs = load %tint_frag_depth_clamp_args
-    %27:f32 = access %26, 0u
-    %28:f32 = access %26, 1u
-    %29:f32 = clamp %25, %27, %28
-    store %ep2_frag_depth_Output, %29
+    %24:Outputs = call %ep2_inner
+    %25:f32 = access %24, 0u
+    store %ep2_loc0_Output, %25
+    %26:f32 = access %24, 1u
+    %27:ptr<push_constant, f32, read> = access %tint_push_constants, 0u
+    %28:f32 = load %27
+    %29:ptr<push_constant, f32, read> = access %tint_push_constants, 1u
+    %30:f32 = load %29
+    %31:f32 = clamp %26, %28, %30
+    store %ep2_frag_depth_Output, %31
     ret
   }
 }
 %ep3 = @fragment func():void {
   $B7: {
-    %31:Outputs = call %ep3_inner
-    %32:f32 = access %31, 0u
-    store %ep3_loc0_Output, %32
-    %33:f32 = access %31, 1u
-    %34:FragDepthClampArgs = load %tint_frag_depth_clamp_args
-    %35:f32 = access %34, 0u
-    %36:f32 = access %34, 1u
-    %37:f32 = clamp %33, %35, %36
-    store %ep3_frag_depth_Output, %37
+    %33:Outputs = call %ep3_inner
+    %34:f32 = access %33, 0u
+    store %ep3_loc0_Output, %34
+    %35:f32 = access %33, 1u
+    %36:ptr<push_constant, f32, read> = access %tint_push_constants, 0u
+    %37:f32 = load %36
+    %38:ptr<push_constant, f32, read> = access %tint_push_constants, 1u
+    %39:f32 = load %38
+    %40:f32 = clamp %35, %37, %39
+    store %ep3_frag_depth_Output, %40
     ret
   }
 }
 )";
 
-    ShaderIOConfig config;
-    config.clamp_frag_depth = true;
+    core::ir::transform::PreparePushConstantsConfig push_constants_config;
+    push_constants_config.AddInternalConstant(4, mod.symbols.New("depth_min"), ty.f32());
+    push_constants_config.AddInternalConstant(8, mod.symbols.New("depth_max"), ty.f32());
+    auto push_constants = PreparePushConstants(mod, push_constants_config);
+    EXPECT_EQ(push_constants, Success);
+
+    ShaderIOConfig config{push_constants.Get()};
+    config.depth_range_offsets = {4, 8};
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());
@@ -1464,8 +1485,8 @@ TEST_F(SpirvWriter_ShaderIOTest, EmitVertexPointSize) {
 
     auto* expect = R"(
 $B1: {  # root
-  %foo_position_Output:ptr<__out, vec4<f32>, write> = var @builtin(position)
-  %foo___point_size_Output:ptr<__out, f32, write> = var @builtin(__point_size)
+  %foo_position_Output:ptr<__out, vec4<f32>, write> = var undef @builtin(position)
+  %foo___point_size_Output:ptr<__out, f32, write> = var undef @builtin(__point_size)
 }
 
 %foo_inner = func():vec4<f32> {
@@ -1484,7 +1505,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     config.emit_vertex_point_size = true;
     Run(ShaderIO, config);
 
@@ -1497,9 +1519,9 @@ TEST_F(SpirvWriter_ShaderIOTest, F16_IO_WithoutPolyfill) {
                                                   {
                                                       mod.symbols.New("out1"),
                                                       ty.f16(),
-                                                      core::type::StructMemberAttributes{
+                                                      core::IOAttributes{
                                                           /* location */ 1u,
-                                                          /* index */ std::nullopt,
+                                                          /* blend_src */ std::nullopt,
                                                           /* color */ std::nullopt,
                                                           /* builtin */ std::nullopt,
                                                           /* interpolation */ std::nullopt,
@@ -1509,9 +1531,9 @@ TEST_F(SpirvWriter_ShaderIOTest, F16_IO_WithoutPolyfill) {
                                                   {
                                                       mod.symbols.New("out2"),
                                                       ty.vec4<f16>(),
-                                                      core::type::StructMemberAttributes{
+                                                      core::IOAttributes{
                                                           /* location */ 2u,
-                                                          /* index */ std::nullopt,
+                                                          /* blend_src */ std::nullopt,
                                                           /* color */ std::nullopt,
                                                           /* builtin */ std::nullopt,
                                                           /* interpolation */ std::nullopt,
@@ -1522,8 +1544,8 @@ TEST_F(SpirvWriter_ShaderIOTest, F16_IO_WithoutPolyfill) {
 
     auto* in1 = b.FunctionParam("in1", ty.f16());
     auto* in2 = b.FunctionParam("in2", ty.vec4<f16>());
-    in1->SetLocation(1, std::nullopt);
-    in1->SetLocation(2, std::nullopt);
+    in1->SetLocation(1);
+    in2->SetLocation(2);
     auto* func = b.Function("main", outputs, core::ir::Function::PipelineStage::kFragment);
     func->SetParams({in1, in2});
     b.Append(func->Block(), [&] {  //
@@ -1536,7 +1558,7 @@ Outputs = struct @align(8) {
   out2:vec4<f16> @offset(8), @location(2)
 }
 
-%main = @fragment func(%in1:f16 [@location(2)], %in2:vec4<f16>):Outputs {
+%main = @fragment func(%in1:f16 [@location(1)], %in2:vec4<f16> [@location(2)]):Outputs {
   $B1: {
     %4:Outputs = construct %in1, %in2
     ret %4
@@ -1552,10 +1574,10 @@ Outputs = struct @align(8) {
 }
 
 $B1: {  # root
-  %main_loc2_Input:ptr<__in, f16, read> = var @location(2)
-  %main_Input:ptr<__in, vec4<f16>, read> = var
-  %main_loc1_Output:ptr<__out, f16, write> = var @location(1)
-  %main_loc2_Output:ptr<__out, vec4<f16>, write> = var @location(2)
+  %main_loc1_Input:ptr<__in, f16, read> = var undef @location(1)
+  %main_loc2_Input:ptr<__in, vec4<f16>, read> = var undef @location(2)
+  %main_loc1_Output:ptr<__out, f16, write> = var undef @location(1)
+  %main_loc2_Output:ptr<__out, vec4<f16>, write> = var undef @location(2)
 }
 
 %main_inner = func(%in1:f16, %in2:vec4<f16>):Outputs {
@@ -1566,8 +1588,8 @@ $B1: {  # root
 }
 %main = @fragment func():void {
   $B3: {
-    %10:f16 = load %main_loc2_Input
-    %11:vec4<f16> = load %main_Input
+    %10:f16 = load %main_loc1_Input
+    %11:vec4<f16> = load %main_loc2_Input
     %12:Outputs = call %main_inner, %10, %11
     %13:f16 = access %12, 0u
     store %main_loc1_Output, %13
@@ -1578,7 +1600,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     config.polyfill_f16_io = false;
     Run(ShaderIO, config);
 
@@ -1591,9 +1614,9 @@ TEST_F(SpirvWriter_ShaderIOTest, F16_IO_WithPolyfill) {
                                                   {
                                                       mod.symbols.New("out1"),
                                                       ty.f16(),
-                                                      core::type::StructMemberAttributes{
+                                                      core::IOAttributes{
                                                           /* location */ 1u,
-                                                          /* index */ std::nullopt,
+                                                          /* blend_src */ std::nullopt,
                                                           /* color */ std::nullopt,
                                                           /* builtin */ std::nullopt,
                                                           /* interpolation */ std::nullopt,
@@ -1603,9 +1626,9 @@ TEST_F(SpirvWriter_ShaderIOTest, F16_IO_WithPolyfill) {
                                                   {
                                                       mod.symbols.New("out2"),
                                                       ty.vec4<f16>(),
-                                                      core::type::StructMemberAttributes{
+                                                      core::IOAttributes{
                                                           /* location */ 2u,
-                                                          /* index */ std::nullopt,
+                                                          /* blend_src */ std::nullopt,
                                                           /* color */ std::nullopt,
                                                           /* builtin */ std::nullopt,
                                                           /* interpolation */ std::nullopt,
@@ -1616,8 +1639,8 @@ TEST_F(SpirvWriter_ShaderIOTest, F16_IO_WithPolyfill) {
 
     auto* in1 = b.FunctionParam("in1", ty.f16());
     auto* in2 = b.FunctionParam("in2", ty.vec4<f16>());
-    in1->SetLocation(1, std::nullopt);
-    in1->SetLocation(2, std::nullopt);
+    in1->SetLocation(1);
+    in2->SetLocation(2);
     auto* func = b.Function("main", outputs, core::ir::Function::PipelineStage::kFragment);
     func->SetParams({in1, in2});
     b.Append(func->Block(), [&] {  //
@@ -1630,7 +1653,7 @@ Outputs = struct @align(8) {
   out2:vec4<f16> @offset(8), @location(2)
 }
 
-%main = @fragment func(%in1:f16 [@location(2)], %in2:vec4<f16>):Outputs {
+%main = @fragment func(%in1:f16 [@location(1)], %in2:vec4<f16> [@location(2)]):Outputs {
   $B1: {
     %4:Outputs = construct %in1, %in2
     ret %4
@@ -1646,10 +1669,10 @@ Outputs = struct @align(8) {
 }
 
 $B1: {  # root
-  %main_loc2_Input:ptr<__in, f32, read> = var @location(2)
-  %main_Input:ptr<__in, vec4<f32>, read> = var
-  %main_loc1_Output:ptr<__out, f32, write> = var @location(1)
-  %main_loc2_Output:ptr<__out, vec4<f32>, write> = var @location(2)
+  %main_loc1_Input:ptr<__in, f32, read> = var undef @location(1)
+  %main_loc2_Input:ptr<__in, vec4<f32>, read> = var undef @location(2)
+  %main_loc1_Output:ptr<__out, f32, write> = var undef @location(1)
+  %main_loc2_Output:ptr<__out, vec4<f32>, write> = var undef @location(2)
 }
 
 %main_inner = func(%in1:f16, %in2:vec4<f16>):Outputs {
@@ -1660,9 +1683,9 @@ $B1: {  # root
 }
 %main = @fragment func():void {
   $B3: {
-    %10:f32 = load %main_loc2_Input
+    %10:f32 = load %main_loc1_Input
     %11:f16 = convert %10
-    %12:vec4<f32> = load %main_Input
+    %12:vec4<f32> = load %main_loc2_Input
     %13:vec4<f16> = convert %12
     %14:Outputs = call %main_inner, %11, %13
     %15:f16 = access %14, 0u
@@ -1676,7 +1699,8 @@ $B1: {  # root
 }
 )";
 
-    ShaderIOConfig config;
+    core::ir::transform::PushConstantLayout push_constants;
+    ShaderIOConfig config{push_constants};
     config.polyfill_f16_io = true;
     Run(ShaderIO, config);
 

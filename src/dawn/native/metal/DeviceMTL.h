@@ -69,7 +69,7 @@ class Device final : public DeviceBase {
                                            uint64_t destinationOffset,
                                            uint64_t size) override;
     MaybeError CopyFromStagingToTextureImpl(const BufferBase* source,
-                                            const TextureDataLayout& dataLayout,
+                                            const TexelCopyBufferLayout& dataLayout,
                                             const TextureCopy& dst,
                                             const Extent3D& copySizePixels) override;
 
@@ -78,10 +78,12 @@ class Device final : public DeviceBase {
 
     float GetTimestampPeriodInNS() const override;
 
-    bool IsResolveTextureBlitWithDrawSupported() const override;
+    bool CanTextureLoadResolveTargetInTheSameRenderpass() const override;
 
     bool UseCounterSamplingAtCommandBoundary() const;
     bool UseCounterSamplingAtStageBoundary() const;
+
+    bool BackendWillValidateMultiDraw() const override;
 
     // Get a MTLBuffer that can be used as a mock in a no-op blit encoder based on filling this
     // single-byte buffer
@@ -110,8 +112,9 @@ class Device final : public DeviceBase {
     ResultOrError<Ref<SamplerBase>> CreateSamplerImpl(const SamplerDescriptor* descriptor) override;
     ResultOrError<Ref<ShaderModuleBase>> CreateShaderModuleImpl(
         const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
+        const std::vector<tint::wgsl::Extension>& internalExtensions,
         ShaderModuleParseResult* parseResult,
-        OwnedCompilationMessages* compilationMessages) override;
+        std::unique_ptr<OwnedCompilationMessages>* compilationMessages) override;
     ResultOrError<Ref<SwapChainBase>> CreateSwapChainImpl(
         Surface* surface,
         SwapChainBase* previousSwapChain,
@@ -128,13 +131,14 @@ class Device final : public DeviceBase {
     void InitializeComputePipelineAsyncImpl(Ref<CreateComputePipelineAsyncEvent> event) override;
     void InitializeRenderPipelineAsyncImpl(Ref<CreateRenderPipelineAsyncEvent> event) override;
 
-    ResultOrError<wgpu::TextureUsage> GetSupportedSurfaceUsageImpl(
-        const Surface* surface) const override;
-
     ResultOrError<Ref<SharedTextureMemoryBase>> ImportSharedTextureMemoryImpl(
         const SharedTextureMemoryDescriptor* descriptor) override;
     ResultOrError<Ref<SharedFenceBase>> ImportSharedFenceImpl(
         const SharedFenceDescriptor* descriptor) override;
+
+    void StartTrace();
+    void StopTrace();
+    bool mTraceInProgress = false;
 
     void DestroyImpl() override;
 
@@ -144,8 +148,8 @@ class Device final : public DeviceBase {
     float mTimestampPeriod = 1.0f;
     // The base of CPU timestamp and GPU timestamp to measure the linear regression between GPU
     // and CPU timestamps.
-    MTLTimestamp mCpuTimestamp API_AVAILABLE(macos(10.15), ios(14.0)) = 0;
-    MTLTimestamp mGpuTimestamp API_AVAILABLE(macos(10.15), ios(14.0)) = 0;
+    MTLTimestamp mCpuTimestamp = 0;
+    MTLTimestamp mGpuTimestamp = 0;
     // The parameters for kalman filter
     std::unique_ptr<KalmanInfo> mKalmanInfo;
     bool mIsTimestampQueryEnabled = false;

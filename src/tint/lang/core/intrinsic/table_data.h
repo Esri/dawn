@@ -149,6 +149,7 @@ enum class OverloadFlag : uint8_t {
     kSupportsFragmentPipeline,  // The overload can be used in fragment shaders
     kSupportsComputePipeline,   // The overload can be used in compute shaders
     kMustUse,                   // The overload cannot be called as a statement
+    kMemberFunction,            // The overload is a member function
     kIsDeprecated,              // The overload is deprecated
 };
 
@@ -600,6 +601,7 @@ struct TableData {
     const IntrinsicInfo& unary_and;
 };
 
+TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 const core::type::Type* MatchState::Type(const core::type::Type* ty) {
     TypeMatcherIndex matcher_index{(*matcher_indices_++).value};
     auto& matcher = data[matcher_index];
@@ -623,6 +625,7 @@ void MatchState::PrintNum(StyledText& out) {
     auto& matcher = data[matcher_index];
     matcher.print(this, out);
 }
+TINT_END_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 
 /// TemplateTypeMatcher is a Matcher for a template type.
 /// The TemplateTypeMatcher will initially match against any type, and then will only be further

@@ -116,8 +116,14 @@ func Resolve(a *ast.AST) (*sem.Sem, error) {
 		}
 	}
 
+	var usages = ast.EnumDecl{}
+	for _, e := range a.Enums {
+		if e.Name == "usages" {
+			usages = e
+		}
+	}
 	// Calculate the unique parameter names
-	r.s.UniqueParameterNames = r.calculateUniqueParameterNames()
+	r.s.UniqueParameterNames = r.calculateUniqueParameterNames(usages)
 
 	return r.s, nil
 }
@@ -126,9 +132,15 @@ func Resolve(a *ast.AST) (*sem.Sem, error) {
 // The resulting sem.Enum is appended to Sem.Enums, and the enum and all its
 // entries are registered with the global scope.
 func (r *resolver) enum(e ast.EnumDecl) error {
+	NS := "core"
+	if ns := e.Attributes.Take("ns"); ns != nil {
+		NS = ns.Values[0].(string)
+	}
+
 	s := &sem.Enum{
 		Decl: e,
 		Name: e.Name,
+		NS:   NS,
 	}
 
 	// Register the enum
@@ -162,6 +174,10 @@ func (r *resolver) enum(e ast.EnumDecl) error {
 
 	// Sort the enum entries into lexicographic order
 	sort.Slice(s.Entries, func(i, j int) bool { return s.Entries[i].Name < s.Entries[j].Name })
+
+	if len(e.Attributes) != 0 {
+		return fmt.Errorf("%v unknown attribute: %v", e.Attributes[0].Source, e.Attributes[0].Values[0])
+	}
 
 	return nil
 }
@@ -395,6 +411,15 @@ func (r *resolver) intrinsic(
 			return fmt.Errorf("%v too many values for @const attribute", constEvalFn.Source)
 		}
 	}
+	if memberFunction := a.Attributes.Take("member_function"); memberFunction != nil {
+		overload.MemberFunction = true
+		if len(memberFunction.Values) != 0 {
+			return fmt.Errorf("%v unexpected value for member_function attribute", memberFunction.Source)
+		}
+		if len(a.Parameters) < 1 {
+			return fmt.Errorf("%v @member_function can only be used on a function with at least one parameter", memberFunction.Source)
+		}
+	}
 	if deprecated := a.Attributes.Take("deprecated"); deprecated != nil {
 		overload.IsDeprecated = true
 		if len(deprecated.Values) != 0 {
@@ -407,10 +432,6 @@ func (r *resolver) intrinsic(
 
 	// Append the overload to the intrinsic
 	intrinsic.Overloads = append(intrinsic.Overloads, overload)
-
-	for _, num := range overload.ExplicitTemplates.Numbers() {
-		return fmt.Errorf("%v explicit number template parameters are not supported", num.AST().Source)
-	}
 
 	// Update high-water mark of templates
 	if n := len(overload.AllTemplates()); r.s.MaxTemplates < n {
@@ -567,7 +588,6 @@ func (r *resolver) lookupNamed(s *scope, a ast.TemplatedName) (sem.Named, error)
 		params = target.TemplateParams
 	case *sem.TypeMatcher:
 		ty = target
-		params = target.TemplateParams
 	case sem.TemplateParam:
 		if len(a.TemplateArgs) != 0 {
 			return nil, fmt.Errorf("%v '%v' template parameters do not accept template arguments", a.Source, a.Name)
@@ -603,9 +623,15 @@ func (r *resolver) lookupNamed(s *scope, a ast.TemplatedName) (sem.Named, error)
 
 // calculateUniqueParameterNames() iterates over all the parameters of all
 // builtin overloads, calculating the list of unique parameter names
-func (r *resolver) calculateUniqueParameterNames() []string {
+func (r *resolver) calculateUniqueParameterNames(usages ast.EnumDecl) []string {
 	set := map[string]struct{}{"": {}}
 	names := []string{}
+
+	for _, e := range usages.Entries {
+		set[e.Name] = struct{}{}
+		names = append(names, e.Name)
+	}
+
 	for _, intrinsics := range [][]*sem.Intrinsic{
 		r.s.Builtins,
 		r.s.UnaryOperators,

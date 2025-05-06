@@ -33,6 +33,7 @@
 #include <functional>
 #include <limits>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -290,12 +291,52 @@ class Stream<std::vector<T>> {
         using SizeT = decltype(std::declval<std::vector<T>>().size());
         SizeT size;
         DAWN_TRY(StreamOut(s, &size));
+        DAWN_INVALID_IF(size >= v->max_size(),
+                        "Trying to reserve a vector of size larger than max_size");
         *v = {};
         v->reserve(size);
         for (SizeT i = 0; i < size; ++i) {
             T el;
             DAWN_TRY(StreamOut(s, &el));
             v->push_back(std::move(el));
+        }
+        return {};
+    }
+};
+
+// Stream specialization for std::array<T, Size> of fundamental types T.
+template <typename T, size_t Size>
+class Stream<std::array<T, Size>, std::enable_if_t<std::is_fundamental_v<T>>> {
+  public:
+    static void Write(Sink* s, const std::array<T, Size>& t) {
+        static_assert(Size > 0);
+        memcpy(s->GetSpace(sizeof(t)), t.data(), sizeof(t));
+    }
+
+    static MaybeError Read(Source* s, std::array<T, Size>* t) {
+        static_assert(Size > 0);
+        const void* ptr;
+        DAWN_TRY(s->Read(&ptr, sizeof(*t)));
+        memcpy(t->data(), ptr, sizeof(*t));
+        return {};
+    }
+};
+
+// Stream specialization for std::array<T, Size> of non-fundamental types T.
+template <typename T, size_t Size>
+class Stream<std::array<T, Size>, std::enable_if_t<!std::is_fundamental_v<T>>> {
+  public:
+    static void Write(Sink* s, const std::array<T, Size>& v) {
+        static_assert(Size > 0);
+        for (const T& it : v) {
+            StreamIn(s, it);
+        }
+    }
+
+    static MaybeError Read(Source* s, std::array<T, Size>* v) {
+        static_assert(Size > 0);
+        for (auto& el : *v) {
+            DAWN_TRY(StreamOut(s, el));
         }
         return {};
     }
@@ -339,6 +380,31 @@ class Stream<std::unordered_map<K, V>> {
             std::pair<K, V> p;
             DAWN_TRY(StreamOut(s, &p));
             m->insert(std::move(p));
+        }
+        return {};
+    }
+};
+
+// Stream specialization for std::unordered_set<V> which sorts the entries
+// to provide a stable ordering.
+template <typename V>
+class Stream<std::unordered_set<V>> {
+  public:
+    static void Write(stream::Sink* sink, const std::unordered_set<V>& s) {
+        std::vector<V> ordered(s.begin(), s.end());
+        std::sort(ordered.begin(), ordered.end(), [](const V& a, const V& b) { return a < b; });
+        StreamIn(sink, ordered);
+    }
+    static MaybeError Read(Source* source, std::unordered_set<V>* s) {
+        using SizeT = decltype(std::declval<std::vector<V>>().size());
+        SizeT size;
+        DAWN_TRY(StreamOut(source, &size));
+        *s = {};
+        s->reserve(size);
+        for (SizeT i = 0; i < size; ++i) {
+            V v;
+            DAWN_TRY(StreamOut(source, &v));
+            s->insert(std::move(v));
         }
         return {};
     }

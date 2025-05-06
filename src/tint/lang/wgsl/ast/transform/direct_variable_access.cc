@@ -539,7 +539,7 @@ struct DirectVariableAccess::State {
 
             // The dynamic index needs to be hoisted (if it hasn't been already).
             auto fn = FnInfoFor(idx->Stmt()->Function());
-            fn->hoisted_exprs.GetOrAdd(idx, [=] {
+            fn->hoisted_exprs.GetOrAdd(idx, [this, idx] {
                 // Create a name for the new 'let'
                 auto name = b.Symbols().New("ptr_index_save");
                 // Insert a new 'let' just above the dynamic index statement.
@@ -1104,7 +1104,7 @@ struct DirectVariableAccess::State {
             }
 
             auto* member = std::get_if<Symbol>(&op);
-            if (TINT_LIKELY(member)) {
+            if (DAWN_LIKELY(member)) {
                 ss << member->Name();
                 continue;
             }
@@ -1151,7 +1151,7 @@ struct DirectVariableAccess::State {
         }
 
         auto* member = std::get_if<Symbol>(&access);
-        if (TINT_LIKELY(member)) {
+        if (DAWN_LIKELY(member)) {
             /// The access is a member access.
             return b.MemberAccessor(expr, ctx.Clone(*member));
         }

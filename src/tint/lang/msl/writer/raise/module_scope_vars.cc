@@ -30,8 +30,9 @@
 #include <utility>
 
 #include "src/tint/lang/core/ir/builder.h"
-#include "src/tint/lang/core/ir/transform/common/referenced_module_vars.h"
+#include "src/tint/lang/core/ir/referenced_module_vars.h"
 #include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/type/binding_array.h"
 
 namespace tint::msl::writer::raise {
 namespace {
@@ -62,7 +63,7 @@ struct State {
     Hashmap<core::ir::Block*, core::ir::Function*, 64> block_to_function{};
 
     /// The mapping from functions to their transitively referenced workgroup variables.
-    core::ir::ReferencedModuleVars referenced_module_vars{ir};
+    core::ir::ReferencedModuleVars<core::ir::Module> referenced_module_vars{ir};
 
     // The name of the module-scope variables structure.
     static constexpr const char* kModuleVarsName = "tint_module_vars";
@@ -88,24 +89,47 @@ struct State {
             ProcessFunction(*func);
         }
 
-        // Replace uses of each module-scope variable with values extracted from the structure.
+        // Replace uses of each module-scope variable.
         uint32_t index = 0;
         for (auto& var : module_vars) {
             Vector<core::ir::Instruction*, 16> to_destroy;
-            auto* ptr = var->Result(0)->Type()->As<core::type::Pointer>();
-            var->Result(0)->ForEachUse([&](core::ir::Usage use) {  //
+            auto* ptr = var->Result()->Type()->As<core::type::Pointer>();
+            var->Result()->ForEachUseUnsorted([&](core::ir::Usage use) {  //
                 auto* extracted_variable = GetVariableFromStruct(var, use.instruction, index);
 
-                // We drop the pointer from handle variables and store them in the struct by value
-                // instead, so remove any load instructions for the handle address space.
-                if (use.instruction->Is<core::ir::Load>() &&
-                    ptr->AddressSpace() == core::AddressSpace::kHandle) {
-                    use.instruction->Result(0)->ReplaceAllUsesWith(extracted_variable);
-                    to_destroy.Push(use.instruction);
+                // Everything but handles are just replaced with values from the structure.
+                if (ptr->AddressSpace() != core::AddressSpace::kHandle) {
+                    use.instruction->SetOperand(use.operand_index, extracted_variable);
                     return;
                 }
 
-                use.instruction->SetOperand(use.operand_index, extracted_variable);
+                Switch(
+                    use.instruction,
+                    // Loads are replaced with a direct access to the variable.
+                    [&](core::ir::Load* load) {
+                        load->Result()->ReplaceAllUsesWith(extracted_variable);
+                        to_destroy.Push(load);
+                    },
+                    // Accesses are replaced with accesses of the extracted variable.
+                    [&](core::ir::Access* access) {
+                        auto* ba = ptr->StoreType()->As<core::type::BindingArray>();
+                        TINT_ASSERT(ba != nullptr);
+                        auto* elem_type = ba->ElemType();
+
+                        access->SetOperand(core::ir::Access::kObjectOperandOffset,
+                                           extracted_variable);
+                        access->Result()->SetType(elem_type);
+
+                        // Accesses of the previously ptr<binding_array<T, N>> would return a ptr<T>
+                        // but the new access returns a T. We need to modify all the previous load
+                        // through the ptr<T> to direct accesses.
+                        access->Result()->ForEachUseUnsorted([&](core::ir::Usage access_use) {
+                            TINT_ASSERT(access_use.instruction->Is<core::ir::Load>());
+                            access_use.instruction->Result()->ReplaceAllUsesWith(access->Result());
+                            to_destroy.Push(access_use.instruction);
+                        });
+                    },
+                    TINT_ICE_ON_NO_MATCH);
             });
             var->Destroy();
             index++;
@@ -123,7 +147,7 @@ struct State {
         Vector<core::type::Manager::StructMemberDesc, 8> struct_members;
         for (auto* global : *ir.root_block) {
             if (auto* var = global->As<core::ir::Var>()) {
-                auto* type = var->Result(0)->Type();
+                auto* type = var->Result()->Type();
 
                 // Handle types drop the pointer and are passed around by value.
                 auto* ptr = type->As<core::type::Pointer>();
@@ -159,7 +183,7 @@ struct State {
         // Add the structure the holds the module-scope variable pointers to the function and record
         // it in the map. Entry points will create the structure, other functions will declare it as
         // a parameter.
-        if (func->Stage() != core::ir::Function::PipelineStage::kUndefined) {
+        if (func->IsEntryPoint()) {
             function_to_struct_value.Add(func, AddModuleVarsToEntryPoint(func, refs));
         } else {
             function_to_struct_value.Add(func, AddModuleVarsToFunction(func));
@@ -172,29 +196,32 @@ struct State {
     /// @returns the structure that holds the module-scope variables
     core::ir::Value* AddModuleVarsToEntryPoint(
         core::ir::Function* func,
-        const core::ir::ReferencedModuleVars::VarSet& referenced_vars) {
+        const core::ir::ReferencedModuleVars<core::ir::Module>::VarSet& referenced_vars) {
         core::ir::Value* module_var_struct = nullptr;
+        core::ir::FunctionParam* workgroup_allocation_param = nullptr;
+        Vector<core::type::Manager::StructMemberDesc, 4> workgroup_struct_members;
+
         // Add parameters and insert instruction at the top of the entry point to set up the
         // module-scope variables structure.
         b.InsertBefore(func->Block()->Front(), [&] {  //
             Vector<core::ir::Value*, 8> construct_args;
             for (auto var : module_vars) {
                 if (!referenced_vars.Contains(var)) {
-                    // The variable isn't used by this entry point, so set the member to undef.
-                    construct_args.Push(nullptr);
+                    // The variable isn't used by this entry point, so set the member to unused.
+                    construct_args.Push(b.Unused());
                     continue;
                 }
 
                 // Create a new declaration in the entry point to replace the module-scope variable.
                 // Use either a parameter or a local variable, depending on the address space.
                 core::ir::Value* decl = nullptr;
-                auto* ptr = var->Result(0)->Type()->As<core::type::Pointer>();
+                auto* ptr = var->Result()->Type()->As<core::type::Pointer>();
                 switch (ptr->AddressSpace()) {
                     case core::AddressSpace::kPrivate: {
                         // Private variables become function-scope variables.
                         auto* local_var = b.Var(ptr);
                         local_var->SetInitializer(var->Initializer());
-                        decl = local_var->Result(0);
+                        decl = local_var->Result();
                         break;
                     }
                     case core::AddressSpace::kStorage:
@@ -204,6 +231,24 @@ struct State {
                         param->SetBindingPoint(var->BindingPoint());
                         func->AppendParam(param);
                         decl = param;
+                        break;
+                    }
+                    case core::AddressSpace::kWorkgroup: {
+                        // Workgroup variables are received as a function parameter (to workaround
+                        // an MSL compiler bug with threadgroup matrices), and we aggregate all
+                        // workgroup variables into a structure to avoid hitting MSL's limit for
+                        // threadgroup memory arguments.
+                        if (!workgroup_allocation_param) {
+                            workgroup_allocation_param = b.FunctionParam(nullptr);
+                            func->AppendParam(workgroup_allocation_param);
+                        }
+                        decl = b.Access(ptr, workgroup_allocation_param,
+                                        u32(workgroup_struct_members.Length()))
+                                   ->Result();
+                        workgroup_struct_members.Push(core::type::Manager::StructMemberDesc{
+                            ir.symbols.New(),
+                            ptr->StoreType(),
+                        });
                         break;
                     }
                     case core::AddressSpace::kHandle: {
@@ -228,8 +273,16 @@ struct State {
             // Construct the structure value and name it with a `let` instruction.
             // The `let` prevents the printer from inlining the constructor, which aids readability.
             auto* construct = b.Construct(struct_type, std::move(construct_args));
-            module_var_struct = b.Let(kModuleVarsName, construct)->Result(0);
+            module_var_struct = b.Let(kModuleVarsName, construct)->Result();
         });
+
+        // Create the workgroup variable structure if needed.
+        if (!workgroup_struct_members.IsEmpty()) {
+            auto* workgroup_struct =
+                ty.Struct(ir.symbols.New(), std::move(workgroup_struct_members));
+            workgroup_allocation_param->SetType(ty.ptr<workgroup>(workgroup_struct));
+        }
+
         return module_var_struct;
     }
 
@@ -242,7 +295,7 @@ struct State {
         func->AppendParam(param);
 
         // Update all callsites to pass the module-scope variables structure as an argument.
-        func->ForEachUse([&](core::ir::Usage use) {
+        func->ForEachUseUnsorted([&](core::ir::Usage use) {
             if (auto* call = use.instruction->As<core::ir::UserCall>()) {
                 call->AppendArg(*function_to_struct_value.Get(ContainingFunction(call)));
             }
@@ -262,7 +315,7 @@ struct State {
                                            uint32_t index) {
         auto* func = ContainingFunction(inst);
         auto* struct_value = function_to_struct_value.GetOr(func, nullptr);
-        auto* type = var->Result(0)->Type();
+        auto* type = var->Result()->Type();
 
         // Handle types drop the pointer and are passed around by value.
         auto* ptr = type->As<core::type::Pointer>();
@@ -272,7 +325,7 @@ struct State {
 
         auto* access = b.Access(type, struct_value, u32(index));
         access->InsertBefore(inst);
-        return access->Result(0);
+        return access->Result();
     }
 
     /// Get the function that contains an instruction.
@@ -288,7 +341,7 @@ struct State {
 }  // namespace
 
 Result<SuccessType> ModuleScopeVars(core::ir::Module& ir) {
-    auto result = ValidateAndDumpIfNeeded(ir, "ModuleScopeVars transform");
+    auto result = ValidateAndDumpIfNeeded(ir, "msl.ModuleScopeVars");
     if (result != Success) {
         return result.Failure();
     }

@@ -122,6 +122,7 @@ def _NonInclusiveFileFilter(file):
         "infra/config/global/main.star",  # Infra settings
         "infra/kokoro/windows/build.bat",  # External URL
         "src/dawn/common/GPUInfo.cpp",  # External URL
+        "src/dawn/common/ThreadLocal.cpp",  # External URL
         "src/dawn/native/metal/BackendMTL.mm",  # OSX Constant
         "src/dawn/native/vulkan/SamplerVk.cpp",  # External URL
         "src/dawn/native/vulkan/TextureVk.cpp",  # External URL
@@ -174,7 +175,6 @@ def _DoCommonChecks(input_api, output_api):
         input_api.canned_checks.CheckPatchFormatted(
             input_api,
             output_api,
-            check_python=True,
             result_factory=result_factory))
     results.extend(
         input_api.canned_checks.CheckGNFormatted(input_api, output_api))
