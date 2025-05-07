@@ -678,6 +678,7 @@ if (enable_android) then
 
   files {
     "src/dawn/native/AHBFunctions.cpp",
+    "src/dawn/native/SpirvValidation.cpp",
   }
 
 end
