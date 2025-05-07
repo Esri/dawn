@@ -867,6 +867,12 @@ if (enable_spirv) then
     "src/tint/lang/spirv/writer/ast_raise/while_to_loop.cc",
   }
 
+else
+
+  defines {
+    "TINT_BUILD_SPV_READER=0",
+  }
+
 end
 
 
