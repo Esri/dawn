@@ -25,6 +25,17 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+typedef struct D3D12_FEATURE_DATA_D3D12_OPTIONS13 {
+    BOOL UnrestrictedBufferTextureCopyPitchSupported;
+    BOOL UnrestrictedVertexElementAlignmentSupported;
+    BOOL InvertedViewportHeightFlipsYSupported;
+    BOOL InvertedViewportDepthFlipsZSupported;
+    BOOL TextureCopyBetweenDimensionsSupported;
+    BOOL AlphaBlendFactorSupported;
+  } D3D12_FEATURE_DATA_D3D12_OPTIONS13;
+
+auto D3D12_FEATURE_D3D12_OPTIONS13 = static_cast<D3D12_FEATURE>(42);
+
 #include "dawn/native/d3d12/D3D12Info.h"
 
 #include <utility>
