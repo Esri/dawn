@@ -41,6 +41,12 @@ fi
 find .. -name "*rtc_shim*" -delete
 _sed_inplace "s|_rtc_shim_.*\.|.|" ../dawn.lua
 
+# Fetch dependencies
+echo "#!/usr/bin/env python" >> ../tools/fetch_dawn_dependencies_temp.py
+cat ../tools/fetch_dawn_dependencies.py >> ../tools/fetch_dawn_dependencies_temp.py
+${python_path} ../tools/fetch_dawn_dependencies_temp.py --directory ..
+m ../tools/fetch_dawn_dependencies_temp.py
+
 cd ../..
 mkdir temp_dawn_build
 cd temp_dawn_build
@@ -49,7 +55,6 @@ cd temp_dawn_build
 command="../dawn "
 
 command_options=(\
-    "-DDAWN_FETCH_DEPENDENCIES=ON" # Needed for Dawn's CMake build system
     "-DDAWN_BUILD_TESTS=OFF" \
     "-DDAWN_BUILD_SAMPLES=OFF" \
     "-DTINT_BUILD_TESTS=OFF" \
