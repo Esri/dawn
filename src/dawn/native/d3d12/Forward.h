@@ -77,7 +77,7 @@ struct D3D12BackendTraits {
 };
 
 template <typename T>
-auto ToBackend(T&& common) -> decltype(ToBackendBase<D3D12BackendTraits>(common)) {
+decltype(auto) ToBackend(T&& common) {
     return ToBackendBase<D3D12BackendTraits>(common);
 }
 
