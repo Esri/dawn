@@ -29,6 +29,7 @@
 
 #include <benchmark/benchmark.h>
 #include <dawn/webgpu_cpp.h>
+#include <dawn/webgpu_cpp_print.h>
 #include <memory>
 #include <utility>
 
@@ -60,25 +61,23 @@ void NullDeviceBenchmarkFixture::SetUp(const benchmark::State& state) {
 
             // Create the device.
             wgpu::DeviceDescriptor desc = GetDeviceDescriptor();
-            desc.deviceLostCallbackInfo = {
-                nullptr, wgpu::CallbackMode::AllowSpontaneous,
-                [](WGPUDevice const*, WGPUDeviceLostReason reason, char const* message, void*) {
-                    if (reason == WGPUDeviceLostReason_Unknown) {
+            desc.SetDeviceLostCallback(
+                wgpu::CallbackMode::AllowSpontaneous,
+                [](const wgpu::Device&, wgpu::DeviceLostReason reason, wgpu::StringView message) {
+                    if (reason == wgpu::DeviceLostReason::Unknown) {
                         dawn::ErrorLog() << message;
                         DAWN_UNREACHABLE();
                     }
-                },
-                this};
-            desc.uncapturedErrorCallbackInfo = {nullptr,
-                                                [](WGPUErrorType, char const* message, void*) {
-                                                    dawn::ErrorLog() << message;
-                                                    DAWN_UNREACHABLE();
-                                                },
-                                                this};
+                });
+            desc.SetUncapturedErrorCallback(
+                [](const wgpu::Device&, wgpu::ErrorType, wgpu::StringView message) {
+                    dawn::ErrorLog() << message;
+                    DAWN_UNREACHABLE();
+                });
 
             adapter.RequestDevice(
                 &desc, wgpu::CallbackMode::AllowSpontaneous,
-                [this](wgpu::RequestDeviceStatus status, wgpu::Device result, const char*) {
+                [this](wgpu::RequestDeviceStatus status, wgpu::Device result, wgpu::StringView) {
                     DAWN_ASSERT(status == wgpu::RequestDeviceStatus::Success);
                     device = std::move(result);
                 });

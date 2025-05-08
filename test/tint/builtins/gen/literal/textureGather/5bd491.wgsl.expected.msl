@@ -1,34 +1,83 @@
+//
+// fragment_main
+//
 #include <metal_stdlib>
-
 using namespace metal;
-void textureGather_5bd491(texture2d<uint, access::sample> tint_symbol_1, sampler tint_symbol_2, device uint4* const tint_symbol_3) {
-  uint4 res = tint_symbol_1.gather(tint_symbol_2, float2(1.0f), int2(0), component::y);
-  *(tint_symbol_3) = res;
-}
 
-struct tint_symbol {
-  float4 value [[position]];
+struct tint_module_vars_struct {
+  device uint4* prevent_dce;
+  texture2d<uint, access::sample> arg_1;
+  sampler arg_2;
 };
 
-float4 vertex_main_inner(texture2d<uint, access::sample> tint_symbol_4, sampler tint_symbol_5, device uint4* const tint_symbol_6) {
-  textureGather_5bd491(tint_symbol_4, tint_symbol_5, tint_symbol_6);
-  return float4(0.0f);
+uint4 textureGather_5bd491(tint_module_vars_struct tint_module_vars) {
+  uint4 res = tint_module_vars.arg_1.gather(tint_module_vars.arg_2, float2(1.0f), int2(0), component::y);
+  return res;
 }
 
-vertex tint_symbol vertex_main(texture2d<uint, access::sample> tint_symbol_7 [[texture(0)]], sampler tint_symbol_8 [[sampler(0)]], device uint4* tint_symbol_9 [[buffer(0)]]) {
-  float4 const inner_result = vertex_main_inner(tint_symbol_7, tint_symbol_8, tint_symbol_9);
-  tint_symbol wrapper_result = {};
-  wrapper_result.value = inner_result;
-  return wrapper_result;
+fragment void fragment_main(device uint4* prevent_dce [[buffer(0)]], texture2d<uint, access::sample> arg_1 [[texture(0)]], sampler arg_2 [[sampler(0)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.prevent_dce=prevent_dce, .arg_1=arg_1, .arg_2=arg_2};
+  (*tint_module_vars.prevent_dce) = textureGather_5bd491(tint_module_vars);
+}
+//
+// compute_main
+//
+#include <metal_stdlib>
+using namespace metal;
+
+struct tint_module_vars_struct {
+  device uint4* prevent_dce;
+  texture2d<uint, access::sample> arg_1;
+  sampler arg_2;
+};
+
+uint4 textureGather_5bd491(tint_module_vars_struct tint_module_vars) {
+  uint4 res = tint_module_vars.arg_1.gather(tint_module_vars.arg_2, float2(1.0f), int2(0), component::y);
+  return res;
 }
 
-fragment void fragment_main(texture2d<uint, access::sample> tint_symbol_10 [[texture(0)]], sampler tint_symbol_11 [[sampler(0)]], device uint4* tint_symbol_12 [[buffer(0)]]) {
-  textureGather_5bd491(tint_symbol_10, tint_symbol_11, tint_symbol_12);
-  return;
+kernel void compute_main(device uint4* prevent_dce [[buffer(0)]], texture2d<uint, access::sample> arg_1 [[texture(0)]], sampler arg_2 [[sampler(0)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.prevent_dce=prevent_dce, .arg_1=arg_1, .arg_2=arg_2};
+  (*tint_module_vars.prevent_dce) = textureGather_5bd491(tint_module_vars);
+}
+//
+// vertex_main
+//
+#include <metal_stdlib>
+using namespace metal;
+
+struct tint_module_vars_struct {
+  texture2d<uint, access::sample> arg_1;
+  sampler arg_2;
+};
+
+struct VertexOutput {
+  float4 pos;
+  uint4 prevent_dce;
+};
+
+struct vertex_main_outputs {
+  float4 VertexOutput_pos [[position]];
+  uint4 VertexOutput_prevent_dce [[user(locn0)]] [[flat]];
+};
+
+uint4 textureGather_5bd491(tint_module_vars_struct tint_module_vars) {
+  uint4 res = tint_module_vars.arg_1.gather(tint_module_vars.arg_2, float2(1.0f), int2(0), component::y);
+  return res;
 }
 
-kernel void compute_main(texture2d<uint, access::sample> tint_symbol_13 [[texture(0)]], sampler tint_symbol_14 [[sampler(0)]], device uint4* tint_symbol_15 [[buffer(0)]]) {
-  textureGather_5bd491(tint_symbol_13, tint_symbol_14, tint_symbol_15);
-  return;
+VertexOutput vertex_main_inner(tint_module_vars_struct tint_module_vars) {
+  VertexOutput out = {};
+  out.pos = float4(0.0f);
+  out.prevent_dce = textureGather_5bd491(tint_module_vars);
+  return out;
 }
 
+vertex vertex_main_outputs vertex_main(texture2d<uint, access::sample> arg_1 [[texture(0)]], sampler arg_2 [[sampler(0)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.arg_1=arg_1, .arg_2=arg_2};
+  VertexOutput const v = vertex_main_inner(tint_module_vars);
+  vertex_main_outputs tint_wrapper_result = {};
+  tint_wrapper_result.VertexOutput_pos = v.pos;
+  tint_wrapper_result.VertexOutput_prevent_dce = v.prevent_dce;
+  return tint_wrapper_result;
+}

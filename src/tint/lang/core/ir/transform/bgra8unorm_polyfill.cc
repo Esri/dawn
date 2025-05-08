@@ -63,13 +63,13 @@ struct State {
                 if (!var) {
                     continue;
                 }
-                auto* ptr = var->Result(0)->Type()->As<core::type::Pointer>();
+                auto* ptr = var->Result()->Type()->As<core::type::Pointer>();
                 if (!ptr) {
                     continue;
                 }
                 auto* storage_texture = ptr->StoreType()->As<core::type::StorageTexture>();
                 if (storage_texture &&
-                    storage_texture->texel_format() == core::TexelFormat::kBgra8Unorm) {
+                    storage_texture->TexelFormat() == core::TexelFormat::kBgra8Unorm) {
                     ReplaceVar(var, storage_texture);
                     to_remove.Push(var);
                 }
@@ -85,7 +85,7 @@ struct State {
                 auto* param = func->Params()[index];
                 auto* storage_texture = param->Type()->As<core::type::StorageTexture>();
                 if (storage_texture &&
-                    storage_texture->texel_format() == core::TexelFormat::kBgra8Unorm) {
+                    storage_texture->TexelFormat() == core::TexelFormat::kBgra8Unorm) {
                     ReplaceParameter(func, param, index, storage_texture);
                 }
             }
@@ -97,8 +97,8 @@ struct State {
     /// @param bgra8 the bgra8unorm texture type
     void ReplaceVar(Var* old_var, const core::type::StorageTexture* bgra8) {
         // Redeclare the variable with a rgba8unorm texel format.
-        auto* rgba8 = ty.Get<core::type::StorageTexture>(
-            bgra8->dim(), core::TexelFormat::kRgba8Unorm, bgra8->access(), bgra8->type());
+        auto* rgba8 =
+            ty.storage_texture(bgra8->Dim(), core::TexelFormat::kRgba8Unorm, bgra8->Access());
         auto* new_var = b.Var(ty.ptr(handle, rgba8));
         auto bp = old_var->BindingPoint();
         new_var->SetBindingPoint(bp->group, bp->binding);
@@ -108,7 +108,7 @@ struct State {
         }
 
         // Replace all uses of the old variable with the new one.
-        ReplaceUses(old_var->Result(0), new_var->Result(0));
+        ReplaceUses(old_var->Result(), new_var->Result());
     }
 
     /// Replace a function parameter with one that uses rgba8unorm instead of bgra8unorm.
@@ -121,8 +121,8 @@ struct State {
                           uint32_t index,
                           const core::type::StorageTexture* bgra8) {
         // Redeclare the parameter with a rgba8unorm texel format.
-        auto* rgba8 = ty.Get<core::type::StorageTexture>(
-            bgra8->dim(), core::TexelFormat::kRgba8Unorm, bgra8->access(), bgra8->type());
+        auto* rgba8 =
+            ty.storage_texture(bgra8->Dim(), core::TexelFormat::kRgba8Unorm, bgra8->Access());
         auto* new_param = b.FunctionParam(rgba8);
         if (auto name = ir.NameOf(old_param)) {
             ir.SetName(new_param, name.NameView());
@@ -140,14 +140,14 @@ struct State {
     /// @param old_value the value whose usages should be replaced
     /// @param new_value the value to use instead
     void ReplaceUses(Value* old_value, Value* new_value) {
-        old_value->ForEachUse([&](Usage use) {
+        old_value->ForEachUseUnsorted([&](Usage use) {
             tint::Switch(
                 use.instruction,
                 [&](Load* load) {
                     // Replace load instructions with new ones that have the updated type.
                     auto* new_load = b.Load(new_value);
                     new_load->InsertBefore(load);
-                    ReplaceUses(load->Result(0), new_load->Result(0));
+                    ReplaceUses(load->Result(), new_load->Result());
                     load->Destroy();
                 },
                 [&](CoreBuiltinCall* call) {
@@ -156,18 +156,18 @@ struct State {
                     if (call->Func() == core::BuiltinFn::kTextureStore) {
                         // Swizzle the value argument of a `textureStore()` builtin.
                         auto* tex = old_value->Type()->As<core::type::StorageTexture>();
-                        auto index = core::type::IsTextureArray(tex->dim()) ? 3u : 2u;
+                        auto index = core::type::IsTextureArray(tex->Dim()) ? 3u : 2u;
                         auto* value = call->Args()[index];
                         auto* swizzle = b.Swizzle(value->Type(), value, Vector{2u, 1u, 0u, 3u});
                         swizzle->InsertBefore(call);
-                        call->SetOperand(index, swizzle->Result(0));
+                        call->SetOperand(index, swizzle->Result());
                     } else if (call->Func() == core::BuiltinFn::kTextureLoad) {
                         // Swizzle the result of a `textureLoad()` builtin.
                         auto* swizzle =
-                            b.Swizzle(call->Result(0)->Type(), nullptr, Vector{2u, 1u, 0u, 3u});
-                        call->Result(0)->ReplaceAllUsesWith(swizzle->Result(0));
+                            b.Swizzle(call->Result()->Type(), nullptr, Vector{2u, 1u, 0u, 3u});
+                        call->Result()->ReplaceAllUsesWith(swizzle->Result());
                         swizzle->InsertAfter(call);
-                        swizzle->SetOperand(Swizzle::kObjectOperandOffset, call->Result(0));
+                        swizzle->SetOperand(Swizzle::kObjectOperandOffset, call->Result());
                     }
                 },
                 [&](UserCall* call) {
@@ -182,7 +182,7 @@ struct State {
 }  // namespace
 
 Result<SuccessType> Bgra8UnormPolyfill(Module& ir) {
-    auto result = ValidateAndDumpIfNeeded(ir, "Bgra8UnormPolyfill transform");
+    auto result = ValidateAndDumpIfNeeded(ir, "core.Bgra8UnormPolyfill");
     if (result != Success) {
         return result;
     }

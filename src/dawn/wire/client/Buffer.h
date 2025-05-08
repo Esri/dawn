@@ -28,13 +28,14 @@
 #ifndef SRC_DAWN_WIRE_CLIENT_BUFFER_H_
 #define SRC_DAWN_WIRE_CLIENT_BUFFER_H_
 
+#include <webgpu/webgpu.h>
+
 #include <memory>
 #include <optional>
 
 #include "dawn/common/FutureUtils.h"
 #include "dawn/common/Ref.h"
-#include "dawn/common/RefCounted.h"
-#include "dawn/webgpu.h"
+#include "dawn/common/RefCountedWithExternalCount.h"
 #include "dawn/wire/WireClient.h"
 #include "dawn/wire/client/ObjectBase.h"
 #include "partition_alloc/pointers/raw_ptr.h"
@@ -43,28 +44,27 @@ namespace dawn::wire::client {
 
 class Device;
 
-class Buffer final : public ObjectWithEventsBase {
+class Buffer final : public RefCountedWithExternalCount<ObjectWithEventsBase> {
   public:
     static WGPUBuffer Create(Device* device, const WGPUBufferDescriptor* descriptor);
+    static WGPUBuffer CreateError(Device* device, const WGPUBufferDescriptor* descriptor);
 
     Buffer(const ObjectBaseParams& params,
            const ObjectHandle& eventManagerHandle,
+           Device* device,
            const WGPUBufferDescriptor* descriptor);
-    ~Buffer() override;
+    void DeleteThis() override;
 
     ObjectType GetObjectType() const override;
 
-    void MapAsync(WGPUMapModeFlags mode,
-                  size_t offset,
-                  size_t size,
-                  WGPUBufferMapCallback callback,
-                  void* userdata);
-    WGPUFuture MapAsyncF(WGPUMapModeFlags mode,
-                         size_t offset,
-                         size_t size,
-                         const WGPUBufferMapCallbackInfo& callbackInfo);
+    WGPUFuture MapAsync(WGPUMapMode mode,
+                        size_t offset,
+                        size_t size,
+                        const WGPUBufferMapCallbackInfo& callbackInfo);
     void* GetMappedRange(size_t offset, size_t size);
     const void* GetConstMappedRange(size_t offset, size_t size);
+    WGPUStatus WriteMappedRange(size_t offset, void const* data, size_t size);
+    WGPUStatus ReadMappedRange(size_t offset, void* data, size_t size);
     void Unmap();
 
     void Destroy();
@@ -79,8 +79,10 @@ class Buffer final : public ObjectWithEventsBase {
     friend class Client;
     class MapAsyncEvent;
 
+    void WillDropLastExternalRef() override;
+
     // Prepares the callbacks to be called and potentially calls them
-    void SetFutureStatus(WGPUBufferMapAsyncStatus status);
+    void SetFutureStatus(WGPUMapAsyncStatus status, std::string_view message);
 
     bool IsMappedForReading() const;
     bool IsMappedForWriting() const;
@@ -91,8 +93,7 @@ class Buffer final : public ObjectWithEventsBase {
     const uint64_t mSize = 0;
     const WGPUBufferUsage mUsage;
     const bool mDestructWriteHandleOnUnmap;
-
-    std::weak_ptr<bool> mIsDeviceAlive;
+    Ref<Device> mDevice;
 
     // Mapping members are mutable depending on the current map state.
     enum class MapRequestType { Read, Write };

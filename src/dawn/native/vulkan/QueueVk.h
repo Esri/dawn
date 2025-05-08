@@ -36,7 +36,7 @@
 #include "dawn/common/vulkan_platform.h"
 #include "dawn/native/Device.h"
 #include "dawn/native/Queue.h"
-#include "dawn/native/vulkan/CommandRecordingContext.h"
+#include "dawn/native/vulkan/CommandRecordingContextVk.h"
 
 namespace dawn::native::vulkan {
 
@@ -83,7 +83,7 @@ class Queue final : public QueueBase {
     // have finished.
     MutexProtected<std::deque<std::pair<VkFence, ExecutionSerial>>> mFencesInFlight;
     // Fences in the unused list aren't reset yet.
-    std::vector<VkFence> mUnusedFences;
+    MutexProtected<std::vector<VkFence>> mUnusedFences;
 
     MaybeError PrepareRecordingContext();
     ResultOrError<CommandPoolAndBuffer> BeginVkCommandBuffer();

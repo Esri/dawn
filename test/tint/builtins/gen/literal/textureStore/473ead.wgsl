@@ -34,18 +34,14 @@
 //                       Do not modify this file directly
 ////////////////////////////////////////////////////////////////////////////////
 
+
+// flags: --glsl-desktop
 @group(1) @binding(0) var arg_0: texture_storage_3d<rg32uint, read_write>;
 
 // fn textureStore(texture: texture_storage_3d<rg32uint, read_write>, coords: vec3<u32>, value: vec4<u32>)
 fn textureStore_473ead() {
   textureStore(arg_0, vec3<u32>(1u), vec4<u32>(1u));
 }
-@vertex
-fn vertex_main() -> @builtin(position) vec4<f32> {
-  textureStore_473ead();
-  return vec4<f32>();
-}
-
 @fragment
 fn fragment_main() {
   textureStore_473ead();

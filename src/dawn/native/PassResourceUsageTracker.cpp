@@ -51,7 +51,7 @@ SyncScopeUsageTracker& SyncScopeUsageTracker::operator=(SyncScopeUsageTracker&&)
 void SyncScopeUsageTracker::BufferUsedAs(BufferBase* buffer,
                                          wgpu::BufferUsage usage,
                                          wgpu::ShaderStage shaderStages) {
-    // std::map's operator[] will create a new element using the default constructor
+    // absl::flat_hash_map's operator[] will create a new element using the default constructor
     // if the key didn't exist before.
     BufferSyncInfo& bufferSyncInfo = mBufferSyncInfos[buffer];
 
@@ -124,8 +124,10 @@ void SyncScopeUsageTracker::AddBindGroup(BindGroupBase* group) {
                         BufferUsedAs(buffer, kInternalStorageBuffer, bindingInfo.visibility);
                         break;
                     case wgpu::BufferBindingType::ReadOnlyStorage:
+                    case kInternalReadOnlyStorageBufferBinding:
                         BufferUsedAs(buffer, kReadOnlyStorageBuffer, bindingInfo.visibility);
                         break;
+                    case wgpu::BufferBindingType::BindingNotUsed:
                     case wgpu::BufferBindingType::Undefined:
                         DAWN_UNREACHABLE();
                 }
@@ -156,12 +158,17 @@ void SyncScopeUsageTracker::AddBindGroup(BindGroupBase* group) {
                     case wgpu::StorageTextureAccess::ReadOnly:
                         TextureViewUsedAs(view, kReadOnlyStorageTexture, bindingInfo.visibility);
                         break;
+                    case wgpu::StorageTextureAccess::BindingNotUsed:
                     case wgpu::StorageTextureAccess::Undefined:
                         DAWN_UNREACHABLE();
                 }
             },
             [&](const SamplerBindingInfo&) {},  //
-            [&](const StaticSamplerBindingInfo&) {});
+            [&](const StaticSamplerBindingInfo&) {},
+            [&](const InputAttachmentBindingInfo&) {
+                // This binding is not supposed to be used on front-end.
+                DAWN_UNREACHABLE();
+            });
     }
 
     for (const Ref<ExternalTextureBase>& externalTexture : group->GetBoundExternalTextures()) {
@@ -226,7 +233,8 @@ void ComputePassResourceUsageTracker::AddResourcesReferencedByBindGroup(BindGrou
                 mUsage.referencedTextures.insert(
                     group->GetBindingAsTextureView(index)->GetTexture());
             },
-            [](const SamplerBindingInfo&) {}, [](const StaticSamplerBindingInfo&) {});
+            [](const SamplerBindingInfo&) {}, [](const StaticSamplerBindingInfo&) {},
+            [&](const InputAttachmentBindingInfo&) { DAWN_UNREACHABLE(); });
     }
 
     for (const Ref<ExternalTextureBase>& externalTexture : group->GetBoundExternalTextures()) {

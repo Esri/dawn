@@ -1,68 +1,37 @@
-#version 310 es
-
-layout(rgba16f) uniform highp writeonly image2D arg_0;
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
-  uint inner;
-} prevent_dce;
-
-void textureDimensions_0c0b0c() {
-  uint res = uvec2(imageSize(arg_0)).x;
-  prevent_dce.inner = res;
-}
-
-vec4 vertex_main() {
-  textureDimensions_0c0b0c();
-  return vec4(0.0f);
-}
-
-void main() {
-  gl_PointSize = 1.0;
-  vec4 inner_result = vertex_main();
-  gl_Position = inner_result;
-  gl_Position.y = -(gl_Position.y);
-  gl_Position.z = ((2.0f * gl_Position.z) - gl_Position.w);
-  return;
-}
+//
+// fragment_main
+//
 #version 310 es
 precision highp float;
 precision highp int;
 
-layout(rgba16f) uniform highp writeonly image2D arg_0;
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+layout(binding = 0, std430)
+buffer f_prevent_dce_block_ssbo {
   uint inner;
-} prevent_dce;
-
-void textureDimensions_0c0b0c() {
-  uint res = uvec2(imageSize(arg_0)).x;
-  prevent_dce.inner = res;
+} v;
+layout(binding = 0, rgba16f) uniform highp writeonly image2D f_arg_0;
+uint textureDimensions_0c0b0c() {
+  uint res = uvec2(imageSize(f_arg_0)).x;
+  return res;
 }
-
-void fragment_main() {
-  textureDimensions_0c0b0c();
-}
-
 void main() {
-  fragment_main();
-  return;
+  v.inner = textureDimensions_0c0b0c();
 }
+//
+// compute_main
+//
 #version 310 es
 
-layout(rgba16f) uniform highp writeonly image2D arg_0;
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+layout(binding = 0, std430)
+buffer prevent_dce_block_1_ssbo {
   uint inner;
-} prevent_dce;
-
-void textureDimensions_0c0b0c() {
+} v;
+layout(binding = 0, rgba16f) uniform highp writeonly image2D arg_0;
+uint textureDimensions_0c0b0c() {
   uint res = uvec2(imageSize(arg_0)).x;
-  prevent_dce.inner = res;
+  return res;
 }
-
-void compute_main() {
-  textureDimensions_0c0b0c();
-}
-
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
-  compute_main();
-  return;
+  v.inner = textureDimensions_0c0b0c();
 }

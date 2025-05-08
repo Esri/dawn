@@ -108,15 +108,16 @@ bool BuiltinFn::IsSubgroup() const {
     return wgsl::IsSubgroup(fn_);
 }
 
-bool BuiltinFn::HasSideEffects() const {
-    return wgsl::HasSideEffects(fn_);
+bool BuiltinFn::IsSubgroupMatrix() const {
+    return wgsl::IsSubgroupMatrix(fn_);
 }
 
-wgsl::Extension BuiltinFn::RequiredExtension() const {
-    if (IsSubgroup()) {
-        return wgsl::Extension::kChromiumExperimentalSubgroups;
-    }
-    return wgsl::Extension::kUndefined;
+bool BuiltinFn::IsQuadSwap() const {
+    return wgsl::IsQuadSwap(fn_);
+}
+
+bool BuiltinFn::HasSideEffects() const {
+    return wgsl::HasSideEffects(fn_);
 }
 
 wgsl::LanguageFeature BuiltinFn::RequiredLanguageFeature() const {

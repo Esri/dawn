@@ -42,6 +42,7 @@
 #include "dawn/native/vulkan/TextureVk.h"
 #include "dawn/native/vulkan/UtilsVulkan.h"
 #include "dawn/native/vulkan/VulkanError.h"
+#include "dawn/native/wgpu_structs_autogen.h"
 
 #if DAWN_PLATFORM_IS(ANDROID)
 #include <android/hardware_buffer.h>
@@ -214,7 +215,7 @@ ResultOrError<VkDeviceMemory> AllocateDeviceMemory(Device* device,
 // static
 ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
     Device* device,
-    const char* label,
+    StringView label,
     const SharedTextureMemoryDmaBufDescriptor* descriptor) {
 #if DAWN_PLATFORM_IS(LINUX)
     VkDevice vkDevice = device->GetVkDevice();
@@ -251,7 +252,7 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
     VkFormat vkFormat = VulkanImageFormat(device, properties.format);
 
     // Usage flags to create the image with.
-    VkImageUsageFlags vkUsageFlags = VulkanImageUsage(properties.usage, *internalFormat);
+    VkImageUsageFlags vkUsageFlags = VulkanImageUsage(device, properties.usage, *internalFormat);
 
     // Number of memory planes in the image which will be queried from the DRM modifier.
     uint32_t memoryPlaneCount;
@@ -298,17 +299,9 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
             vkFormat, descriptor->drmFormat, descriptor->drmModifier, memoryPlaneCount,
             descriptor->planeCount);
         DAWN_INVALID_IF(memoryPlaneCount == 0, "Memory plane count must not be 0");
-        DAWN_INVALID_IF(
-            memoryPlaneCount > 1 && !(drmModifierProps.drmFormatModifierTilingFeatures &
-                                      VK_FORMAT_FEATURE_DISJOINT_BIT),
-            "VK_FORMAT_FEATURE_DISJOINT_BIT tiling is not supported for multi-planar DRM "
-            "format (%u) with drm modifier (%u).",
-            descriptor->drmFormat, descriptor->drmModifier);
         DAWN_INVALID_IF(memoryPlaneCount > kMaxPlanesPerFormat,
                         "Memory plane count (%u) must not exceed %u.", memoryPlaneCount,
                         kMaxPlanesPerFormat);
-        DAWN_INVALID_IF(memoryPlaneCount > 1,
-                        "TODO(crbug.com/dawn/1548): Disjoint planar import not supported yet.");
 
         // Verify that the format modifier of the external memory and the requested Vulkan format
         // are actually supported together in a dma-buf import.
@@ -318,10 +311,6 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
         imageFormatInfo.tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
         imageFormatInfo.usage = vkUsageFlags;
         imageFormatInfo.flags = 0;
-
-        if (memoryPlaneCount > 1) {
-            imageFormatInfo.flags |= VK_IMAGE_CREATE_DISJOINT_BIT;
-        }
 
         VkPhysicalDeviceImageDrmFormatModifierInfoEXT drmModifierInfo = {};
         drmModifierInfo.sType =
@@ -383,6 +372,18 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
         }
     }
 
+    // Validate that there is a single FD. If there is more than one FD, Dawn will need to validate
+    // the format has VK_FORMAT_FEATURE_DISJOINT_BIT, create the VkImage with
+    // VK_IMAGE_CREATE_DISJOINT_BIT, and separately bind the image planes to memory. Dawn doesn't
+    // support use of VK_IMAGE_CREATE_DISJOINT_BIT currently. See crbug.com/42240514.
+    int fd = descriptor->planes[0].fd;
+    for (uint32_t i = 1; i < descriptor->planeCount; ++i) {
+        DAWN_INVALID_IF(descriptor->planes[i].fd != fd,
+                        "descriptor->planes[%u].fd (%i) does not match other plane fd (%i). All "
+                        "fds must be the same.",
+                        i, descriptor->planes[i].fd, fd);
+    }
+
     // Don't add the view format if backend validation is enabled, otherwise most image creations
     // will fail with VVL. This view format is only needed for sRGB reinterpretation.
     // TODO(crbug.com/dawn/2304): Investigate if this is a bug in VVL.
@@ -420,60 +421,54 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
     }
 
     // Import the memory plane(s) as VkDeviceMemory and bind to the VkImage.
-    if (memoryPlaneCount > 1u) {
-        // TODO(crbug.com/dawn/1548): Disjoint planar import not supported yet.
-        DAWN_UNREACHABLE();
-    } else {
-        VkMemoryFdPropertiesKHR fdProperties;
-        fdProperties.sType = VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR;
-        fdProperties.pNext = nullptr;
+    VkMemoryFdPropertiesKHR fdProperties;
+    fdProperties.sType = VK_STRUCTURE_TYPE_MEMORY_FD_PROPERTIES_KHR;
+    fdProperties.pNext = nullptr;
 
-        // Get the valid memory types that the external memory can be imported as.
-        DAWN_TRY(CheckVkSuccess(device->fn.GetMemoryFdPropertiesKHR(
-                                    vkDevice, handleType, descriptor->planes[0].fd, &fdProperties),
-                                "vkGetMemoryFdPropertiesKHR"));
+    // Get the valid memory types that the external memory can be imported as.
+    DAWN_TRY(CheckVkSuccess(device->fn.GetMemoryFdPropertiesKHR(
+                                vkDevice, handleType, descriptor->planes[0].fd, &fdProperties),
+                            "vkGetMemoryFdPropertiesKHR"));
 
-        // Get the valid memory types for the VkImage.
-        VkMemoryRequirements memoryRequirements;
-        device->fn.GetImageMemoryRequirements(vkDevice, sharedTextureMemory->mVkImage->Get(),
-                                              &memoryRequirements);
+    // Get the valid memory types for the VkImage.
+    VkMemoryRequirements memoryRequirements;
+    device->fn.GetImageMemoryRequirements(vkDevice, sharedTextureMemory->mVkImage->Get(),
+                                          &memoryRequirements);
 
-        // Choose the best memory type that satisfies both the image's constraint and the
-        // import's constraint.
-        memoryRequirements.memoryTypeBits &= fdProperties.memoryTypeBits;
-        int memoryTypeIndex = device->GetResourceMemoryAllocator()->FindBestTypeIndex(
-            memoryRequirements, MemoryKind::Opaque);
-        DAWN_INVALID_IF(memoryTypeIndex == -1,
-                        "Unable to find an appropriate memory type for import.");
+    // Choose the best memory type that satisfies both the image's constraint and the
+    // import's constraint.
+    memoryRequirements.memoryTypeBits &= fdProperties.memoryTypeBits;
+    int memoryTypeIndex = device->GetResourceMemoryAllocator()->FindBestTypeIndex(
+        memoryRequirements, MemoryKind::DeviceLocal);
+    DAWN_INVALID_IF(memoryTypeIndex == -1, "Unable to find an appropriate memory type for import.");
 
-        SystemHandle memoryFD;
-        DAWN_TRY_ASSIGN(memoryFD, SystemHandle::Duplicate(descriptor->planes[0].fd));
+    SystemHandle memoryFD;
+    DAWN_TRY_ASSIGN(memoryFD, SystemHandle::Duplicate(fd));
 
-        VkMemoryAllocateInfo memoryAllocateInfo = {};
-        memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        memoryAllocateInfo.allocationSize = memoryRequirements.size;
-        memoryAllocateInfo.memoryTypeIndex = memoryTypeIndex;
+    VkMemoryAllocateInfo memoryAllocateInfo = {};
+    memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    memoryAllocateInfo.allocationSize = memoryRequirements.size;
+    memoryAllocateInfo.memoryTypeIndex = memoryTypeIndex;
 
-        VkImportMemoryFdInfoKHR importMemoryFdInfo;
-        importMemoryFdInfo.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR;
-        importMemoryFdInfo.handleType = handleType;
-        importMemoryFdInfo.fd = memoryFD.Get();
+    VkImportMemoryFdInfoKHR importMemoryFdInfo;
+    importMemoryFdInfo.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR;
+    importMemoryFdInfo.handleType = handleType;
+    importMemoryFdInfo.fd = memoryFD.Get();
 
-        // Import the fd as VkDeviceMemory
-        VkDeviceMemory vkDeviceMemory;
-        DAWN_TRY_ASSIGN(vkDeviceMemory,
-                        AllocateDeviceMemory(device, &memoryAllocateInfo, &importMemoryFdInfo));
+    // Import the fd as VkDeviceMemory
+    VkDeviceMemory vkDeviceMemory;
+    DAWN_TRY_ASSIGN(vkDeviceMemory,
+                    AllocateDeviceMemory(device, &memoryAllocateInfo, &importMemoryFdInfo));
 
-        memoryFD.Detach();  // Ownership transfered to the VkDeviceMemory.
-        sharedTextureMemory->mVkDeviceMemory =
-            AcquireRef(new RefCountedVkHandle<VkDeviceMemory>(device, vkDeviceMemory));
+    memoryFD.Detach();  // Ownership transfered to the VkDeviceMemory.
+    sharedTextureMemory->mVkDeviceMemory =
+        AcquireRef(new RefCountedVkHandle<VkDeviceMemory>(device, vkDeviceMemory));
 
-        // Bind the VkImage to the memory.
-        DAWN_TRY(CheckVkSuccess(
-            device->fn.BindImageMemory(vkDevice, sharedTextureMemory->mVkImage->Get(),
-                                       sharedTextureMemory->mVkDeviceMemory->Get(), 0),
-            "vkBindImageMemory"));
-    }
+    // Bind the VkImage to the memory.
+    DAWN_TRY(
+        CheckVkSuccess(device->fn.BindImageMemory(vkDevice, sharedTextureMemory->mVkImage->Get(),
+                                                  sharedTextureMemory->mVkDeviceMemory->Get(), 0),
+                       "vkBindImageMemory"));
     return sharedTextureMemory;
 #else
     DAWN_UNREACHABLE();
@@ -483,7 +478,7 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
 // static
 ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
     Device* device,
-    const char* label,
+    StringView label,
     const SharedTextureMemoryAHardwareBufferDescriptor* descriptor) {
 #if DAWN_PLATFORM_IS(ANDROID)
     const auto* ahbFunctions =
@@ -492,28 +487,28 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
 
     auto* aHardwareBuffer = static_cast<struct AHardwareBuffer*>(descriptor->handle);
 
+    bool useExternalFormat = descriptor->useExternalFormat;
+
     const VkExternalMemoryHandleTypeFlagBits handleType =
         VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
 
     // Reflect the properties of the AHardwareBuffer.
-    AHardwareBuffer_Desc aHardwareBufferDesc{};
-    ahbFunctions->Describe(aHardwareBuffer, &aHardwareBufferDesc);
+    SharedTextureMemoryProperties properties =
+        GetAHBSharedTextureMemoryProperties(ahbFunctions, aHardwareBuffer);
 
-    SharedTextureMemoryProperties properties;
-    properties.size = {aHardwareBufferDesc.width, aHardwareBufferDesc.height,
-                       aHardwareBufferDesc.layers};
-    properties.usage = wgpu::TextureUsage::CopySrc | wgpu::TextureUsage::CopyDst;
-    if (aHardwareBufferDesc.usage & AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER) {
-        properties.usage |= wgpu::TextureUsage::RenderAttachment;
-    }
-    if (aHardwareBufferDesc.usage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE) {
-        properties.usage |= wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::StorageBinding;
+    if (useExternalFormat) {
+        // When using the external YUV texture format, only TextureBinding usage is valid.
+        properties.usage &= wgpu::TextureUsage::TextureBinding;
     }
 
     VkFormat vkFormat;
     YCbCrVkDescriptor yCbCrAHBInfo;
+    SampleTypeBit externalSampleType;
     VkAndroidHardwareBufferPropertiesANDROID bufferProperties = {
         .sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID,
+    };
+    VkExternalFormatANDROID externalFormatAndroid = {
+        .sType = VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID,
     };
 
     // Query the properties to find the appropriate VkFormat and memory type.
@@ -528,11 +523,24 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
                                     vkDevice, aHardwareBuffer, &bufferProperties),
                                 "vkGetAndroidHardwareBufferPropertiesANDROID"));
 
-        vkFormat = bufferFormatProperties.format;
+        // TODO(crbug.com/dawn/2476): Validate more as per
+        // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkImageCreateInfo.html
+        if (useExternalFormat) {
+            DAWN_INVALID_IF(
+                bufferFormatProperties.externalFormat == 0,
+                "AHardwareBuffer with external sampler must have non-zero external format.");
+            vkFormat = VK_FORMAT_UNDEFINED;
+            externalFormatAndroid.externalFormat = bufferFormatProperties.externalFormat;
+            properties.format = wgpu::TextureFormat::External;
+        } else {
+            vkFormat = bufferFormatProperties.format;
+            externalFormatAndroid.externalFormat = 0;
+            DAWN_TRY_ASSIGN(properties.format, FormatFromVkFormat(device, vkFormat));
+        }
 
         // Populate the YCbCr info.
-        yCbCrAHBInfo.externalFormat = bufferFormatProperties.externalFormat;
-        yCbCrAHBInfo.vkFormat = bufferFormatProperties.format;
+        yCbCrAHBInfo.externalFormat = externalFormatAndroid.externalFormat;
+        yCbCrAHBInfo.vkFormat = vkFormat;
         yCbCrAHBInfo.vkYCbCrModel = bufferFormatProperties.suggestedYcbcrModel;
         yCbCrAHBInfo.vkYCbCrRange = bufferFormatProperties.suggestedYcbcrRange;
         yCbCrAHBInfo.vkComponentSwizzleRed =
@@ -547,15 +555,17 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
         yCbCrAHBInfo.vkYChromaOffset = bufferFormatProperties.suggestedYChromaOffset;
 
         uint32_t formatFeatures = bufferFormatProperties.formatFeatures;
-        yCbCrAHBInfo.vkChromaFilter =
-            (formatFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_LINEAR_FILTER_BIT)
-                ? wgpu::FilterMode::Linear
-                : wgpu::FilterMode::Nearest;
+        if (formatFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_LINEAR_FILTER_BIT) {
+            yCbCrAHBInfo.vkChromaFilter = wgpu::FilterMode::Linear;
+            externalSampleType = SampleTypeBit::UnfilterableFloat | SampleTypeBit::Float;
+        } else {
+            yCbCrAHBInfo.vkChromaFilter = wgpu::FilterMode::Nearest;
+            externalSampleType = SampleTypeBit::UnfilterableFloat;
+        }
         yCbCrAHBInfo.forceExplicitReconstruction =
             formatFeatures &
             VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_CHROMA_RECONSTRUCTION_EXPLICIT_BIT;
     }
-    DAWN_TRY_ASSIGN(properties.format, FormatFromVkFormat(device, vkFormat));
 
     const Format* internalFormat = nullptr;
     DAWN_TRY_ASSIGN(internalFormat, device->GetInternalFormat(properties.format));
@@ -568,12 +578,13 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
         SharedTextureMemory::Create(device, label, properties, VK_QUEUE_FAMILY_FOREIGN_EXT);
 
     sharedTextureMemory->mYCbCrAHBInfo = yCbCrAHBInfo;
+    sharedTextureMemory->GetContents()->SetExternalFormatSupportedSampleTypes(externalSampleType);
 
     // Reflect properties to reify them.
     sharedTextureMemory->APIGetProperties(&properties);
 
     // Compute the Vulkan usage flags to create the image with.
-    VkImageUsageFlags vkUsageFlags = VulkanImageUsage(properties.usage, *internalFormat);
+    VkImageUsageFlags vkUsageFlags = VulkanImageUsage(device, properties.usage, *internalFormat);
 
     const auto& compatibleViewFormats = device->GetCompatibleViewFormats(*internalFormat);
 
@@ -596,53 +607,57 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
         imageFormatInfo.usage = vkUsageFlags;
         imageFormatInfo.flags = 0;
 
-        constexpr wgpu::TextureUsage kUsageRequiringView = wgpu::TextureUsage::RenderAttachment |
-                                                           wgpu::TextureUsage::TextureBinding |
-                                                           wgpu::TextureUsage::StorageBinding;
-        const bool mayNeedViewReinterpretation =
-            (properties.usage & kUsageRequiringView) != 0 && !compatibleViewFormats.empty();
-        const bool needsBGRA8UnormStoragePolyfill =
-            properties.format == wgpu::TextureFormat::BGRA8Unorm &&
-            (properties.usage & wgpu::TextureUsage::StorageBinding);
-        if (mayNeedViewReinterpretation || needsBGRA8UnormStoragePolyfill) {
-            // Add the mutable format bit for view reinterpretation.
-            imageFormatInfo.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+        if (!useExternalFormat) {
+            constexpr wgpu::TextureUsage kUsageRequiringView =
+                wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding |
+                wgpu::TextureUsage::StorageBinding;
+            const bool mayNeedViewReinterpretation =
+                (properties.usage & kUsageRequiringView) != 0 && !compatibleViewFormats.empty();
+            const bool needsBGRA8UnormStoragePolyfill =
+                properties.format == wgpu::TextureFormat::BGRA8Unorm &&
+                (properties.usage & wgpu::TextureUsage::StorageBinding);
+            if (mayNeedViewReinterpretation || needsBGRA8UnormStoragePolyfill) {
+                // Add the mutable format bit for view reinterpretation.
+                imageFormatInfo.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
 
-            if (properties.usage & wgpu::TextureUsage::StorageBinding) {
-                // Don't use an image format list because it becomes impossible to make an
-                // rgba8unorm storage texture which may be reinterpreted as rgba8unorm-srgb,
-                // because the srgb format doesn't support storage. Creation with an explicit
-                // format list that includes srgb will fail.
-                // This is the same issue seen with the DMA buf import path which has a workaround
-                // to bypass the support check.
-                // TODO(crbug.com/dawn/2304): If the dma buf import is resolved in a better way,
-                // apply the same fix here.
-            } else if (device->GetDeviceInfo().HasExt(DeviceExt::ImageFormatList)) {
-                // Set the list of view formats the image can be compatible with.
-                DAWN_ASSERT(compatibleViewFormats.size() == 1u);
-                viewFormats[0] = vkFormat;
-                viewFormats[1] = VulkanImageFormat(device, compatibleViewFormats[0]->format);
-                imageFormatListInfo.viewFormatCount = 2;
-                imageFormatListInfo.pViewFormats = viewFormats.data();
+                if (properties.usage & wgpu::TextureUsage::StorageBinding) {
+                    // Don't use an image format list because it becomes impossible to make an
+                    // rgba8unorm storage texture which may be reinterpreted as rgba8unorm-srgb,
+                    // because the srgb format doesn't support storage. Creation with an explicit
+                    // format list that includes srgb will fail.
+                    // This is the same issue seen with the DMA buf import path which has a
+                    // workaround to bypass the support check.
+                    // TODO(crbug.com/dawn/2304): If the dma buf import is resolved in a better way,
+                    // apply the same fix here.
+                } else if (device->GetDeviceInfo().HasExt(DeviceExt::ImageFormatList)) {
+                    // Set the list of view formats the image can be compatible with.
+                    DAWN_ASSERT(compatibleViewFormats.size() == 1u);
+                    viewFormats[0] = vkFormat;
+                    viewFormats[1] = VulkanImageFormat(device, compatibleViewFormats[0]->format);
+                    imageFormatListInfo.viewFormatCount = 2;
+                    imageFormatListInfo.pViewFormats = viewFormats.data();
+                }
             }
-        }
 
-        if (imageFormatListInfo.viewFormatCount > 0) {
-            DAWN_TRY_CONTEXT(CheckExternalImageFormatSupport(device, properties, &imageFormatInfo,
-                                                             handleType, &imageFormatListInfo),
-                             "checking import support of AHardwareBuffer");
-        } else {
-            DAWN_TRY_CONTEXT(
-                CheckExternalImageFormatSupport(device, properties, &imageFormatInfo, handleType),
-                "checking import support of AHardwareBuffer");
+            if (imageFormatListInfo.viewFormatCount > 0) {
+                DAWN_TRY_CONTEXT(
+                    CheckExternalImageFormatSupport(device, properties, &imageFormatInfo,
+                                                    handleType, &imageFormatListInfo),
+                    "checking import support of AHardwareBuffer");
+            } else {
+                DAWN_TRY_CONTEXT(CheckExternalImageFormatSupport(device, properties,
+                                                                 &imageFormatInfo, handleType),
+                                 "checking import support of AHardwareBuffer");
+            }
         }
     }
 
     // Create the VkImage for the import.
     {
         VkImage vkImage;
-        DAWN_TRY_ASSIGN(vkImage, CreateExternalVkImage(device, properties, imageFormatInfo,
-                                                       handleType, &imageFormatListInfo));
+        DAWN_TRY_ASSIGN(vkImage,
+                        CreateExternalVkImage(device, properties, imageFormatInfo, handleType,
+                                              &imageFormatListInfo, &externalFormatAndroid));
 
         sharedTextureMemory->mVkImage =
             AcquireRef(new RefCountedVkHandle<VkImage>(device, vkImage));
@@ -650,21 +665,11 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
 
     // Import the memory as VkDeviceMemory and bind to the VkImage.
     {
-        // Get the valid memory types for the VkImage.
+        // Choose the best memory type that satisfies the import's constraint.
         VkMemoryRequirements memoryRequirements;
-        device->fn.GetImageMemoryRequirements(vkDevice, sharedTextureMemory->mVkImage->Get(),
-                                              &memoryRequirements);
-
-        DAWN_INVALID_IF(memoryRequirements.size > bufferProperties.allocationSize,
-                        "Required texture memory size (%u) is larger than the AHardwareBuffer "
-                        "allocation size (%u).",
-                        memoryRequirements.size, bufferProperties.allocationSize);
-
-        // Choose the best memory type that satisfies both the image's constraint and the
-        // import's constraint.
-        memoryRequirements.memoryTypeBits &= bufferProperties.memoryTypeBits;
+        memoryRequirements.memoryTypeBits = bufferProperties.memoryTypeBits;
         int memoryTypeIndex = device->GetResourceMemoryAllocator()->FindBestTypeIndex(
-            memoryRequirements, MemoryKind::Opaque);
+            memoryRequirements, MemoryKind::DeviceLocal);
         DAWN_INVALID_IF(memoryTypeIndex == -1,
                         "Unable to find an appropriate memory type for import.");
 
@@ -698,6 +703,22 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
             device->fn.BindImageMemory(vkDevice, sharedTextureMemory->mVkImage->Get(),
                                        sharedTextureMemory->mVkDeviceMemory->Get(), 0),
             "vkBindImageMemory"));
+
+        // Verify the texture memory requirements fit within the constraints of the AHardwareBuffer.
+        device->fn.GetImageMemoryRequirements(vkDevice, sharedTextureMemory->mVkImage->Get(),
+                                              &memoryRequirements);
+
+        DAWN_INVALID_IF((memoryRequirements.memoryTypeBits & bufferProperties.memoryTypeBits) == 0,
+                        "Required memory type bits (%u) do not overlap with AHardwareBuffer memory "
+                        "type bits (%u).",
+                        memoryRequirements.memoryTypeBits, bufferProperties.memoryTypeBits);
+
+        if (!device->IsToggleEnabled(Toggle::IgnoreImportedAHardwareBufferVulkanImageSize)) {
+            DAWN_INVALID_IF(memoryRequirements.size > bufferProperties.allocationSize,
+                            "Required texture memory size (%u) is larger than the AHardwareBuffer "
+                            "allocation size (%u).",
+                            memoryRequirements.size, bufferProperties.allocationSize);
+        }
     }
     return sharedTextureMemory;
 #else
@@ -708,7 +729,7 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
 // static
 ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
     Device* device,
-    const char* label,
+    StringView label,
     const SharedTextureMemoryOpaqueFDDescriptor* descriptor) {
 #if DAWN_PLATFORM_IS(POSIX)
     VkDevice vkDevice = device->GetVkDevice();
@@ -926,7 +947,7 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
 // static
 Ref<SharedTextureMemory> SharedTextureMemory::Create(
     Device* device,
-    const char* label,
+    StringView label,
     const SharedTextureMemoryProperties& properties,
     uint32_t queueFamilyIndex) {
     Ref<SharedTextureMemory> sharedTextureMemory =
@@ -936,7 +957,7 @@ Ref<SharedTextureMemory> SharedTextureMemory::Create(
 }
 
 SharedTextureMemory::SharedTextureMemory(Device* device,
-                                         const char* label,
+                                         StringView label,
                                          const SharedTextureMemoryProperties& properties,
                                          uint32_t queueFamilyIndex)
     : SharedTextureMemoryBase(device, label, properties), mQueueFamilyIndex(queueFamilyIndex) {}
@@ -960,7 +981,7 @@ void SharedTextureMemory::DestroyImpl() {
 
 ResultOrError<Ref<TextureBase>> SharedTextureMemory::CreateTextureImpl(
     const UnpackedPtr<TextureDescriptor>& descriptor) {
-    return Texture::CreateFromSharedTextureMemory(this, descriptor);
+    return SharedTexture::Create(this, descriptor);
 }
 
 MaybeError SharedTextureMemory::BeginAccessImpl(
@@ -968,6 +989,9 @@ MaybeError SharedTextureMemory::BeginAccessImpl(
     const UnpackedPtr<BeginAccessDescriptor>& descriptor) {
     // TODO(dawn/2276): support concurrent read access.
     DAWN_INVALID_IF(descriptor->concurrentRead, "Vulkan backend doesn't support concurrent read.");
+    DAWN_INVALID_IF(
+        texture->GetFormat().format == wgpu::TextureFormat::External && !descriptor->initialized,
+        "BeginAccess with Texture format (%s) must be initialized", texture->GetFormat().format);
 
     wgpu::SType type;
     DAWN_TRY_ASSIGN(
@@ -982,7 +1006,7 @@ MaybeError SharedTextureMemory::BeginAccessImpl(
         DAWN_INVALID_IF(descriptor->signaledValues[i] != 1, "%s signaled value (%u) was not 1.",
                         descriptor->fences[i], descriptor->signaledValues[i]);
     }
-    ToBackend(texture)->SetPendingAcquire(
+    static_cast<SharedTexture*>(texture)->SetPendingAcquire(
         static_cast<VkImageLayout>(vkLayoutBeginState->oldLayout),
         static_cast<VkImageLayout>(vkLayoutBeginState->newLayout));
     return {};
@@ -1007,13 +1031,12 @@ ResultOrError<FenceAndSignalValue> SharedTextureMemory::EndAccessImpl(
                     wgpu::FeatureName::SharedFenceVkSemaphoreZirconHandle,
                     wgpu::SharedFenceType::VkSemaphoreZirconHandle);
 #elif DAWN_PLATFORM_IS(LINUX)
-    DAWN_INVALID_IF(!GetDevice()->HasFeature(Feature::SharedFenceVkSemaphoreSyncFD) &&
+    DAWN_INVALID_IF(!GetDevice()->HasFeature(Feature::SharedFenceSyncFD) &&
                         !GetDevice()->HasFeature(Feature::SharedFenceVkSemaphoreOpaqueFD),
                     "Required feature (%s or %s) for %s or %s is missing.",
                     wgpu::FeatureName::SharedFenceVkSemaphoreOpaqueFD,
-                    wgpu::FeatureName::SharedFenceVkSemaphoreSyncFD,
-                    wgpu::SharedFenceType::VkSemaphoreOpaqueFD,
-                    wgpu::SharedFenceType::VkSemaphoreSyncFD);
+                    wgpu::FeatureName::SharedFenceSyncFD,
+                    wgpu::SharedFenceType::VkSemaphoreOpaqueFD, wgpu::SharedFenceType::SyncFD);
 #endif
 
     SystemHandle handle;
@@ -1021,8 +1044,8 @@ ResultOrError<FenceAndSignalValue> SharedTextureMemory::EndAccessImpl(
         ExternalSemaphoreHandle semaphoreHandle;
         VkImageLayout releasedOldLayout;
         VkImageLayout releasedNewLayout;
-        DAWN_TRY(ToBackend(texture)->EndAccess(&semaphoreHandle, &releasedOldLayout,
-                                               &releasedNewLayout));
+        DAWN_TRY(static_cast<SharedTexture*>(texture)->EndAccess(
+            &semaphoreHandle, &releasedOldLayout, &releasedNewLayout));
         // Handle is acquired from the texture so we need to make sure to close it.
         // TODO(dawn:1745): Consider using one event per submit that is tracked by the
         // CommandRecordingContext so that we don't need to create one handle per texture,
@@ -1041,8 +1064,8 @@ ResultOrError<FenceAndSignalValue> SharedTextureMemory::EndAccessImpl(
     DAWN_TRY_ASSIGN(fence,
                     SharedFence::Create(ToBackend(GetDevice()), "Internal VkSemaphore", &desc));
 #elif DAWN_PLATFORM_IS(LINUX)
-    if (GetDevice()->HasFeature(Feature::SharedFenceVkSemaphoreSyncFD)) {
-        SharedFenceVkSemaphoreSyncFDDescriptor desc;
+    if (GetDevice()->HasFeature(Feature::SharedFenceSyncFD)) {
+        SharedFenceSyncFDDescriptor desc;
         desc.handle = handle.Get();
 
         DAWN_TRY_ASSIGN(fence,

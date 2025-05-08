@@ -133,7 +133,8 @@ struct MultiplanarExternalTexture::State {
             // binding points into the passed map.
             BindingPoint bp = *sem_var->Attributes().binding_point;
 
-            BindingsMap::const_iterator it = new_binding_points->bindings_map.find(bp);
+            const tint::transform::multiplanar::BindingsMap::const_iterator it =
+                new_binding_points->bindings_map.find(bp);
             if (it == new_binding_points->bindings_map.end()) {
                 b.Diagnostics().AddError(Source{})
                     << "missing new binding points for texture_external at binding {" << bp.group
@@ -141,7 +142,7 @@ struct MultiplanarExternalTexture::State {
                 continue;
             }
 
-            BindingPoints bps = it->second;
+            const tint::transform::multiplanar::BindingPoints bps = it->second;
 
             // Symbols for the newly created bindings must be saved so they can be passed as
             // parameters later. These are placed in a map and keyed by the source symbol associated
@@ -301,7 +302,7 @@ struct MultiplanarExternalTexture::State {
             b.Member("samplePlane0RectMax", b.ty.vec2<f32>()),
             b.Member("samplePlane1RectMin", b.ty.vec2<f32>()),
             b.Member("samplePlane1RectMax", b.ty.vec2<f32>()),
-            b.Member("visibleSize", b.ty.vec2<u32>()),
+            b.Member("apparentSize", b.ty.vec2<u32>()),
             b.Member("plane1CoordFactor", b.ty.vec2<f32>())};
 
         params_struct_sym = b.Symbols().New("ExternalTextureParams");
@@ -394,7 +395,7 @@ struct MultiplanarExternalTexture::State {
             case wgsl::BuiltinFn::kTextureLoad:
                 stmts.Push(b.Decl(
                     b.Let("clampedCoords", b.Call("min", b.Call<vec2<u32>>("coord"),
-                                                  b.MemberAccessor("params", "visibleSize")))));
+                                                  b.MemberAccessor("params", "apparentSize")))));
                 stmts.Push(b.Decl(b.Let(
                     "plane0_clamped",
                     b.Call<vec2<u32>>(b.Call(
@@ -470,7 +471,7 @@ struct MultiplanarExternalTexture::State {
                                                              NewBindingSymbols syms) {
         const Expression* plane_0_binding_param = ctx.Clone(expr->args[0]);
 
-        if (TINT_UNLIKELY(expr->args.Length() != 3)) {
+        if (DAWN_UNLIKELY(expr->args.Length() != 3)) {
             TINT_ICE() << "expected textureSampleBaseClampToEdge call with a "
                           "texture_external to have 3 parameters, found "
                        << expr->args.Length() << " parameters";
@@ -514,7 +515,7 @@ struct MultiplanarExternalTexture::State {
     /// @param syms the expanded symbols to be used in the new call
     /// @returns a call expression to textureLoadExternal
     const CallExpression* createTextureLoad(const sem::Call* call, NewBindingSymbols syms) {
-        if (TINT_UNLIKELY(call->Arguments().Length() != 2)) {
+        if (DAWN_UNLIKELY(call->Arguments().Length() != 2)) {
             TINT_ICE()
                 << "expected textureLoad call with a texture_external to have 2 arguments, found "
                 << call->Arguments().Length() << " arguments";
@@ -558,20 +559,21 @@ struct MultiplanarExternalTexture::State {
     /// Returns the expression used to replace a textureDimensions call.
     /// @param call the call expression being transformed
     /// @param syms the expanded symbols to be used in the new call
-    /// @returns a load of params.visibleSize
+    /// @returns a load of params.apparentSize
     const Expression* createTextureDimensions(const sem::Call* call, NewBindingSymbols syms) {
-        if (TINT_UNLIKELY(call->Arguments().Length() != 1)) {
+        if (DAWN_UNLIKELY(call->Arguments().Length() != 1)) {
             TINT_ICE() << "expected textureDimensions call with a texture_external to have 1 "
                           "arguments, found "
                        << call->Arguments().Length() << " arguments";
         }
-        return b.Add(b.MemberAccessor(syms.params, "visibleSize"), b.Call<vec2<u32>>(1_a));
+        return b.Add(b.MemberAccessor(syms.params, "apparentSize"), b.Call<vec2<u32>>(1_a));
     }
 };
 
 MultiplanarExternalTexture::NewBindingPoints::NewBindingPoints() = default;
-MultiplanarExternalTexture::NewBindingPoints::NewBindingPoints(BindingsMap inputBindingsMap,
-                                                               bool may_collide)
+MultiplanarExternalTexture::NewBindingPoints::NewBindingPoints(
+    tint::transform::multiplanar::BindingsMap inputBindingsMap,
+    bool may_collide)
     : bindings_map(std::move(inputBindingsMap)), allow_collisions(may_collide) {}
 
 MultiplanarExternalTexture::NewBindingPoints::~NewBindingPoints() = default;

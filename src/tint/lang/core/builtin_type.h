@@ -39,7 +39,7 @@
 
 #include <cstdint>
 
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/rtti/traits.h"
 
 namespace tint::core {
 
@@ -72,9 +72,9 @@ enum class BuiltinType : uint8_t {
     kModfResultVec4Abstract,
     kModfResultVec4F16,
     kModfResultVec4F32,
-    kPackedVec3,
     kArray,
     kAtomic,
+    kBindingArray,
     kBool,
     kF16,
     kF32,
@@ -110,6 +110,9 @@ enum class BuiltinType : uint8_t {
     kPtr,
     kSampler,
     kSamplerComparison,
+    kSubgroupMatrixLeft,
+    kSubgroupMatrixResult,
+    kSubgroupMatrixRight,
     kTexture1D,
     kTexture2D,
     kTexture2DArray,
@@ -152,7 +155,8 @@ std::string_view ToString(BuiltinType value);
 /// @param out the stream to write to
 /// @param value the BuiltinType
 /// @returns @p out so calls can be chained
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, BuiltinType value) {
     return out << ToString(value);
 }
@@ -189,9 +193,9 @@ constexpr std::string_view kBuiltinTypeStrings[] = {
     "__modf_result_vec4_abstract",
     "__modf_result_vec4_f16",
     "__modf_result_vec4_f32",
-    "__packed_vec3",
     "array",
     "atomic",
+    "binding_array",
     "bool",
     "f16",
     "f32",
@@ -227,6 +231,9 @@ constexpr std::string_view kBuiltinTypeStrings[] = {
     "ptr",
     "sampler",
     "sampler_comparison",
+    "subgroup_matrix_left",
+    "subgroup_matrix_result",
+    "subgroup_matrix_right",
     "texture_1d",
     "texture_2d",
     "texture_2d_array",

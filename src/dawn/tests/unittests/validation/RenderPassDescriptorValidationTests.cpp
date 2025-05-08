@@ -134,7 +134,7 @@ TEST_F(RenderPassDescriptorValidationTest, ErrorEncoderLingeringAttachmentState)
 
     wgpu::CommandEncoder commandEncoder;
     ASSERT_DEVICE_ERROR(commandEncoder = device.CreateCommandEncoder(&commandEncoderDesc));
-    wgpu::RenderPassEncoder renderPassEncoder = commandEncoder.BeginRenderPass(&descriptor);
+    commandEncoder.BeginRenderPass(&descriptor);
 
     ExpectDeviceDestruction();
     device = nullptr;
@@ -578,6 +578,20 @@ TEST_F(RenderPassDescriptorValidationTest, TextureViewDepthSliceOverlaps) {
     }
 }
 
+// Check that the render pass depth attachment should not have any chained structs on it.
+TEST_F(RenderPassDescriptorValidationTest, DepthAttachmentChained) {
+    wgpu::TextureView renderView =
+        Create2DAttachment(device, 1, 1, wgpu::TextureFormat::Depth32Float);
+    utils::ComboRenderPassDescriptor renderPass({}, renderView);
+    renderPass.cDepthStencilAttachmentInfo.stencilLoadOp = wgpu::LoadOp::Undefined;
+    renderPass.cDepthStencilAttachmentInfo.stencilStoreOp = wgpu::StoreOp::Undefined;
+
+    wgpu::ChainedStruct chain = {};
+    renderPass.cDepthStencilAttachmentInfo.nextInChain = &chain;
+
+    AssertBeginRenderPassError(&renderPass);
+}
+
 // Check that the render pass depth attachment must have the RenderAttachment usage.
 TEST_F(RenderPassDescriptorValidationTest, DepthAttachmentInvalidUsage) {
     // Control case: using a texture with RenderAttachment is valid.
@@ -760,7 +774,7 @@ TEST_F(RenderPassDescriptorValidationTest, MaxDrawCount) {
     wgpu::Buffer indexedIndirectBuffer =
         utils::CreateBufferFromData<uint32_t>(device, wgpu::BufferUsage::Indirect, {3, 1, 0, 0, 0});
 
-    wgpu::RenderPassDescriptorMaxDrawCount maxDrawCount;
+    wgpu::RenderPassMaxDrawCount maxDrawCount;
     maxDrawCount.maxDrawCount = kMaxDrawCount;
 
     // Valid. drawCount is less than the default maxDrawCount.
@@ -1164,7 +1178,7 @@ TEST_F(MultisampledRenderPassDescriptorValidationTest, ResolveTargetUsedTwice) {
 // Tests the texture format of the resolve target must support being used as resolve target.
 TEST_F(MultisampledRenderPassDescriptorValidationTest, ResolveTargetFormat) {
     for (wgpu::TextureFormat format : utils::kAllTextureFormats) {
-        if (!utils::TextureFormatSupportsMultisampling(device, format) ||
+        if (!utils::TextureFormatSupportsMultisampling(device, format, UseCompatibilityMode()) ||
             utils::IsDepthOrStencilFormat(format)) {
             continue;
         }
@@ -1257,6 +1271,25 @@ TEST_F(MultisampledRenderPassDescriptorValidationTest, LoadResolveTextureWithout
     AssertBeginRenderPassError(&renderPass, testing::HasSubstr("is not enabled"));
 }
 
+// Creating a render pass with ExpandResolveRect and no DawnLoadResolveTexture feature
+// enabled should result in error.
+TEST_F(MultisampledRenderPassDescriptorValidationTest, ExpandResolveRectWithoutFeatureEnabled) {
+    auto multisampledColorTextureView = CreateMultisampledColorTextureView();
+    auto resolveTarget = CreateNonMultisampledColorTextureView();
+
+    wgpu::RenderPassDescriptorExpandResolveRect rect{};
+    rect.x = rect.y = 0;
+    rect.width = rect.height = 1;
+
+    auto renderPass = CreateMultisampledRenderPass();
+    renderPass.nextInChain = &rect;
+    renderPass.cColorAttachments[0].view = multisampledColorTextureView;
+    renderPass.cColorAttachments[0].resolveTarget = resolveTarget;
+    renderPass.cColorAttachments[0].loadOp = wgpu::LoadOp::Clear;
+
+    AssertBeginRenderPassError(&renderPass);
+}
+
 // Tests that NaN cannot be accepted as a valid color or depth clear value and INFINITY is valid
 // in both color and depth clear values.
 TEST_F(RenderPassDescriptorValidationTest, UseNaNOrINFINITYAsColorOrDepthClearValue) {
@@ -1287,32 +1320,32 @@ TEST_F(RenderPassDescriptorValidationTest, UseNaNOrINFINITYAsColorOrDepthClearVa
         AssertBeginRenderPassError(&renderPass);
     }
 
-    // Tests that INFINITY can be used in clearColor.
+    // Tests that INFINITY cannot be used in clearColor.
     {
         utils::ComboRenderPassDescriptor renderPass({color}, nullptr);
         renderPass.cColorAttachments[0].clearValue.r = INFINITY;
-        AssertBeginRenderPassSuccess(&renderPass);
+        AssertBeginRenderPassError(&renderPass);
     }
 
     {
         utils::ComboRenderPassDescriptor renderPass({color}, nullptr);
         renderPass.cColorAttachments[0].clearValue.g = INFINITY;
-        AssertBeginRenderPassSuccess(&renderPass);
+        AssertBeginRenderPassError(&renderPass);
     }
 
     {
         utils::ComboRenderPassDescriptor renderPass({color}, nullptr);
         renderPass.cColorAttachments[0].clearValue.b = INFINITY;
-        AssertBeginRenderPassSuccess(&renderPass);
+        AssertBeginRenderPassError(&renderPass);
     }
 
     {
         utils::ComboRenderPassDescriptor renderPass({color}, nullptr);
         renderPass.cColorAttachments[0].clearValue.a = INFINITY;
-        AssertBeginRenderPassSuccess(&renderPass);
+        AssertBeginRenderPassError(&renderPass);
     }
 
-    // Tests that NaN cannot be used in depthClearValue.
+    // Tests that NaN cannot be used in depthClearValue if depthLoadOp is Clear.
     {
         wgpu::TextureView depth =
             Create2DAttachment(device, 1, 1, wgpu::TextureFormat::Depth24Plus);
@@ -1996,6 +2029,137 @@ TEST_F(DawnLoadResolveTextureValidationTest, OnlyLoadingColorAttachmentIsSupport
         AssertBeginRenderPassError(&renderPass,
                                    testing::HasSubstr("not supported on depth/stencil attachment"));
     }
+}
+
+// Creating a render pass with ExpandResolveRect and no DawnPartialLoadResolveTexture feature
+// enabled should result in error.
+TEST_F(DawnLoadResolveTextureValidationTest, ExpandResolveRectWithoutFeatureEnabled) {
+    auto multisampledColorTextureView = CreateMultisampledColorTextureView();
+    auto resolveTarget = CreateCompatibleResolveTextureView();
+
+    wgpu::RenderPassDescriptorExpandResolveRect rect{};
+    rect.x = rect.y = 0;
+    rect.width = rect.height = 1;
+
+    auto renderPass = CreateMultisampledRenderPass();
+    renderPass.nextInChain = &rect;
+    renderPass.cColorAttachments[0].view = multisampledColorTextureView;
+    renderPass.cColorAttachments[0].resolveTarget = resolveTarget;
+    renderPass.cColorAttachments[0].loadOp = wgpu::LoadOp::ExpandResolveTexture;
+
+    AssertBeginRenderPassError(&renderPass);
+}
+
+class DawnPartialLoadResolveTextureValidationTest : public DawnLoadResolveTextureValidationTest {
+  protected:
+    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
+        auto features = DawnLoadResolveTextureValidationTest::GetRequiredFeatures();
+        features.push_back(wgpu::FeatureName::DawnPartialLoadResolveTexture);
+        return features;
+    }
+};
+
+// Test that using a valid ExpandResolveRect with LoadOp::ExpandResolveTexture doesn't raise
+// any error.
+TEST_F(DawnPartialLoadResolveTextureValidationTest, ExpandResolveRectValid) {
+    auto multisampledTexture =
+        CreateTexture(device, wgpu::TextureDimension::e2D, kColorFormat, kSize, kSize, kArrayLayers,
+                      kLevelCount, /*sampleCount=*/4, wgpu::TextureUsage::RenderAttachment);
+
+    // Create a resolve texture with sample count = 1.
+    auto resolveTarget = CreateCompatibleResolveTextureView();
+
+    wgpu::RenderPassDescriptorExpandResolveRect rect{};
+    rect.x = rect.y = 0;
+    rect.width = rect.height = 1;
+
+    auto renderPass = CreateMultisampledRenderPass();
+    renderPass.nextInChain = &rect;
+    renderPass.cColorAttachments[0].view = multisampledTexture.CreateView();
+    renderPass.cColorAttachments[0].resolveTarget = resolveTarget;
+    renderPass.cColorAttachments[0].loadOp = wgpu::LoadOp::ExpandResolveTexture;
+    AssertBeginRenderPassSuccess(&renderPass);
+}
+
+// Test that using a valid ExpandResolveRect with LoadOp::ExpandResolveTexture, jointed with another
+// attachment without LoadOp::ExpandResolveTexture doesn't raise any error.
+TEST_F(DawnPartialLoadResolveTextureValidationTest, ExpandResolveRectMixedLoadOpsValid) {
+    auto multisampledTextureView1 =
+        CreateTexture(device, wgpu::TextureDimension::e2D, kColorFormat, kSize, kSize, kArrayLayers,
+                      kLevelCount, /*sampleCount=*/4, wgpu::TextureUsage::RenderAttachment)
+            .CreateView();
+    auto multisampledTextureView2 =
+        CreateTexture(device, wgpu::TextureDimension::e2D, kColorFormat, kSize, kSize, kArrayLayers,
+                      kLevelCount, /*sampleCount=*/4, wgpu::TextureUsage::RenderAttachment)
+            .CreateView();
+
+    // Create a resolve texture with sample count = 1.
+    auto resolveTarget1 = CreateCompatibleResolveTextureView();
+    auto resolveTarget2 = CreateCompatibleResolveTextureView();
+
+    wgpu::RenderPassDescriptorExpandResolveRect rect{};
+    rect.x = rect.y = 0;
+    rect.width = rect.height = 1;
+
+    utils::ComboRenderPassDescriptor renderPass(
+        {multisampledTextureView1, multisampledTextureView2});
+
+    renderPass.nextInChain = &rect;
+    renderPass.cColorAttachments[0].resolveTarget = resolveTarget1;
+    renderPass.cColorAttachments[0].loadOp = wgpu::LoadOp::ExpandResolveTexture;
+    renderPass.cColorAttachments[1].resolveTarget = resolveTarget2;
+    renderPass.cColorAttachments[1].loadOp = wgpu::LoadOp::Load;
+    AssertBeginRenderPassSuccess(&renderPass);
+}
+
+// The area of ExpandResolveRect must be within the texture size.
+TEST_F(DawnPartialLoadResolveTextureValidationTest, ExpandResolveRectInvalidSize) {
+    auto multisampledTexture =
+        CreateTexture(device, wgpu::TextureDimension::e2D, kColorFormat, kSize, kSize, kArrayLayers,
+                      kLevelCount, /*sampleCount=*/4, wgpu::TextureUsage::RenderAttachment);
+
+    // Create a resolve texture with sample count = 1.
+    auto resolveTarget = CreateCompatibleResolveTextureView();
+
+    wgpu::RenderPassDescriptorExpandResolveRect rect{};
+    rect.x = rect.y = 0;
+    rect.width = rect.height = kSize;
+
+    auto renderPass = CreateMultisampledRenderPass();
+    renderPass.nextInChain = &rect;
+    renderPass.cColorAttachments[0].view = multisampledTexture.CreateView();
+    renderPass.cColorAttachments[0].resolveTarget = resolveTarget;
+    renderPass.cColorAttachments[0].loadOp = wgpu::LoadOp::ExpandResolveTexture;
+    AssertBeginRenderPassSuccess(&renderPass);
+
+    rect.width = kSize + 1;
+    AssertBeginRenderPassError(&renderPass);
+
+    rect.height = kSize + 1;
+    rect.width = 1;
+    AssertBeginRenderPassError(&renderPass);
+}
+
+// ExpandResolveRect must be used with wgpu::LoadOp::ExpandResolveTexture.
+TEST_F(DawnPartialLoadResolveTextureValidationTest, ExpandResolveRectInvalidLoadOp) {
+    auto multisampledTexture =
+        CreateTexture(device, wgpu::TextureDimension::e2D, kColorFormat, kSize, kSize, kArrayLayers,
+                      kLevelCount, /*sampleCount=*/4, wgpu::TextureUsage::RenderAttachment);
+
+    // Create a resolve texture with sample count = 1.
+    auto resolveTarget = CreateCompatibleResolveTextureView();
+
+    wgpu::RenderPassDescriptorExpandResolveRect rect{};
+    rect.x = rect.y = 0;
+    rect.width = rect.height = 1;
+
+    auto renderPass = CreateMultisampledRenderPass();
+    renderPass.nextInChain = &rect;
+    renderPass.cColorAttachments[0].view = multisampledTexture.CreateView();
+    renderPass.cColorAttachments[0].resolveTarget = resolveTarget;
+    renderPass.cColorAttachments[0].loadOp = wgpu::LoadOp::Load;
+
+    AssertBeginRenderPassError(&renderPass);
 }
 
 }  // anonymous namespace

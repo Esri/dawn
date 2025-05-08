@@ -27,9 +27,10 @@
 
 #include "src/tint/lang/core/constant/invalid.h"
 
-#include "src/tint/lang/core/constant/helper_test.h"
+#include "gtest/gtest.h"
 #include "src/tint/lang/core/constant/scalar.h"
 #include "src/tint/lang/core/fluent_types.h"
+#include "src/tint/lang/core/type/clone_context.h"
 
 using namespace tint::core::number_suffixes;  // NOLINT
 using namespace tint::core::fluent_types;     // NOLINT
@@ -37,19 +38,22 @@ using namespace tint::core::fluent_types;     // NOLINT
 namespace tint::core::constant {
 namespace {
 
-using ConstantTest_Invalid = TestHelper;
+using ConstantTest_Invalid = testing::Test;
 
 TEST_F(ConstantTest_Invalid, AllZero) {
+    Manager constants;
     auto* invalid = constants.Invalid();
     EXPECT_FALSE(invalid->AllZero());
 }
 
 TEST_F(ConstantTest_Invalid, AnyZero) {
+    Manager constants;
     auto* invalid = constants.Invalid();
     EXPECT_FALSE(invalid->AnyZero());
 }
 
 TEST_F(ConstantTest_Invalid, Index) {
+    Manager constants;
     auto* invalid = constants.Invalid();
     EXPECT_EQ(invalid->Index(0), nullptr);
     EXPECT_EQ(invalid->Index(1), nullptr);
@@ -57,6 +61,7 @@ TEST_F(ConstantTest_Invalid, Index) {
 }
 
 TEST_F(ConstantTest_Invalid, Clone) {
+    Manager constants;
     auto* invalid = constants.Invalid();
 
     constant::Manager mgr;

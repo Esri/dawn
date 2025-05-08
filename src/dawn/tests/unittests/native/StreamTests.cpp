@@ -25,11 +25,14 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <array>
 #include <cstring>
 #include <iomanip>
+#include <limits>
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -227,6 +230,32 @@ TEST(SerializeTests, ByteVectorSinks) {
     EXPECT_CACHE_KEY_EQ(data, expected);
 }
 
+// Test that serializing a value, then deserializing it with unexpected size, an error is raised.
+TEST(SerializeTests, SerializeDeserializeVectorSizeOutOfBounds) {
+    size_t value = std::numeric_limits<size_t>::max();
+    ByteVectorSink sink;
+    StreamIn(&sink, value);
+
+    BlobSource source(CreateBlob(std::move(sink)));
+    std::vector<uint8_t> deserialized;
+    auto err = StreamOut(&source, &deserialized);
+    EXPECT_TRUE(err.IsError());
+    err.AcquireError();
+}
+
+// Test that serializing a value, then deserializing it without vector elements, an error is raised.
+TEST(SerializeTests, SerializeDeserializeNoElementsInVector) {
+    size_t value = 1;
+    ByteVectorSink sink;
+    StreamIn(&sink, value);
+
+    BlobSource source(CreateBlob(std::move(sink)));
+    std::vector<uint8_t> deserialized;
+    auto err = StreamOut(&source, &deserialized);
+    EXPECT_TRUE(err.IsError());
+    err.AcquireError();
+}
+
 // Test that ByteVectorSink serializes std::pair as expected.
 TEST(SerializeTests, StdPair) {
     std::string_view s = "hi!";
@@ -272,6 +301,17 @@ TEST(SerializeTests, StdUnorderedMap) {
     EXPECT_CACHE_KEY_EQ(m, expected);
 }
 
+// Test that ByteVectorSink serializes std::unordered_set as expected.
+TEST(SerializeTests, StdUnorderedSet) {
+    const std::unordered_set<int> input = {99, 4, 6, 1};
+
+    // Expect the number of entries, followed by values sorted in order of key.
+    ByteVectorSink expected;
+    StreamIn(&expected, size_t(4), 1, 4, 6, 99);
+
+    EXPECT_CACHE_KEY_EQ(input, expected);
+}
+
 // Test that ByteVectorSink serializes tint::BindingPoint as expected.
 TEST(SerializeTests, TintSemBindingPoint) {
     tint::BindingPoint bp{3, 6};
@@ -280,20 +320,6 @@ TEST(SerializeTests, TintSemBindingPoint) {
     StreamIn(&expected, uint32_t(3), uint32_t(6));
 
     EXPECT_CACHE_KEY_EQ(bp, expected);
-}
-
-// Test that ByteVectorSink serializes tint::ExternalTextureOptions::BindingPoints
-// as expected.
-TEST(SerializeTests, TintTransformBindingPoints) {
-    tint::ExternalTextureOptions::BindingPoints points{
-        tint::BindingPoint{1, 4},
-        tint::BindingPoint{3, 7},
-    };
-
-    ByteVectorSink expected;
-    StreamIn(&expected, uint32_t(1), uint32_t(4), uint32_t(3), uint32_t(7));
-
-    EXPECT_CACHE_KEY_EQ(points, expected);
 }
 
 // Test that serializing then deserializing a param pack yields the same values.
@@ -413,8 +439,15 @@ static auto kStreamValueVectorParams = std::make_tuple(
         BitsetFromBitString("100110010101011001100110101011001100101010110011001011011"),
         BitsetFromBitString("000110010101011000100110101011001100101010010011001010100"),
         BitsetFromBitString("111111111111111111111111111111111111111111111111111111111"), 0},
+    // Test unordered_sets.
+    std::vector<std::unordered_set<int>>{{}, {4, 6, 99, 0}, {100, 300, 300}},
     // Test vectors.
-    std::vector<std::vector<int>>{{}, {1, 5, 2, 7, 4}, {3, 3, 3, 3, 3, 3, 3}});
+    std::vector<std::vector<int>>{{}, {1, 5, 2, 7, 4}, {3, 3, 3, 3, 3, 3, 3}},
+    // Test different size of arrays.
+    std::vector<std::array<int, 3>>{{1, 5, 2}, {-3, -3, -3}},
+    std::vector<std::array<uint8_t, 5>>{{5, 2, 7, 9, 6}, {3, 3, 3, 3, 42}},
+    // array of non-fundamental type
+    std::vector<std::array<std::string, 2>>{{"abcd", "efg"}, {"123hij", ""}});
 
 static auto kStreamValueInitListParams = std::make_tuple(
     std::initializer_list<char[12]>{"test string", "string test"},

@@ -33,8 +33,8 @@
 #include <functional>
 
 #include "src/tint/utils/math/hash.h"
-#include "src/tint/utils/reflection/reflection.h"
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/reflection.h"
+#include "src/tint/utils/rtti/traits.h"
 
 namespace tint {
 
@@ -54,19 +54,19 @@ struct BindingPoint {
     /// Equality operator
     /// @param rhs the BindingPoint to compare against
     /// @returns true if this BindingPoint is equal to `rhs`
-    inline bool operator==(const BindingPoint& rhs) const {
+    bool operator==(const BindingPoint& rhs) const {
         return group == rhs.group && binding == rhs.binding;
     }
 
     /// Inequality operator
     /// @param rhs the BindingPoint to compare against
     /// @returns true if this BindingPoint is not equal to `rhs`
-    inline bool operator!=(const BindingPoint& rhs) const { return !(*this == rhs); }
+    bool operator!=(const BindingPoint& rhs) const { return !(*this == rhs); }
 
     /// Less-than operator
     /// @param rhs the BindingPoint to compare against
     /// @returns true if this BindingPoint comes before @p rhs
-    inline bool operator<(const BindingPoint& rhs) const {
+    bool operator<(const BindingPoint& rhs) const {
         if (group < rhs.group) {
             return true;
         }
@@ -81,7 +81,8 @@ struct BindingPoint {
 /// @param o the stream to write to
 /// @param bp the BindingPoint
 /// @return the stream so calls can be chained
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& o, const BindingPoint& bp) {
     return o << "[group: " << bp.group << ", binding: " << bp.binding << "]";
 }
@@ -97,8 +98,8 @@ class hash<tint::BindingPoint> {
   public:
     /// @param binding_point the binding point to create a hash for
     /// @return the hash value
-    inline size_t operator()(const tint::BindingPoint& binding_point) const {
-        return static_cast<size_t>(binding_point.group) << 16 |
+    size_t operator()(const tint::BindingPoint& binding_point) const {
+        return (static_cast<size_t>(binding_point.group) << 16) |
                static_cast<size_t>(binding_point.binding);
     }
 };

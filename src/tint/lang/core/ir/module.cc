@@ -43,7 +43,7 @@ namespace {
 template <typename F>
 struct FunctionSorter {
     /// The dependency-ordered list of functions.
-    Vector<F*, 16> ordered_functions{};
+    UniqueVector<F*, 16> ordered_functions{};
 
     /// The functions that have been visited and checked for dependencies.
     Hashset<F*, 16> visited{};
@@ -70,7 +70,7 @@ struct FunctionSorter {
             // unvisited dependencies. We can now add it to the ordered list, and walk back down the
             // stack until we find the next unvisited function.
             while (!function_stack.IsEmpty() && visited.Contains(function_stack.Back())) {
-                ordered_functions.Push(function_stack.Pop());
+                ordered_functions.Add(function_stack.Pop());
             }
         }
     }
@@ -106,7 +106,7 @@ struct FunctionSorter {
         for (auto& func : mod.functions) {
             sorter.Visit(func.Get());
         }
-        return std::move(sorter.ordered_functions);
+        return std::move(sorter.ordered_functions.Release());
     }
 };
 
@@ -124,7 +124,7 @@ Symbol Module::NameOf(const Instruction* inst) const {
     if (inst->Results().Length() != 1) {
         return Symbol{};
     }
-    return NameOf(inst->Result(0));
+    return NameOf(inst->Result());
 }
 
 Symbol Module::NameOf(const Value* value) const {
@@ -133,7 +133,12 @@ Symbol Module::NameOf(const Value* value) const {
 
 void Module::SetName(Instruction* inst, std::string_view name) {
     TINT_ASSERT(inst->Results().Length() == 1);
-    return SetName(inst->Result(0), name);
+    SetName(inst->Result(), name);
+}
+
+void Module::SetName(Instruction* inst, Symbol name) {
+    TINT_ASSERT(inst->Results().Length() == 1);
+    SetName(inst->Result(), name);
 }
 
 void Module::SetName(Value* value, std::string_view name) {
@@ -148,6 +153,26 @@ void Module::SetName(Value* value, Symbol name) {
 
 void Module::ClearName(Value* value) {
     value_to_name_.Remove(value);
+}
+
+void Module::SetSource(Instruction* inst, Source src) {
+    TINT_ASSERT(inst->Results().Length() == 1);
+    SetSource(inst->Result(), src);
+}
+
+void Module::SetSource(Value* value, Source src) {
+    value_to_source_.Replace(value, src);
+}
+
+Source Module::SourceOf(const Instruction* inst) const {
+    if (inst->Results().Length() != 1) {
+        return Source{};
+    }
+    return SourceOf(inst->Result());
+}
+
+Source Module::SourceOf(const Value* value) const {
+    return value_to_source_.GetOr(value, Source{});
 }
 
 Vector<Function*, 16> Module::DependencyOrderedFunctions() {

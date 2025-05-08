@@ -47,8 +47,6 @@ class PlatformFunctions {
     virtual ~PlatformFunctions();
 
     MaybeError LoadFunctions();
-    bool IsPIXEventRuntimeLoaded() const;
-    bool IsDXCBinaryAvailable() const;
     uint64_t GetWindowsBuildNumber() const;
 
     // Functions from dxgi.dll
@@ -62,29 +60,24 @@ class PlatformFunctions {
                                                       _COM_Outptr_ void** ppFactory);
     PFN_CREATE_DXGI_FACTORY2 createDxgiFactory2 = nullptr;
 
-    // Functions from dxcompiler.dll
-    using PFN_DXC_CREATE_INSTANCE = HRESULT(WINAPI*)(REFCLSID rclsid,
-                                                     REFIID riid,
-                                                     _COM_Outptr_ void** ppCompiler);
-    PFN_DXC_CREATE_INSTANCE dxcCreateInstance = nullptr;
-
-    // Functions from d3d3compiler.dll
+    // Functions from D3DCompiler_47.dll
     pD3DCompile d3dCompile = nullptr;
     pD3DDisassemble d3dDisassemble = nullptr;
 
+    // Functions from kernelbase.dll
+    using PFN_COMPARE_OBJECT_HANDLES = BOOL(WINAPI*)(HANDLE hFirstObjectHandle,
+                                                     HANDLE hSecondObjectHandle);
+    PFN_COMPARE_OBJECT_HANDLES compareObjectHandles = nullptr;
+
   private:
     MaybeError LoadDXGI();
-    void LoadDXCLibraries();
-    void LoadDXIL(const std::string& baseWindowsSDKPath);
-    void LoadDXCompiler(const std::string& baseWindowsSDKPath);
     MaybeError LoadFXCompiler();
-    void LoadPIXRuntime();
+    MaybeError LoadKernelBase();
     void InitWindowsVersion();
 
     DynamicLib mDXGILib;
-    DynamicLib mDXILLib;
-    DynamicLib mDXCompilerLib;
     DynamicLib mFXCompilerLib;
+    DynamicLib mKernelBaseLib;
 
     uint64_t mCurrentBuildNumber;
 };

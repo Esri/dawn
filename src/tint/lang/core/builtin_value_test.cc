@@ -57,7 +57,7 @@ inline std::ostream& operator<<(std::ostream& out, Case c) {
 }
 
 static constexpr Case kValidCases[] = {
-    {"__point_size", BuiltinValue::kPointSize},
+    {"clip_distances", BuiltinValue::kClipDistances},
     {"frag_depth", BuiltinValue::kFragDepth},
     {"front_facing", BuiltinValue::kFrontFacing},
     {"global_invocation_id", BuiltinValue::kGlobalInvocationId},
@@ -75,9 +75,9 @@ static constexpr Case kValidCases[] = {
 };
 
 static constexpr Case kInvalidCases[] = {
-    {"_ccpoint_siz", BuiltinValue::kUndefined},
-    {"_3poi_ile", BuiltinValue::kUndefined},
-    {"__poiVt_size", BuiltinValue::kUndefined},
+    {"clip_distacecc", BuiltinValue::kUndefined},
+    {"c_disla3ces", BuiltinValue::kUndefined},
+    {"cliV_distances", BuiltinValue::kUndefined},
     {"frag1depth", BuiltinValue::kUndefined},
     {"fraJqqepth", BuiltinValue::kUndefined},
     {"fra7ll_depth", BuiltinValue::kUndefined},

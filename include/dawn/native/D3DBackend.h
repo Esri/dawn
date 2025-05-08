@@ -29,6 +29,7 @@
 #define INCLUDE_DAWN_NATIVE_D3DBACKEND_H_
 
 #include <dxgi1_4.h>
+#include <webgpu/webgpu_cpp_chained_struct.h>
 #include <windows.h>
 #include <wrl/client.h>
 
@@ -36,7 +37,6 @@
 #include <vector>
 
 #include "dawn/native/DawnNative.h"
-#include "webgpu/webgpu_cpp_chained_struct.h"
 
 namespace dawn::native::d3d {
 
@@ -52,7 +52,7 @@ struct DAWN_NATIVE_EXPORT RequestAdapterOptionsLUID : wgpu::ChainedStruct {
 };
 
 // Chrome uses 0 as acquire key.
-static constexpr UINT64 kDXGIKeyedMutexAcquireKey = 0;
+static constexpr uint64_t kDXGIKeyedMutexAcquireKey = 0;
 
 }  // namespace dawn::native::d3d
 

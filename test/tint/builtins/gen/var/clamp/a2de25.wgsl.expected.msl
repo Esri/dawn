@@ -1,41 +1,82 @@
+//
+// fragment_main
+//
 #include <metal_stdlib>
-
 using namespace metal;
-uint tint_clamp(uint e, uint low, uint high) {
-  return min(max(e, low), high);
-}
 
-void clamp_a2de25(device uint* const tint_symbol_1) {
+struct tint_module_vars_struct {
+  device uint* prevent_dce;
+};
+
+uint clamp_a2de25() {
   uint arg_0 = 1u;
   uint arg_1 = 1u;
   uint arg_2 = 1u;
-  uint res = tint_clamp(arg_0, arg_1, arg_2);
-  *(tint_symbol_1) = res;
+  uint res = min(max(arg_0, arg_1), arg_2);
+  return res;
 }
 
-struct tint_symbol {
-  float4 value [[position]];
+fragment void fragment_main(device uint* prevent_dce [[buffer(0)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.prevent_dce=prevent_dce};
+  (*tint_module_vars.prevent_dce) = clamp_a2de25();
+}
+//
+// compute_main
+//
+#include <metal_stdlib>
+using namespace metal;
+
+struct tint_module_vars_struct {
+  device uint* prevent_dce;
 };
 
-float4 vertex_main_inner(device uint* const tint_symbol_2) {
-  clamp_a2de25(tint_symbol_2);
-  return float4(0.0f);
+uint clamp_a2de25() {
+  uint arg_0 = 1u;
+  uint arg_1 = 1u;
+  uint arg_2 = 1u;
+  uint res = min(max(arg_0, arg_1), arg_2);
+  return res;
 }
 
-vertex tint_symbol vertex_main(device uint* tint_symbol_3 [[buffer(0)]]) {
-  float4 const inner_result = vertex_main_inner(tint_symbol_3);
-  tint_symbol wrapper_result = {};
-  wrapper_result.value = inner_result;
-  return wrapper_result;
+kernel void compute_main(device uint* prevent_dce [[buffer(0)]]) {
+  tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.prevent_dce=prevent_dce};
+  (*tint_module_vars.prevent_dce) = clamp_a2de25();
+}
+//
+// vertex_main
+//
+#include <metal_stdlib>
+using namespace metal;
+
+struct VertexOutput {
+  float4 pos;
+  uint prevent_dce;
+};
+
+struct vertex_main_outputs {
+  float4 VertexOutput_pos [[position]];
+  uint VertexOutput_prevent_dce [[user(locn0)]] [[flat]];
+};
+
+uint clamp_a2de25() {
+  uint arg_0 = 1u;
+  uint arg_1 = 1u;
+  uint arg_2 = 1u;
+  uint res = min(max(arg_0, arg_1), arg_2);
+  return res;
 }
 
-fragment void fragment_main(device uint* tint_symbol_4 [[buffer(0)]]) {
-  clamp_a2de25(tint_symbol_4);
-  return;
+VertexOutput vertex_main_inner() {
+  VertexOutput out = {};
+  out.pos = float4(0.0f);
+  out.prevent_dce = clamp_a2de25();
+  return out;
 }
 
-kernel void compute_main(device uint* tint_symbol_5 [[buffer(0)]]) {
-  clamp_a2de25(tint_symbol_5);
-  return;
+vertex vertex_main_outputs vertex_main() {
+  VertexOutput const v = vertex_main_inner();
+  vertex_main_outputs tint_wrapper_result = {};
+  tint_wrapper_result.VertexOutput_pos = v.pos;
+  tint_wrapper_result.VertexOutput_prevent_dce = v.prevent_dce;
+  return tint_wrapper_result;
 }
-

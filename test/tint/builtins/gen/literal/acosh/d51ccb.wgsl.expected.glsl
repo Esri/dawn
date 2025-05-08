@@ -1,65 +1,63 @@
-#version 310 es
-
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
-  vec4 inner;
-} prevent_dce;
-
-void acosh_d51ccb() {
-  vec4 res = vec4(1.0f);
-  prevent_dce.inner = res;
-}
-
-vec4 vertex_main() {
-  acosh_d51ccb();
-  return vec4(0.0f);
-}
-
-void main() {
-  gl_PointSize = 1.0;
-  vec4 inner_result = vertex_main();
-  gl_Position = inner_result;
-  gl_Position.y = -(gl_Position.y);
-  gl_Position.z = ((2.0f * gl_Position.z) - gl_Position.w);
-  return;
-}
+//
+// fragment_main
+//
 #version 310 es
 precision highp float;
 precision highp int;
 
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+layout(binding = 0, std430)
+buffer f_prevent_dce_block_ssbo {
   vec4 inner;
-} prevent_dce;
-
-void acosh_d51ccb() {
+} v;
+vec4 acosh_d51ccb() {
   vec4 res = vec4(1.0f);
-  prevent_dce.inner = res;
+  return res;
 }
-
-void fragment_main() {
-  acosh_d51ccb();
-}
-
 void main() {
-  fragment_main();
-  return;
+  v.inner = acosh_d51ccb();
 }
+//
+// compute_main
+//
 #version 310 es
 
-layout(binding = 0, std430) buffer prevent_dce_block_ssbo {
+layout(binding = 0, std430)
+buffer prevent_dce_block_1_ssbo {
   vec4 inner;
-} prevent_dce;
-
-void acosh_d51ccb() {
+} v;
+vec4 acosh_d51ccb() {
   vec4 res = vec4(1.0f);
-  prevent_dce.inner = res;
+  return res;
 }
-
-void compute_main() {
-  acosh_d51ccb();
-}
-
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
-  compute_main();
-  return;
+  v.inner = acosh_d51ccb();
+}
+//
+// vertex_main
+//
+#version 310 es
+
+
+struct VertexOutput {
+  vec4 pos;
+  vec4 prevent_dce;
+};
+
+layout(location = 0) flat out vec4 tint_interstage_location0;
+vec4 acosh_d51ccb() {
+  vec4 res = vec4(1.0f);
+  return res;
+}
+VertexOutput vertex_main_inner() {
+  VertexOutput v = VertexOutput(vec4(0.0f), vec4(0.0f));
+  v.pos = vec4(0.0f);
+  v.prevent_dce = acosh_d51ccb();
+  return v;
+}
+void main() {
+  VertexOutput v_1 = vertex_main_inner();
+  gl_Position = vec4(v_1.pos.x, -(v_1.pos.y), ((2.0f * v_1.pos.z) - v_1.pos.w), v_1.pos.w);
+  tint_interstage_location0 = v_1.prevent_dce;
+  gl_PointSize = 1.0f;
 }

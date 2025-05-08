@@ -39,15 +39,15 @@
 
 #include <cstdint>
 
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/rtti/traits.h"
 
 namespace tint::core {
 
 /// Address space of a given pointer.
 enum class AddressSpace : uint8_t {
     kUndefined,
-    kIn,
-    kOut,
+    kIn,   // Tint-internal enum entry - not parsed
+    kOut,  // Tint-internal enum entry - not parsed
     kFunction,
     kHandle,  // Tint-internal enum entry - not parsed
     kPixelLocal,
@@ -65,7 +65,8 @@ std::string_view ToString(AddressSpace value);
 /// @param out the stream to write to
 /// @param value the AddressSpace
 /// @returns @p out so calls can be chained
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, AddressSpace value) {
     return out << ToString(value);
 }
@@ -76,8 +77,7 @@ auto& operator<<(STREAM& out, AddressSpace value) {
 AddressSpace ParseAddressSpace(std::string_view str);
 
 constexpr std::string_view kAddressSpaceStrings[] = {
-    "__in",          "__out",   "function", "pixel_local", "private",
-    "push_constant", "storage", "uniform",  "workgroup",
+    "function", "pixel_local", "private", "push_constant", "storage", "uniform", "workgroup",
 };
 
 /// @returns true if the AddressSpace is host-shareable

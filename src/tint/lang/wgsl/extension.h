@@ -38,7 +38,7 @@
 #define SRC_TINT_LANG_WGSL_EXTENSION_H_
 
 #include "src/tint/utils/containers/unique_vector.h"
-#include "src/tint/utils/traits/traits.h"
+#include "src/tint/utils/rtti/traits.h"
 
 namespace tint::wgsl {
 
@@ -50,12 +50,13 @@ enum class Extension : uint8_t {
     kChromiumExperimentalFramebufferFetch,
     kChromiumExperimentalPixelLocal,
     kChromiumExperimentalPushConstant,
-    kChromiumExperimentalSubgroups,
-    kChromiumInternalDualSourceBlending,
+    kChromiumExperimentalSubgroupMatrix,
     kChromiumInternalGraphite,
     kChromiumInternalInputAttachments,
-    kChromiumInternalRelaxedUniformLayout,
+    kClipDistances,
+    kDualSourceBlending,
     kF16,
+    kSubgroups,
 };
 
 /// @param value the enum value
@@ -65,7 +66,8 @@ std::string_view ToString(Extension value);
 /// @param out the stream to write to
 /// @param value the Extension
 /// @returns @p out so calls can be chained
-template <typename STREAM, typename = traits::EnableIfIsOStream<STREAM>>
+template <typename STREAM>
+    requires(traits::IsOStream<STREAM>)
 auto& operator<<(STREAM& out, Extension value) {
     return out << ToString(value);
 }
@@ -80,12 +82,13 @@ constexpr std::string_view kExtensionStrings[] = {
     "chromium_experimental_framebuffer_fetch",
     "chromium_experimental_pixel_local",
     "chromium_experimental_push_constant",
-    "chromium_experimental_subgroups",
-    "chromium_internal_dual_source_blending",
+    "chromium_experimental_subgroup_matrix",
     "chromium_internal_graphite",
     "chromium_internal_input_attachments",
-    "chromium_internal_relaxed_uniform_layout",
+    "clip_distances",
+    "dual_source_blending",
     "f16",
+    "subgroups",
 };
 
 /// All extensions
@@ -94,12 +97,13 @@ static constexpr Extension kAllExtensions[] = {
     Extension::kChromiumExperimentalFramebufferFetch,
     Extension::kChromiumExperimentalPixelLocal,
     Extension::kChromiumExperimentalPushConstant,
-    Extension::kChromiumExperimentalSubgroups,
-    Extension::kChromiumInternalDualSourceBlending,
+    Extension::kChromiumExperimentalSubgroupMatrix,
     Extension::kChromiumInternalGraphite,
     Extension::kChromiumInternalInputAttachments,
-    Extension::kChromiumInternalRelaxedUniformLayout,
+    Extension::kClipDistances,
+    Extension::kDualSourceBlending,
     Extension::kF16,
+    Extension::kSubgroups,
 };
 
 /// A unique vector of extensions
