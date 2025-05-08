@@ -128,9 +128,9 @@ def update_lua_file():
         if parent_path.startswith("/"):
             whitespace = "    "
         to_insert = create_lua_string(list(parent_files), whitespace)
-        regex = r'(?m)(-- {}.*\n)(^\ *\"(.|\n)*?)*?((  --)|(}}))'.format(parent_path)
+        regex = r'(?m)(-- {}.*\n)((^\ *\"(.|\n)*?)*?|(\ *\n)*)((\ *--)|(\ *}}))'.format(parent_path)
         regex_pattern = re.compile(regex)
-        content_new = re.sub(regex_pattern, r'\1' + to_insert + r'\n\4', content_new)
+        content_new = re.sub(regex_pattern, r'\1' + to_insert + r'\n\6', content_new)
     
     # Deal with platform specific special files that share common parent directories.
     # Add them to their OS group.
