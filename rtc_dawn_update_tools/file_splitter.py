@@ -17,7 +17,7 @@ include_files = {
     "src/tint/" : set(),
 }
 
-# FIle names that are platform specific but have parent directories that are shared between platforms. We need to handle these differently.
+# File names that are platform specific but have parent directories that are shared between platforms. We need to handle these differently.
 special_file_names = ["_mac.", "Windows", "windows", "linux", "posix", "SpirvValidation", "Surface_metal", "IOSurfaceUtils", "X11"]
 special_file_names_vulkan_linux = [
     "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf.cpp",

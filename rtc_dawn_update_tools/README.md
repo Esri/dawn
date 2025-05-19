@@ -50,8 +50,7 @@ This conflict is case and suffix insensitive. E.g. the following files lead to c
 
 ## Pre-requisites
 
-Before running the script, check that all RTC dependencies are up to date in `variables.sh`. They have been manually
-copied from RTC so may need updating.
+Before running the script, check that all listed RTC dependencies in `rtc_dawn_update_tools/variables.sh` are up to date, they have been manually copied from RTC so may need updating. The version numbers are taken from `runtimecore/runtimecore_scripts/scripts/install_dependencies/variables.yml`, while the Windows `visual_studio_install_paths` list can be found in `runtimecore/runtimecore_scripts/scripts/platform_helper.sh`. These variables are only used in the update scripts needed for updating the Dawn 3rdpary library, they do not need to be updated for Dawn to build successfully.
 
 ## Usage
 
@@ -63,8 +62,7 @@ cd ~/"your_development_directory"/3rdparty/dawn/rtc_dawn_update_tools
 ./update_lua_file.sh -o
 ```
 
-Note the `-o` flag. This removes currently included files in `dawn.lua` to allow the script to remove old file includes
-that are not needed or don't exist anymore.
+Note the `-o` flag. This causes the script to overwrite most includes in `dawn.lua` only with those in `compile_commands.json` so that files that are not needed or don't exist anymore are removed. Without the `-o` flag, changes are additive only. Note that specific platform files (those found in the `enable_"platform" section) are only altered by the respective operating system as these files are not shared between the platforms that the update script is run on.
 
 Run these commands to check if there are any build failures:
 
@@ -120,3 +118,6 @@ could be caused by the previous operating system inserting a file into `dawn.lua
 systems that do not have this file will also try to include it. Add the special file name to the the
 `special_file_names` list in `file_splitter.py`. This will cause the script to only add this file to the file include
 area of the operating systems that have and use the file.
+
+### Android
+In `dawn.lua` there is a section for file includes for Android but the script does take into account Android when updating the file so includes might have to be added manually. If after finishing all the update steps, the Android vTest fails, check the vTest output to find the missing files you will have to add manually.
