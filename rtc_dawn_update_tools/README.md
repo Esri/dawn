@@ -59,7 +59,7 @@ Run `update_lua_file.sh` on each operating system: Windows, MacOS and Linux, the
 the first operating system, run these commands:
 
 ```
-cd ~/"your_development_directory"/3rdparty/dawn/dawn_update_tools
+cd ~/"your_development_directory"/3rdparty/dawn/rtc_dawn_update_tools
 ./update_lua_file.sh -o
 ```
 
@@ -77,7 +77,7 @@ If there are no errors, build a project that uses Dawn. Once Dawn and RTC builds
 the next operating system, get the updated branch and run these commands:
 
 ```
-cd ~/"your_development_directory/3rdparty/dawn/dawn_update_tools
+cd ~/"your_development_directory/3rdparty/dawn/rtc_dawn_update_tools
 ./update_lua_file.sh
 ```
 
