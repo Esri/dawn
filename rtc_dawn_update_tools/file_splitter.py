@@ -6,18 +6,20 @@ import re
 os = sys.argv[1]
 overwrite = int(sys.argv[2])
 
+# Parent directories specific to platforms
 os_includes = {
     "linux" : ["/vulkan/", "/spirv/"],
     "macos" : ["/metal/", "/msl/"],
     "windows" : ["/vulkan/", "/spirv/", "/d3d/", "/d3d12/", "/hlsl/"]
 }
 
+# Parent directories that all the platforms include.
 include_files = {
     "src/dawn/" : set(),
     "src/tint/" : set(),
 }
 
-# FIle names that are platform specific but have parent directories that are shared between platforms. We need to handle these differently.
+# File names that are platform specific but have parent directories that are shared between platforms. We need to handle these differently.
 special_file_names = ["_mac.", "Windows", "windows", "linux", "posix", "SpirvValidation", "Surface_metal", "IOSurfaceUtils", "X11"]
 special_file_names_vulkan_linux = [
     "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf.cpp",
@@ -38,7 +40,8 @@ for target_os, includes in os_includes.items():
 
 # If overwriting, remove all current includes that have parent directories that are listed in include files and os_includes.
 # This allows you to start "fresh" by removing potentially any old includes that are not used anymore.
-# If not overwriting, it will update the include_files dictionary so that they are present files are not overwritten.
+# If not overwriting, the include_files dictionary will be populated with the current files in dawn.lua so that 
+# changes are additive only.
 def prepare(): 
     lua_file = open('../dawn.lua', 'r')
     content = lua_file.read()
@@ -75,7 +78,7 @@ def prepare():
                 files = re.sub(regex, r'\1', files)
                 include_files[parent_path] = set(files.splitlines())
 
-# Read in the compile_commands.json file and group by their parent directories.
+# Read in the compile_commands.json file and group the listed files by their parent directories.
 def file_to_list():
     compile_commands = open('temp_compile_commands', 'r')
     compile_commands = compile_commands.read()

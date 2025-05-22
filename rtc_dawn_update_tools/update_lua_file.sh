@@ -81,7 +81,7 @@ else
   ${cmake_path} ${command}
 fi
 
-cd ../dawn/dawn_update_tools
+cd ../dawn/rtc_dawn_update_tools
 
 # Update dawn.lua with the correct file includes.
 grep "file" ../../temp_dawn_build/compile_commands.json > temp_compile_commands
