@@ -71,33 +71,17 @@ namespace dawn::native::vulkan {
 #define COMPILED_SPIRV_MEMBERS(X) X(std::vector<uint32_t>, spirv)
 
 // Represents the result and metadata for a SPIR-V compilation.
-DAWN_SERIALIZABLE(struct, CompiledSpirv, COMPILED_SPIRV_MEMBERS){};
+// clang-format off
+DAWN_SERIALIZABLE(struct, CompiledSpirv, COMPILED_SPIRV_MEMBERS) {
+    static ResultOrError<CompiledSpirv> FromValidatedBlob(Blob blob) {
+        CompiledSpirv result;
+        DAWN_TRY_ASSIGN(result, FromBlob(std::move(blob)));
+        DAWN_INVALID_IF(result.spirv.empty(), "Cached CompiledSpirv result has no instructions");
+        return result;
+    }
+};
+// clang-format on
 #undef COMPILED_SPIRV_MEMBERS
-
-bool TransformedShaderModuleCacheKey::operator==(
-    const TransformedShaderModuleCacheKey& other) const {
-    if (layoutPtr != other.layoutPtr || entryPoint != other.entryPoint ||
-        constants.size() != other.constants.size()) {
-        return false;
-    }
-    if (!std::equal(constants.begin(), constants.end(), other.constants.begin())) {
-        return false;
-    }
-    if (emitPointSize != other.emitPointSize) {
-        return false;
-    }
-    return true;
-}
-
-size_t TransformedShaderModuleCacheKeyHashFunc::operator()(
-    const TransformedShaderModuleCacheKey& key) const {
-    size_t hash = 0;
-    HashCombine(&hash, key.layoutPtr, key.entryPoint, key.emitPointSize);
-    for (const auto& entry : key.constants) {
-        HashCombine(&hash, entry.first, entry.second);
-    }
-    return hash;
-}
 
 // static
 ResultOrError<Ref<ShaderModule>> ShaderModule::Create(
@@ -157,14 +141,6 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
     bool emitPointSize,
     const ImmediateConstantMask& pipelineImmediateMask) {
     TRACE_EVENT0(GetDevice()->GetPlatform(), General, "ShaderModuleVk::GetHandleAndSpirv");
-
-    // Check to see if we have the handle and spirv cached already
-    // TODO(chromium:345359083): Improve the computation of the cache key. For example, it isn't
-    // ideal to use `reinterpret_cast<uintptr_t>(layout)` as the layout may be freed and
-    // reallocated during the runtime.
-    auto cacheKey = TransformedShaderModuleCacheKey{reinterpret_cast<uintptr_t>(layout),
-                                                    programmableStage.entryPoint.c_str(),
-                                                    programmableStage.constants, emitPointSize};
 
 #if TINT_BUILD_SPV_WRITER
     // Creation of module and spirv is deferred to this point when using tint generator
@@ -308,7 +284,10 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
         GetDevice()->IsToggleEnabled(Toggle::DisablePolyfillsOnIntegerDivisonAndModulo);
     req.tintOptions.use_vulkan_memory_model =
         GetDevice()->IsToggleEnabled(Toggle::UseVulkanMemoryModel);
-
+    req.tintOptions.scalarize_clamp_builtin =
+        GetDevice()->IsToggleEnabled(Toggle::VulkanScalarizeClampBuiltin);
+    req.tintOptions.dva_transform_handle =
+        GetDevice()->IsToggleEnabled(Toggle::VulkanDirectVariableAccessTransformHandle);
     // Pass matrices to user functions by pointer on Qualcomm devices to workaround a known bug.
     // See crbug.com/tint/2045.
     if (ToBackend(GetDevice()->GetPhysicalDevice())->IsAndroidQualcomm()) {
@@ -323,6 +302,9 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
             offsetStartBytes, offsetStartBytes + kImmediateConstantElementByteSize};
     }
 
+    req.tintOptions.enable_integer_range_analysis =
+        GetDevice()->IsToggleEnabled(Toggle::EnableIntegerRangeAnalysisInRobustness);
+
     req.limits = LimitsForCompilationRequest::Create(GetDevice()->GetLimits().v1);
     req.adapterSupportedLimits =
         LimitsForCompilationRequest::Create(GetDevice()->GetAdapter()->GetLimits().v1);
@@ -330,7 +312,7 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
 
     CacheResult<CompiledSpirv> compilation;
     DAWN_TRY_LOAD_OR_RUN(
-        compilation, GetDevice(), std::move(req), CompiledSpirv::FromBlob,
+        compilation, GetDevice(), std::move(req), CompiledSpirv::FromValidatedBlob,
         [](SpirvCompilationRequest r) -> ResultOrError<CompiledSpirv> {
             TRACE_EVENT0(r.platform.UnsafeGetValue(), General, "tint::spirv::writer::Generate()");
 

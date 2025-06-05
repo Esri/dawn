@@ -78,7 +78,7 @@ struct State {
 
             auto* ptr = var->Result()->Type()->As<core::type::Pointer>();
             switch (ptr->AddressSpace()) {
-                case core::AddressSpace::kPushConstant:
+                case core::AddressSpace::kImmediate:
                 case core::AddressSpace::kStorage:
                 case core::AddressSpace::kUniform:
                     vars_requiring_explicit_layout.Push(var);
@@ -182,7 +182,7 @@ struct State {
         if (!must_emit_without_explicit_layout.Contains(original_struct) && !members_were_forked) {
             // TODO(crbug.com/tint/745): Remove the const_cast.
             const_cast<core::type::Struct*>(original_struct)
-                ->SetStructFlag(core::type::kSpirvExplicitLayout);
+                ->SetStructFlag(core::type::kExplicitLayout);
             return nullptr;
         }
 
@@ -193,7 +193,7 @@ struct State {
                                                    original_struct->Align(),  //
                                                    original_struct->Size(),   //
                                                    original_struct->SizeNoPadding());
-        new_str->SetStructFlag(core::type::kSpirvExplicitLayout);
+        new_str->SetStructFlag(core::type::kExplicitLayout);
         for (auto flag : original_struct->StructFlags()) {
             new_str->SetStructFlag(flag);
         }
@@ -357,7 +357,8 @@ struct State {
 }  // namespace
 
 Result<SuccessType> ForkExplicitLayoutTypes(core::ir::Module& ir) {
-    auto result = ValidateAndDumpIfNeeded(ir, "spirv.ForkExplicitLayoutTypes");
+    auto result = ValidateAndDumpIfNeeded(ir, "spirv.ForkExplicitLayoutTypes",
+                                          kForkExplicitLayoutTypesCapabilities);
     if (result != Success) {
         return result;
     }

@@ -414,6 +414,15 @@ constexpr BuiltinChecker kSampleIndexChecker{
     /* type_error */ "sample_index must be an u32",
 };
 
+constexpr BuiltinChecker kSubgroupIdChecker{
+    /* name */ "subgroup_id",
+    /* stages */
+    EnumSet<Function::PipelineStage>(Function::PipelineStage::kCompute),
+    /* direction */ BuiltinChecker::IODirection::kInput,
+    /* type_check */ [](const core::type::Type* ty) -> bool { return ty->Is<core::type::U32>(); },
+    /* type_error */ "subgroup_id must be an u32",
+};
+
 constexpr BuiltinChecker kSubgroupInvocationIdChecker{
     /* name */ "subgroup_invocation_id",
     /* stages */
@@ -476,6 +485,8 @@ const BuiltinChecker& BuiltinCheckerFor(BuiltinValue builtin) {
             return kNumWorkgroupsChecker;
         case BuiltinValue::kSampleIndex:
             return kSampleIndexChecker;
+        case BuiltinValue::kSubgroupId:
+            return kSubgroupIdChecker;
         case BuiltinValue::kSubgroupInvocationId:
             return kSubgroupInvocationIdChecker;
         case BuiltinValue::kSubgroupSize:
@@ -1374,7 +1385,6 @@ class Validator {
     core::ir::ReferencedModuleVars<const Module> referenced_module_vars_;
     Hashset<OverrideId, 8> seen_override_ids_;
     Hashset<std::string, 4> entry_point_names_;
-
     Hashset<ValidatedType, 16> validated_types_{};
 };
 
@@ -1688,12 +1698,13 @@ bool Validator::CheckResults(const ir::Instruction* inst, std::optional<size_t> 
 bool Validator::CheckOperand(const Instruction* inst, size_t idx) {
     auto* operand = inst->Operand(idx);
 
-    // var instructions are allowed to have a nullptr operands
-    if (inst->Is<Var>() && operand == nullptr) {
-        return true;
-    }
-
     if (DAWN_UNLIKELY(operand == nullptr)) {
+        // var instructions are allowed to have a nullptr initializers.
+        // terminator instructions use nullptr operands to signal 'undef'.
+        if (inst->IsAnyOf<Terminator, Var>()) {
+            return true;
+        }
+
         AddError(inst, idx) << "operand is undefined";
         return false;
     }
@@ -1843,11 +1854,30 @@ void Validator::CheckType(const core::type::Type* root,
                     return false;
                 }
 
+                if (ptr->AddressSpace() == AddressSpace::kUniform ||
+                    ptr->AddressSpace() == AddressSpace::kHandle) {
+                    if (ptr->Access() != core::Access::kRead) {
+                        diag() << "uniform and handle pointers must be read access";
+                        return false;
+                    }
+                }
+
+                if (ptr->AddressSpace() == AddressSpace::kHandle) {
+                    if (!ptr->StoreType()->IsHandle()) {
+                        diag() << "the 'handle' address space can only be used for handle types";
+                        return false;
+                    }
+                } else {
+                    if (ptr->StoreType()->IsHandle()) {
+                        diag() << "handle types can only be declared in the 'handle' address space";
+                        return false;
+                    }
+                }
+
                 if (type != root) {
                     // Nesting pointer types inside structures is guarded by a capability.
-                    if (!(root->Is<core::type::Struct>() &&
-                          capabilities_.Contains(
-                              Capability::kAllowPointersAndHandlesInStructures))) {
+                    if (!(capabilities_.Contains(
+                            Capability::kAllowPointersAndHandlesInStructures))) {
                         diag() << "nested pointer types are not permitted";
                         return false;
                     }
@@ -1878,6 +1908,16 @@ void Validator::CheckType(const core::type::Type* root,
                 }
                 return true;
             },
+            [&](const core::type::Array* arr) {
+                if (arr->Count()->Is<core::type::RuntimeArrayCount>()) {
+                    auto* mv = root->As<core::type::MemoryView>();
+                    if (mv && mv->AddressSpace() != AddressSpace::kStorage) {
+                        diag() << "runtime arrays must be in the 'storage' address space";
+                        return false;
+                    }
+                }
+                return true;
+            },
             [&](const core::type::Vector* v) {
                 if (!v->Type()->IsScalar()) {
                     diag() << "vector elements, " << NameOf(type) << ", must be scalars";
@@ -1899,6 +1939,23 @@ void Validator::CheckType(const core::type::Type* root,
                 }
                 return true;
             },
+            [&](const core::type::MultisampledTexture* ms) {
+                if (!ms->Type()->IsAnyOf<core::type::F32, core::type::I32, core::type::U32>()) {
+                    diag() << "invalid multisampled texture sample type: " << NameOf(ms->Type());
+                    return false;
+                }
+
+                switch (ms->Dim()) {
+                    case core::type::TextureDimension::k2d:
+                    case core::type::TextureDimension::k2dArray:
+                        break;
+                    default:
+                        diag() << "invalid multisampled texture dimension: "
+                               << style::Literal(ToString(ms->Dim()));
+                        return false;
+                }
+                return true;
+            },
             [&](const core::type::StorageTexture* s) {
                 switch (s->Dim()) {
                     case core::type::TextureDimension::kCube:
@@ -1913,6 +1970,13 @@ void Validator::CheckType(const core::type::Type* root,
                     default:
                         return true;
                 }
+            },
+            [&](const core::type::InputAttachment* i) {
+                if (!i->Type()->IsAnyOf<core::type::F32, core::type::I32, core::type::U32>()) {
+                    diag() << "invalid input attachment component type: " << NameOf(i->Type());
+                    return false;
+                }
+                return true;
             },
             [&](const core::type::SubgroupMatrix* m) {
                 if (!m->Type()
@@ -2034,8 +2098,17 @@ void Validator::CheckFunction(const Function* func) {
     scope_stack_.Push();
     TINT_DEFER(scope_stack_.Pop());
 
-    // Checking the name early, so its usage can be recorded, even if the function is malformed.
     if (func->IsEntryPoint()) {
+        // Check that there is at most one entry point unless we allow multiple entry points.
+        if (!capabilities_.Contains(Capability::kAllowMultipleEntryPoints)) {
+            if (!entry_point_names_.IsEmpty()) {
+                AddError(func) << "a module with multiple entry points requires the "
+                                  "AllowMultipleEntryPoints capability";
+                return;
+            }
+        }
+
+        // Checking the name early, so its usage can be recorded, even if the function is malformed.
         const auto name = mod_.NameOf(func).Name();
         if (!entry_point_names_.Add(name)) {
             AddError(func) << "entry point name " << style::Function(name) << " is not unique";
@@ -2155,6 +2228,17 @@ void Validator::CheckFunction(const Function* func) {
                 AddError(param)
                     << "input param to non-entry point function has a binding point set";
             }
+            if (param->Builtin().has_value()) {
+                AddError(param) << "builtins can only be decorated on entry point params";
+            }
+        }
+
+        if (!capabilities_.Contains(Capability::kAllowWorkspacePointerInputToEntryPoint) &&
+            func->IsEntryPoint()) {
+            if (mv && mv->Is<core::type::Pointer>() && address_space == AddressSpace::kWorkgroup) {
+                AddError(param) << "input param to entry point cannot be a ptr in the 'workgroup' "
+                                   "address space";
+            }
         }
 
         scope_stack_.Add(param);
@@ -2206,7 +2290,18 @@ void Validator::CheckFunction(const Function* func) {
             func, CheckFrontFacingIfBoolFunc<Function>("entry point returns can not be 'bool'"),
             CheckFrontFacingIfBoolFunc<Function>("entry point return members can not be 'bool'"));
 
+        Hashset<BindingPoint, 4> binding_points{};
+
         for (auto var : referenced_module_vars_.TransitiveReferences(func)) {
+            if (!capabilities_.Contains(Capability::kAllowDuplicateBindings) &&
+                var->BindingPoint().has_value()) {
+                auto bp = var->BindingPoint().value();
+                if (!binding_points.Add(bp)) {
+                    AddError(var) << "found non-unique binding point, " << bp
+                                  << ", being referenced in entry point, " << NameOf(func);
+                }
+            }
+
             const auto* mv = var->Result()->Type()->As<core::type::MemoryView>();
             const auto* ty = var->Result()->Type()->UnwrapPtrOrRef();
             const auto attr = var->Attributes();
@@ -2527,13 +2622,6 @@ void Validator::CheckVar(const Var* var) {
         return;
     }
 
-    if (mv->UnwrapPtrOrRef()->IsHandle()) {
-        if (mv->AddressSpace() != AddressSpace::kHandle) {
-            AddError(var) << "handle types can only be declared in the 'handle' address space";
-            return;
-        }
-    }
-
     if (var->Block() != mod_.root_block && mv->AddressSpace() != AddressSpace::kFunction) {
         if (!capabilities_.Contains(Capability::kAllowPrivateVarsInFunctions) ||
             mv->AddressSpace() != AddressSpace::kPrivate) {
@@ -2604,10 +2692,17 @@ void Validator::CheckVar(const Var* var) {
         }
     }
 
-    // Check that non-handle variables don't have @input_attachment_index set
-    if (var->InputAttachmentIndex().has_value() && mv->AddressSpace() != AddressSpace::kHandle) {
-        AddError(var) << "'@input_attachment_index' is not valid for non-handle var";
-        return;
+    if (var->InputAttachmentIndex().has_value()) {
+        if (mv->AddressSpace() != AddressSpace::kHandle) {
+            AddError(var) << "'@input_attachment_index' is not valid for non-handle var";
+            return;
+        }
+        if (!capabilities_.Contains(Capability::kAllowAnyInputAttachmentIndexType) &&
+            !mv->UnwrapPtrOrRef()->Is<core::type::InputAttachment>()) {
+            AddError(var)
+                << "'@input_attachment_index' is only valid for 'input_attachment' type var";
+            return;
+        }
     }
 
     if (var->Block() == mod_.root_block) {
@@ -3400,8 +3495,10 @@ void Validator::CheckTerminator(const Terminator* b) {
         return;
     }
 
-    // Note, transforms create `undef` terminator arguments (this is done in MergeReturn and
-    // DemoteToHelper) so we can't add validation.
+    // Operands must be alive and in scope if they are not nullptr.
+    if (!CheckOperands(b)) {
+        return;
+    }
 
     tint::Switch(
         b,                                                           //
@@ -3764,11 +3861,12 @@ Result<SuccessType> Validate(const Module& mod, Capabilities capabilities) {
 
 Result<SuccessType> ValidateAndDumpIfNeeded([[maybe_unused]] const Module& ir,
                                             [[maybe_unused]] const char* msg,
-                                            [[maybe_unused]] Capabilities capabilities) {
+                                            [[maybe_unused]] Capabilities capabilities,
+                                            [[maybe_unused]] std::string_view timing) {
 #if TINT_DUMP_IR_WHEN_VALIDATING
     auto printer = StyledTextPrinter::Create(stdout);
     std::cout << "=========================================================\n";
-    std::cout << "== IR dump before " << msg << ":\n";
+    std::cout << "== IR dump " << timing << " " << msg << ":\n";
     std::cout << "=========================================================\n";
     printer->Print(Disassembler(ir).Text());
 #endif

@@ -173,6 +173,7 @@ files {
   -- src/dawn/
   "src/dawn/common/AlignedAlloc.cpp",
   "src/dawn/common/Assert.cpp",
+  "src/dawn/common/Defer.cpp",
   "src/dawn/common/DynamicLib.cpp",
   "src/dawn/common/FutureUtils.cpp",
   "src/dawn/common/GPUInfo.cpp",
@@ -234,6 +235,7 @@ files {
   "src/dawn/native/ExternalTexture.cpp",
   "src/dawn/native/Features.cpp",
   "src/dawn/native/Format.cpp",
+  "src/dawn/native/ImmediateConstantsLayout.cpp",
   "src/dawn/native/ImmediateConstantsTracker.cpp",
   "src/dawn/native/IndirectDrawMetadata.cpp",
   "src/dawn/native/IndirectDrawValidationEncoder.cpp",
@@ -242,7 +244,6 @@ files {
   "src/dawn/native/Limits.cpp",
   "src/dawn/native/ObjectBase.cpp",
   "src/dawn/native/ObjectContentHasher.cpp",
-  "src/dawn/native/PassResourceUsage.cpp",
   "src/dawn/native/PassResourceUsageTracker.cpp",
   "src/dawn/native/PerStage.cpp",
   "src/dawn/native/PhysicalDevice.cpp",
@@ -379,7 +380,7 @@ files {
   "src/tint/lang/core/ir/transform/demote_to_helper.cc",
   "src/tint/lang/core/ir/transform/direct_variable_access.cc",
   "src/tint/lang/core/ir/transform/multiplanar_external_texture.cc",
-  "src/tint/lang/core/ir/transform/prepare_push_constants.cc",
+  "src/tint/lang/core/ir/transform/prepare_immediate_data.cc",
   "src/tint/lang/core/ir/transform/preserve_padding.cc",
   "src/tint/lang/core/ir/transform/prevent_infinite_loops.cc",
   "src/tint/lang/core/ir/transform/remove_continue_in_switch.cc",
@@ -678,7 +679,7 @@ if (enable_android) then
 
   files {
     "src/dawn/native/AHBFunctions.cpp",
-    "src/dawn/native/SpirvValidation.cpp",
+    "src/dawn/native/SpirvValidation_rtc_shim_1.cpp",
   }
 
 end
@@ -781,6 +782,7 @@ if (enable_hlsl) then
     "src/tint/lang/hlsl/writer/printer/printer.cc",
     "src/tint/lang/hlsl/writer/raise/binary_polyfill_rtc_shim_1.cc",
     "src/tint/lang/hlsl/writer/raise/builtin_polyfill_rtc_shim_2.cc",
+    "src/tint/lang/hlsl/writer/raise/change_immediate_to_uniform.cc",
     "src/tint/lang/hlsl/writer/raise/decompose_storage_access.cc",
     "src/tint/lang/hlsl/writer/raise/decompose_uniform_access.cc",
     "src/tint/lang/hlsl/writer/raise/localize_struct_array_assignment_rtc_shim_1.cc",
@@ -823,8 +825,10 @@ if (enable_msl) then
     "src/tint/lang/msl/writer/common/printer_support.cc",
     "src/tint/lang/msl/writer/helpers/generate_bindings_rtc_shim_1.cc",
     "src/tint/lang/msl/writer/printer/printer_rtc_shim_1.cc",
+    "src/tint/lang/msl/writer/raise/argument_buffers.cc",
     "src/tint/lang/msl/writer/raise/binary_polyfill_rtc_shim_2.cc",
     "src/tint/lang/msl/writer/raise/builtin_polyfill_rtc_shim_3.cc",
+    "src/tint/lang/msl/writer/raise/module_constant.cc",
     "src/tint/lang/msl/writer/raise/module_scope_vars.cc",
     "src/tint/lang/msl/writer/raise/packed_vec3.cc",
     "src/tint/lang/msl/writer/raise/raise_rtc_shim_2.cc",

@@ -473,7 +473,8 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
         (mDeviceInfo.shaderSubgroupExtendedTypes.shaderSubgroupExtendedTypes == VK_TRUE);
 
     // Some devices (PowerVR GE8320) can apparently report subgroup size of 1.
-    const bool allowSubgroupSizeRanges = mSubgroupMinSize >= 4u && mSubgroupMaxSize <= 128u;
+    const bool allowSubgroupSizeRanges =
+        mSubgroupMinSize >= kDefaultSubgroupMinSize && mSubgroupMaxSize <= kDefaultSubgroupMaxSize;
     if (!kForceDisableSubgroups && hasBaseSubgroupSupport && hasRequiredF16Support &&
         allowSubgroupSizeRanges) {
         EnableFeature(Feature::Subgroups);
@@ -546,8 +547,6 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     if (mDeviceInfo.HasExt(DeviceExt::ImageDrmFormatModifier)) {
         EnableFeature(Feature::DawnDrmFormatCapabilities);
     }
-
-    EnableFeature(Feature::ChromiumExperimentalImmediateData);
 }
 
 MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits) {
@@ -737,12 +736,14 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsInternal(wgpu::FeatureLevel 
         }
     }
 
-    // vulkan needs to have enough push constant range size for all
+    // Vulkan needs to have enough push constant range size for all
     // internal and external immediate data usages.
-    constexpr uint32_t kMinVulkanPushConstants = 128;
-    DAWN_ASSERT(vkLimits.maxPushConstantsSize >= kMinVulkanPushConstants);
-    static_assert(kMinVulkanPushConstants >= sizeof(RenderImmediateConstants));
-    static_assert(kMinVulkanPushConstants >= sizeof(ComputeImmediateConstants));
+    constexpr uint32_t kVkGuaranteedMaxPushConstantsSize = 128;  // from Vulkan spec
+    static_assert(kVkGuaranteedMaxPushConstantsSize >=
+                  kDefaultMaxImmediateDataBytes + std::max(sizeof(RenderImmediateConstants),
+                                                           sizeof(ComputeImmediateConstants)));
+    DAWN_ASSERT(vkLimits.maxPushConstantsSize >= kVkGuaranteedMaxPushConstantsSize);
+    limits->v1.maxImmediateSize = kDefaultMaxImmediateDataBytes;
 
     if (mDeviceInfo.HasExt(DeviceExt::ExternalMemoryHost) &&
         mDeviceInfo.externalMemoryHostProperties.minImportedHostPointerAlignment <=
@@ -812,6 +813,10 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         // resolve target doesn't perform the resolve. To work around it, add a small amount of work
         // to the pass to force it to execute.
         deviceToggles->Default(Toggle::VulkanAddWorkToEmptyResolvePass, true);
+
+        // chromium:407109052: Qualcomm devices have a bug where the spirv extended op NClamp
+        // modifies other components of a vector when one of the components is nan.
+        deviceToggles->Default(Toggle::VulkanScalarizeClampBuiltin, true);
     }
 
     if (IsAndroidARM()) {
@@ -825,6 +830,12 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         // `unpack4x8unorm` methods can have issues on ARM. To work around the issue we re-write the
         // pack/unpack calls and do the packing manually.
         deviceToggles->Default(Toggle::PolyfillPackUnpack4x8Norm, true);
+    }
+
+    if (gpu_info::IsARM(GetVendorId())) {
+        // chromium:387000529: Arm devices have issues passing texture handles as parameters to
+        // functions for accesses without a sampler (TextureLoad).
+        deviceToggles->Default(Toggle::VulkanDirectVariableAccessTransformHandle, true);
     }
 
     if (IsAndroidSamsung() || IsAndroidQualcomm() || IsAndroidHuawei()) {
@@ -1188,13 +1199,6 @@ const AHBFunctions* PhysicalDevice::GetOrLoadAHBFunctions() {
 }
 
 void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info) const {
-    if (auto* subgroupProperties = info.Get<AdapterPropertiesSubgroups>()) {
-        // Subgroups are supported only if subgroup size control is supported.
-        subgroupProperties->subgroupMinSize =
-            mDeviceInfo.subgroupSizeControlProperties.minSubgroupSize;
-        subgroupProperties->subgroupMaxSize =
-            mDeviceInfo.subgroupSizeControlProperties.maxSubgroupSize;
-    }
     if (auto* memoryHeapProperties = info.Get<AdapterPropertiesMemoryHeaps>()) {
         size_t count = mDeviceInfo.memoryHeaps.size();
         auto* heapInfo = new MemoryHeapInfo[count];

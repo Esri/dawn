@@ -96,7 +96,7 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
 MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits) {
     GetDefaultLimitsForSupportedFeatureLevel(limits);
     // Set the subgroups limit, as DeviceNull should support subgroups feature.
-    limits->experimentalImmediateDataLimits.maxImmediateDataRangeByteSize =
+    limits->v1.maxImmediateSize =
         kMaxExternalImmediateConstantsPerPipeline * kImmediateConstantElementByteSize;
     return {};
 }
@@ -116,10 +116,6 @@ ResultOrError<Ref<DeviceBase>> PhysicalDevice::CreateDeviceImpl(
 }
 
 void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info) const {
-    if (auto* subgroupProperties = info.Get<AdapterPropertiesSubgroups>()) {
-        subgroupProperties->subgroupMinSize = 4;
-        subgroupProperties->subgroupMaxSize = 128;
-    }
     if (auto* memoryHeapProperties = info.Get<AdapterPropertiesMemoryHeaps>()) {
         auto* heapInfo = new MemoryHeapInfo[1];
         memoryHeapProperties->heapCount = 1;

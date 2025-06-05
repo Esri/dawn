@@ -155,7 +155,7 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "https://crbug.com/dawn/673", ToggleStage::Device}},
     {Toggle::DisableBindGroupLayoutEntryArraySize,
      {"disable_bind_group_layout_entry_array_size",
-      "Disable uses of wgpu::BindGroupLayoutEntryArraySize.",
+      "Disable uses of BindGroupLayoutEntry.bindingArraySize > 0.",
       "https://issues.chromium.org/393558555", ToggleStage::Device}},
     {Toggle::UseD3D12SmallShaderVisibleHeapForTesting,
      {"use_d3d12_small_shader_visible_heap",
@@ -563,18 +563,21 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "https://crbug.com/dawn/2260", ToggleStage::Instance}},
     {Toggle::ExposeWGSLExperimentalFeatures,
      {"expose_wgsl_experimental_features",
-      "Make the Instance expose the experimental features but not the unsage ones, so that safe "
+      "Make the Instance expose the experimental features but not the unsafe ones, so that safe "
       "experimental features can be used without the need for allow_unsafe_apis",
       "https://crbug.com/dawn/2260", ToggleStage::Instance}},
     {Toggle::DisablePolyfillsOnIntegerDivisonAndModulo,
      {"disable_polyfills_on_integer_div_and_mod",
       "Disable the Tint polyfills on integer division and modulo.", "https://crbug.com/tint/2128",
       ToggleStage::Device}},
+    {Toggle::MetalEnableModuleConstant,
+     {"metal_enable_module_constant_transform", "Enable the module constant transform.",
+      "https://crbug.com/419804339", ToggleStage::Device}},
     {Toggle::EnableImmediateErrorHandling,
      {"enable_immediate_error_handling",
       "Have the uncaptured error callback invoked immediately when an error occurs, rather than "
       "waiting for the next Tick. This enables using the stack trace in which the uncaptured error "
-      "occured when breaking into the uncaptured error callback.",
+      "occurred when breaking into the uncaptured error callback.",
       "https://crbug.com/dawn/1789", ToggleStage::Device}},
     {Toggle::VulkanUseStorageInputOutput16,
      {"vulkan_use_storage_input_output_16",
@@ -639,11 +642,23 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
     {Toggle::UseVulkanMemoryModel,
      {"use_vulkan_memory_model", "Use the Vulkan Memory Model if available.",
       "https://crbug.com/392606604", ToggleStage::Adapter}},
+    {Toggle::VulkanScalarizeClampBuiltin,
+     {"vulkan_scalarize_clamp_builtin", "Scalarize calls to the clamp builtin.",
+      "https://crbug.com/407109052", ToggleStage::Device}},
+    {Toggle::VulkanDirectVariableAccessTransformHandle,
+     {"vulkan_direct_variable_access_transform_handle",
+      "Transform handles using direct variable access.", "https://crbug.com/387000529",
+      ToggleStage::Device}},
     {Toggle::VulkanAddWorkToEmptyResolvePass,
      {"vulkan_add_work_to_empty_resolve_pass",
       "Adds a small amount of work to empty render passes which perform a resolve. This toggle is "
       "enabled by default on Qualcomm GPUs, where it is needed to force the resolve to complete.",
       "https://crbug.com/411656647", ToggleStage::Device}},
+    {Toggle::EnableIntegerRangeAnalysisInRobustness,
+     {"enable_integer_range_analysis_in_robustness",
+      "Compute the range of the index with Integer Range Analysis in the robustness transform and "
+      "skip doing index clamping when the out of bound access cannot happen.",
+      "https://crbug.com/348701956", ToggleStage::Device}},
     {Toggle::NoWorkaroundSampleMaskBecomesZeroForAllButLastColorTarget,
      {"no_workaround_sample_mask_becomes_zero_for_all_but_last_color_target",
       "MacOS 12.0+ Intel has a bug where the sample mask is only applied for the last color "
@@ -677,6 +692,13 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
      {"d3d11_disable_fence",
       "Disable d3d11 fence. Fences are not always available on every D3D11 device.",
       "https://crbug.com/chromium/390441217", ToggleStage::Device}},
+    {Toggle::D3D11DelayFlushToGPU,
+     {"d3d11_delay_flush_to_gpu",
+      "When this toggle is enabled, Queue::Submit() might not flush the commands to GPU "
+      "immediately. A flush will happen when IDXGISwapChain::Present() is called or applications "
+      "use Instance.WaitAny() to wait for a GPU operation to finish. This toggle is intended to "
+      "reduce the fixed overhead associated with each flushing.",
+      "https://crbug.com/chromium/377716220", ToggleStage::Device}},
     {Toggle::IgnoreImportedAHardwareBufferVulkanImageSize,
      {"ignore_imported_ahardwarebuffer_vulkan_image_size",
       "Don't validate the required VkImage size against the size of the AHardwareBuffer on import. "
@@ -684,6 +706,7 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "https://crbug.com/333424893", ToggleStage::Device}},
     // Comment to separate the }} so it is clearer what to copy-paste to add a toggle.
 }};
+
 }  // anonymous namespace
 
 void TogglesSet::Set(Toggle toggle, bool enabled) {

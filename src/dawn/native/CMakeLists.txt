@@ -206,6 +206,7 @@ set(sources
     "ExternalTexture.cpp"
     "Features.cpp"
     "Format.cpp"
+    "ImmediateConstantsLayout.cpp"
     "ImmediateConstantsTracker.cpp"
     "IndirectDrawMetadata.cpp"
     "IndirectDrawValidationEncoder.cpp"
@@ -214,7 +215,6 @@ set(sources
     "Limits.cpp"
     "ObjectBase.cpp"
     "ObjectContentHasher.cpp"
-    "PassResourceUsage.cpp"
     "PassResourceUsageTracker.cpp"
     "PerStage.cpp"
     "PhysicalDevice.cpp"
@@ -566,6 +566,29 @@ if (DAWN_ENABLE_NULL)
     )
 endif()
 
+if (DAWN_ENABLE_WEBGPU_ON_WEBGPU)
+    list(APPEND headers
+        "${DAWN_INCLUDE_DIR}/dawn/native/WebGPUBackend.h"
+    )
+    list(APPEND private_headers
+        "webgpu/BackendWGPU.h"
+        "webgpu/BufferWGPU.h"
+        "webgpu/CommandBufferWGPU.h"
+        "webgpu/DeviceWGPU.h"
+        "webgpu/Forward.h"
+        "webgpu/PhysicalDeviceWGPU.h"
+        "webgpu/QueueWGPU.h"
+    )
+    list(APPEND sources
+        "webgpu/BackendWGPU.cpp"
+        "webgpu/BufferWGPU.cpp"
+        "webgpu/CommandBufferWGPU.cpp"
+        "webgpu/DeviceWGPU.cpp"
+        "webgpu/PhysicalDeviceWGPU.cpp"
+        "webgpu/QueueWGPU.cpp"
+    )
+endif()
+
 if ((DAWN_ENABLE_OPENGL OR DAWN_ENABLE_VULKAN) AND DAWN_ENABLE_SPIRV_VALIDATION)
     list(APPEND private_headers
         "SpirvValidation.h"
@@ -798,6 +821,9 @@ if (DAWN_ENABLE_METAL)
 endif()
 if (DAWN_ENABLE_NULL)
     list(APPEND dawn_component_srcs "null/NullBackend.cpp")
+endif()
+if (DAWN_ENABLE_WEBGPU_ON_WEBGPU)
+    list(APPEND dawn_component_srcs "webgpu/WebGPUBackend.cpp")
 endif()
 if (DAWN_ENABLE_OPENGL)
     list(APPEND dawn_component_srcs "opengl/OpenGLBackend.cpp")

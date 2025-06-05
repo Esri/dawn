@@ -28,11 +28,11 @@
 #include "src/tint/lang/msl/writer/printer/printer.h"
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
 
-#include "src/tint/lang/core/constant/composite.h"
 #include "src/tint/lang/core/constant/splat.h"
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/ir/access.h"
@@ -42,7 +42,6 @@
 #include "src/tint/lang/core/ir/construct.h"
 #include "src/tint/lang/core/ir/continue.h"
 #include "src/tint/lang/core/ir/convert.h"
-#include "src/tint/lang/core/ir/core_binary.h"
 #include "src/tint/lang/core/ir/core_builtin_call.h"
 #include "src/tint/lang/core/ir/core_unary.h"
 #include "src/tint/lang/core/ir/discard.h"
@@ -101,7 +100,6 @@
 #include "src/tint/lang/msl/type/level.h"
 #include "src/tint/lang/msl/writer/common/options.h"
 #include "src/tint/lang/msl/writer/common/printer_support.h"
-#include "src/tint/utils/containers/map.h"
 #include "src/tint/utils/macros/scoped_assignment.h"
 #include "src/tint/utils/rtti/switch.h"
 #include "src/tint/utils/text/string.h"
@@ -133,6 +131,8 @@ class Printer : public tint::TextGenerator {
                 core::ir::Capability::kAllowPointersAndHandlesInStructures,
                 core::ir::Capability::kAllowPrivateVarsInFunctions,
                 core::ir::Capability::kAllowAnyLetType,
+                core::ir::Capability::kAllowModuleScopeLets,
+                core::ir::Capability::kAllowWorkspacePointerInputToEntryPoint,
             });
         if (valid != Success) {
             return std::move(valid.Failure());
@@ -144,8 +144,14 @@ class Printer : public tint::TextGenerator {
             Line() << "using namespace metal;";
         }
 
-        // Module-scope declarations should have all been moved into the entry points.
-        TINT_ASSERT(ir_.root_block->IsEmpty());
+        // Module-scope declarations should have all been moved into the entry points with the
+        // exception of const as lets.
+
+        for (auto* inst : *ir_.root_block) {
+            auto let = inst->As<core::ir::Let>();
+            TINT_ASSERT(let);
+            EmitLet(let);
+        }
 
         // Determine which structures will need to be emitted with host-shareable memory layouts.
         FindHostShareableStructs();
@@ -351,9 +357,6 @@ class Printer : public tint::TextGenerator {
                 case core::ir::Function::PipelineStage::kUndefined:
                     break;
             }
-            if (func->IsEntryPoint()) {
-                result_.workgroup_info.allocations.insert({func_name, {}});
-            }
 
             EmitType(out, func->ReturnType());
             out << " " << func_name << "(";
@@ -422,7 +425,7 @@ class Printer : public tint::TextGenerator {
                     func->Stage() == core::ir::Function::PipelineStage::kCompute) {
                     auto* ty = ptr->StoreType();
 
-                    auto& allocations = result_.workgroup_info.allocations.at(func_name);
+                    auto& allocations = result_.workgroup_info.allocations;
                     out << " [[threadgroup(" << allocations.size() << ")]]";
                     allocations.push_back(ty->Size());
 
@@ -656,8 +659,19 @@ class Printer : public tint::TextGenerator {
     /// @param l the let instruction
     void EmitLet(const core::ir::Let* l) {
         auto out = Line();
+
+        if (current_function_ == nullptr) {
+            // program scope let
+            // TODO(crbug.com/419804339): This should be 'constexpr constant' but the matrix class
+            // (constructor) in metal is not constexpr.
+            out << "const constant ";
+        }
         EmitType(out, l->Result()->Type());
-        out << " const " << NameOf(l->Result()) << " = ";
+        out << " ";
+        if (current_function_ != nullptr) {
+            out << "const ";
+        }
+        out << NameOf(l->Result()) << " = ";
         EmitAndTakeAddressIfNeeded(out, l->Value());
         out << ";";
     }
@@ -1511,7 +1525,8 @@ class Printer : public tint::TextGenerator {
         // temporary text buffer, then anything it depends on will emit to the preamble first,
         // and then it copies the text buffer into the preamble.
         TextBuffer str_buf;
-        Line(&str_buf) << "\n" << "struct " << StructName(str) << " {";
+        Line(&str_buf);
+        Line(&str_buf) << "struct " << StructName(str) << " {";
 
         bool is_host_shareable = host_shareable_structs_.Contains(str);
 
@@ -1535,13 +1550,14 @@ class Printer : public tint::TextGenerator {
 
         str_buf.IncrementIndent();
 
+        bool explicit_layout = str->StructFlags().Contains(core::type::kExplicitLayout);
         uint32_t msl_offset = 0;
         for (auto* mem : str->Members()) {
             auto out = Line(&str_buf);
             auto mem_name = NameOf(mem);
             auto ir_offset = mem->Offset();
 
-            if (is_host_shareable) {
+            if (!explicit_layout && is_host_shareable) {
                 if (DAWN_UNLIKELY(ir_offset < msl_offset)) {
                     // Unimplementable layout
                     TINT_IR_ICE(ir_) << "Structure member offset (" << ir_offset
@@ -1581,6 +1597,10 @@ class Printer : public tint::TextGenerator {
                     TINT_IR_ICE(ir_) << "unknown builtin";
                 }
                 out << " [[" << name << "]]";
+            }
+
+            if (attributes.binding_point.has_value()) {
+                out << " [[id(" << attributes.binding_point->binding << ")]]";
             }
 
             if (auto location = attributes.location) {
@@ -1642,7 +1662,7 @@ class Printer : public tint::TextGenerator {
 
             out << ";";
 
-            if (is_host_shareable) {
+            if (!explicit_layout && is_host_shareable) {
                 // Calculate new MSL offset
                 auto size_align = MslPackedTypeSizeAndAlign(ty);
                 if (DAWN_UNLIKELY(msl_offset % size_align.align)) {
@@ -1654,7 +1674,7 @@ class Printer : public tint::TextGenerator {
             }
         }
 
-        if (is_host_shareable && str->Size() != msl_offset) {
+        if (!explicit_layout && is_host_shareable && str->Size() != msl_offset) {
             add_padding(str->Size() - msl_offset, msl_offset);
         }
 

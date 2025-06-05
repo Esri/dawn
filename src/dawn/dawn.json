@@ -89,6 +89,13 @@
             {"name": "xr compatible", "type": "bool"}
         ]
     },
+    "request adapter WebGPU backend options": {
+        "category": "structure",
+        "chained": "in",
+        "chain roots": ["request adapter options"],
+        "tags": ["dawn", "native"],
+        "members": []
+    },
     "request adapter callback": {
         "category": "callback function",
         "args": [
@@ -495,21 +502,13 @@
         ]
     },
 
-    "bind group layout entry array size": {
-        "category": "structure",
-        "chained": "in",
-        "chain roots": ["bind group layout entry"],
-        "members": [
-            {"name": "array size", "type": "uint32_t", "default": 0}
-        ]
-    },
-
     "bind group layout entry": {
         "category": "structure",
         "extensible": "in",
         "members": [
             {"name": "binding", "type": "uint32_t"},
             {"name": "visibility", "type": "shader stage"},
+            {"name": "binding array size", "type": "uint32_t", "default": 0},
             {"name": "buffer", "type": "buffer binding layout", "default": "zero"},
             {"name": "sampler", "type": "sampler binding layout", "default": "zero"},
             {"name": "texture", "type": "texture binding layout", "default": "zero"},
@@ -1077,6 +1076,7 @@
             },
             {
                 "name": "set immediate data",
+                "tags": ["dawn"],
                 "args": [
                     {"name": "offset", "type": "uint32_t"},
                     {"name": "data", "type": "void", "annotation": "const*", "length": "size"},
@@ -1591,28 +1591,11 @@
             {"name": "max compute workgroup size y", "type": "uint32_t", "default": "limit u32 undefined"},
             {"name": "max compute workgroup size z", "type": "uint32_t", "default": "limit u32 undefined"},
             {"name": "max compute workgroups per dimension", "type": "uint32_t", "default": "limit u32 undefined"},
+            {"name": "max immediate size", "type": "uint32_t", "default": "limit u32 undefined"},
             {"name": "max storage buffers in vertex stage", "type": "uint32_t", "default": "limit u32 undefined"},
             {"name": "max storage textures in vertex stage", "type": "uint32_t", "default": "limit u32 undefined"},
             {"name": "max storage buffers in fragment stage", "type": "uint32_t", "default": "limit u32 undefined"},
             {"name": "max storage textures in fragment stage", "type": "uint32_t", "default": "limit u32 undefined"}
-        ]
-    },
-    "adapter properties subgroups": {
-        "category": "structure",
-        "chained": "out",
-        "chain roots": ["adapter info"],
-        "members": [
-            {"name": "subgroup min size", "type": "uint32_t", "default": "limit u32 undefined"},
-            {"name": "subgroup max size", "type": "uint32_t", "default": "limit u32 undefined"}
-        ]
-    },
-    "dawn experimental immediate data limits": {
-        "category": "structure",
-        "chained": "out",
-        "chain roots": ["limits"],
-        "tags": ["dawn"],
-        "members": [
-            {"name": "max immediate data range byte size", "type": "uint32_t", "default": "limit u32 undefined"}
         ]
     },
     "dawn texel copy buffer row alignment limits": {
@@ -2285,7 +2268,6 @@
             {"value": 2, "name": "dawn native", "tags": ["dawn", "native"]},
             {"value": 3, "name": "chromium experimental timestamp query inside passes", "tags": ["dawn"]},
             {"value": 4, "name": "implicit device synchronization", "tags": ["dawn", "native"]},
-            {"value": 5, "name": "chromium experimental immediate data", "tags": ["dawn"]},
             {"value": 6, "name": "transient attachments", "tags": ["dawn"]},
             {"value": 7, "name": "MSAA render to single sampled", "tags": ["dawn"]},
             {"value": 8, "name": "D3D11 multithread protected", "tags": ["dawn", "native"]},
@@ -2654,7 +2636,7 @@
             {"name": "label", "type": "string view", "optional": true},
             {"name": "bind group layout count", "type": "size_t"},
             {"name": "bind group layouts", "type": "bind group layout", "annotation": "const*", "length": "bind group layout count", "optional": true},
-            {"name": "immediate data range byte size", "type": "uint32_t", "default": 0}
+            {"name": "immediate size", "type": "uint32_t", "default": 0}
         ]
     },
     "pipeline layout pixel local storage": {
@@ -2833,7 +2815,8 @@
     "queue work done callback": {
         "category": "callback function",
         "args": [
-            {"name": "status", "type": "queue work done status"}
+            {"name": "status", "type": "queue work done status"},
+            {"name": "message", "type": "string view"}
         ]
     },
     "queue work done callback info": {
@@ -2968,6 +2951,7 @@
             },
             {
                 "name": "set immediate data",
+                "tags": ["dawn"],
                 "args": [
                     {"name": "offset", "type": "uint32_t"},
                     {"name": "data", "type": "void", "annotation": "const*", "length": "size"},
@@ -3068,6 +3052,20 @@
         "members": [
             {"name": "x", "type": "uint32_t"},
             {"name": "y", "type": "uint32_t"},
+            {"name": "width", "type": "uint32_t"},
+            {"name": "height", "type": "uint32_t"}
+        ]
+    },
+    "render pass descriptor resolve rect": {
+        "category": "structure",
+        "tags": ["dawn"],
+        "chained": "in",
+        "chain roots": ["render pass descriptor"],
+        "members": [
+            {"name": "colorOffsetX", "type": "uint32_t"},
+            {"name": "colorOffsetY", "type": "uint32_t"},
+            {"name": "resolveOffsetX", "type": "uint32_t"},
+            {"name": "resolveOffsetY", "type": "uint32_t"},
             {"name": "width", "type": "uint32_t"},
             {"name": "height", "type": "uint32_t"}
         ]
@@ -3274,6 +3272,7 @@
             },
             {
                 "name": "set immediate data",
+                "tags": ["dawn"],
                 "args": [
                     {"name": "offset", "type": "uint32_t"},
                     {"name": "data", "type": "void", "annotation": "const*", "length": "size"},
@@ -3790,8 +3789,6 @@
             {"value": 9, "name": "surface source XCB window"},
             {"value": 10, "name": "surface color management", "tags": ["upstream", "emscripten"]},
             {"value": 11, "name": "request adapter WebXR options", "tags": ["upstream", "emscripten"]},
-            {"value": 12, "name": "adapter properties subgroups"},
-            {"value": 13, "name": "bind group layout entry array size"},
 
             {"value": 0, "name": "texture binding view dimension descriptor", "tags": ["compat"]},
 
@@ -3855,7 +3852,6 @@
             {"value": 54, "name": "y cb cr vk descriptor", "tags": ["dawn"]},
             {"value": 55, "name": "shared texture memory a hardware buffer properties", "tags": ["dawn", "native"]},
             {"value": 56, "name": "a hardware buffer properties", "tags": ["dawn", "native"]},
-            {"value": 57, "name": "dawn experimental immediate data limits", "tags": ["dawn"]},
             {"value": 58, "name": "dawn texel copy buffer row alignment limits", "tags": ["dawn"]},
             {"value": 59, "name": "adapter properties subgroup matrix configs", "tags": ["dawn"]},
             {"value": 60, "name": "shared fence EGL sync descriptor", "tags": ["dawn", "native"]},
@@ -3865,7 +3861,9 @@
             {"value": 64, "name": "dawn fake buffer OOM for testing", "tags": ["dawn"]},
             {"value": 65, "name": "surface descriptor from windows WinUI swap chain panel", "tags": ["dawn"]},
             {"value": 66, "name": "dawn device allocator control", "tags": ["dawn"]},
-            {"value": 67, "name": "dawn host mapped pointer limits", "tags": ["dawn"]}
+            {"value": 67, "name": "dawn host mapped pointer limits", "tags": ["dawn"]},
+            {"value": 68, "name": "render pass descriptor resolve rect", "tags": ["dawn"]},
+            {"value": 69, "name": "request adapter WebGPU backend options", "tags": ["dawn", "native"]}
         ]
     },
     "texture": {

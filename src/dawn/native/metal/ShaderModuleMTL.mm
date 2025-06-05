@@ -82,7 +82,17 @@ using WorkgroupAllocations = std::vector<uint32_t>;
     X(WorkgroupAllocations, workgroupAllocations) \
     X(Extent3D, localWorkgroupSize)
 
-DAWN_SERIALIZABLE(struct, MslCompilation, MSL_COMPILATION_MEMBERS){};
+// clang-format off
+DAWN_SERIALIZABLE(struct, MslCompilation, MSL_COMPILATION_MEMBERS) {
+    static ResultOrError<MslCompilation> FromValidatedBlob(Blob blob) {
+        MslCompilation result;
+        DAWN_TRY_ASSIGN(result, FromBlob(std::move(blob)));
+        DAWN_INVALID_IF(result.msl.empty() || result.remappedEntryPointName.empty(),
+                        "Cached MslCompilation result has no MSL");
+        return result;
+    }
+};
+// clang-format on
 #undef MSL_COMPILATION_MEMBERS
 
 }  // namespace
@@ -288,7 +298,11 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
     req.tintOptions.bindings = std::move(bindings);
     req.tintOptions.disable_polyfill_integer_div_mod =
         device->IsToggleEnabled(Toggle::DisablePolyfillsOnIntegerDivisonAndModulo);
+    req.tintOptions.enable_module_constant =
+        device->IsToggleEnabled(Toggle::MetalEnableModuleConstant);
     req.tintOptions.vertex_pulling_config = std::move(vertexPullingTransformConfig);
+    req.tintOptions.enable_integer_range_analysis =
+        device->IsToggleEnabled(Toggle::EnableIntegerRangeAnalysisInRobustness);
 
     req.limits = LimitsForCompilationRequest::Create(device->GetLimits().v1);
     req.adapterSupportedLimits =
@@ -297,7 +311,7 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
 
     CacheResult<MslCompilation> mslCompilation;
     DAWN_TRY_LOAD_OR_RUN(
-        mslCompilation, device, std::move(req), MslCompilation::FromBlob,
+        mslCompilation, device, std::move(req), MslCompilation::FromValidatedBlob,
         [](MslCompilationRequest r) -> ResultOrError<MslCompilation> {
             TRACE_EVENT0(r.platform.UnsafeGetValue(), General, "tint::msl::writer::Generate");
             // Requires Tint Program here right before actual using.
@@ -374,14 +388,12 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
                 )" +
                   msl;
 
-            auto workgroupAllocations = std::move(
-                result->workgroup_info.allocations.at(r.tintOptions.remapped_entry_point_name));
             return MslCompilation{{
                 std::move(msl),
                 r.tintOptions.remapped_entry_point_name,
                 result->needs_storage_buffer_sizes,
                 result->has_invariant_attribute,
-                std::move(workgroupAllocations),
+                std::move(result->workgroup_info.allocations),
                 localSize,
             }};
         },

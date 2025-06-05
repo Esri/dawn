@@ -319,6 +319,7 @@ dawn_test("dawn_unittests") {
     "DawnNativeTest.cpp",
     "DawnNativeTest.h",
     "unittests/AsyncTaskTests.cpp",
+    "unittests/BitSetRangeIteratorTests.cpp",
     "unittests/BuddyAllocatorTests.cpp",
     "unittests/BuddyMemoryAllocatorTests.cpp",
     "unittests/ChainUtilsTests.cpp",
@@ -655,6 +656,7 @@ source_set("end2end_tests_sources") {
     "end2end/PipelineCachingTests.cpp",
     "end2end/PipelineLayoutTests.cpp",
     "end2end/PixelLocalStorageTests.cpp",
+    "end2end/PolyfillBuiltinSimpleTests.cpp",
     "end2end/PrimitiveStateTests.cpp",
     "end2end/PrimitiveTopologyTests.cpp",
     "end2end/QueryTests.cpp",
@@ -692,6 +694,10 @@ source_set("end2end_tests_sources") {
     "end2end/ViewportOrientationTests.cpp",
     "end2end/ViewportTests.cpp",
   ]
+
+  if (!is_debug) {
+    sources += [ "end2end/RuntimeTimeoutCompute.cpp" ]
+  }
 
   libs = []
 

@@ -116,7 +116,8 @@ class State {
         core::ir::Capabilities caps{core::ir::Capability::kAllowRefTypes,
                                     core::ir::Capability::kAllowOverrides,
                                     core::ir::Capability::kAllowPhonyInstructions};
-        if (auto res = core::ir::Validate(mod, caps); res != Success) {
+        if (auto res = core::ir::ValidateAndDumpIfNeeded(mod, "wgsl.to_program", caps);
+            res != Success) {
             // IR module failed validation.
             b.Diagnostics().AddError(Source{}) << res.Failure();
             return Program{resolver::Resolve(b)};
@@ -366,7 +367,7 @@ class State {
             [&](const core::ir::Binary* i) { Binary(i); },                          //
             [&](const core::ir::BreakIf* i) { BreakIf(i); },                        //
             [&](const core::ir::Call* i) { Call(i); },                              //
-            [&](const core::ir::Continue*) {},                                      //
+            [&](const core::ir::Continue* c) { EmitContinue(c); },                  //
             [&](const core::ir::ExitIf*) {},                                        //
             [&](const core::ir::ExitLoop* i) { ExitLoop(i); },                      //
             [&](const core::ir::ExitSwitch* i) { ExitSwitch(i); },                  //
@@ -547,6 +548,15 @@ class State {
         Append(b.Break());
     }
 
+    void EmitContinue(const core::ir::Continue* c) {
+        auto* loop = c->Loop();
+        // No need to emit the continue as the last statement in loop as it's implicit
+        if (loop->Body()->Terminator() == c) {
+            return;
+        }
+        Append(b.Continue());
+    }
+
     void ExitLoop(const core::ir::ExitLoop*) { Append(b.Break()); }
 
     void BreakIf(const core::ir::BreakIf* i) { Append(b.BreakIf(Expr(i->Condition()))); }
@@ -607,8 +617,8 @@ class State {
                 Enable(wgsl::Extension::kChromiumExperimentalPixelLocal);
                 b.GlobalVar(name, ty, init, ref->AddressSpace(), std::move(attrs));
                 return;
-            case core::AddressSpace::kPushConstant:
-                Enable(wgsl::Extension::kChromiumExperimentalPushConstant);
+            case core::AddressSpace::kImmediate:
+                Enable(wgsl::Extension::kChromiumExperimentalImmediate);
                 b.GlobalVar(name, ty, init, ref->AddressSpace(), std::move(attrs));
                 return;
             default:

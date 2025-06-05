@@ -84,6 +84,9 @@ config("internal_config") {
   if (dawn_enable_null) {
     defines += [ "DAWN_ENABLE_BACKEND_NULL" ]
   }
+  if (dawn_enable_webgpu_on_webgpu) {
+    defines += [ "DAWN_ENABLE_BACKEND_WEBGPU" ]
+  }
   if (dawn_enable_opengl) {
     defines += [ "DAWN_ENABLE_BACKEND_OPENGL" ]
   }
@@ -264,11 +267,14 @@ if (is_win || is_linux || is_chromeos || is_mac || is_fuchsia || is_android ||
       "Alloc.h",
       "Assert.cpp",
       "Assert.h",
+      "BitSetRangeIterator.h",
       "Compiler.h",
       "Constants.h",
       "ContentLessObjectCache.h",
       "ContentLessObjectCacheable.h",
       "CoreFoundationRef.h",
+      "Defer.cpp",
+      "Defer.h",
       "DynamicLib.cpp",
       "DynamicLib.h",
       "Enumerator.h",

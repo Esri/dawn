@@ -18,13 +18,20 @@ function _display_help_dialog() {
   exit 0
 }
 overwrite=0
-while getopts "oh" flag; do
+while getopts ":oh" flag; do
   case $flag in 
     o)
     overwrite=1
     ;;
     h)
     _display_help_dialog
+    ;;
+    \?)
+    echo "Invalid option: -$OPTARG"
+    echo 
+    echo "To display the help dialog, please use -h."
+    echo
+    exit 1
     ;;
   esac
 done
@@ -45,7 +52,7 @@ _sed_inplace "s|_rtc_shim_.*\.|.|" ../dawn.lua
 echo "#!/usr/bin/env python" >> ../tools/fetch_dawn_dependencies_temp.py
 cat ../tools/fetch_dawn_dependencies.py >> ../tools/fetch_dawn_dependencies_temp.py
 ${python_path} ../tools/fetch_dawn_dependencies_temp.py --directory ..
-m ../tools/fetch_dawn_dependencies_temp.py
+rm ../tools/fetch_dawn_dependencies_temp.py
 
 cd ../..
 mkdir temp_dawn_build

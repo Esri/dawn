@@ -138,6 +138,7 @@ enum class Toggle {
     ExposeWGSLTestingFeatures,
     ExposeWGSLExperimentalFeatures,
     DisablePolyfillsOnIntegerDivisonAndModulo,
+    MetalEnableModuleConstant,
     EnableImmediateErrorHandling,
     VulkanUseStorageInputOutput16,
     D3D12DontUseShaderModel66OrHigher,
@@ -151,7 +152,10 @@ enum class Toggle {
     D3D12RelaxMinSubgroupSizeTo8,
     D3D12RelaxBufferTextureCopyPitchAndOffsetAlignment,
     UseVulkanMemoryModel,
+    VulkanScalarizeClampBuiltin,
+    VulkanDirectVariableAccessTransformHandle,
     VulkanAddWorkToEmptyResolvePass,
+    EnableIntegerRangeAnalysisInRobustness,
 
     // Unresolved issues.
     NoWorkaroundSampleMaskBecomesZeroForAllButLastColorTarget,
@@ -163,6 +167,7 @@ enum class Toggle {
 
     D3D11UseUnmonitoredFence,
     D3D11DisableFence,
+    D3D11DelayFlushToGPU,
     IgnoreImportedAHardwareBufferVulkanImageSize,
 
     EnumCount,

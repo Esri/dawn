@@ -172,6 +172,7 @@ struct Options {
 
 #if TINT_BUILD_MSL_WRITER
     std::string xcrun_path;
+    bool use_argument_buffers = false;
     std::unordered_map<uint32_t, uint32_t> pixel_local_attachments;
 #endif
 
@@ -393,6 +394,15 @@ violations that may be produced)",
             opts->spirv_reader_options.allow_non_uniform_derivatives = true;
         }
     });
+
+    auto& sampler_mapping = options.Add<StringOption>(
+        "sampler-mapping",
+        "Allows remapping the binding points of samplers from the SPIR-V file. "
+        "This allows setting a correct binding point for samplers which were part of a combined "
+        "texture/sampler pair. Entries are provided as binding point pairs (group, binding) and "
+        "each provides a (source:destination) mapping. (e.g. 1,2:3,4) Multiple entries should "
+        "be separated with a space.",
+        Default{""});
 #endif
 
 #if TINT_BUILD_SPV_WRITER
@@ -422,6 +432,10 @@ When specified, automatically enables MSL validation)",
             opts->validate = true;
         }
     });
+
+    auto& use_argument_buffers = options.Add<BoolOption>(
+        "use-argument-buffers", "Use the Argument Buffers in MSL", Default{false});
+    TINT_DEFER(opts->use_argument_buffers = *use_argument_buffers.value);
 #endif  // TINT_BUILD_MSL_WRITER
 
 #if TINT_BUILD_HLSL_WRITER
@@ -501,6 +515,49 @@ Options:
             opts->overrides.Add(std::string(parts[0]), value.Get());
         }
     }
+
+#if TINT_BUILD_SPV_READER
+    if (!sampler_mapping.value->empty()) {
+        auto str_to_bp = [](const std::string_view& str) -> std::optional<tint::BindingPoint> {
+            auto parts = tint::Split(str, ",");
+            if (parts.Length() != 2) {
+                std::cerr << "A binding point requires a 'group,binding' pair, found "
+                          << parts.Length() << " components instead of 2.\n";
+                return std::nullopt;
+            }
+
+            uint32_t group = 0;
+            std::from_chars(parts[0].data(), parts[0].data() + parts[0].size(), group);
+
+            uint32_t binding = 0;
+            std::from_chars(parts[1].data(), parts[1].data() + parts[0].size(), binding);
+
+            return {tint::BindingPoint{group, binding}};
+        };
+
+        for (auto mapping : tint::Split(*sampler_mapping.value, " ")) {
+            auto parts = tint::Split(mapping, ":");
+            if (parts.Length() != 2) {
+                std::cerr << "Expected source and destination binding points separated by a ':'\n";
+                return false;
+            }
+
+            auto opt_src = str_to_bp(parts[0]);
+            if (!opt_src.has_value()) {
+                return false;
+            }
+            tint::BindingPoint src_bp = opt_src.value();
+
+            auto opt_dst = str_to_bp(parts[1]);
+            if (!opt_dst.has_value()) {
+                return false;
+            }
+            tint::BindingPoint dst_bp = opt_dst.value();
+
+            opts->spirv_reader_options.sampler_mappings.insert({src_bp, dst_bp});
+        }
+    }
+#endif  // TINT_BUILD_SPV_READER
 
 #if TINT_BUILD_HLSL_WRITER
     if (pixel_local_attachment_formats.value.has_value()) {
@@ -836,11 +893,11 @@ bool GenerateSpirv([[maybe_unused]] Options& options,
 
     auto entry_point = inspector.GetEntryPoint(options.ep_name);
 
-    // Push constant Offset must be 4-byte aligned.
-    uint32_t offset = tint::RoundUp(4u, entry_point.push_constant_size);
+    // Immediate data Offset must be 4-byte aligned.
+    uint32_t offset = tint::RoundUp(4u, entry_point.immediate_data_size);
 
     if (entry_point.frag_depth_used) {
-        // Place the RangeOffset push constant member after user-defined push constants (if
+        // Place the RangeOffset immediate data member after user-defined immediate data (if
         // any).
         gen_options.depth_range_offsets = {offset + 0, offset + 4};
         offset += 8;
@@ -1021,6 +1078,7 @@ bool GenerateMsl([[maybe_unused]] Options& options,
     gen_options.bindings = tint::msl::writer::GenerateBindings(ir.Get());
     gen_options.array_length_from_uniform.ubo_binding = 30;
     gen_options.disable_demote_to_helper = options.disable_demote_to_helper;
+    gen_options.use_argument_buffers = options.use_argument_buffers;
 
     // Add array_length_from_uniform entries for all storage buffers with runtime sized arrays.
     std::unordered_set<tint::BindingPoint> storage_bindings;
@@ -1301,11 +1359,11 @@ bool GenerateGlsl([[maybe_unused]] Options& options,
 
     auto entry_point = inspector.GetEntryPoint(options.ep_name);
 
-    // Push constant Offset must be 4-byte aligned.
-    uint32_t offset = tint::RoundUp(4u, entry_point.push_constant_size);
+    // Immediate data Offset must be 4-byte aligned.
+    uint32_t offset = tint::RoundUp(4u, entry_point.immediate_data_size);
 
     if (entry_point.instance_index_used) {
-        // Place the first_instance push constant member after user-defined push constants (if
+        // Place the first_instance immediate data member after user-defined immediate data (if
         // any).
         gen_options.first_instance_offset = offset;
         offset += 4;

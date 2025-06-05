@@ -35,10 +35,15 @@
 namespace tint::core::ir {
 class Access;
 class Binary;
+class Constant;
+class Convert;
 class Function;
 class FunctionParam;
+class Let;
 class Load;
 class Loop;
+class Module;
+class Value;
 class Var;
 }  // namespace tint::core::ir
 
@@ -69,8 +74,9 @@ struct IntegerRangeAnalysisImpl;
 class IntegerRangeAnalysis {
   public:
     /// Constructor
-    /// @param func the function to cache analyses for
-    explicit IntegerRangeAnalysis(Function* func);
+    /// @module ir_module the ir module to cache analyses for
+    explicit IntegerRangeAnalysis(Module* ir_module);
+
     ~IntegerRangeAnalysis();
 
     /// Returns the integer range info of a given parameter with given index, if it is an integer
@@ -97,6 +103,26 @@ class IntegerRangeAnalysis {
     /// Returns the integer range info of a given `Access` variable if it is an integer variable and
     /// it has a meaningful range. Returns nullptr otherwise.
     const IntegerRangeInfo* GetInfo(const Access* access);
+
+    /// Returns the integer range info of a given `Let` variable if it is an integer variable and it
+    /// has a meaningful range. Returns nullptr otherwise.
+    const IntegerRangeInfo* GetInfo(const Let* let);
+
+    /// Returns the integer range info of a given `Constant` if it is an integer.
+    /// Returns nullptr otherwise.
+    const IntegerRangeInfo* GetInfo(const Constant* constant);
+
+    /// Returns the integer range info of a given `Value` variable if it is an integer variable and
+    /// it has a meaningful range. Returns nullptr otherwise.
+    const IntegerRangeInfo* GetInfo(const Value* value);
+
+    /// Returns the integer range info of a given `Binary` variable if it is an integer variable and
+    /// it has a meaningful range. Returns nullptr otherwise.
+    const IntegerRangeInfo* GetInfo(const Binary* binary);
+
+    /// Returns the integer range info of a given `Convert` variable if it is an integer variable
+    /// and it has a meaningful range. Returns nullptr otherwise.
+    const IntegerRangeInfo* GetInfo(const Convert* convert);
 
     /// Note: This function is only for tests.
     /// Returns the pointer of the loop control variable in the given loop when its initializer

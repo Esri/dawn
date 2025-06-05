@@ -148,7 +148,7 @@
 	gclient-condition = build_with_chromium
 [submodule "third_party/emsdk"]
 	path = third_party/emsdk
-	url = https://github.com/emscripten-core/emsdk.git
+	url = https://chromium.googlesource.com/external/github.com/emscripten-core/emsdk.git
 	gclient-condition = dawn_wasm
 [submodule "third_party/node-api-headers"]
 	path = third_party/node-api-headers
@@ -162,6 +162,9 @@
 	path = third_party/gpuweb
 	url = https://chromium.googlesource.com/external/github.com/gpuweb/gpuweb
 	gclient-condition = dawn_node
+[submodule "third_party/webgpu-headers/src"]
+	path = third_party/webgpu-headers/src
+	url = https://chromium.googlesource.com/external/github.com/webgpu-native/webgpu-headers
 [submodule "third_party/protobuf"]
 	path = third_party/protobuf
 	url = https://chromium.googlesource.com/chromium/src/third_party/protobuf
