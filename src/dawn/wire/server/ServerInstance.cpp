@@ -113,14 +113,6 @@ void Server::OnRequestAdapterCallback(RequestAdapterUserdata* data,
         propertiesChain = &(*propertiesChain)->next;
     }
 
-    // Query AdapterPropertiesSubgroups if the feature is supported.
-    WGPUAdapterPropertiesSubgroups subgroupsProperties = {};
-    subgroupsProperties.chain.sType = WGPUSType_AdapterPropertiesSubgroups;
-    if (mProcs.adapterHasFeature(adapter, WGPUFeatureName_Subgroups)) {
-        *propertiesChain = &subgroupsProperties.chain;
-        propertiesChain = &(*propertiesChain)->next;
-    }
-
     // Query AdapterPropertiesSubgroupMatrixConfigs if the feature is supported.
     FreeMembers<WGPUAdapterPropertiesSubgroupMatrixConfigs> subgroupMatrixConfigs(mProcs);
     // WGPUAdapterPropertiesSubgroupMatrixConfigs subgroupMatrixConfigs{};
@@ -141,15 +133,10 @@ void Server::OnRequestAdapterCallback(RequestAdapterUserdata* data,
     // Query and report the adapter limits, including all known extension limits.
     WGPULimits limits = {};
 
-    // Chained DawnExperimentalImmediateDataLimits.
-    WGPUDawnExperimentalImmediateDataLimits experimentalImmediateDataLimits = {};
-    experimentalImmediateDataLimits.chain.sType = WGPUSType_DawnExperimentalImmediateDataLimits;
-    limits.nextInChain = &experimentalImmediateDataLimits.chain;
-
     // Chained DawnTexelCopyBufferRowAlignmentLimits.
     WGPUDawnTexelCopyBufferRowAlignmentLimits texelCopyBufferRowAlignmentLimits = {};
     texelCopyBufferRowAlignmentLimits.chain.sType = WGPUSType_DawnTexelCopyBufferRowAlignmentLimits;
-    experimentalImmediateDataLimits.chain.next = &texelCopyBufferRowAlignmentLimits.chain;
+    limits.nextInChain = &texelCopyBufferRowAlignmentLimits.chain;
 
     mProcs.adapterGetLimits(adapter, &limits);
     cmd.limits = &limits;

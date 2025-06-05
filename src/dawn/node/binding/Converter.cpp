@@ -67,9 +67,11 @@ bool Converter::Convert(wgpu::Extent3D& out, const interop::GPUExtent3D& in) {
             default:
             case 3:
                 out.depthOrArrayLayers = (*vec)[2];
-            case 2:  // fallthrough
+                [[fallthrough]];
+            case 2:
                 out.height = (*vec)[1];
-            case 1:  // fallthrough
+                [[fallthrough]];
+            case 1:
                 out.width = (*vec)[0];
                 return true;
             case 0:
@@ -101,11 +103,14 @@ bool Converter::Convert(wgpu::Color& out, const interop::GPUColor& in) {
             default:
             case 4:
                 out.a = (*vec)[3];
-            case 3:  // fallthrough
+                [[fallthrough]];
+            case 3:
                 out.b = (*vec)[2];
-            case 2:  // fallthrough
+                [[fallthrough]];
+            case 2:
                 out.g = (*vec)[1];
-            case 1:  // fallthrough
+                [[fallthrough]];
+            case 1:
                 out.r = (*vec)[0];
                 return true;
             case 0:
@@ -121,10 +126,13 @@ bool Converter::Convert(wgpu::Origin3D& out, const std::vector<interop::GPUInteg
         default:
         case 3:
             out.z = in[2];
-        case 2:  // fallthrough
+            [[fallthrough]];
+        case 2:
             out.y = in[1];
-        case 1:  // fallthrough
+            [[fallthrough]];
+        case 1:
             out.x = in[0];
+            [[fallthrough]];
         case 0:
             break;
     }
@@ -1343,6 +1351,9 @@ bool Converter::Convert(wgpu::BindGroupEntry& out, const interop::GPUBindGroupEn
     if (auto* res = std::get_if<interop::Interface<interop::GPUTextureView>>(&in.resource)) {
         return Convert(out.textureView, *res);
     }
+    if (auto* res = std::get_if<interop::Interface<interop::GPUBuffer>>(&in.resource)) {
+        return Convert(out.buffer, *res);
+    }
     if (auto* res = std::get_if<interop::GPUBufferBinding>(&in.resource)) {
         auto buffer = res->buffer.As<GPUBuffer>();
         out.size = wgpu::kWholeSize;
@@ -1352,7 +1363,8 @@ bool Converter::Convert(wgpu::BindGroupEntry& out, const interop::GPUBindGroupEn
         out.buffer = *buffer;
         return true;
     }
-    if (auto* res = std::get_if<interop::Interface<interop::GPUExternalTexture>>(&in.resource)) {
+    if ([[maybe_unused]] auto* res =
+            std::get_if<interop::Interface<interop::GPUExternalTexture>>(&in.resource)) {
         // TODO(crbug.com/dawn/1129): External textures
         UNIMPLEMENTED(env, {});
     }
@@ -1363,8 +1375,9 @@ bool Converter::Convert(wgpu::BindGroupLayoutEntry& out,
                         const interop::GPUBindGroupLayoutEntry& in) {
     // TODO(crbug.com/dawn/1129): External textures
     return Convert(out.binding, in.binding) && Convert(out.visibility, in.visibility) &&
-           Convert(out.buffer, in.buffer) && Convert(out.sampler, in.sampler) &&
-           Convert(out.texture, in.texture) && Convert(out.storageTexture, in.storageTexture);
+           Convert(out.bindingArraySize, in.bindingArraySize) && Convert(out.buffer, in.buffer) &&
+           Convert(out.sampler, in.sampler) && Convert(out.texture, in.texture) &&
+           Convert(out.storageTexture, in.storageTexture);
 }
 
 bool Converter::Convert(wgpu::BufferBindingLayout& out, const interop::GPUBufferBindingLayout& in) {
@@ -1533,15 +1546,14 @@ bool Converter::Convert(wgpu::FeatureName& out, interop::GPUFeatureName in) {
         case interop::GPUFeatureName::kDualSourceBlending:
             out = wgpu::FeatureName::DualSourceBlending;
             return true;
-        case interop::GPUFeatureName::kChromiumExperimentalImmediateData:
-            out = wgpu::FeatureName::ChromiumExperimentalImmediateData;
-            return true;
         case interop::GPUFeatureName::kClipDistances:
             out = wgpu::FeatureName::ClipDistances;
             return true;
         case interop::GPUFeatureName::kChromiumExperimentalSubgroupMatrix:
             out = wgpu::FeatureName::ChromiumExperimentalSubgroupMatrix;
             return true;
+        case interop::GPUFeatureName::kTextureFormatsTier1:
+            return false;
     }
     return false;
 }
@@ -1572,7 +1584,6 @@ bool Converter::Convert(interop::GPUFeatureName& out, wgpu::FeatureName in) {
         CASE(MultiDrawIndirect, kMultiDrawIndirect);
         CASE(DualSourceBlending, kDualSourceBlending);
         CASE(ClipDistances, kClipDistances);
-        CASE(ChromiumExperimentalImmediateData, kChromiumExperimentalImmediateData);
         CASE(ChromiumExperimentalSubgroupMatrix, kChromiumExperimentalSubgroupMatrix);
 
 #undef CASE

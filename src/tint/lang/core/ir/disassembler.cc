@@ -956,8 +956,8 @@ void Disassembler::EmitStructDecl(const core::type::Struct* str) {
             case core::type::kBlock:
                 out_ << ", " << StyleAttribute("@block");
                 break;
-            case core::type::kSpirvExplicitLayout:
-                out_ << ", " << StyleAttribute("@spirv.explicit_layout");
+            case core::type::kExplicitLayout:
+                out_ << ", " << StyleAttribute("@core.explicit_layout");
                 break;
         }
     }
@@ -992,6 +992,10 @@ void Disassembler::EmitStructDecl(const core::type::Struct* str) {
         if (member->Attributes().builtin.has_value()) {
             out_ << ", " << StyleAttribute("@builtin") << "("
                  << StyleLiteral(member->Attributes().builtin.value()) << ")";
+        }
+        if (member->Attributes().binding_point.has_value()) {
+            out_ << ", ";
+            EmitBindingPoint(member->Attributes().binding_point.value());
         }
         EmitLine();
     }

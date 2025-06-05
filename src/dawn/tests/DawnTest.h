@@ -51,8 +51,10 @@
 #include "dawn/tests/MockCallback.h"
 #include "dawn/tests/ParamGenerator.h"
 #include "dawn/tests/ToggleParser.h"
+#include "dawn/utils/ComboLimits.h"
 #include "dawn/utils/TestUtils.h"
 #include "dawn/utils/TextureUtils.h"
+#include "dawn/utils/Timer.h"
 #include "dawn/webgpu_cpp_print.h"
 #include "partition_alloc/pointers/raw_ptr.h"
 
@@ -253,6 +255,7 @@ class DawnTestBase {
     bool IsD3D12() const;
     bool IsMetal() const;
     bool IsNull() const;
+    bool IsWebGPUOnWebGPU() const;
     bool IsOpenGL() const;
     bool IsOpenGLES() const;
     bool IsVulkan() const;
@@ -331,16 +334,25 @@ class DawnTestBase {
     // mDeferredExpectations get too big.
     void ResolveDeferredExpectationsNow();
 
+    // Starts the internal timer for the test and sets the max expected time. This
+    // 'max_expected_time' is not actually a test timeout as it simply checks an expectation at the
+    // end of the test.
+    void StartTestTimer(float expected_max_time);
+
   protected:
     wgpu::Instance instance;
     wgpu::Adapter adapter;
+    dawn::utils::ComboLimits adapterLimits;
     wgpu::Device device;
+    dawn::utils::ComboLimits deviceLimits;
     wgpu::Queue queue;
 
     DawnProcTable backendProcs = {};
     WGPUDevice backendDevice = nullptr;
 
     uint64_t mLastWarningCount = 0;
+    std::unique_ptr<utils::Timer> mTimer;
+    float mExpectedTimeMaxSec = 0.0f;
 
     // Mock callbacks tracking errors and destruction. These are strict mocks because any errors or
     // device loss that aren't expected should result in test failures and not just some warnings
@@ -616,12 +628,15 @@ class DawnTestBase {
     // code path to handle the situation when not all features are supported.
     virtual std::vector<wgpu::FeatureName> GetRequiredFeatures();
 
-    virtual wgpu::Limits GetRequiredLimits(const wgpu::Limits&);
+    // Called in SetUp() to get the limits required to be enabled in the tests.
+    // Note implementations of this can assume `required` starts as default-initialized.
+    virtual void GetRequiredLimits(const dawn::utils::ComboLimits& supported,
+                                   dawn::utils::ComboLimits& required);
 
     const TestAdapterProperties& GetAdapterProperties() const;
 
-    wgpu::Limits GetAdapterLimits();
-    wgpu::Limits GetSupportedLimits();
+    const dawn::utils::ComboLimits& GetAdapterLimits();
+    const dawn::utils::ComboLimits& GetSupportedLimits();
 
     uint64_t GetDeprecationWarningCountForTesting() const;
 

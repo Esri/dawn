@@ -28,10 +28,12 @@
 #ifndef SRC_DAWN_COMMON_ITYP_BITSET_H_
 #define SRC_DAWN_COMMON_ITYP_BITSET_H_
 
+#include <bit>
 #include <bitset>
 #include <limits>
 
 #include "dawn/common/Assert.h"
+#include "dawn/common/BitSetRangeIterator.h"
 #include "dawn/common/Math.h"
 #include "dawn/common/Platform.h"
 #include "dawn/common/TypedInteger.h"
@@ -49,8 +51,7 @@ class Iterator64 final {
         : mBits(static_cast<uint64_t>(bits.to_ullong())) {}
     Iterator64& operator++();
 
-    bool operator==(const Iterator64& other) const { return mBits == other.mBits; }
-    bool operator!=(const Iterator64& other) const { return !(*this == other); }
+    bool operator==(const Iterator64& other) const = default;
 
     Index operator*() const;
 
@@ -81,7 +82,7 @@ uint32_t Iterator64<Index, N>::getNextBit() const {
     if (mBits == 0) {
         return 0;
     }
-    return ScanForward(mBits);
+    return std::countr_zero(mBits);
 }
 
 template <typename Index, size_t N>
@@ -138,7 +139,7 @@ uint32_t IteratorArray<Index, N>::getNextBit() {
     while (mOffset < N) {
         uint64_t wordBits = static_cast<uint64_t>((mBits & wordMask).to_ullong());
         if (wordBits != 0ull) {
-            return ScanForward(wordBits) + mOffset;
+            return std::countr_zero(wordBits) + mOffset;
         }
 
         mBits >>= kBitsPerWord;
@@ -242,6 +243,10 @@ class bitset : private ::std::bitset<N> {
         return bitset(static_cast<const Base&>(lhs) ^ static_cast<const Base&>(rhs));
     }
 
+    friend BitSetRangeIterator<N, Index> IterateRanges(const bitset& bitset) {
+        return BitSetRangeIterator<N, Index>(static_cast<const Base&>(bitset));
+    }
+
     friend struct std::hash<bitset>;
 };
 
@@ -258,47 +263,16 @@ class bitset : private ::std::bitset<N> {
 template <typename Index, size_t N>
 Index GetHighestBitIndexPlusOne(const ityp::bitset<Index, N>& bitset) {
     using I = UnderlyingType<Index>;
-#if DAWN_COMPILER_IS(MSVC)
-    if constexpr (N > 32) {
-#if DAWN_PLATFORM_IS(64_BIT)
-        // NOLINTNEXTLINE(runtime/int)
-        unsigned long firstBitIndex = 0ul;
-        unsigned char ret = _BitScanReverse64(&firstBitIndex, bitset.to_ullong());
-        if (ret == 0) {
-            return Index(static_cast<I>(0));
-        }
-        return Index(static_cast<I>(firstBitIndex + 1));
-#else   // DAWN_PLATFORM_IS(64_BIT)
-        if (bitset.none()) {
-            return Index(static_cast<I>(0));
-        }
-        for (size_t i = 0u; i < N; i++) {
-            if (bitset.test(Index(static_cast<I>(N - 1 - i)))) {
-                return Index(static_cast<I>(N - i));
-            }
-        }
-        DAWN_UNREACHABLE();
-#endif  // DAWN_PLATFORM_IS(64_BIT)
-    } else {
-        // NOLINTNEXTLINE(runtime/int)
-        unsigned long firstBitIndex = 0ul;
-        unsigned char ret = _BitScanReverse(&firstBitIndex, bitset.to_ulong());
-        if (ret == 0) {
-            return Index(static_cast<I>(0));
-        }
-        return Index(static_cast<I>(firstBitIndex + 1));
-    }
-#else   // DAWN_COMPILER_IS(MSVC)
     if (bitset.none()) {
         return Index(static_cast<I>(0));
     }
     if constexpr (N > 32) {
         return Index(
-            static_cast<I>(64 - static_cast<uint32_t>(__builtin_clzll(bitset.to_ullong()))));
+            static_cast<I>(64 - std::countl_zero(static_cast<uint64_t>(bitset.to_ullong()))));
     } else {
-        return Index(static_cast<I>(32 - static_cast<uint32_t>(__builtin_clz(bitset.to_ulong()))));
+        return Index(
+            static_cast<I>(32 - std::countl_zero(static_cast<uint32_t>(bitset.to_ulong()))));
     }
-#endif  // DAWN_COMPILER_IS(MSVC)
 }
 
 }  // namespace dawn

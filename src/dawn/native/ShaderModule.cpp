@@ -320,6 +320,10 @@ ResultOrError<InterpolationSampling> TintInterpolationSamplingToInterpolationSam
     DAWN_UNREACHABLE();
 }
 
+EntryPointMetadata::OverrideId FromTintOverrideId(tint::OverrideId id) {
+    return EntryPointMetadata::OverrideId{{id.value}};
+}
+
 EntryPointMetadata::Override::Type FromTintOverrideType(tint::inspector::Override::Type type) {
     switch (type) {
         case tint::inspector::Override::Type::kBool:
@@ -375,7 +379,7 @@ ResultOrError<PixelLocalMemberType> FromTintPixelLocalMemberType(
 ResultOrError<tint::Program> ParseWGSL(const tint::Source::File* file,
                                        const tint::wgsl::AllowedFeatures& allowedFeatures,
                                        const std::vector<tint::wgsl::Extension>& internalExtensions,
-                                       OwnedCompilationMessages* outMessages) {
+                                       ParsedCompilationMessages* outMessages) {
     tint::wgsl::reader::Options options;
     options.allowed_features = allowedFeatures;
     options.allowed_features.extensions.insert(internalExtensions.begin(),
@@ -394,7 +398,7 @@ ResultOrError<tint::Program> ParseWGSL(const tint::Source::File* file,
 #if TINT_BUILD_SPV_READER
 ResultOrError<tint::Program> ParseSPIRV(const std::vector<uint32_t>& spirv,
                                         const tint::wgsl::AllowedFeatures& allowedFeatures,
-                                        OwnedCompilationMessages* outMessages,
+                                        ParsedCompilationMessages* outMessages,
                                         const DawnShaderModuleSPIRVOptionsDescriptor* optionsDesc) {
     tint::spirv::reader::Options options;
     if (optionsDesc) {
@@ -677,8 +681,8 @@ ResultOrError<std::unique_ptr<EntryPointMetadata>> ReflectEntryPointUsingTint(
     if (!entryPoint.overrides.empty()) {
         for (auto& c : entryPoint.overrides) {
             auto id = name2Id.at(c.name);
-            EntryPointMetadata::Override override = {id, FromTintOverrideType(c.type),
-                                                     c.is_initialized};
+            EntryPointMetadata::Override override = {
+                {FromTintOverrideId(id), FromTintOverrideType(c.type), c.is_initialized}};
 
             std::string identifier = c.is_id_specified ? std::to_string(override.id.value) : c.name;
             metadata->overrides[identifier] = override;
@@ -705,8 +709,9 @@ ResultOrError<std::unique_ptr<EntryPointMetadata>> ReflectEntryPointUsingTint(
         }
 
         auto id = name2Id.at(o.name);
-        EntryPointMetadata::Override override = {id, FromTintOverrideType(o.type), o.is_initialized,
-                                                 /* isUsed */ false};
+        EntryPointMetadata::Override override = {{FromTintOverrideId(id),
+                                                  FromTintOverrideType(o.type), o.is_initialized,
+                                                  /* isUsed */ false}};
         metadata->overrides[identifier] = override;
     }
 
@@ -728,9 +733,9 @@ ResultOrError<std::unique_ptr<EntryPointMetadata>> ReflectEntryPointUsingTint(
     metadata->interStageVariables.resize(maxInterStageShaderVariables);
 
     // Immediate data byte size must be 4-byte aligned.
-    if (entryPoint.push_constant_size) {
-        DAWN_ASSERT(IsAligned(entryPoint.push_constant_size, 4u));
-        metadata->immediateDataRangeByteSize = entryPoint.push_constant_size;
+    if (entryPoint.immediate_data_size) {
+        DAWN_ASSERT(IsAligned(entryPoint.immediate_data_size, 4u));
+        metadata->immediateDataRangeByteSize = entryPoint.immediate_data_size;
     }
 
     // Vertex shader specific reflection.
@@ -1231,8 +1236,8 @@ ResultOrError<Extent3D> ValidateComputeStageWorkgroupSize(
                     "minimum allowed (1, 1, 1).",
                     x, y, z);
 
-    if (DAWN_UNLIKELY(x > limits.maxComputeWorkgroupSizeX || y > limits.maxComputeWorkgroupSizeY ||
-                      z > limits.maxComputeWorkgroupSizeZ)) {
+    if (x > limits.maxComputeWorkgroupSizeX || y > limits.maxComputeWorkgroupSizeY ||
+        z > limits.maxComputeWorkgroupSizeZ) [[unlikely]] {
         uint32_t maxComputeWorkgroupSizeXAdapterLimit =
             adaterSupportedlimits.maxComputeWorkgroupSizeX;
         uint32_t maxComputeWorkgroupSizeYAdapterLimit =
@@ -1305,7 +1310,7 @@ MaybeError ParseShaderModule(DeviceBase* device,
                              const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
                              const std::vector<tint::wgsl::Extension>& internalExtensions,
                              ShaderModuleParseResult* parseResult,
-                             OwnedCompilationMessages* outMessages) {
+                             ParsedCompilationMessages* outMessages) {
     DAWN_ASSERT(parseResult != nullptr);
 
     // We assume that the descriptor chain has already been validated.
@@ -1718,7 +1723,7 @@ Future ShaderModuleBase::APIGetCompilationInfo(
     return {futureID};
 }
 
-OwnedCompilationMessages* ShaderModuleBase::GetCompilationMessages() const {
+const OwnedCompilationMessages* ShaderModuleBase::GetCompilationMessages() const {
     return mCompilationMessages.get();
 }
 
@@ -1736,6 +1741,11 @@ std::string ShaderModuleBase::GetCompilationLog() const {
     }
 
     return t.str();
+}
+
+void ShaderModuleBase::SetCompilationMessagesForTesting(
+    std::unique_ptr<OwnedCompilationMessages>* compilationMessages) {
+    mCompilationMessages = std::move(*compilationMessages);
 }
 
 MaybeError ShaderModuleBase::InitializeBase(

@@ -121,7 +121,7 @@ auto GetOrCreate(ContentLessObjectCache<RefCountedT>& cache,
         result = createFn();
     } else {
         auto resultOrError = createFn();
-        if (DAWN_UNLIKELY(resultOrError.IsError())) {
+        if (resultOrError.IsError()) [[unlikely]] {
             return ReturnType(std::move(resultOrError.AcquireError()));
         }
         result = resultOrError.AcquireSuccess();
@@ -223,6 +223,7 @@ void DeviceBase::DeviceLostEvent::Complete(EventCompletionType completionType) {
         mCallback(&device, ToAPI(mReason), ToOutputStringView(mMessage), userdata1, userdata2);
     }
 
+    // Break the ref cycle between DeviceBase and DeviceLostEvent.
     mDevice = nullptr;
 }
 
@@ -363,7 +364,7 @@ DeviceBase::DeviceBase(AdapterBase* adapter,
     mLimits.hostMappedPointerLimits = GetPhysicalDevice()->GetLimits().hostMappedPointerLimits;
 
     // Handle maxXXXPerStage/maxXXXInStage.
-    EnforceLimitSpecInvariants(&mLimits.v1, effectiveFeatureLevel);
+    EnforceLimitSpecInvariants(&mLimits, effectiveFeatureLevel);
 
     if (mLimits.v1.maxStorageBuffersInFragmentStage < 1) {
         // If there is no storage buffer in fragment stage, UseBlitForB2T is not possible.
@@ -403,7 +404,7 @@ DeviceBase::DeviceBase(AdapterBase* adapter,
 
 DeviceBase::DeviceBase() : mState(State::Alive), mToggles(ToggleStage::Device) {
     GetDefaultLimits(&mLimits, wgpu::FeatureLevel::Core);
-    EnforceLimitSpecInvariants(&mLimits.v1, wgpu::FeatureLevel::Core);
+    EnforceLimitSpecInvariants(&mLimits, wgpu::FeatureLevel::Core);
     mFormatTable = BuildFormatTable(this);
 
     DeviceDescriptor desc = {};
@@ -473,6 +474,13 @@ void DeviceBase::WillDropLastExternalRef() {
         // the lock.
         auto deviceLock(GetScopedLock());
 
+        // Set DeviceLostEvent to pass a null device to the callback (which may happen in Destroy()
+        // depending on the CallbackMode). This also makes DeviceLostEvent skip unregistering the
+        // UncapturedError and Logging callbacks; they'll be unregistered later in this function.
+        if (mLostEvent) {
+            mLostEvent->mDevice = nullptr;
+        }
+
         // DeviceBase uses RefCountedWithExternalCount to break refcycles.
         //
         // DeviceBase holds multiple Refs to various API objects (pipelines, buffers, etc.) which
@@ -502,7 +510,7 @@ void DeviceBase::WillDropLastExternalRef() {
 
     auto deviceLock(GetScopedLock());
     // Drop the device's reference to the queue. Because the application dropped the last external
-    // references, they can no longer get the queue from APIGetQueue().
+    // reference, it's UB if they try to get the queue from APIGetQueue().
     mQueue = nullptr;
 
     // Reset callbacks since after dropping the last external reference, the application may have
@@ -586,6 +594,11 @@ void DeviceBase::Destroy() {
         // TODO(crbug.com/dawn/826): Cancel the tasks that are in flight if possible.
         mAsyncTaskManager->WaitAllPendingTasks();
         mCallbackTaskManager->HandleShutDown();
+
+        // Finish destroying all objects owned by the device. Note that this must be done before
+        // DestroyImpl() as it may relinquish resources that will be freed by backends in the
+        // DestroyImpl() call.
+        DestroyObjects();
     }
 
     // Disconnect the device, depending on which state we are currently in.
@@ -599,7 +612,6 @@ void DeviceBase::Destroy() {
             // complete before proceeding with destruction.
             // Ignore errors so that we can continue with destruction
             IgnoreErrors(mQueue->WaitForIdleForDestruction());
-            mQueue->AssumeCommandsComplete();
             break;
 
         case State::BeingDisconnected:
@@ -620,13 +632,10 @@ void DeviceBase::Destroy() {
 
     if (mState != State::BeingCreated) {
         // The GPU timeline is finished.
+        mQueue->AssumeCommandsComplete();
         DAWN_ASSERT(mQueue->GetCompletedCommandSerial() == mQueue->GetLastSubmittedCommandSerial());
-
-        // Finish destroying all objects owned by the device and tick the queue-related tasks
-        // since they should be complete. This must be done before DestroyImpl() it may
-        // relinquish resources that will be freed by backends in the DestroyImpl() call.
-        DestroyObjects();
         mQueue->Tick(mQueue->GetCompletedCommandSerial());
+
         // Call TickImpl once last time to clean up resources
         // Ignore errors so that we can continue with destruction
         IgnoreErrors(TickImpl());
@@ -1188,7 +1197,7 @@ BufferBase* DeviceBase::APICreateBuffer(const BufferDescriptor* rawDescriptor) {
     // 2. Error handling.
     Ref<BufferBase> buffer;
     std::unique_ptr<ErrorData> deferredError;
-    if (DAWN_LIKELY(resultOrError.IsSuccess())) {
+    if (resultOrError.IsSuccess()) [[likely]] {
         buffer = resultOrError.AcquireSuccess();
     } else {
         // Make an error buffer, but don't consume the ErrorData yet until we've tried to map,
@@ -1404,8 +1413,7 @@ ShaderModuleBase* DeviceBase::APICreateShaderModule(const ShaderModuleDescriptor
     utils::TraceLabel label = utils::GetLabelForTrace(descriptor->label);
     TRACE_EVENT1(GetPlatform(), General, "DeviceBase::APICreateShaderModule", "label", label.label);
 
-    std::unique_ptr<OwnedCompilationMessages> compilationMessages(
-        std::make_unique<OwnedCompilationMessages>());
+    ParsedCompilationMessages compilationMessages;
     auto resultOrError =
         CreateShaderModule(descriptor, /*internalExtensions=*/{}, &compilationMessages);
 
@@ -1426,21 +1434,21 @@ ShaderModuleBase* DeviceBase::APICreateShaderModule(const ShaderModuleDescriptor
     DAWN_ASSERT(consumedError);
     DAWN_ASSERT(result == nullptr);
     // The compilation messages should still be hold valid if shader module creation failed.
-    DAWN_ASSERT(compilationMessages != nullptr);
     // Move the compilation messages to the error shader module so the application can later
     // retrieve it with GetCompilationInfo.
-    result = ShaderModuleBase::MakeError(this, descriptor ? descriptor->label : nullptr,
-                                         std::move(compilationMessages));
+    result = ShaderModuleBase::MakeError(
+        this, descriptor ? descriptor->label : nullptr,
+        std::make_unique<OwnedCompilationMessages>(std::move(compilationMessages)));
     return ReturnToAPI(std::move(result));
 }
 
 ShaderModuleBase* DeviceBase::APICreateErrorShaderModule(const ShaderModuleDescriptor* descriptor,
                                                          StringView errorMessage) {
-    std::unique_ptr<OwnedCompilationMessages> compilationMessages(
-        std::make_unique<OwnedCompilationMessages>());
-    compilationMessages->AddUnanchoredMessage(errorMessage, wgpu::CompilationMessageType::Error);
+    ParsedCompilationMessages compilationMessages;
+    compilationMessages.AddUnanchoredMessage(errorMessage, wgpu::CompilationMessageType::Error);
     Ref<ShaderModuleBase> result = ShaderModuleBase::MakeError(
-        this, descriptor ? descriptor->label : nullptr, std::move(compilationMessages));
+        this, descriptor ? descriptor->label : nullptr,
+        std::make_unique<OwnedCompilationMessages>(std::move(compilationMessages)));
     auto log = result->GetCompilationLog();
 
     std::unique_ptr<ErrorData> errorData = DAWN_VALIDATION_ERROR(
@@ -1668,6 +1676,8 @@ void DeviceBase::SetWGSLExtensionAllowList() {
         mWGSLAllowedFeatures.extensions.insert(
             tint::wgsl::Extension::kChromiumDisableUniformityAnalysis);
         mWGSLAllowedFeatures.extensions.insert(tint::wgsl::Extension::kChromiumInternalGraphite);
+        mWGSLAllowedFeatures.extensions.insert(
+            tint::wgsl::Extension::kChromiumExperimentalImmediate);
     }
     if (mEnabledFeatures.IsEnabled(Feature::DualSourceBlending)) {
         mWGSLAllowedFeatures.extensions.insert(tint::wgsl::Extension::kDualSourceBlending);
@@ -1687,10 +1697,6 @@ void DeviceBase::SetWGSLExtensionAllowList() {
     if (mEnabledFeatures.IsEnabled(Feature::ChromiumExperimentalSubgroupMatrix)) {
         mWGSLAllowedFeatures.extensions.insert(
             tint::wgsl::Extension::kChromiumExperimentalSubgroupMatrix);
-    }
-    if (mEnabledFeatures.IsEnabled(Feature::ChromiumExperimentalImmediateData)) {
-        mWGSLAllowedFeatures.extensions.insert(
-            tint::wgsl::Extension::kChromiumExperimentalPushConstant);
     }
 
     // Language features are enabled instance-wide.
@@ -2111,7 +2117,7 @@ ResultOrError<Ref<SamplerBase>> DeviceBase::CreateSampler(const SamplerDescripto
 ResultOrError<Ref<ShaderModuleBase>> DeviceBase::CreateShaderModule(
     const ShaderModuleDescriptor* descriptor,
     const std::vector<tint::wgsl::Extension>& internalExtensions,
-    std::unique_ptr<OwnedCompilationMessages>* compilationMessages) {
+    ParsedCompilationMessages* compilationMessages) {
     DAWN_TRY(ValidateIsAlive());
 
     // Unpack and validate the descriptor chain before doing further validation or cache lookups.
@@ -2155,16 +2161,14 @@ ResultOrError<Ref<ShaderModuleBase>> DeviceBase::CreateShaderModule(
 
     return GetOrCreate(
         mCaches->shaderModules, &blueprint, [&]() -> ResultOrError<Ref<ShaderModuleBase>> {
-            std::unique_ptr<OwnedCompilationMessages> inplaceCompilationMessages;
             // If the compilationMessages is nullptr, caller of this function assumes that the
             // shader creation will succeed and doesn't care the compilation messages. However we
             // still use a inplace compile messages to ensure every shader module in the cache have
             // a valid OwnedCompilationMessages.
+            ParsedCompilationMessages inplaceCompilationMessages;
             if (compilationMessages == nullptr) {
-                inplaceCompilationMessages = std::make_unique<OwnedCompilationMessages>();
                 compilationMessages = &inplaceCompilationMessages;
             }
-            auto* unownedMessages = compilationMessages->get();
 
             SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetPlatform(), "CreateShaderModuleUS");
 
@@ -2174,13 +2178,16 @@ ResultOrError<Ref<ShaderModuleBase>> DeviceBase::CreateShaderModule(
                 // Try to validate and parse the shader code, and if an error occurred return it
                 // without updating the cache.
                 DAWN_TRY(ParseShaderModule(this, unpacked, internalExtensions, &parseResult,
-                                           unownedMessages));
+                                           compilationMessages));
 
                 Ref<ShaderModuleBase> shaderModule;
                 // If created successfully, compilation messages are moved into the shader module.
+                DAWN_ASSERT(compilationMessages);
+                auto ownedCompilationMessages =
+                    std::make_unique<OwnedCompilationMessages>(std::move(*compilationMessages));
                 DAWN_TRY_ASSIGN(shaderModule,
                                 CreateShaderModuleImpl(unpacked, internalExtensions, &parseResult,
-                                                       compilationMessages));
+                                                       &ownedCompilationMessages));
                 shaderModule->SetContentHash(blueprintHash);
                 return shaderModule;
             }();
@@ -2439,6 +2446,8 @@ MemoryUsageInfo DeviceBase::ComputeEstimatedMemoryUsage() const {
         info.texturesUsage += size;
         if (texture->GetSampleCount() > 1) {
             info.msaaTexturesUsage += size;
+            info.msaaTexturesCount++;
+            info.largestMsaaTextureUsage = std::max(info.largestMsaaTextureUsage, size);
         }
         if (texture->GetFormat().HasDepthOrStencil()) {
             info.depthStencilTexturesUsage += size;

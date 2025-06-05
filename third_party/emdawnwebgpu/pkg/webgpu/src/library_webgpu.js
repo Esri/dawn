@@ -572,6 +572,46 @@ var LibraryWebGPU = {
       setLimitValueU32('maxComputeWorkgroupSizeY', {{{ C_STRUCTS.WGPULimits.maxComputeWorkgroupSizeY }}});
       setLimitValueU32('maxComputeWorkgroupSizeZ', {{{ C_STRUCTS.WGPULimits.maxComputeWorkgroupSizeZ }}});
       setLimitValueU32('maxComputeWorkgroupsPerDimension', {{{ C_STRUCTS.WGPULimits.maxComputeWorkgroupsPerDimension }}});
+
+      // Non-standard. If this is undefined, it will correctly just cast to 0.
+      if (limits.maxImmediateSize !== undefined) {
+        setLimitValueU32('maxImmediateSize', {{{ C_STRUCTS.WGPULimits.maxImmediateSize }}});
+      }
+    },
+
+    fillAdapterInfoStruct__deps: ['$stringToNewUTF8', '$lengthBytesUTF8'],
+    fillAdapterInfoStruct: (info, infoStruct) => {
+      {{{ gpu.makeCheckDescriptor('infoStruct') }}}
+
+      // Populate subgroup limits.
+      {{{ makeSetValue('infoStruct', C_STRUCTS.WGPUAdapterInfo.subgroupMinSize, 'info.subgroupMinSize', 'i32') }}};
+      {{{ makeSetValue('infoStruct', C_STRUCTS.WGPUAdapterInfo.subgroupMaxSize, 'info.subgroupMaxSize', 'i32') }}};
+
+      // Append all the strings together to condense into a single malloc.
+      var strs = info.vendor + info.architecture + info.device + info.description;
+      var strPtr = stringToNewUTF8(strs);
+
+      var vendorLen = lengthBytesUTF8(info.vendor);
+      WebGPU.setStringView(infoStruct + {{{ C_STRUCTS.WGPUAdapterInfo.vendor }}}, strPtr, vendorLen);
+      strPtr += vendorLen;
+
+      var architectureLen = lengthBytesUTF8(info.architecture);
+      WebGPU.setStringView(infoStruct + {{{ C_STRUCTS.WGPUAdapterInfo.architecture }}}, strPtr, architectureLen);
+      strPtr += architectureLen;
+
+      var deviceLen = lengthBytesUTF8(info.device);
+      WebGPU.setStringView(infoStruct + {{{ C_STRUCTS.WGPUAdapterInfo.device }}}, strPtr, deviceLen);
+      strPtr += deviceLen;
+
+      var descriptionLen = lengthBytesUTF8(info.description);
+      WebGPU.setStringView(infoStruct + {{{ C_STRUCTS.WGPUAdapterInfo.description }}}, strPtr, descriptionLen);
+      strPtr += descriptionLen;
+
+      {{{ makeSetValue('infoStruct', C_STRUCTS.WGPUAdapterInfo.backendType, gpu.BackendType.WebGPU, 'i32') }}};
+      var adapterType = info.isFallbackAdapter ? {{{ gpu.AdapterType.CPU }}} : {{{ gpu.AdapterType.Unknown }}};
+      {{{ makeSetValue('infoStruct', C_STRUCTS.WGPUAdapterInfo.adapterType, 'adapterType', 'i32') }}};
+      {{{ makeSetValue('infoStruct', C_STRUCTS.WGPUAdapterInfo.vendorID, '0', 'i32') }}};
+      {{{ makeSetValue('infoStruct', C_STRUCTS.WGPUAdapterInfo.deviceID, '0', 'i32') }}};
     },
 
     // Maps from enum string back to enum number, for callbacks.
@@ -619,10 +659,10 @@ var LibraryWebGPU = {
   emwgpuWaitAny__sig: 'jppp',
 #if ASYNCIFY
   emwgpuWaitAny__async: true,
-  emwgpuWaitAny: (futurePtr, futureCount, timeoutNSPtr) => Asyncify.handleAsync(async () => {
+  emwgpuWaitAny: (futurePtr, futureCount, timeoutMSPtr) => Asyncify.handleAsync(async () => {
     var promises = [];
-    if (timeoutNSPtr) {
-      var timeoutMS = {{{ gpu.makeGetU64('timeoutNSPtr', 0) }}} / 1000000;
+    if (timeoutMSPtr) {
+      var timeoutMS = {{{ makeGetValue('timeoutMSPtr', 0, 'i32') }}};
       promises.length = futureCount + 1;
       promises[futureCount] = new Promise((resolve) => setTimeout(resolve, timeoutMS, 0));
     } else {
@@ -700,36 +740,9 @@ var LibraryWebGPU = {
     {{{ makeSetValue('supportedFeatures', C_STRUCTS.WGPUSupportedFeatures.featureCount, 'numFeatures', '*') }}};
   },
 
-  wgpuAdapterGetInfo__deps: ['$stringToNewUTF8', '$lengthBytesUTF8'],
   wgpuAdapterGetInfo: (adapterPtr, info) => {
     var adapter = WebGPU.getJsObject(adapterPtr);
-    {{{ gpu.makeCheckDescriptor('info') }}}
-
-    // Append all the strings together to condense into a single malloc.
-    var strs = adapter.info.vendor + adapter.info.architecture + adapter.info.device + adapter.info.description;
-    var strPtr = stringToNewUTF8(strs);
-
-    var vendorLen = lengthBytesUTF8(adapter.info.vendor);
-    WebGPU.setStringView(info + {{{ C_STRUCTS.WGPUAdapterInfo.vendor }}}, strPtr, vendorLen);
-    strPtr += vendorLen;
-
-    var architectureLen = lengthBytesUTF8(adapter.info.architecture);
-    WebGPU.setStringView(info + {{{ C_STRUCTS.WGPUAdapterInfo.architecture }}}, strPtr, architectureLen);
-    strPtr += architectureLen;
-
-    var deviceLen = lengthBytesUTF8(adapter.info.device);
-    WebGPU.setStringView(info + {{{ C_STRUCTS.WGPUAdapterInfo.device }}}, strPtr, deviceLen);
-    strPtr += deviceLen;
-
-    var descriptionLen = lengthBytesUTF8(adapter.info.description);
-    WebGPU.setStringView(info + {{{ C_STRUCTS.WGPUAdapterInfo.description }}}, strPtr, descriptionLen);
-    strPtr += descriptionLen;
-
-    {{{ makeSetValue('info', C_STRUCTS.WGPUAdapterInfo.backendType, gpu.BackendType.WebGPU, 'i32') }}};
-    var adapterType = adapter.info.isFallbackAdapter ? {{{ gpu.AdapterType.CPU }}} : {{{ gpu.AdapterType.Unknown }}};
-    {{{ makeSetValue('info', C_STRUCTS.WGPUAdapterInfo.adapterType, 'adapterType', 'i32') }}};
-    {{{ makeSetValue('info', C_STRUCTS.WGPUAdapterInfo.vendorID, '0', 'i32') }}};
-    {{{ makeSetValue('info', C_STRUCTS.WGPUAdapterInfo.deviceID, '0', 'i32') }}};
+    WebGPU.fillAdapterInfoStruct(adapter.info, info);
     return {{{ gpu.Status.Success }}};
   },
 
@@ -763,10 +776,10 @@ var LibraryWebGPU = {
       if (limitsPtr) {
         {{{ gpu.makeCheckDescriptor('limitsPtr') }}}
         var requiredLimits = {};
-        function setLimitU32IfDefined(name, limitOffset) {
+        function setLimitU32IfDefined(name, limitOffset, ignoreIfZero=false) {
           var ptr = limitsPtr + limitOffset;
           var value = {{{ gpu.makeGetU32('ptr', 0) }}};
-          if (value != {{{ gpu.LIMIT_U32_UNDEFINED }}}) {
+          if (value != {{{ gpu.LIMIT_U32_UNDEFINED }}} && (!ignoreIfZero || value != 0)) {
             requiredLimits[name] = value;
           }
         }
@@ -810,6 +823,10 @@ var LibraryWebGPU = {
         setLimitU32IfDefined("maxComputeWorkgroupSizeY", {{{ C_STRUCTS.WGPULimits.maxComputeWorkgroupSizeY }}});
         setLimitU32IfDefined("maxComputeWorkgroupSizeZ", {{{ C_STRUCTS.WGPULimits.maxComputeWorkgroupSizeZ }}});
         setLimitU32IfDefined("maxComputeWorkgroupsPerDimension", {{{ C_STRUCTS.WGPULimits.maxComputeWorkgroupsPerDimension }}});
+
+        // Non-standard. If this is 0, avoid passing it through so it won't cause an error.
+        setLimitU32IfDefined("maxImmediateSize", {{{ C_STRUCTS.WGPULimits.maxImmediateSize }}}, true);
+
         desc["requiredLimits"] = requiredLimits;
       }
 
@@ -1229,7 +1246,7 @@ var LibraryWebGPU = {
     return ptr;
   },
 
-  wgpuCommandEncoderInsertDebugMarker2: (encoderPtr, markerLabelPtr) => {
+  wgpuCommandEncoderInsertDebugMarker: (encoderPtr, markerLabelPtr) => {
     var encoder = WebGPU.getJsObject(encoderPtr);
     encoder.insertDebugMarker(WebGPU.makeStringFromStringView(markerLabelPtr));
   },
@@ -1239,7 +1256,7 @@ var LibraryWebGPU = {
     encoder.popDebugGroup();
   },
 
-  wgpuCommandEncoderPushDebugGroup2: (encoderPtr, groupLabelPtr) => {
+  wgpuCommandEncoderPushDebugGroup: (encoderPtr, groupLabelPtr) => {
     var encoder = WebGPU.getJsObject(encoderPtr);
     encoder.pushDebugGroup(WebGPU.makeStringFromStringView(groupLabelPtr));
   },
@@ -1278,7 +1295,7 @@ var LibraryWebGPU = {
     pass.end();
   },
 
-  wgpuComputePassEncoderInsertDebugMarker2: (encoderPtr, markerLabelPtr) => {
+  wgpuComputePassEncoderInsertDebugMarker: (encoderPtr, markerLabelPtr) => {
     var encoder = WebGPU.getJsObject(encoderPtr);
     encoder.insertDebugMarker(WebGPU.makeStringFromStringView(markerLabelPtr));
   },
@@ -1288,7 +1305,7 @@ var LibraryWebGPU = {
     encoder.popDebugGroup();
   },
 
-  wgpuComputePassEncoderPushDebugGroup2: (encoderPtr, groupLabelPtr) => {
+  wgpuComputePassEncoderPushDebugGroup: (encoderPtr, groupLabelPtr) => {
     var encoder = WebGPU.getJsObject(encoderPtr);
     encoder.pushDebugGroup(WebGPU.makeStringFromStringView(groupLabelPtr));
   },
@@ -1464,6 +1481,13 @@ var LibraryWebGPU = {
 
     function makeEntry(entryPtr) {
       {{{ gpu.makeCheck('entryPtr') }}}
+#if ASSERTIONS
+      // bindingArraySize is not specced and thus not implemented yet. We don't pass it through
+      // because if we did, then existing apps using this version of the bindings could break when
+      // browsers start accepting bindingArraySize.
+      var bindingArraySize = {{{ gpu.makeGetU32('entryPtr', C_STRUCTS.WGPUBindGroupLayoutEntry.bindingArraySize) }}};
+      assert(bindingArraySize == 0 || bindingArraySize == 1);
+#endif
 
       return {
         "binding":
@@ -1721,6 +1745,7 @@ var LibraryWebGPU = {
         "lodMaxClamp": {{{ makeGetValue('descriptor', C_STRUCTS.WGPUSamplerDescriptor.lodMaxClamp, 'float') }}},
         "compare": WebGPU.CompareFunction[
             {{{ gpu.makeGetU32('descriptor', C_STRUCTS.WGPUSamplerDescriptor.compare) }}}],
+        "maxAnisotropy": {{{ makeGetValue('descriptor', C_STRUCTS.WGPUSamplerDescriptor.maxAnisotropy, 'u16') }}},
       };
     }
 
@@ -1827,38 +1852,9 @@ var LibraryWebGPU = {
     return device.features.has(WebGPU.FeatureName[featureEnumValue]);
   },
 
-  wgpuDeviceGetAdapterInfo__deps: ['$stringToNewUTF8', '$lengthBytesUTF8'],
   wgpuDeviceGetAdapterInfo: (devicePtr, adapterInfo) => {
-    // TODO(crbug.com/377760848): Avoid duplicated code with wgpuAdapterGetInfo,
-    // for example by deferring to wgpuAdapterGetInfo from webgpu.cpp.
     var device = WebGPU.getJsObject(devicePtr);
-    {{{ gpu.makeCheckDescriptor('adapterInfo') }}}
-
-    // Append all the strings together to condense into a single malloc.
-    var strs = device.adapterInfo.vendor + device.adapterInfo.architecture + device.adapterInfo.device + device.adapterInfo.description;
-    var strPtr = stringToNewUTF8(strs);
-
-    var vendorLen = lengthBytesUTF8(device.adapterInfo.vendor);
-    WebGPU.setStringView(adapterInfo + {{{ C_STRUCTS.WGPUAdapterInfo.vendor }}}, strPtr, vendorLen);
-    strPtr += vendorLen;
-
-    var architectureLen = lengthBytesUTF8(device.adapterInfo.architecture);
-    WebGPU.setStringView(adapterInfo + {{{ C_STRUCTS.WGPUAdapterInfo.architecture }}}, strPtr, architectureLen);
-    strPtr += architectureLen;
-
-    var deviceLen = lengthBytesUTF8(device.adapterInfo.device);
-    WebGPU.setStringView(adapterInfo + {{{ C_STRUCTS.WGPUAdapterInfo.device }}}, strPtr, deviceLen);
-    strPtr += deviceLen;
-
-    var descriptionLen = lengthBytesUTF8(device.adapterInfo.description);
-    WebGPU.setStringView(adapterInfo + {{{ C_STRUCTS.WGPUAdapterInfo.description }}}, strPtr, descriptionLen);
-    strPtr += descriptionLen;
-
-    {{{ makeSetValue('adapterInfo', C_STRUCTS.WGPUAdapterInfo.backendType, gpu.BackendType.WebGPU, 'i32') }}};
-    var adapterType = device.adapterInfo.isFallbackAdapter ? {{{ gpu.AdapterType.CPU }}} : {{{ gpu.AdapterType.Unknown }}};
-    {{{ makeSetValue('adapterInfo', C_STRUCTS.WGPUAdapterInfo.adapterType, 'adapterType', 'i32') }}};
-    {{{ makeSetValue('adapterInfo', C_STRUCTS.WGPUAdapterInfo.vendorID, '0', 'i32') }}};
-    {{{ makeSetValue('adapterInfo', C_STRUCTS.WGPUAdapterInfo.deviceID, '0', 'i32') }}};
+    WebGPU.fillAdapterInfoStruct(device.adapterInfo, adapterInfo);
     return {{{ gpu.Status.Success }}};
   },
 
@@ -2082,6 +2078,7 @@ var LibraryWebGPU = {
       _emwgpuOnWorkDoneCompleted(futureId, {{{ gpu.QueueWorkDoneStatus.Success }}});
     }, () => {
       {{{ runtimeKeepalivePop() }}}
+      // We could translate this into a status+message, but it's not supposed to ever happen.
       abort('Unexpected failure in GPUQueue.onSubmittedWorkDone().')
     }));
   },
@@ -2163,7 +2160,7 @@ var LibraryWebGPU = {
     return ptr;
   },
 
-  wgpuRenderBundleEncoderInsertDebugMarker2: (encoderPtr, markerLabelPtr) => {
+  wgpuRenderBundleEncoderInsertDebugMarker: (encoderPtr, markerLabelPtr) => {
     var encoder = WebGPU.getJsObject(encoderPtr);
     encoder.insertDebugMarker(WebGPU.makeStringFromStringView(markerLabelPtr));
   },
@@ -2173,7 +2170,7 @@ var LibraryWebGPU = {
     encoder.popDebugGroup();
   },
 
-  wgpuRenderBundleEncoderPushDebugGroup2: (encoderPtr, groupLabelPtr) => {
+  wgpuRenderBundleEncoderPushDebugGroup: (encoderPtr, groupLabelPtr) => {
     var encoder = WebGPU.getJsObject(encoderPtr);
     encoder.pushDebugGroup(WebGPU.makeStringFromStringView(groupLabelPtr));
   },
@@ -2227,16 +2224,30 @@ var LibraryWebGPU = {
     pass.drawIndexed(indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
   },
 
-  wgpuRenderPassEncoderDrawIndexedIndirect: (passPtr, indirectBufferPtr, indirectOffset) => {
-    var indirectBuffer = WebGPU.getJsObject(indirectBufferPtr);
+  wgpuRenderPassEncoderDrawIndirect: (passPtr, indirectBufferPtr, indirectOffset) => {
     var pass = WebGPU.getJsObject(passPtr);
+    var indirectBuffer = WebGPU.getJsObject(indirectBufferPtr);
+    pass.drawIndirect(indirectBuffer, indirectOffset);
+  },
+
+  wgpuRenderPassEncoderDrawIndexedIndirect: (passPtr, indirectBufferPtr, indirectOffset) => {
+    var pass = WebGPU.getJsObject(passPtr);
+    var indirectBuffer = WebGPU.getJsObject(indirectBufferPtr);
     pass.drawIndexedIndirect(indirectBuffer, indirectOffset);
   },
 
-  wgpuRenderPassEncoderDrawIndirect: (passPtr, indirectBufferPtr, indirectOffset) => {
-    var indirectBuffer = WebGPU.getJsObject(indirectBufferPtr);
+  wgpuRenderPassEncoderMultiDrawIndirect: (passPtr, indirectBufferPtr, indirectOffset, maxDrawCount, drawCountBufferPtr, drawCountBufferOffset) => {
     var pass = WebGPU.getJsObject(passPtr);
-    pass.drawIndirect(indirectBuffer, indirectOffset);
+    var indirectBuffer = WebGPU.getJsObject(indirectBufferPtr);
+    var drawCountBuffer = WebGPU.getJsObject(drawCountBufferPtr);
+    pass.multiDrawIndirect(indirectBuffer, indirectOffset, maxDrawCount, drawCountBuffer, drawCountBufferOffset);
+  },
+
+  wgpuRenderPassEncoderMultiDrawIndexedIndirect: (passPtr, indirectBufferPtr, indirectOffset, maxDrawCount, drawCountBufferPtr, drawCountBufferOffset) => {
+    var pass = WebGPU.getJsObject(passPtr);
+    var indirectBuffer = WebGPU.getJsObject(indirectBufferPtr);
+    var drawCountBuffer = WebGPU.getJsObject(drawCountBufferPtr);
+    pass.multiDrawIndexedIndirect(indirectBuffer, indirectOffset, maxDrawCount, drawCountBuffer, drawCountBufferOffset);
   },
 
   wgpuRenderPassEncoderEnd: (encoderPtr) => {
@@ -2261,7 +2272,7 @@ var LibraryWebGPU = {
     pass.executeBundles(bundles);
   },
 
-  wgpuRenderPassEncoderInsertDebugMarker2: (encoderPtr, markerLabelPtr) => {
+  wgpuRenderPassEncoderInsertDebugMarker: (encoderPtr, markerLabelPtr) => {
     var encoder = WebGPU.getJsObject(encoderPtr);
     encoder.insertDebugMarker(WebGPU.makeStringFromStringView(markerLabelPtr));
   },
@@ -2271,7 +2282,7 @@ var LibraryWebGPU = {
     encoder.popDebugGroup();
   },
 
-  wgpuRenderPassEncoderPushDebugGroup2: (encoderPtr, groupLabelPtr) => {
+  wgpuRenderPassEncoderPushDebugGroup: (encoderPtr, groupLabelPtr) => {
     var encoder = WebGPU.getJsObject(encoderPtr);
     encoder.pushDebugGroup(WebGPU.makeStringFromStringView(groupLabelPtr));
   },

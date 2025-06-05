@@ -853,8 +853,8 @@ MaybeError Texture::ClearTexture(CommandRecordingContext* commandContext,
                             RecordBufferTextureCopyWithBufferHandle(
                                 BufferTextureCopyDirection::B2T, commandList,
                                 ToBackend(reservation.buffer)->GetD3D12Resource(),
-                                reservation.offsetInBuffer, bytesPerRow, largestMipSize.height,
-                                textureCopy, copySize);
+                                reservation.offsetInBuffer, bytesPerRow,
+                                largestMipSize.height / blockInfo.height, textureCopy, copySize);
                         }
                     }
                     return {};
@@ -888,11 +888,6 @@ MaybeError Texture::EnsureSubresourceContentInitialized(CommandRecordingContext*
         DAWN_TRY(ClearTexture(commandContext, range, TextureBase::ClearValue::Zero));
     }
     return {};
-}
-
-bool Texture::StateAndDecay::operator==(const Texture::StateAndDecay& other) const {
-    return lastState == other.lastState && lastDecaySerial == other.lastDecaySerial &&
-           isValidToDecay == other.isValidToDecay;
 }
 
 // static

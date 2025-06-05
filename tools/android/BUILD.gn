@@ -32,6 +32,8 @@ import("${dawn_root}/generator/dawn_generator.gni")
 dawn_json_generator("jni_gen") {
   target = "jni"
   outputs = [
+    "cpp/JNIClasses.cpp",
+    "cpp/JNIClasses.h",
     "cpp/methods.cpp",
     "cpp/structures.cpp",
     "cpp/structures.h",
@@ -43,7 +45,6 @@ dawn_json_generator("kotlin_gen") {
   outputs = [
     "java/android/dawn/Adapter.kt",
     "java/android/dawn/AdapterInfo.kt",
-    "java/android/dawn/AdapterPropertiesSubgroups.kt",
     "java/android/dawn/AdapterType.kt",
     "java/android/dawn/AddressMode.kt",
     "java/android/dawn/AsyncHelpers.kt",
@@ -54,7 +55,6 @@ dawn_json_generator("kotlin_gen") {
     "java/android/dawn/BindGroupLayout.kt",
     "java/android/dawn/BindGroupLayoutDescriptor.kt",
     "java/android/dawn/BindGroupLayoutEntry.kt",
-    "java/android/dawn/BindGroupLayoutEntryArraySize.kt",
     "java/android/dawn/BlendComponent.kt",
     "java/android/dawn/BlendFactor.kt",
     "java/android/dawn/BlendOperation.kt",

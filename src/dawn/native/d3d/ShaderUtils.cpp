@@ -51,7 +51,7 @@ ResultOrError<tint::Program> RunTransforms(tint::ast::transform::Manager* transf
                                            const tint::Program* program,
                                            const tint::ast::transform::DataMap& inputs,
                                            tint::ast::transform::DataMap* outputs,
-                                           OwnedCompilationMessages* outMessages) {
+                                           ParsedCompilationMessages* outMessages) {
     DAWN_ASSERT(program != nullptr);
     tint::ast::transform::DataMap transform_outputs;
     tint::Program result = transformManager->Run(*program, inputs, transform_outputs);
@@ -331,6 +331,8 @@ MaybeError TranslateToHLSL(d3d::HlslCompilationRequest r,
             SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(tracePlatform.UnsafeGetValue(),
                                                "ShaderModuleGenerateHLSL");
             result = tint::hlsl::writer::Generate(ir.Get(), r.tintOptions);
+            DAWN_INVALID_IF(result != tint::Success, "An error occurred while generating HLSL:\n%s",
+                            result.Failure().reason);
         }
 
         // Workgroup validation has to come after `Generate` because it may require overrides to
@@ -356,10 +358,9 @@ MaybeError TranslateToHLSL(d3d::HlslCompilationRequest r,
         }
 
         result = tint::hlsl::writer::Generate(transformedProgram, r.tintOptions);
+        DAWN_INVALID_IF(result != tint::Success, "An error occurred while generating HLSL:\n%s",
+                        result.Failure().reason);
     }
-
-    DAWN_INVALID_IF(result != tint::Success, "An error occurred while generating HLSL:\n%s",
-                    result.Failure().reason);
 
     if (r.useTintIR && r.stage == SingleShaderStage::Vertex) {
         usesVertexIndex = result->has_vertex_index;

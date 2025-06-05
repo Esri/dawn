@@ -77,6 +77,7 @@ set(ENABLE_D3D11 OFF)
 set(ENABLE_D3D12 OFF)
 set(ENABLE_METAL OFF)
 set(ENABLE_NULL ON)
+set(ENABLE_WEBGPU_ON_WEBGPU OFF)
 set(ENABLE_OPENGLES OFF)
 set(ENABLE_DESKTOP_GL OFF)
 set(ENABLE_VULKAN OFF)
@@ -93,6 +94,7 @@ if (EMSCRIPTEN)
   set(BUILD_SAMPLES ON)
   set(BUILD_TESTS ON)
   set(ENABLE_NULL OFF)
+  set(ENABLE_WEBGPU_ON_WEBGPU OFF)
 elseif (WIN32)
   set(ENABLE_D3D11 ON)
   set(USE_WINDOWS_UI ON)
@@ -124,7 +126,7 @@ endif()
 
 # GLFW is not supported in UWP
 set(DAWN_SUPPORTS_GLFW_FOR_WINDOWING OFF)
-if (NOT EMSCRIPTEN AND ((WIN32 AND NOT WINDOWS_STORE) OR (UNIX AND NOT ANDROID)))
+if (EMSCRIPTEN OR (WIN32 AND NOT WINDOWS_STORE) OR (UNIX AND NOT ANDROID))
     set(DAWN_SUPPORTS_GLFW_FOR_WINDOWING ON)
 endif()
 
@@ -143,6 +145,7 @@ option(DAWN_ENABLE_D3D11 "Enable compilation of the D3D11 backend" ${ENABLE_D3D1
 option(DAWN_ENABLE_D3D12 "Enable compilation of the D3D12 backend" ${ENABLE_D3D12})
 option(DAWN_ENABLE_METAL "Enable compilation of the Metal backend" ${ENABLE_METAL})
 option(DAWN_ENABLE_NULL "Enable compilation of the Null backend" ${ENABLE_NULL})
+option(DAWN_ENABLE_WEBGPU_ON_WEBGPU "Enable compilation of the WebGPU backend" ${ENABLE_WEBGPU_ON_WEBGPU})
 option(DAWN_ENABLE_DESKTOP_GL "Enable compilation of the OpenGL backend" ${ENABLE_DESKTOP_GL})
 option(DAWN_ENABLE_OPENGLES "Enable compilation of the OpenGL ES backend" ${ENABLE_OPENGLES})
 option(DAWN_ENABLE_VULKAN "Enable compilation of the Vulkan backend" ${ENABLE_VULKAN})
@@ -384,7 +387,8 @@ endif()
 find_package(Python3 REQUIRED)
 message(STATUS "Dawn: using python at ${Python3_EXECUTABLE}")
 
-# Compile definitions for the internal config
+# Options and compile definitions for the internal config
+add_dependencies(dawn_internal_config dawn_warnings_config)
 if (DAWN_ALWAYS_ASSERT OR IS_DEBUG_BUILD)
     target_compile_definitions(dawn_internal_config INTERFACE "DAWN_ENABLE_ASSERTS")
 endif()
@@ -399,6 +403,9 @@ if (DAWN_ENABLE_METAL)
 endif()
 if (DAWN_ENABLE_NULL)
     target_compile_definitions(dawn_internal_config INTERFACE "DAWN_ENABLE_BACKEND_NULL")
+endif()
+if (DAWN_ENABLE_WEBGPU_ON_WEBGPU)
+    target_compile_definitions(dawn_internal_config INTERFACE "DAWN_ENABLE_BACKEND_WEBGPU")
 endif()
 if (DAWN_ENABLE_DESKTOP_GL)
     target_compile_definitions(dawn_internal_config INTERFACE "DAWN_ENABLE_BACKEND_DESKTOP_GL")
@@ -439,37 +446,6 @@ set(TINT_SPIRV_TOOLS_DIR   ${DAWN_SPIRV_TOOLS_DIR})
 ################################################################################
 # Run on all subdirectories
 ################################################################################
-# Needed by protobuf and other dependencies in third_party
-set(ABSL_ROOT_DIR ${DAWN_ABSEIL_DIR})
-if (NOT TARGET absl::strings)
-    # Recommended setting for compatibility with future abseil releases.
-    set(ABSL_PROPAGATE_CXX_STD ON CACHE BOOL "" FORCE)
-    message(STATUS "Dawn: using Abseil at ${DAWN_ABSEIL_DIR}")
-    if (("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang") OR
-        ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang"))
-        add_compile_options(
-            -Wno-array-parameter
-            -Wno-deprecated-builtins
-            -Wno-unknown-warning-option
-            -Wno-gcc-compat
-            -Wno-unreachable-code-break
-            -Wno-nullability-extension
-            -Wno-shadow
-        )
-    endif()
-
-    add_subdirectory(${DAWN_ABSEIL_DIR} "${CMAKE_CURRENT_BINARY_DIR}/abseil")
-endif()
-
-if (DAWN_BUILD_PROTOBUF AND EXISTS "${DAWN_PROTOBUF_DIR}/cmake")
-  if (("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang") AND WIN32)
-    set(protobuf_HAVE_BUILTIN_ATOMICS 1)
-  endif()
-
-  # Needs to come before SPIR-V Tools
-  include("third_party/protobuf.cmake")
-endif()
-
 add_subdirectory(third_party)
 
 # TODO(crbug.com/tint/455): Tint does not currently build with CMake when

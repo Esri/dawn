@@ -62,6 +62,7 @@ enum builtin_value {
   sample_index
   sample_mask
   clip_distances
+  subgroup_id
   subgroup_invocation_id
   subgroup_size
   @internal __point_size
@@ -88,6 +89,8 @@ enum interpolation_sampling {
 enum builtin_type {
   // https://www.w3.org/TR/WGSL/#scalar-types
   bool
+  i8
+  u8
   f16
   f32
   i32
@@ -239,6 +242,7 @@ enum attribute {
 enum usages {
   base
   bits
+  const_offset
   coords
   count
   depth
@@ -248,15 +252,19 @@ enum usages {
   exp
   height
   i
+  image
   image_operands
   insert
   level
   location
+  lod
   num_levels
   original_value
   refz
-  samples
   result
+  sample
+  samples
+  texel
   width
   x
 }
@@ -341,7 +349,7 @@ match fi32: f32 | i32
 match f32_f16: f32 | f16
 match iu32: i32 | u32
 
-match subgroup_matrix_elements: f32 | f16 | u32 | i32
+match subgroup_matrix_elements: f32 | f16 | u32 | i32 | u8 | i8
 match subgroup_matrix_kind_left : subgroup_matrix_kind.left
 match subgroup_matrix_kind_right : subgroup_matrix_kind.right
 match subgroup_matrix_kind_result : subgroup_matrix_kind.result

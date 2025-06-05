@@ -110,7 +110,16 @@ DAWN_MAKE_CACHE_REQUEST(GLSLCompilationRequest, GLSL_COMPILATION_REQUEST_MEMBERS
 
 #define GLSL_COMPILATION_MEMBERS(X) X(std::string, glsl)
 
-DAWN_SERIALIZABLE(struct, GLSLCompilation, GLSL_COMPILATION_MEMBERS){};
+// clang-format off
+DAWN_SERIALIZABLE(struct, GLSLCompilation, GLSL_COMPILATION_MEMBERS) {
+    static ResultOrError<GLSLCompilation> FromValidatedBlob(Blob blob) {
+        GLSLCompilation result;
+        DAWN_TRY_ASSIGN(result, FromBlob(std::move(blob)));
+        DAWN_INVALID_IF(result.glsl.empty(), "Cached GLSLCompilation result has no GLSL");
+        return result;
+    }
+};
+// clang-format on
 #undef GLSL_COMPILATION_MEMBERS
 
 }  // namespace
@@ -526,17 +535,17 @@ ResultOrError<GLuint> ShaderModule::CompileShader(
     req.tintOptions.disable_robustness = false;
 
     if (usesVertexIndex) {
-        req.tintOptions.first_vertex_offset = 4 * PipelineLayout::PushConstantLocation::FirstVertex;
+        req.tintOptions.first_vertex_offset = 4 * PipelineLayout::ImmediateLocation::FirstVertex;
     }
 
     if (usesInstanceIndex) {
         req.tintOptions.first_instance_offset =
-            4 * PipelineLayout::PushConstantLocation::FirstInstance;
+            4 * PipelineLayout::ImmediateLocation::FirstInstance;
     }
 
     if (usesFragDepth) {
-        req.tintOptions.depth_range_offsets = {4 * PipelineLayout::PushConstantLocation::MinDepth,
-                                               4 * PipelineLayout::PushConstantLocation::MaxDepth};
+        req.tintOptions.depth_range_offsets = {4 * PipelineLayout::ImmediateLocation::MinDepth,
+                                               4 * PipelineLayout::ImmediateLocation::MaxDepth};
     }
 
     if (stage == SingleShaderStage::Vertex) {
@@ -559,9 +568,12 @@ ResultOrError<GLuint> ShaderModule::CompileShader(
     req.tintOptions.disable_polyfill_integer_div_mod =
         GetDevice()->IsToggleEnabled(Toggle::DisablePolyfillsOnIntegerDivisonAndModulo);
 
+    req.tintOptions.enable_integer_range_analysis =
+        GetDevice()->IsToggleEnabled(Toggle::EnableIntegerRangeAnalysisInRobustness);
+
     CacheResult<GLSLCompilation> compilationResult;
     DAWN_TRY_LOAD_OR_RUN(
-        compilationResult, GetDevice(), std::move(req), GLSLCompilation::FromBlob,
+        compilationResult, GetDevice(), std::move(req), GLSLCompilation::FromValidatedBlob,
         [](GLSLCompilationRequest r) -> ResultOrError<GLSLCompilation> {
             // Requires Tint Program here right before actual using.
             auto inputProgram = r.inputProgram.UnsafeGetValue()->GetTintProgram();

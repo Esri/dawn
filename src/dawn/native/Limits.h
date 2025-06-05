@@ -38,9 +38,9 @@
 
 namespace dawn::native {
 
+// TODO(crbug.com/421950205): Replace this with dawn::utils::ComboLimits.
 struct CombinedLimits {
     Limits v1;
-    DawnExperimentalImmediateDataLimits experimentalImmediateDataLimits;
     DawnHostMappedPointerLimits hostMappedPointerLimits;
     DawnTexelCopyBufferRowAlignmentLimits texelCopyBufferRowAlignmentLimits;
 };
@@ -54,7 +54,7 @@ void GetDefaultLimits(CombinedLimits* limits, wgpu::FeatureLevel featureLevel);
 CombinedLimits ReifyDefaultLimits(const CombinedLimits& limits, wgpu::FeatureLevel featureLevel);
 
 // Fixup limits after device creation
-void EnforceLimitSpecInvariants(Limits* limits, wgpu::FeatureLevel featureLevel);
+void EnforceLimitSpecInvariants(CombinedLimits* limits, wgpu::FeatureLevel featureLevel);
 
 // Validate that |requiredLimits| are no better than |supportedLimits|.
 MaybeError ValidateLimits(const CombinedLimits& supportedLimits,
@@ -86,6 +86,7 @@ CombinedLimits ApplyLimitTiers(const CombinedLimits& limits);
 struct LimitsForCompilationRequest {
     static LimitsForCompilationRequest Create(const Limits& limits);
     DAWN_VISITABLE_MEMBERS(LIMITS_FOR_COMPILATION_REQUEST_MEMBERS)
+    bool operator==(const LimitsForCompilationRequest& other) const = default;
 };
 
 // Enforce restriction for limit values, including:

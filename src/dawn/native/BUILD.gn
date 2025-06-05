@@ -160,6 +160,7 @@ source_set("headers") {
     "${dawn_root}/include/dawn/native/NullBackend.h",
     "${dawn_root}/include/dawn/native/OpenGLBackend.h",
     "${dawn_root}/include/dawn/native/VulkanBackend.h",
+    "${dawn_root}/include/dawn/native/WebGPUBackend.h",
   ]
 }
 
@@ -300,6 +301,7 @@ source_set("sources") {
     "Format.cpp",
     "Format.h",
     "Forward.h",
+    "ImmediateConstantsLayout.cpp",
     "ImmediateConstantsLayout.h",
     "ImmediateConstantsTracker.cpp",
     "ImmediateConstantsTracker.h",
@@ -318,7 +320,6 @@ source_set("sources") {
     "ObjectBase.h",
     "ObjectContentHasher.cpp",
     "ObjectContentHasher.h",
-    "PassResourceUsage.cpp",
     "PassResourceUsage.h",
     "PassResourceUsageTracker.cpp",
     "PassResourceUsageTracker.h",
@@ -702,6 +703,24 @@ source_set("sources") {
     ]
   }
 
+  if (dawn_enable_webgpu_on_webgpu) {
+    sources += [
+      "webgpu/BackendWGPU.cpp",
+      "webgpu/BackendWGPU.h",
+      "webgpu/BufferWGPU.cpp",
+      "webgpu/BufferWGPU.h",
+      "webgpu/CommandBufferWGPU.cpp",
+      "webgpu/CommandBufferWGPU.h",
+      "webgpu/DeviceWGPU.cpp",
+      "webgpu/DeviceWGPU.h",
+      "webgpu/Forward.h",
+      "webgpu/PhysicalDeviceWGPU.cpp",
+      "webgpu/PhysicalDeviceWGPU.h",
+      "webgpu/QueueWGPU.cpp",
+      "webgpu/QueueWGPU.h",
+    ]
+  }
+
   if ((dawn_enable_opengl || dawn_enable_vulkan) &&
       dawn_enable_spirv_validation) {
     sources += [
@@ -954,6 +973,9 @@ dawn_component("native") {
   }
   if (dawn_enable_null) {
     sources += [ "null/NullBackend.cpp" ]
+  }
+  if (dawn_enable_webgpu_on_webgpu) {
+    sources += [ "webgpu/WebGPUBackend.cpp" ]
   }
   if (dawn_enable_opengl) {
     sources += [ "opengl/OpenGLBackend.cpp" ]

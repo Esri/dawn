@@ -124,7 +124,7 @@ SpvStorageClass StorageClass(core::AddressSpace addrspace) {
             return SpvStorageClassInput;
         case core::AddressSpace::kPrivate:
             return SpvStorageClassPrivate;
-        case core::AddressSpace::kPushConstant:
+        case core::AddressSpace::kImmediate:
             return SpvStorageClassPushConstant;
         case core::AddressSpace::kOut:
             return SpvStorageClassOutput;
@@ -299,7 +299,7 @@ class Printer {
 
     /// Builds the SPIR-V from the IR
     Result<SuccessType> Generate() {
-        auto valid = core::ir::ValidateAndDumpIfNeeded(ir_, "spirv.Printer");
+        auto valid = core::ir::ValidateAndDumpIfNeeded(ir_, "spirv.Printer", kPrinterCapabilities);
         if (valid != Success) {
             return valid.Failure();
         }
@@ -370,6 +370,9 @@ class Printer {
                 return SpvBuiltInSampleId;
             case core::BuiltinValue::kSampleMask:
                 return SpvBuiltInSampleMask;
+            case core::BuiltinValue::kSubgroupId:
+                module_.PushCapability(SpvCapabilityGroupNonUniform);
+                return SpvBuiltInSubgroupId;
             case core::BuiltinValue::kSubgroupInvocationId:
                 module_.PushCapability(SpvCapabilityGroupNonUniform);
                 return SpvBuiltInSubgroupLocalInvocationId;
@@ -697,7 +700,7 @@ class Printer {
         for (auto* member : str->Members()) {
             operands.push_back(Type(member->Type()));
 
-            if (str->StructFlags().Contains(core::type::kSpirvExplicitLayout)) {
+            if (str->StructFlags().Contains(core::type::kExplicitLayout)) {
                 // Generate struct member offset decoration.
                 module_.PushAnnot(spv::Op::OpMemberDecorate,
                                   {operands[0], member->Index(), U32Operand(SpvDecorationOffset),
@@ -1428,6 +1431,12 @@ class Printer {
                 break;
             case spirv::BuiltinFn::kImageSampleExplicitLod:
                 op = spv::Op::OpImageSampleExplicitLod;
+                break;
+            case spirv::BuiltinFn::kImageSampleProjImplicitLod:
+                op = spv::Op::OpImageSampleProjImplicitLod;
+                break;
+            case spirv::BuiltinFn::kImageSampleProjExplicitLod:
+                op = spv::Op::OpImageSampleProjExplicitLod;
                 break;
             case spirv::BuiltinFn::kImageSampleDrefImplicitLod:
                 op = spv::Op::OpImageSampleDrefImplicitLod;
@@ -2585,7 +2594,7 @@ class Printer {
                 module_.PushType(spv::Op::OpVariable, operands);
                 break;
             }
-            case core::AddressSpace::kPushConstant: {
+            case core::AddressSpace::kImmediate: {
                 TINT_ASSERT(!current_function_);
                 module_.PushType(spv::Op::OpVariable,
                                  {ty, id, U32Operand(SpvStorageClassPushConstant)});

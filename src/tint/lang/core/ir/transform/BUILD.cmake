@@ -64,8 +64,8 @@ tint_add_target(tint_lang_core_ir_transform lib
   lang/core/ir/transform/multiplanar_external_texture.cc
   lang/core/ir/transform/multiplanar_external_texture.h
   lang/core/ir/transform/multiplanar_options.h
-  lang/core/ir/transform/prepare_push_constants.cc
-  lang/core/ir/transform/prepare_push_constants.h
+  lang/core/ir/transform/prepare_immediate_data.cc
+  lang/core/ir/transform/prepare_immediate_data.h
   lang/core/ir/transform/preserve_padding.cc
   lang/core/ir/transform/preserve_padding.h
   lang/core/ir/transform/prevent_infinite_loops.cc
@@ -139,7 +139,7 @@ tint_add_target(tint_lang_core_ir_transform_test test
   lang/core/ir/transform/direct_variable_access_test.cc
   lang/core/ir/transform/helper_test.h
   lang/core/ir/transform/multiplanar_external_texture_test.cc
-  lang/core/ir/transform/prepare_push_constants_test.cc
+  lang/core/ir/transform/prepare_immediate_data_test.cc
   lang/core/ir/transform/preserve_padding_test.cc
   lang/core/ir/transform/prevent_infinite_loops_test.cc
   lang/core/ir/transform/remove_continue_in_switch_test.cc
@@ -202,6 +202,7 @@ tint_add_target(tint_lang_core_ir_transform_fuzz fuzz
   lang/core/ir/transform/remove_terminator_args_fuzz.cc
   lang/core/ir/transform/rename_conflicts_fuzz.cc
   lang/core/ir/transform/robustness_fuzz.cc
+  lang/core/ir/transform/single_entry_point_fuzz.cc
   lang/core/ir/transform/std140_fuzz.cc
   lang/core/ir/transform/substitute_overrides_fuzz.cc
   lang/core/ir/transform/value_to_let_fuzz.cc
