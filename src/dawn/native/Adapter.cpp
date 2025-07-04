@@ -447,11 +447,11 @@ std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapter
     const auto ComputeAdapterTypeRank = [&](const Ref<AdapterBase>& a) {
         switch (a->GetPhysicalDevice()->GetAdapterType()) {
             case wgpu::AdapterType::DiscreteGPU:
-                return highPerformance ? 0 : 1;
+                return highPerformance ? 1 : 2;
             case wgpu::AdapterType::IntegratedGPU:
-                return highPerformance ? 1 : 0;
+                return highPerformance ? 2 : 1;
             case wgpu::AdapterType::CPU:
-                return 2;
+                return 0;
             case wgpu::AdapterType::Unknown:
                 return 3;
         }
