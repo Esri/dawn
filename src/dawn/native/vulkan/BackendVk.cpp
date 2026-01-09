@@ -164,6 +164,12 @@ constexpr SkippedMessage kSkippedMessages[] = {
      "vkAllocateMemory(): pAllocateInfo->pNext<VkMemoryDedicatedAllocateInfo>"},
     // crbug.com/324282958
     {"NVIDIA", "vkBindImageMemory: memoryTypeIndex"},
+
+    // crbug.com/441788589
+    {"VUID-vkCmdDraw-None-08114",
+     // vkCmdDraw(): the descriptor
+     "is being used in draw but has never been updated via vkUpdateDescriptorSets() or a similar "
+     "call."},
 };
 
 namespace dawn::native::vulkan {
@@ -335,28 +341,12 @@ MaybeError VulkanInstance::Initialize(const InstanceBase* instance, ICD icd) {
 
     const std::vector<std::string>& searchPaths = instance->GetRuntimeSearchPaths();
 
-    auto CommaSeparatedResolvedSearchPaths = [&](const char* name) {
-        std::string list;
-        bool first = true;
-        for (const std::string& path : searchPaths) {
-            if (!first) {
-                list += ", ";
-            }
-            first = false;
-            list += (path + name);
-        }
-        return list;
-    };
-
     auto LoadVulkan = [&](const char* libName) -> MaybeError {
-        for (const std::string& path : searchPaths) {
-            std::string resolvedPath = path + libName;
-            if (mVulkanLib.Open(resolvedPath)) {
-                return {};
-            }
+        std::string error;
+        if (mVulkanLib.Open(libName, searchPaths, &error)) {
+            return {};
         }
-        return DAWN_FORMAT_INTERNAL_ERROR("Couldn't load Vulkan. Searched %s.",
-                                          CommaSeparatedResolvedSearchPaths(libName));
+        return DAWN_FORMAT_INTERNAL_ERROR("Couldn't load Vulkan: %s", error.c_str());
     };
 
     switch (icd) {
@@ -391,10 +381,13 @@ MaybeError VulkanInstance::Initialize(const InstanceBase* instance, ICD icd) {
     DAWN_TRY(mFunctions.LoadGlobalProcs(mVulkanLib));
 
     DAWN_TRY_ASSIGN(mGlobalInfo, GatherGlobalInfo(mFunctions));
-    if (icd != ICD::SwiftShader && mGlobalInfo.apiVersion < VK_MAKE_API_VERSION(0, 1, 1, 0)) {
-        // See crbug.com/850881, crbug.com/863086, crbug.com/1465064, crbug.com/346990068
-        return DAWN_INTERNAL_ERROR(
-            "Vulkan 1.0 driver is unsupported. At least Vulkan 1.1 is required.");
+
+    if (mGlobalInfo.apiVersion < kRequiredVulkanVersion) {
+        std::ostringstream versionError;
+        versionError << "Vulkan " << FormatAPIVersion(mGlobalInfo.apiVersion)
+                     << " driver is unsupported. At least Vulkan "
+                     << FormatAPIVersion(kRequiredVulkanVersion) << " is required.";
+        return DAWN_INTERNAL_ERROR(versionError.str());
     }
 
     VulkanGlobalKnobs usedGlobalKnobs = {};
@@ -453,10 +446,7 @@ ResultOrError<VulkanGlobalKnobs> VulkanInstance::CreateVkInstance(const Instance
     std::vector<const char*> extensionNames;
     for (InstanceExt ext : extensionsToRequest) {
         const InstanceExtInfo& info = GetInstanceExtInfo(ext);
-
-        if (info.versionPromoted > mGlobalInfo.apiVersion) {
-            extensionNames.push_back(info.name);
-        }
+        extensionNames.push_back(info.name);
     }
 
     VkApplicationInfo appInfo;
@@ -466,7 +456,7 @@ ResultOrError<VulkanGlobalKnobs> VulkanInstance::CreateVkInstance(const Instance
     appInfo.applicationVersion = 0;
     appInfo.pEngineName = "Dawn";
     appInfo.engineVersion = 0;
-    appInfo.apiVersion = std::min(mGlobalInfo.apiVersion, VK_API_VERSION_1_3);
+    appInfo.apiVersion = kRequiredVulkanVersion;
 
     VkInstanceCreateInfo createInfo;
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;

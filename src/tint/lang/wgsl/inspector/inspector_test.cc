@@ -25,6 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <algorithm>
 #include <memory>
 #include <unordered_set>
 
@@ -82,6 +83,7 @@ using InspectorGetEntryPointTest = InspectorTest;
 using InspectorOverridesTest = InspectorTest;
 using InspectorGetConstantNameToIdMapTest = InspectorTest;
 using InspectorGetResourceBindingsTest = InspectorTest;
+using InspectorGetResourceTableInfoTest = InspectorTest;
 using InspectorGetUsedExtensionNamesTest = InspectorTest;
 using InspectorGetBlendSrcTest = InspectorTest;
 using InspectorSubgroupMatrixTest = InspectorTest;
@@ -199,8 +201,6 @@ TEST_F(InspectorGetEntryPointTest, ImmediateDataSizeNone) {
 // Test that immediate_data_size is 4 (bytes) if there is a single F32 immediate data.
 TEST_F(InspectorGetEntryPointTest, ImmediateDataSizeOneWord) {
     auto* src = R"(
-enable chromium_experimental_immediate;
-
 var<immediate> pc: f32;
 
 @fragment fn foo() { _ = pc; }
@@ -218,8 +218,6 @@ var<immediate> pc: f32;
 // each of i32, f32 and u32.
 TEST_F(InspectorGetEntryPointTest, ImmediateDataSizeThreeWords) {
     auto* src = R"(
-enable chromium_experimental_immediate;
-
 struct S {
   a: i32,
   b: f32,
@@ -243,8 +241,6 @@ var<immediate> pc : S;
 // point containing a struct of size 12 bytes.
 TEST_F(InspectorGetEntryPointTest, ImmediateDataSizeTwoConstants) {
     auto* src = R"(
-enable chromium_experimental_immediate;
-
 struct S {
   a: i32,
   b: f32,
@@ -1136,6 +1132,7 @@ fn ep_func() {}
     EXPECT_FALSE(result[0].sample_index_used);
     EXPECT_FALSE(result[0].num_workgroups_used);
     EXPECT_FALSE(result[0].frag_depth_used);
+    EXPECT_FALSE(result[0].fine_derivative_builtin_used);
 }
 
 TEST_F(InspectorGetEntryPointTest, InputSampleMaskSimpleReferenced) {
@@ -1324,6 +1321,108 @@ fn ep_func() -> out_struct {
 
     ASSERT_EQ(1u, result.size());
     EXPECT_TRUE(result[0].frag_depth_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, DpdxFineDirectlyUsed) {
+    auto* src = R"(
+@fragment
+fn ep_func(@location(0) i: f32) {
+  _ = dpdxFine(i);
+}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].fine_derivative_builtin_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, DpdxFineTransientlyUsed) {
+    auto* src = R"(
+fn foo(i: f32) {
+  _ = dpdxFine(i);
+}
+
+@fragment
+fn ep_func(@location(0) i: f32) {
+    foo(i);
+}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].fine_derivative_builtin_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, DpdyFineDirectlyUsed) {
+    auto* src = R"(
+@fragment
+fn ep_func(@location(0) i: f32) {
+  _ = dpdyFine(i);
+}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].fine_derivative_builtin_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, DpdyFineTransientlyUsed) {
+    auto* src = R"(
+fn foo(i: f32) {
+  _ = dpdyFine(i);
+}
+
+@fragment
+fn ep_func(@location(0) i: f32) {
+    foo(i);
+}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].fine_derivative_builtin_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, FwidthFineDirectlyUsed) {
+    auto* src = R"(
+@fragment
+fn ep_func(@location(0) i: f32) {
+  _ = fwidthFine(i);
+}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].fine_derivative_builtin_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, FwidthFineTransientlyUsed) {
+    auto* src = R"(
+fn foo(i: f32) {
+  _ = fwidthFine(i);
+}
+
+@fragment
+fn ep_func(@location(0) i: f32) {
+    foo(i);
+}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].fine_derivative_builtin_used);
 }
 
 TEST_F(InspectorGetEntryPointTest, ClipDistancesReferenced) {
@@ -1527,6 +1626,25 @@ fn callee_func() { _ = foo; }
     EXPECT_TRUE(ep.is_id_specified);
 }
 
+TEST_F(InspectorGetEntryPointTest, HasTextureFromGetResource) {
+    std::string shader = R"(
+enable chromium_experimental_resource_table;
+
+const kHouseTexture = 2u;
+
+@fragment fn fs() {
+    let td = getResource<texture_depth_2d>(kHouseTexture);
+    _ = textureLoad(td, vec2(0), 0);
+}
+    )";
+    Inspector& inspector = Initialize(shader);
+    auto result = inspector.GetEntryPoints();
+    ASSERT_FALSE(inspector.has_error()) << inspector.error();
+
+    // Resource table information doesn't set the flag.
+    EXPECT_FALSE(inspector.GetEntryPoint("lfs").has_texture_load_with_depth_texture);
+}
+
 TEST_F(InspectorGetEntryPointTest, HasTextureLoadWithDepthTexture) {
     std::string shader = R"(
         @group(0) @binding(0) var td : texture_depth_2d;
@@ -1552,6 +1670,56 @@ TEST_F(InspectorGetEntryPointTest, HasTextureLoadWithDepthTexture) {
         }
         @compute @workgroup_size(1) fn load_texture_depth_in_function() {
             load_texture_depth_arg(td);
+        }
+    )";
+    Inspector& inspector = Initialize(shader);
+    auto result = inspector.GetEntryPoints();
+    ASSERT_FALSE(inspector.has_error()) << inspector.error();
+
+    EXPECT_TRUE(inspector.GetEntryPoint("load_texture_depth").has_texture_load_with_depth_texture);
+    EXPECT_TRUE(inspector.GetEntryPoint("load_texture_depth_multisample")
+                    .has_texture_load_with_depth_texture);
+    EXPECT_FALSE(inspector.GetEntryPoint("load_texture_2d").has_texture_load_with_depth_texture);
+    EXPECT_FALSE(
+        inspector.GetEntryPoint("sample_texture_depth").has_texture_load_with_depth_texture);
+    EXPECT_TRUE(inspector.GetEntryPoint("load_texture_depth_in_function")
+                    .has_texture_load_with_depth_texture);
+}
+
+TEST_F(InspectorGetEntryPointTest, HasTextureLoadWithDepthTextureThroughLet) {
+    std::string shader = R"(
+        @group(0) @binding(0) var td : texture_depth_2d;
+        @group(0) @binding(1) var tdm : texture_depth_multisampled_2d;
+        @group(0) @binding(2) var t : texture_2d<f32>;
+        @group(0) @binding(3) var s : sampler;
+
+        @compute @workgroup_size(1) fn load_texture_depth() {
+            let a = td;
+            _ = textureLoad(a, vec2(0), 0);
+        }
+        @compute @workgroup_size(1) fn load_texture_depth_multisample() {
+            let a = td;
+            _ = textureLoad(a, vec2(0), 0);
+        }
+        @compute @workgroup_size(1) fn load_texture_2d() {
+            let a = t;
+            _ = textureLoad(a, vec2(0), 0);
+        }
+        @fragment fn sample_texture_depth() -> @location(0) u32 {
+            let a = td;
+            let b = a;
+            let c = b;
+            _ = textureSample(c, s, vec2(0));
+            return 0;
+        }
+        fn load_texture_depth_arg(tex : texture_depth_2d) {
+           let a = tex;
+            _ = textureLoad(a, vec2(0), 0);
+        }
+        @compute @workgroup_size(1) fn load_texture_depth_in_function() {
+            let a = td;
+            let b = a;
+            load_texture_depth_arg(b);
         }
     )";
     Inspector& inspector = Initialize(shader);
@@ -1820,6 +1988,41 @@ fn main() {
     EXPECT_EQ(3u, result[1].binding);
     EXPECT_EQ(1u, result[1].input_attachment_index);
     EXPECT_EQ(inspector::ResourceBinding::SampledKind::kSInt, result[1].sampled_kind);
+}
+
+TEST_F(InspectorGetResourceBindingsTest, TexelBuffer) {
+    auto* src = R"(
+
+@group(0) @binding(0) var tb_read: texel_buffer<rgba8uint, read>;
+@group(2) @binding(1) var tb_rw: texel_buffer<r32sint, read_write>;
+
+fn use_tb() {
+  _ = textureDimensions(tb_read);
+  textureStore(tb_rw, 0u, vec4<i32>());
+}
+
+@fragment
+fn main() { use_tb(); }
+)";
+
+    Inspector& inspector = Initialize(src);
+    auto result = inspector.GetResourceBindings("main");
+    ASSERT_FALSE(inspector.has_error()) << inspector.error();
+    ASSERT_EQ(2u, result.size());
+
+    EXPECT_EQ(ResourceBinding::ResourceType::kReadOnlyTexelBuffer, result[0].resource_type);
+    EXPECT_EQ(0u, result[0].bind_group);
+    EXPECT_EQ(0u, result[0].binding);
+    EXPECT_EQ(ResourceBinding::TextureDimension::k1d, result[0].dim);
+    EXPECT_EQ(ResourceBinding::TexelFormat::kRgba8Uint, result[0].image_format);
+    EXPECT_EQ(ResourceBinding::SampledKind::kUInt, result[0].sampled_kind);
+
+    EXPECT_EQ(ResourceBinding::ResourceType::kReadWriteTexelBuffer, result[1].resource_type);
+    EXPECT_EQ(2u, result[1].bind_group);
+    EXPECT_EQ(1u, result[1].binding);
+    EXPECT_EQ(ResourceBinding::TextureDimension::k1d, result[1].dim);
+    EXPECT_EQ(ResourceBinding::TexelFormat::kR32Sint, result[1].image_format);
+    EXPECT_EQ(ResourceBinding::SampledKind::kSInt, result[1].sampled_kind);
 }
 
 TEST_F(InspectorGetResourceBindingsTest, MissingEntryPoint) {
@@ -2755,6 +2958,107 @@ fn f() {
     EXPECT_EQ(1u, result[0].binding);
     EXPECT_TRUE(result[0].array_size.has_value());
     EXPECT_EQ(5u, result[0].array_size.value());
+}
+
+TEST_F(InspectorGetResourceTableInfoTest, NoResourceBinding) {
+    auto* src = R"(
+@group(0) @binding(1) var toto: texture_2d<f32>;
+@fragment fn ep() {
+  _ = textureDimensions(toto);
+}
+)";
+
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetResourceTableInfo("ep");
+    ASSERT_FALSE(inspector.has_error()) << inspector.error();
+
+    EXPECT_TRUE(result.empty());
+}
+
+TEST_F(InspectorGetResourceTableInfoTest, ResourceTable) {
+    auto* src = R"(
+enable chromium_experimental_resource_table;
+
+@fragment fn ep() {
+  _ = hasResource<texture_2d<f32>>(0);
+  _ = getResource<texture_3d<i32>>(1);
+}
+)";
+
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetResourceTableInfo("ep");
+    ASSERT_FALSE(inspector.has_error()) << inspector.error();
+
+    ASSERT_EQ(2u, result.size());
+
+    std::vector<ResourceType> types(result.begin(), result.end());
+    std::sort(types.begin(), types.end());
+    EXPECT_EQ(ResourceType::kTexture2d_f32, types[0]);
+    EXPECT_EQ(ResourceType::kTexture3d_i32, types[1]);
+}
+
+TEST_F(InspectorGetResourceTableInfoTest, ResourceTable_Multiple) {
+    auto* src = R"(
+enable chromium_experimental_resource_table;
+
+@fragment fn ep() {
+  _ = textureDimensions(getResource<texture_cube<f32>>(3));
+  _ = textureDimensions(getResource<texture_1d<f32>>(3));
+
+  _ = hasResource<texture_2d<f32>>(0);
+  _ = getResource<texture_3d<f32>>(1);
+}
+)";
+
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetResourceTableInfo("ep");
+    ASSERT_FALSE(inspector.has_error()) << inspector.error();
+
+    ASSERT_EQ(4u, result.size());
+
+    std::vector<ResourceType> types(result.begin(), result.end());
+    std::sort(types.begin(), types.end());
+
+    EXPECT_EQ(ResourceType::kTexture1d_f32, types[0]);
+    EXPECT_EQ(ResourceType::kTexture2d_f32, types[1]);
+    EXPECT_EQ(ResourceType::kTexture3d_f32, types[2]);
+    EXPECT_EQ(ResourceType::kTextureCube_f32, types[3]);
+}
+
+TEST_F(InspectorGetResourceTableInfoTest, ResourceTable_Nested) {
+    auto* src = R"(
+enable chromium_experimental_resource_table;
+
+fn nested() {
+  _ = textureDimensions(getResource<texture_cube<f32>>(3));
+  _ = textureDimensions(getResource<texture_1d<f32>>(3));
+
+  _ = hasResource<texture_2d<f32>>(0);
+  _ = getResource<texture_3d<f32>>(1);
+}
+
+@fragment fn ep() {
+  nested();
+}
+)";
+
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetResourceTableInfo("ep");
+    ASSERT_FALSE(inspector.has_error()) << inspector.error();
+
+    ASSERT_EQ(4u, result.size());
+
+    std::vector<ResourceType> types(result.begin(), result.end());
+    std::sort(types.begin(), types.end());
+
+    EXPECT_EQ(ResourceType::kTexture1d_f32, types[0]);
+    EXPECT_EQ(ResourceType::kTexture2d_f32, types[1]);
+    EXPECT_EQ(ResourceType::kTexture3d_f32, types[2]);
+    EXPECT_EQ(ResourceType::kTextureCube_f32, types[3]);
 }
 
 class InspectorGetSamplerTextureUsesTest : public TestHelper, public testing::Test {
@@ -3808,12 +4112,14 @@ TEST_F(InspectorTextureTest, TextureLoadMultipleInEP) {
 @group(2) @binding(3) var tex1: texture_2d<f32>;
 @group(1) @binding(4) var tex2: texture_multisampled_2d<f32>;
 @group(0) @binding(1) var tex3: texture_2d<f32>;
+@group(0) @binding(8) var tex4: texture_external;
 
 @compute @workgroup_size(1)
 fn main() {
   let num1 = textureLoad(tex1, vec2(0, 0), 0);
   let num2 = textureLoad(tex2, vec2(0, 0), 0);
   let num3 = textureLoad(tex3, vec2(0, 0), 0);
+  let num4 = textureLoad(tex4, vec2(0, 0));
 })";
 
     Inspector& inspector = Initialize(shader);
@@ -4009,6 +4315,207 @@ static std::ostream& operator<<(std::ostream& out, const Inspector::TextureQuery
             break;
     }
     return out;
+}
+
+using InspectorImmediateBlockTest = InspectorTest;
+
+TEST_F(InspectorImmediateBlockTest, NoImmediateVariable) {
+    auto* src = R"(
+@compute @workgroup_size(1)
+fn main() {}
+)";
+    Inspector& inspector = Initialize(src);
+    auto info = inspector.GetImmediateBlockInfo("main");
+    EXPECT_TRUE(info.none());
+}
+
+TEST_F(InspectorImmediateBlockTest, UnusedImmediateVariable) {
+    auto* src = R"(
+requires immediate_address_space;
+var<immediate> a : u32;
+@compute @workgroup_size(1)
+fn main() {}
+)";
+    Inspector& inspector = Initialize(src);
+    auto info = inspector.GetImmediateBlockInfo("main");
+    EXPECT_TRUE(info.none());
+}
+
+TEST_F(InspectorImmediateBlockTest, SimpleScalar) {
+    auto* src = R"(
+requires immediate_address_space;
+var<immediate> a : u32;
+@compute @workgroup_size(1)
+fn main() {
+  _ = a;
+}
+)";
+    Inspector& inspector = Initialize(src);
+    auto info = inspector.GetImmediateBlockInfo("main");
+    EXPECT_TRUE(info[0]);
+    for (size_t i = 1; i < info.size(); ++i) {
+        EXPECT_FALSE(info[i]);
+    }
+}
+
+TEST_F(InspectorImmediateBlockTest, SimpleVector) {
+    auto* src = R"(
+requires immediate_address_space;
+var<immediate> a : vec4<f32>;
+@compute @workgroup_size(1)
+fn main() {
+  _ = a;
+}
+)";
+    Inspector& inspector = Initialize(src);
+    auto info = inspector.GetImmediateBlockInfo("main");
+    for (size_t i = 0; i < 4; ++i) {
+        EXPECT_TRUE(info[i]);
+    }
+    for (size_t i = 4; i < info.size(); ++i) {
+        EXPECT_FALSE(info[i]);
+    }
+}
+
+TEST_F(InspectorImmediateBlockTest, MatrixWithPadding) {
+    auto* src = R"(
+requires immediate_address_space;
+var<immediate> a : mat3x3<f32>;
+@compute @workgroup_size(1)
+fn main() {
+  _ = a;
+}
+)";
+    Inspector& inspector = Initialize(src);
+    auto info = inspector.GetImmediateBlockInfo("main");
+    // mat3x3<f32> has 3 columns of vec3<f32>.
+    // vec3<f32> is 12 bytes, aligned to 16.
+    // Size is 48 bytes.
+
+    // Col 0: slots 0, 1, 2. Slot 3 is padding.
+    EXPECT_TRUE(info[0]);
+    EXPECT_TRUE(info[1]);
+    EXPECT_TRUE(info[2]);
+    EXPECT_FALSE(info[3]);
+
+    // Col 1: slots 4, 5, 6. Slot 7 is padding.
+    EXPECT_TRUE(info[4]);
+    EXPECT_TRUE(info[5]);
+    EXPECT_TRUE(info[6]);
+    EXPECT_FALSE(info[7]);
+
+    // Col 2: slots 8, 9, 10. Slot 11 is padding.
+    EXPECT_TRUE(info[8]);
+    EXPECT_TRUE(info[9]);
+    EXPECT_TRUE(info[10]);
+    EXPECT_FALSE(info[11]);
+
+    for (size_t i = 12; i < info.size(); ++i) {
+        EXPECT_FALSE(info[i]);
+    }
+}
+
+TEST_F(InspectorImmediateBlockTest, StructWithPadding) {
+    auto* src = R"(
+requires immediate_address_space;
+struct S {
+  a : u32,
+  b : vec3<f32>,
+}
+var<immediate> u : S;
+@compute @workgroup_size(1)
+fn main() {
+  _ = u;
+}
+)";
+    Inspector& inspector = Initialize(src);
+    auto info = inspector.GetImmediateBlockInfo("main");
+    // S alignment is 16 (vec3<f32>).
+    // a: offset 0, size 4.
+    // padding: 12 bytes.
+    // b: offset 16, size 12.
+    // padding: 4 bytes (to align struct size to 16).
+    // Total size: 32 bytes.
+
+    // a
+    EXPECT_TRUE(info[0]);
+    // padding
+    EXPECT_FALSE(info[1]);
+    EXPECT_FALSE(info[2]);
+    EXPECT_FALSE(info[3]);
+    // b
+    EXPECT_TRUE(info[4]);
+    EXPECT_TRUE(info[5]);
+    EXPECT_TRUE(info[6]);
+    // padding
+    EXPECT_FALSE(info[7]);
+
+    for (size_t i = 8; i < info.size(); ++i) {
+        EXPECT_FALSE(info[i]);
+    }
+}
+
+TEST_F(InspectorImmediateBlockTest, IndirectUse) {
+    auto* src = R"(
+requires immediate_address_space;
+var<immediate> a : u32;
+fn foo() {
+  _ = a;
+}
+@compute @workgroup_size(1)
+fn main() {
+  foo();
+}
+)";
+    Inspector& inspector = Initialize(src);
+    auto info = inspector.GetImmediateBlockInfo("main");
+    EXPECT_TRUE(info[0]);
+    for (size_t i = 1; i < info.size(); ++i) {
+        EXPECT_FALSE(info[i]);
+    }
+}
+
+TEST_F(InspectorImmediateBlockTest, PartialAccess) {
+    auto* src = R"(
+requires immediate_address_space;
+struct S {
+  a : u32,
+  b : u32,
+}
+var<immediate> u : S;
+@compute @workgroup_size(1)
+fn main() {
+  _ = u.b;
+}
+)";
+    Inspector& inspector = Initialize(src);
+    auto info = inspector.GetImmediateBlockInfo("main");
+    // Even with partial access, we mark all non-padding bytes.
+    EXPECT_TRUE(info[0]);
+    EXPECT_TRUE(info[1]);
+    for (size_t i = 2; i < info.size(); ++i) {
+        EXPECT_FALSE(info[i]);
+    }
+}
+
+TEST_F(InspectorImmediateBlockTest, FunctionParameter) {
+    auto* src = R"(
+requires immediate_address_space;
+var<immediate> a : u32;
+fn foo(val : u32) {
+  _ = val;
+}
+@compute @workgroup_size(1)
+fn main() {
+  foo(a);
+}
+)";
+    Inspector& inspector = Initialize(src);
+    auto info = inspector.GetImmediateBlockInfo("main");
+    EXPECT_TRUE(info[0]);
+    for (size_t i = 1; i < info.size(); ++i) {
+        EXPECT_FALSE(info[i]);
+    }
 }
 
 }  // namespace tint::inspector

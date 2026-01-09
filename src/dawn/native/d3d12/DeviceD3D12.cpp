@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <memory>
 #include <sstream>
 #include <utility>
 
@@ -176,10 +177,8 @@ MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
     GetD3D12Device()->CreateCommandSignature(&programDesc, nullptr,
                                              IID_PPV_ARGS(&mDrawIndexedIndirectSignature));
 
-    DAWN_TRY(DeviceBase::Initialize(std::move(queue)));
-
-    // Ensure DXC if use_dxc toggle is set.
-    DAWN_TRY(EnsureDXCIfRequired());
+    DAWN_TRY(DeviceBase::Initialize(descriptor, std::move(queue)));
+    DAWN_TRY(EnsureCompilerLibraries());
 
     // Set up shader profile for DXC.
     if (IsToggleEnabled(Toggle::UseDXC)) {
@@ -197,6 +196,9 @@ MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
         mDxcShaderProfiles[SingleShaderStage::Compute] = L"c" + profileSuffix;
     }
 
+    // The device guard isn't needed for thread safety exactly, since device creation should happen
+    // on a single thread, but it's required to satisfy assertions.
+    auto deviceGuard = GetGuard();
     DAWN_TRY(CreateZeroBuffer());
 
     SetLabelImpl();
@@ -216,7 +218,20 @@ ID3D12Device* Device::GetD3D12Device() const {
     return mD3d12Device.Get();
 }
 
-ResultOrError<ComPtr<ID3D11On12Device>> Device::GetOrCreateD3D11on12Device() {
+ComPtr<ID3D11On12Device> Device::GetOrCreateD3D11On12Device() {
+    ComPtr<ID3D11On12Device> d3d11On12Device;
+    // Use std::addressof to avoid ComPtr's overloaded operator& returning ComPtrRef type.
+    if (ConsumedError(GetOrCreateD3D11On12DeviceInternal(), std::addressof(d3d11On12Device))) {
+        return nullptr;
+    }
+    return d3d11On12Device;
+}
+
+ComPtr<ID3D12CommandQueue> Device::GetD3D12CommandQueue() const {
+    return ToBackend(GetQueue())->GetCommandQueue();
+}
+
+ResultOrError<ComPtr<ID3D11On12Device>> Device::GetOrCreateD3D11On12DeviceInternal() {
     if (mD3d11On12Device == nullptr) {
         ComPtr<ID3D11Device> d3d11Device;
         D3D_FEATURE_LEVEL d3dFeatureLevel;
@@ -270,12 +285,11 @@ ComPtr<ID3D12CommandSignature> Device::GetDrawIndexedIndirectSignature() const {
 }
 
 // Ensure DXC if use_dxc toggles are set and validated.
-MaybeError Device::EnsureDXCIfRequired() {
+MaybeError Device::EnsureCompilerLibraries() {
     if (IsToggleEnabled(Toggle::UseDXC)) {
-        DAWN_ASSERT(ToBackend(GetPhysicalDevice())->GetBackend()->IsDXCAvailable());
-        DAWN_TRY(ToBackend(GetPhysicalDevice())->GetBackend()->EnsureDxcCompiler());
-        DAWN_TRY(ToBackend(GetPhysicalDevice())->GetBackend()->EnsureDxcLibrary());
-        DAWN_TRY(ToBackend(GetPhysicalDevice())->GetBackend()->EnsureDxcValidator());
+        DAWN_TRY(ToBackend(GetPhysicalDevice())->GetBackend()->EnsureDXC());
+    } else {
+        DAWN_TRY(ToBackend(GetPhysicalDevice())->GetBackend()->EnsureFXC());
     }
 
     return {};
@@ -291,26 +305,46 @@ MutexProtected<ResidencyManager>& Device::GetResidencyManager() const {
 
 MaybeError Device::CreateZeroBuffer() {
     BufferDescriptor zeroBufferDescriptor;
-    zeroBufferDescriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
     zeroBufferDescriptor.size = kZeroBufferSize;
     zeroBufferDescriptor.label = "ZeroBuffer_Internal";
-    DAWN_TRY_ASSIGN(mZeroBuffer, Buffer::Create(this, Unpack(&zeroBufferDescriptor)));
 
-    CommandRecordingContext* commandContext =
-        ToBackend(GetQueue())->GetPendingCommandContext(QueueBase::SubmitMode::Passive);
+    Ref<BufferBase> zeroBufferBase;
 
-    return GetDynamicUploader()->WithUploadReservation(
-        kZeroBufferSize, kCopyBufferToBufferOffsetAlignment,
-        [&](UploadReservation reservation) -> MaybeError {
-            memset(reservation.mappedPointer, 0u, kZeroBufferSize);
+    // Clear zero buffer from CPU when `Feature::BufferMapExtendedUsages` is supported.
+    if (ToBackend(GetPhysicalDevice())->SupportsBufferMapExtendedUsages()) {
+        zeroBufferDescriptor.mappedAtCreation = true;
+        zeroBufferDescriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::MapWrite;
 
-            CopyFromStagingToBufferHelper(commandContext, reservation.buffer.Get(),
-                                          reservation.offsetInBuffer, mZeroBuffer.Get(), 0,
-                                          kZeroBufferSize);
+        DAWN_TRY_ASSIGN(zeroBufferBase, CreateBuffer(&zeroBufferDescriptor));
 
-            mZeroBuffer->SetInitialized(true);
-            return {};
-        });
+        void* mappedPointer = zeroBufferBase->GetMappedPointer();
+        DAWN_ASSERT(mappedPointer != nullptr);
+        memset(mappedPointer, 0, zeroBufferBase->GetAllocatedSize());
+        DAWN_TRY(zeroBufferBase->Unmap());
+    } else {
+        zeroBufferDescriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
+
+        DAWN_TRY_ASSIGN(zeroBufferBase, CreateBuffer(&zeroBufferDescriptor));
+
+        CommandRecordingContext* commandContext =
+            ToBackend(GetQueue())->GetPendingCommandContext(QueueBase::SubmitMode::Passive);
+
+        DAWN_TRY(GetDynamicUploader()->WithUploadReservation(
+            kZeroBufferSize, kCopyBufferToBufferOffsetAlignment,
+            [&](UploadReservation reservation) -> MaybeError {
+                memset(reservation.mappedPointer, 0u, kZeroBufferSize);
+
+                CopyFromStagingToBufferHelper(commandContext, reservation.buffer.Get(),
+                                              reservation.offsetInBuffer, zeroBufferBase.Get(), 0,
+                                              kZeroBufferSize);
+
+                zeroBufferBase->SetInitialized(true);
+                return {};
+            }));
+    }
+
+    mZeroBuffer = ToBackend(zeroBufferBase);
+    return {};
 }
 
 MaybeError Device::ClearBufferToZero(CommandRecordingContext* commandContext,
@@ -358,11 +392,11 @@ void Device::ReferenceUntilUnused(ComPtr<IUnknown> object) {
 }
 
 ResultOrError<Ref<BindGroupBase>> Device::CreateBindGroupImpl(
-    const BindGroupDescriptor* descriptor) {
+    const UnpackedPtr<BindGroupDescriptor>& descriptor) {
     return BindGroup::Create(this, descriptor);
 }
 ResultOrError<Ref<BindGroupLayoutInternalBase>> Device::CreateBindGroupLayoutImpl(
-    const BindGroupLayoutDescriptor* descriptor) {
+    const UnpackedPtr<BindGroupLayoutDescriptor>& descriptor) {
     return BindGroupLayout::Create(this, descriptor);
 }
 ResultOrError<Ref<BufferBase>> Device::CreateBufferImpl(
@@ -389,16 +423,18 @@ Ref<RenderPipelineBase> Device::CreateUninitializedRenderPipelineImpl(
     const UnpackedPtr<RenderPipelineDescriptor>& descriptor) {
     return RenderPipeline::CreateUninitialized(this, descriptor);
 }
+ResultOrError<Ref<ResourceTableBase>> Device::CreateResourceTableImpl(
+    const ResourceTableDescriptor* descriptor) {
+    // TODO(https://issues.chromium.org/473354062): Implement resource tables in D3D12.
+    return DAWN_UNIMPLEMENTED_ERROR("ResourceTable is not implemented on D3D12");
+}
 ResultOrError<Ref<SamplerBase>> Device::CreateSamplerImpl(const SamplerDescriptor* descriptor) {
     return Sampler::Create(this, descriptor);
 }
 ResultOrError<Ref<ShaderModuleBase>> Device::CreateShaderModuleImpl(
     const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
-    const std::vector<tint::wgsl::Extension>& internalExtensions,
-    ShaderModuleParseResult* parseResult,
-    std::unique_ptr<OwnedCompilationMessages>* compilationMessages) {
-    return ShaderModule::Create(this, descriptor, internalExtensions, parseResult,
-                                compilationMessages);
+    const std::vector<tint::wgsl::Extension>& internalExtensions) {
+    return ShaderModule::Create(this, descriptor, internalExtensions);
 }
 ResultOrError<Ref<SwapChainBase>> Device::CreateSwapChainImpl(Surface* surface,
                                                               SwapChainBase* previousSwapChain,
@@ -428,7 +464,10 @@ ResultOrError<Ref<SharedBufferMemoryBase>> Device::ImportSharedBufferMemoryImpl(
 
     wgpu::SType type;
     DAWN_TRY_ASSIGN(
-        type, (unpacked.ValidateBranches<Branch<SharedBufferMemoryD3D12ResourceDescriptor>>()));
+        type,
+        (unpacked
+             .ValidateBranches<Branch<SharedBufferMemoryD3D12ResourceDescriptor>,
+                               Branch<SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor>>()));
 
     switch (type) {
         case wgpu::SType::SharedBufferMemoryD3D12ResourceDescriptor:
@@ -437,6 +476,14 @@ ResultOrError<Ref<SharedBufferMemoryBase>> Device::ImportSharedBufferMemoryImpl(
                             wgpu::FeatureName::SharedBufferMemoryD3D12Resource);
             return SharedBufferMemory::Create(
                 this, descriptor->label, unpacked.Get<SharedBufferMemoryD3D12ResourceDescriptor>());
+        case wgpu::SType::SharedBufferMemoryD3D12SharedMemoryFileMappingHandleDescriptor:
+            DAWN_INVALID_IF(
+                !HasFeature(Feature::SharedBufferMemoryD3D12SharedMemoryFileMappingHandle),
+                "%s is not enabled.",
+                wgpu::FeatureName::SharedBufferMemoryD3D12SharedMemoryFileMappingHandle);
+            return SharedBufferMemory::Create(
+                this, descriptor->label,
+                unpacked.Get<SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor>());
         default:
             DAWN_UNREACHABLE();
     }
@@ -449,7 +496,8 @@ ResultOrError<Ref<SharedTextureMemoryBase>> Device::ImportSharedTextureMemoryImp
 
     wgpu::SType type;
     DAWN_TRY_ASSIGN(
-        type, (unpacked.ValidateBranches<Branch<SharedTextureMemoryDXGISharedHandleDescriptor>>()));
+        type, (unpacked.ValidateBranches<Branch<SharedTextureMemoryDXGISharedHandleDescriptor>,
+                                         Branch<SharedTextureMemoryD3D12ResourceDescriptor>>()));
 
     switch (type) {
         case wgpu::SType::SharedTextureMemoryDXGISharedHandleDescriptor:
@@ -459,6 +507,13 @@ ResultOrError<Ref<SharedTextureMemoryBase>> Device::ImportSharedTextureMemoryImp
             return SharedTextureMemory::Create(
                 this, descriptor->label,
                 unpacked.Get<SharedTextureMemoryDXGISharedHandleDescriptor>());
+        case wgpu::SType::SharedTextureMemoryD3D12ResourceDescriptor:
+            DAWN_INVALID_IF(!HasFeature(Feature::SharedTextureMemoryD3D12Resource),
+                            "%s is not enabled.",
+                            wgpu::FeatureName::SharedTextureMemoryD3D12Resource);
+            return SharedTextureMemory::Create(
+                this, descriptor->label,
+                unpacked.Get<SharedTextureMemoryD3D12ResourceDescriptor>());
         default:
             DAWN_UNREACHABLE();
     }
@@ -484,11 +539,11 @@ ResultOrError<Ref<SharedFenceBase>> Device::ImportSharedFenceImpl(
     }
 }
 
-MaybeError Device::CopyFromStagingToBufferImpl(BufferBase* source,
-                                               uint64_t sourceOffset,
-                                               BufferBase* destination,
-                                               uint64_t destinationOffset,
-                                               uint64_t size) {
+MaybeError Device::CopyFromStagingToBuffer(BufferBase* source,
+                                           uint64_t sourceOffset,
+                                           BufferBase* destination,
+                                           uint64_t destinationOffset,
+                                           uint64_t size) {
     CommandRecordingContext* commandRecordingContext =
         ToBackend(GetQueue())->GetPendingCommandContext(QueueBase::SubmitMode::Passive);
 
@@ -521,7 +576,7 @@ void Device::CopyFromStagingToBufferHelper(CommandRecordingContext* commandConte
         sourceOffset, size);
 }
 
-MaybeError Device::CopyFromStagingToTextureImpl(const BufferBase* source,
+MaybeError Device::CopyFromStagingToTextureImpl(BufferBase* source,
                                                 const TexelCopyBufferLayout& src,
                                                 const TextureCopy& dst,
                                                 const Extent3D& copySizePixels) {
@@ -540,10 +595,15 @@ MaybeError Device::CopyFromStagingToTextureImpl(const BufferBase* source,
 
     texture->TrackUsageAndTransitionNow(commandContext, wgpu::TextureUsage::CopyDst, range);
 
-    RecordBufferTextureCopyWithBufferHandle(BufferTextureCopyDirection::B2T,
-                                            commandContext->GetCommandList(),
-                                            ToBackend(source)->GetD3D12Resource(), src.offset,
-                                            src.bytesPerRow, src.rowsPerImage, dst, copySizePixels);
+    const TypedTexelBlockInfo& blockInfo = GetBlockInfo(dst);
+    BlockCount blocksPerRow = blockInfo.BytesToBlocks(src.bytesPerRow);
+    BlockCount rowsPerImage{src.rowsPerImage};
+    BlockExtent3D copySizePixelsInBlocks = blockInfo.ToBlock(copySizePixels);
+
+    RecordBufferTextureCopyWithBufferHandle(
+        BufferTextureCopyDirection::B2T, commandContext->GetCommandList(),
+        ToBackend(source)->GetD3D12Resource(), src.offset, blocksPerRow, rowsPerImage, dst,
+        copySizePixelsInBlocks);
     return {};
 }
 
@@ -576,7 +636,7 @@ MaybeError Device::ImportSharedHandleResource(HANDLE handle,
 
     if (useKeyedMutex) {
         ComPtr<ID3D11On12Device> d3d11on12Device;
-        DAWN_TRY_ASSIGN(d3d11on12Device, GetOrCreateD3D11on12Device());
+        DAWN_TRY_ASSIGN(d3d11on12Device, GetOrCreateD3D11On12DeviceInternal());
 
         // Since D3D12 does not directly support keyed mutexes, we need to wrap the D3D12 resource
         // using 11on12 and QueryInterface the D3D11 representation for the keyed mutex.
@@ -706,10 +766,11 @@ void Device::AppendDeviceLostMessage(ErrorData* error) {
         HRESULT result = mD3d12Device->GetDeviceRemovedReason();
         error->AppendBackendMessage("Device removed reason: %s (0x%08X)",
                                     d3d::HRESULTAsString(result), result);
+        RecordDeviceRemovedReason(result);
     }
 }
 
-void Device::DestroyImpl() {
+void Device::DestroyImpl(DestroyReason reason) {
     DAWN_ASSERT(GetState() == State::Disconnected);
 
     // TODO(crbug.com/dawn/831): DestroyImpl is called from two places.
@@ -720,7 +781,7 @@ void Device::DestroyImpl() {
     //   is implicitly destroyed. This case is thread-safe because there are no
     //   other threads using the device since there are no other live refs.
 
-    Base::DestroyImpl();
+    Base::DestroyImpl(reason);
 
     mZeroBuffer = nullptr;
 
@@ -784,6 +845,14 @@ uint32_t Device::GetOptimalBytesPerRowAlignment() const {
 // so we return 1 and let ComputeTextureCopySplits take care of the alignment.
 uint64_t Device::GetOptimalBufferToTextureCopyOffsetAlignment() const {
     return 1;
+}
+
+bool Device::CanTextureLoadResolveTargetInTheSameRenderpass() const {
+    return true;
+}
+
+bool Device::CanResolveSubRect() const {
+    return true;
 }
 
 float Device::GetTimestampPeriodInNS() const {

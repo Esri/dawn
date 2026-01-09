@@ -41,6 +41,7 @@
 #include "src/tint/lang/core/type/reference.h"
 #include "src/tint/lang/core/type/sampler.h"
 #include "src/tint/lang/core/type/struct.h"
+#include "src/tint/lang/core/type/texel_buffer.h"
 #include "src/tint/lang/core/type/texture.h"
 #include "src/tint/lang/core/type/u32.h"
 #include "src/tint/lang/core/type/u64.h"
@@ -160,17 +161,13 @@ bool Type::IsBoolScalarOrVector() const {
     return Is<Bool>() || IsBoolVector();
 }
 
-bool Type::IsScalarVector() const {
-    return Is([](const Vector* v) { return v->Type()->Is<core::type::Scalar>(); });
-}
-
 bool Type::IsNumericScalarOrVector() const {
     return Is<core::type::NumericScalar>() ||
            Is([](const Vector* v) { return v->Type()->Is<core::type::NumericScalar>(); });
 }
 
 bool Type::IsHandle() const {
-    if (IsAnyOf<Sampler, Texture>()) {
+    if (IsAnyOf<Sampler, TexelBuffer, Texture>()) {
         return true;
     }
     if (auto* binding_array = As<BindingArray>()) {

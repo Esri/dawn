@@ -28,34 +28,52 @@
 #ifndef SRC_DAWN_NATIVE_WEBGPU_QUEUEWGPU_H_
 #define SRC_DAWN_NATIVE_WEBGPU_QUEUEWGPU_H_
 
+#include <deque>
+#include <memory>
+#include <utility>
+#include "dawn/common/MutexProtected.h"
 #include "dawn/native/Queue.h"
-
 #include "dawn/native/webgpu/Forward.h"
+#include "dawn/native/webgpu/ObjectWGPU.h"
 
 namespace dawn::native::webgpu {
 
+class CaptureContext;
 class Device;
 
-class Queue final : public QueueBase {
+class Queue final : public QueueBase, public ObjectWGPU<WGPUQueue> {
   public:
     static ResultOrError<Ref<Queue>> Create(Device* device, const QueueDescriptor* descriptor);
 
+    bool IsCapturing() const;
+    MaybeError SetCaptureContext(std::unique_ptr<CaptureContext> captureContext);
+    CaptureContext* GetCaptureContext() const;
+
   private:
     Queue(Device* device, const QueueDescriptor* descriptor);
-    ~Queue() override;
     MaybeError SubmitImpl(uint32_t commandCount, CommandBufferBase* const* commands) override;
     MaybeError WriteBufferImpl(BufferBase* buffer,
                                uint64_t bufferOffset,
                                const void* data,
                                size_t size) override;
+    MaybeError WriteTextureImpl(const TexelCopyTextureInfo& destination,
+                                const void* data,
+                                size_t dataSize,
+                                const TexelCopyBufferLayout& dataLayout,
+                                const Extent3D& writeSizePixel) override;
     ResultOrError<ExecutionSerial> CheckAndUpdateCompletedSerials() override;
     void ForceEventualFlushOfCommands() override;
     bool HasPendingCommands() const override;
-    MaybeError SubmitPendingCommands() override;
-    ResultOrError<bool> WaitForQueueSerial(ExecutionSerial serial, Nanoseconds timeout) override;
-    MaybeError WaitForIdleForDestruction() override;
+    MaybeError SubmitPendingCommandsImpl() override;
+    ResultOrError<ExecutionSerial> WaitForQueueSerialImpl(ExecutionSerial waitSerial,
+                                                          Nanoseconds timeout) override;
+    MaybeError WaitForIdleForDestructionImpl() override;
+    MaybeError SubmitFutureSync();
 
-    WGPUQueue mInnerQueue = nullptr;
+    MutexProtected<std::deque<std::pair<WGPUFuture, ExecutionSerial>>> mFuturesInFlight;
+    bool mHasPendingCommands = false;
+
+    std::unique_ptr<CaptureContext> mCaptureContext;
 };
 
 }  // namespace dawn::native::webgpu

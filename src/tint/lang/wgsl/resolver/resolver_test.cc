@@ -30,8 +30,7 @@
 #include <tuple>
 
 #include "gmock/gmock.h"
-#include "src/tint/lang/core/address_space.h"
-#include "src/tint/lang/core/builtin_value.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/type/reference.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/texture_dimension.h"
@@ -2069,13 +2068,6 @@ TEST_F(ResolverTest, Function_EntryPoints_LinearTime) {
          },
          Vector{Stage(ast::PipelineStage::kCompute), WorkgroupSize(1_i)});
 
-    ASSERT_TRUE(r()->Resolve()) << r()->error();
-}
-
-// Test for crbug.com/tint/728
-TEST_F(ResolverTest, ASTNodesAreReached) {
-    Structure("A", Vector{Member("x", ty.array<f32, 4>(Vector{Stride(4)}))});
-    Structure("B", Vector{Member("x", ty.array<f32, 4>(Vector{Stride(4)}))});
     ASSERT_TRUE(r()->Resolve()) << r()->error();
 }
 

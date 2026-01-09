@@ -80,7 +80,7 @@ MaybeError Queue::Initialize() {
     return OpenPendingCommands();
 }
 
-void Queue::DestroyImpl() {
+void Queue::DestroyImpl(DestroyReason reason) {
     // Immediately forget about all pending commands for the case where device is lost on its
     // own and WaitForIdleForDestruction isn't called.
     mPendingCommands.Release();
@@ -119,10 +119,10 @@ MaybeError Queue::SubmitImpl(uint32_t commandCount, CommandBufferBase* const* co
     TRACE_EVENT_END1(GetDevice()->GetPlatform(), Recording, "CommandBufferD3D12::RecordCommands",
                      "serial", uint64_t(pendingSerial));
 
-    return SubmitPendingCommands();
+    return SubmitPendingCommandsImpl();
 }
 
-MaybeError Queue::SubmitPendingCommands() {
+MaybeError Queue::SubmitPendingCommandsImpl() {
     Device* device = ToBackend(GetDevice());
     DAWN_ASSERT(device->IsLockedByCurrentThreadIfNeeded());
 
@@ -161,7 +161,7 @@ MaybeError Queue::WaitForSerial(ExecutionSerial serial) {
         return {};
     }
     DAWN_TRY_ASSIGN(std::ignore,
-                    WaitForQueueSerial(serial, std::numeric_limits<Nanoseconds>::max()));
+                    WaitForQueueSerialImpl(serial, std::numeric_limits<Nanoseconds>::max()));
     return CheckPassedSerials();
 }
 
@@ -170,6 +170,9 @@ bool Queue::HasPendingCommands() const {
 }
 
 ResultOrError<ExecutionSerial> Queue::CheckAndUpdateCompletedSerials() {
+    // TODO(crbug.com/40643114): Revisit whether this lock is needed for this backend.
+    auto deviceGuard = GetDevice()->GetGuard();
+
     ExecutionSerial completedSerial = ExecutionSerial(mFence->GetCompletedValue());
     if (completedSerial == ExecutionSerial(UINT64_MAX)) [[unlikely]] {
         // GetCompletedValue returns UINT64_MAX if the device was removed.
@@ -194,7 +197,7 @@ void Queue::ForceEventualFlushOfCommands() {
     mPendingCommands.SetNeedsSubmit();
 }
 
-MaybeError Queue::WaitForIdleForDestruction() {
+MaybeError Queue::WaitForIdleForDestructionImpl() {
     // Immediately forget about all pending commands
     mPendingCommands.Release();
 
@@ -234,7 +237,9 @@ MaybeError Queue::OpenPendingCommands() {
         DAWN_TRY(RecycleUnusedCommandLists());
     }
 
-    DAWN_ASSERT(mFreeAllocators.any());
+    // This is a release check to catch a potential issue where allocator recycling didn't seem to
+    // work correctly so we want to get crash reports if it happens again.
+    DAWN_CHECK(mFreeAllocators.any());
     ID3D12Device* d3d12Device = ToBackend(GetDevice())->GetD3D12Device();
 
     // Get the index of the first free allocator from the bitset

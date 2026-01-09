@@ -39,17 +39,23 @@ class Module;
 namespace tint::msl::writer::raise {
 
 /// The capabilities that the transform can support.
-const core::ir::Capabilities kModuleConstant{
+const core::ir::Capabilities kModuleConstantCapabilities{
     core::ir::Capability::kAllow8BitIntegers,
     core::ir::Capability::kAllow64BitIntegers,
-    core::ir::Capability::kAllowPointersAndHandlesInStructures,
+    core::ir::Capability::kAllowPointSizeBuiltin,
     core::ir::Capability::kAllowVectorElementPointer,
     core::ir::Capability::kAllowHandleVarsWithoutBindings,
-    core::ir::Capability::kAllowClipDistancesOnF32,
-    core::ir::Capability::kAllowPrivateVarsInFunctions,
+    core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector,
     core::ir::Capability::kAllowAnyLetType,
-    core::ir::Capability::kAllowWorkspacePointerInputToEntryPoint,
+    core::ir::Capability::kAllowNonCoreTypes,
+    core::ir::Capability::kMslAllowEntryPointInterface,
     core::ir::Capability::kAllowModuleScopeLets,
+};
+
+/// The set of polyfills that should be applied.
+struct ModuleConstantConfig {
+    // Set to true to disable module constant transform on constant data that has any f16.
+    bool disable_module_constant_f16 = false;
 };
 
 /// ModuleConstant is a transform that moves all const data associated with access to a module scope
@@ -57,7 +63,7 @@ const core::ir::Capabilities kModuleConstant{
 /// potential for copying of large const in nested loops.
 /// @param module the module to transform
 /// @returns success or failure
-Result<SuccessType> ModuleConstant(core::ir::Module& module);
+Result<SuccessType> ModuleConstant(core::ir::Module& module, const ModuleConstantConfig& config);
 
 }  // namespace tint::msl::writer::raise
 

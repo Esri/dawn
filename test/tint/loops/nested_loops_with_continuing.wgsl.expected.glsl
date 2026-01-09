@@ -26,7 +26,8 @@ int f() {
             tint_loop_idx_1.x = tint_low_inc_1;
             uint tint_carry_1 = uint((tint_low_inc_1 == 4294967295u));
             tint_loop_idx_1.y = (tint_loop_idx_1.y - tint_carry_1);
-            j = (j + 1);
+            uint v = uint(j);
+            j = int((v + uint(1)));
           }
           continue;
         }
@@ -40,4 +41,5 @@ int f() {
 }
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
+  f();
 }

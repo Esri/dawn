@@ -27,6 +27,7 @@
 
 #include "dawn/native/DynamicUploader.h"
 
+#include <atomic>
 #include <utility>
 
 #include "dawn/common/Math.h"
@@ -35,6 +36,10 @@
 #include "dawn/native/Queue.h"
 
 namespace dawn::native {
+
+namespace {
+constexpr uint64_t kRingBufferSize = 4 * 1024 * 1024;
+}  // anonymous namespace
 
 DynamicUploader::DynamicUploader(DeviceBase* device) : mDevice(device) {}
 
@@ -121,6 +126,35 @@ ResultOrError<UploadReservation> DynamicUploader::Reserve(uint64_t allocationSiz
     return reservation;
 }
 
+MaybeError DynamicUploader::OnStagingMemoryFreePendingOnSubmit(uint64_t size) {
+    UpdateMemoryPendingSubmit();
+    mMemoryPendingSubmit.fetch_add(size, std::memory_order_relaxed);
+    return {};
+}
+
+MaybeError DynamicUploader::MaybeSubmitPendingCommands() {
+    constexpr uint64_t kPendingMemorySubmitThreshold = 16 * 1024 * 1024;
+    if (mMemoryPendingSubmit.load(std::memory_order_relaxed) < kPendingMemorySubmitThreshold) {
+        return {};
+    }
+
+    // Only lock the device mutex if a submit is required.
+    auto deviceGuard = mDevice->GetGuard();
+
+    // Check memory pending submit again after acquiring the lock in case a submit happened and
+    // another submit is no longer required.
+    UpdateMemoryPendingSubmit();
+    if (mMemoryPendingSubmit.load(std::memory_order_relaxed) < kPendingMemorySubmitThreshold) {
+        return {};
+    }
+
+    // TODO(crbug.com/42240396): Consider blocking when there is too much memory in flight for
+    // freeing, which could cause OOM even if we eagerly flush when too much memory is pending.
+    QueueBase* queue = mDevice->GetQueue();
+    queue->ForceEventualFlushOfCommands();
+    return queue->SubmitPendingCommands();
+}
+
 void DynamicUploader::Deallocate(ExecutionSerial lastCompletedSerial, bool freeAll) {
     // Reclaim memory within the ring buffers by ticking (or removing requests no longer
     // in-flight).
@@ -139,21 +173,16 @@ void DynamicUploader::Deallocate(ExecutionSerial lastCompletedSerial, bool freeA
     }
 }
 
-bool DynamicUploader::ShouldFlush() const {
-    uint64_t kTotalAllocatedSizeThreshold = 64 * 1024 * 1024;
-    // We use total allocated size instead of pending-upload size to prevent Dawn from allocating
-    // too much GPU memory so that the risk of OOM can be minimized.
-    return GetTotalAllocatedSize() > kTotalAllocatedSizeThreshold;
-}
+void DynamicUploader::UpdateMemoryPendingSubmit() {
+    DAWN_ASSERT(mDevice->IsLockedByCurrentThreadIfNeeded());
 
-uint64_t DynamicUploader::GetTotalAllocatedSize() const {
-    uint64_t size = 0;
-    for (const auto& buffer : mRingBuffers) {
-        if (buffer->mStagingBuffer != nullptr) {
-            size += buffer->mStagingBuffer->GetSize();
-        }
+    // Take into account that submits make the pending memory freed in finite time so we no longer
+    // need to track that memory.
+    ExecutionSerial pendingSerial = mDevice->GetQueue()->GetPendingCommandSerial();
+    if (pendingSerial > mLastPendingSerialSeen) {
+        mMemoryPendingSubmit.store(0u, std::memory_order_relaxed);
+        mLastPendingSerialSeen = pendingSerial;
     }
-    return size;
 }
 
 }  // namespace dawn::native

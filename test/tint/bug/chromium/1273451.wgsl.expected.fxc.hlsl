@@ -1,16 +1,20 @@
-[numthreads(1, 1, 1)]
-void unused_entry_point() {
-  return;
-}
-
-struct A {
-  int a;
-};
 struct B {
   int b;
 };
 
+struct A {
+  int a;
+};
+
+
 B f(A a) {
-  B tint_symbol = (B)0;
-  return tint_symbol;
+  B v = (B)0;
+  return v;
 }
+
+[numthreads(1, 1, 1)]
+void main() {
+  A v_1 = {int(1)};
+  f(v_1);
+}
+

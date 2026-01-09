@@ -1,4 +1,4 @@
-//* Copyright 2024 The Dawn & Tint Authors
+//* Copyright 2025 The Dawn & Tint Authors
 //*
 //* Redistribution and use in source and binary forms, with or without
 //* modification, are permitted provided that the following conditions are met:
@@ -24,14 +24,45 @@
 //* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 //* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 //* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-package {{ kotlin_package }}
-{% from 'art/api_kotlin_types.kt' import kotlin_declaration with context %}
 
+package {{ kotlin_package }}
+{% from 'art/api_kotlin_types.kt' import kotlin_annotation, kotlin_declaration, kotlin_definition, check_if_doc_present, generate_kdoc with context %}
+
+{% set callbackName = 'on' + function_pointer.name.chunks[:-1] | map('title') | join %}
+
+//* Generating KDocs
+{% set all_callback_info = kdocs.callbacks %}
+{% set funtion_pointer_info = all_callback_info.get(function_pointer.name.get()) %}
+{% set main_doc = funtion_pointer_info.doc if funtion_pointer_info else "" %}
+{% set arg_docs_map =  funtion_pointer_info.args if funtion_pointer_info else {} %}
+
+{% set function_pointer_args = function_pointer.arguments | list %}
 public fun interface {{ function_pointer.name.CamelCase() }} {
+    {% if check_if_doc_present(main_doc, "", arg_docs_map, function_pointer_args) == 'True' %}
+    {{ generate_kdoc(main_doc, return_str, arg_docs_map, function_pointer_args , indent_prefix = "    ",line_wrap_prefix = "\n     * ") }}
+    {%- endif %}
     @Suppress("INAPPLICABLE_JVM_NAME")  //* Required for @JvmName on global function.
-    @JvmName("callback")  //* Required to access Inline Value Class parameters via JNI.
-    public fun callback(
+    @JvmName("{{ callbackName }}")  //* Required to access Inline Value Class parameters via JNI.
+    public fun {{ callbackName }}(
     {%- for arg in kotlin_record_members(function_pointer.arguments) -%}
-        {{ as_varName(arg.name) }}: {{ kotlin_declaration(arg) }},{{ ' ' }}
+        {{ kotlin_annotation(arg) }} {{ as_varName(arg.name) }}: {{ kotlin_declaration(arg) }},{{ ' ' }}
     {%- endfor -%});
+}
+
+{% set args_list = kotlin_record_members(function_pointer.arguments) | list %}
+
+internal class {{ function_pointer.name.CamelCase() }}Runnable(
+private val callback: {{ function_pointer.name.CamelCase() }},
+{% for arg in args_list %}
+    private val {{ as_varName(arg.name) }}: {{ kotlin_declaration(arg) }}{{ ','
+    if not loop.last }}
+{% endfor %}
+) : Runnable {
+    override fun run() {
+        callback.{{ callbackName }}(
+            {%- for arg in args_list -%}
+            {{ as_varName(arg.name) }}{{ ', ' if not loop.last }}
+            {%- endfor -%}
+        )
+    }
 }

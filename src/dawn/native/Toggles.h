@@ -35,6 +35,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "dawn/common/ityp_bitset.h"
 #include "dawn/native/DawnNative.h"
+#include "dawn/native/Serializable.h"
 
 namespace dawn::native {
 
@@ -66,13 +67,13 @@ enum class Toggle {
     UseDXC,
     DisableRobustness,
     MetalEnableVertexPulling,
-    DisableTextureViewBindingUsedAsExternalTexture,
     AllowUnsafeAPIs,
     FlushBeforeClientWaitSync,
     UseTempBufferInSmallFormatTextureToTextureCopyFromGreaterToLessMipLevel,
     EmitHLSLDebugSymbols,
     DisallowSpirv,
     DumpShaders,
+    DumpShadersOnFailure,
     DisableWorkgroupInit,
     DisableDemoteToHelper,
     VulkanUseDemoteToHelperInvocationExtension,
@@ -101,6 +102,10 @@ enum class Toggle {
     MetalUseCombinedDepthStencilFormatForStencil8,
     MetalUseBothDepthAndStencilAttachmentsForCombinedDepthStencilFormats,
     MetalKeepMultisubresourceDepthStencilTexturesInitialized,
+    MetalPolyfillUnpack2x16snorm,
+    MetalPolyfillUnpack2x16unorm,
+    VulkanPolyfillF32Negation,
+    VulkanPolyfillF32Abs,
     MetalFillEmptyOcclusionQueriesWithZero,
     UseBlitForBufferToDepthTextureCopy,
     UseBlitForBufferToStencilTextureCopy,
@@ -130,15 +135,21 @@ enum class Toggle {
     ResolveMultipleAttachmentInSeparatePasses,
     D3D12CreateNotZeroedHeap,
     D3D12DontUseNotZeroedHeapFlagOnTexturesAsCommitedResources,
-    UseTintIR,
     D3DDisableIEEEStrictness,
+    D3DSkipShaderOptimizations,
     PolyFillPacked4x8DotProduct,
     PolyfillPackUnpack4x8Norm,
+    EnableSubgroupsIntelGen9,
     D3D12PolyFillPackUnpack4x8,
+    VulkanPolyfillSwitchWithIf,
     ExposeWGSLTestingFeatures,
     ExposeWGSLExperimentalFeatures,
     DisablePolyfillsOnIntegerDivisonAndModulo,
-    MetalEnableModuleConstant,
+    ScalarizeMaxMinClamp,
+    MetalPolyfillClampFloat,
+    SubgroupShuffleClamped,
+    VulkanSampleCompareDepthCubeArrayWorkaround,
+    MetalDisableModuleConstantF16,
     EnableImmediateErrorHandling,
     VulkanUseStorageInputOutput16,
     D3D12DontUseShaderModel66OrHigher,
@@ -148,14 +159,25 @@ enum class Toggle {
     GLDepthBiasModifier,
     GLForceES31AndNoExtensions,
     VulkanMonolithicPipelineCache,
+    VulkanIncompletePipelineCacheWorkaround,
     MetalSerializeTimestampGenerationAndResolution,
     D3D12RelaxMinSubgroupSizeTo8,
     D3D12RelaxBufferTextureCopyPitchAndOffsetAlignment,
     UseVulkanMemoryModel,
-    VulkanScalarizeClampBuiltin,
     VulkanDirectVariableAccessTransformHandle,
     VulkanAddWorkToEmptyResolvePass,
     EnableIntegerRangeAnalysisInRobustness,
+    UseSpirv14,
+    MetalUseArgumentBuffers,
+    EnableShaderPrint,
+    BlobCacheHashValidation,
+    DecomposeUniformBuffers,
+    VulkanEnableF16OnNvidia,
+    EnableRenderDocProcessInjection,
+    VulkanUseDynamicRendering,
+
+    // Once all backends have been updated to be thread safe for waiting, we can remove this toggle.
+    WaitIsThreadSafe,
 
     // Unresolved issues.
     NoWorkaroundSampleMaskBecomesZeroForAllButLastColorTarget,
@@ -169,6 +191,11 @@ enum class Toggle {
     D3D11DisableFence,
     D3D11DelayFlushToGPU,
     IgnoreImportedAHardwareBufferVulkanImageSize,
+    GLAllowContextOnMultiThreads,
+    GLDefer,
+
+    // Once WebGPU backend is fully implemented we can remove this toggle and related logic.
+    WebGPUEnableForCheckCaptureReplay,
 
     EnumCount,
     InvalidEnum = EnumCount,
@@ -176,16 +203,22 @@ enum class Toggle {
 
 // A wrapper of the bitset to store if a toggle is present or not. This wrapper provides the
 // convenience to convert the enums of enum class Toggle to the indices of a bitset.
-struct TogglesSet {
-    ityp::bitset<uint32_t, static_cast<size_t>(Toggle::EnumCount)> bitset;
+using TogglesBitSet = ityp::bitset<uint32_t, static_cast<size_t>(Toggle::EnumCount)>;
+#define TOGGLES_SET_MEMBER(X) X(TogglesBitSet, bitset)
+DAWN_SERIALIZABLE(struct, TogglesSet, TOGGLES_SET_MEMBER) {
     using Iterator = ityp::bitset<uint32_t, static_cast<size_t>(Toggle::EnumCount)>::Iterator;
 
     void Set(Toggle toggle, bool enabled);
     bool Has(Toggle toggle) const;
     size_t Count() const;
-    Iterator begin() const { return bitset.begin(); }
-    Iterator end() const { return bitset.end(); }
+    Iterator begin() const {
+        return bitset.begin();
+    }
+    Iterator end() const {
+        return bitset.end();
+    }
 };
+#undef TOGGLES_SET_MEMBER
 
 namespace stream {
 class Sink;
@@ -230,6 +263,7 @@ class TogglesState {
     ToggleStage GetStage() const;
     std::vector<const char*> GetEnabledToggleNames() const;
     std::vector<const char*> GetDisabledToggleNames() const;
+    const TogglesSet& GetEnabledToggles() const;
 
     // Friend definition of StreamIn which can be found by ADL to override stream::StreamIn<T>. This
     // allows writing TogglesState to stream for cache key.

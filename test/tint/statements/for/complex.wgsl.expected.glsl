@@ -2,7 +2,8 @@
 
 void some_loop_body() {
 }
-void f() {
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+void main() {
   int j = 0;
   {
     uvec2 tint_loop_idx = uvec2(4294967295u);
@@ -22,18 +23,17 @@ void f() {
         break;
       }
       some_loop_body();
-      j = (i * 30);
+      uint v_1 = uint(i);
+      j = int((v_1 * uint(30)));
       {
         uint tint_low_inc = (tint_loop_idx.x - 1u);
         tint_loop_idx.x = tint_low_inc;
         uint tint_carry = uint((tint_low_inc == 4294967295u));
         tint_loop_idx.y = (tint_loop_idx.y - tint_carry);
-        i = (i + 1);
+        uint v_2 = uint(i);
+        i = int((v_2 + uint(1)));
       }
       continue;
     }
   }
-}
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-void main() {
 }

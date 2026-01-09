@@ -36,6 +36,7 @@
 #include "src/tint/lang/core/ir/binary/encode.h"
 #include "src/tint/lang/core/ir/disassembler.h"
 #include "src/tint/lang/core/ir/module.h"
+#include "src/tint/lang/core/ir/transform/substitute_overrides.h"
 #include "src/tint/lang/core/ir/validator.h"
 #include "src/tint/lang/wgsl/ast/module.h"
 #include "src/tint/lang/wgsl/reader/reader.h"
@@ -129,22 +130,25 @@ Options:
     auto args = result.Get();
     if (args.Length() != 2) {
         std::cerr << "Expected exactly 2 args, found: "
-                  << tint::Join(Transform(args, tint::Quote), ", ") << "\n";
+                  << tint::Join(Transform(args, tint::cmd::Quote), ", ") << "\n";
         return false;
     }
 
-    if (is_directory(std::filesystem::path{args[0]}) &&
-        is_directory(std::filesystem::path{args[1]})) {
+    bool is_arg0_dir = is_directory(std::filesystem::path{args[0]});
+    bool is_arg1_dir = is_directory(std::filesystem::path{args[1]});
+
+    if (is_arg0_dir && is_arg1_dir) {
         opts->input_dirname = args[0];
         opts->output_dirname = args[1];
         opts->batch_mode = true;
-    } else if ((!is_directory(std::filesystem::path{args[0]}) &&
-                !is_directory(std::filesystem::path{args[1]}))) {
+    } else if (!is_arg0_dir && !is_arg1_dir) {
         opts->input_filename = args[0];
         opts->output_filename = args[1];
         opts->batch_mode = false;
     } else {
-        std::cerr << "Expected args to either both be directories or both be files\n";
+        std::cerr << "Expected args to either both be directories or both be files ('" << args[0]
+                  << "' is " << (is_arg0_dir ? "DIR" : "FILE") << " and '" << args[1] << "' is "
+                  << (is_arg1_dir ? "DIR" : "FILE") << "\n";
         return false;
     }
 
@@ -177,22 +181,14 @@ tint::Result<tint::core::ir::Module> GenerateIrModule(const tint::Program& progr
         return tint::Failure{"Unsupported enable used in shader"};
     }
 
-    auto ir = tint::wgsl::reader::ProgramToLoweredIR(program);
-    if (ir != tint::Success) {
-        return ir.Failure();
-    }
+    TINT_CHECK_RESULT_UNWRAP(ir, tint::wgsl::reader::ProgramToLoweredIR(program));
 
-    auto cfg = tint::fuzz::ir::SubstituteOverridesConfig(ir.Get());
-    auto substituteOverridesResult = tint::core::ir::transform::SubstituteOverrides(ir.Get(), cfg);
-    if (substituteOverridesResult != tint::Success) {
-        return substituteOverridesResult.Failure();
-    }
+    auto cfg = tint::fuzz::ir::SubstituteOverridesConfig(ir);
+    TINT_CHECK_RESULT(tint::core::ir::transform::SubstituteOverrides(ir, cfg));
 
-    if (auto val = tint::core::ir::Validate(ir.Get()); val != tint::Success) {
-        return val.Failure();
-    }
+    TINT_CHECK_RESULT(tint::core::ir::Validate(ir));
 
-    return ir.Move();
+    return ir;
 }
 
 /// @returns a fuzzer test case protobuf for the given program.
@@ -260,6 +256,11 @@ bool ProcessFile(const Options& options) {
     opts.printer = options.printer.get();
 
     auto info = tint::cmd::LoadProgramInfo(opts);
+    if (!info.program.IsValid()) {
+        // If the program just fails to load, ignore it as it's probably just a test file added in
+        // anticipation of a new feature.
+        return true;
+    }
 
     if (options.dump_ir) {
         DumpIR(info.program, options);

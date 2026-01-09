@@ -34,22 +34,8 @@ ComboLimits::ComboLimits() = default;
 void ComboLimits::UnlinkedCopyTo(ComboLimits* dst) const {
     {% for type in limits_and_extensions %}
         *static_cast<wgpu::{{as_cppType(type.name)}}*>(dst) = *this;
-    {% endfor %}
-    {% for type in limits_and_extensions %}
         dst->wgpu::{{as_cppType(type.name)}}::nextInChain = nullptr;
     {% endfor %}
-}
-
-wgpu::Limits* ComboLimits::GetLinked() {
-    {% for type in limits_and_extensions %}
-        this->wgpu::{{as_cppType(type.name)}}::nextInChain =
-            {% if loop.nextitem %}
-                static_cast<wgpu::{{as_cppType(loop.nextitem.name)}}*>(this);
-            {% else %}
-                nullptr;
-            {% endif %}
-    {% endfor %}
-    return this;
 }
 
 }  // namespace dawn::utils

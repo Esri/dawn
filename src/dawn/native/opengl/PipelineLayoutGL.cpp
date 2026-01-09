@@ -36,11 +36,11 @@ namespace dawn::native::opengl {
 PipelineLayout::PipelineLayout(Device* device,
                                const UnpackedPtr<PipelineLayoutDescriptor>& descriptor)
     : PipelineLayoutBase(device, descriptor) {
-    GLuint uboIndex = 0;
-    GLuint samplerIndex = 0;
-    GLuint sampledTextureIndex = 0;
-    GLuint ssboIndex = 0;
-    GLuint storageTextureIndex = 0;
+    FlatBindingIndex uboIndex{0};
+    FlatBindingIndex samplerIndex{0};
+    FlatBindingIndex sampledTextureIndex{0};
+    FlatBindingIndex ssboIndex{0};
+    FlatBindingIndex storageTextureIndex{0};
 
     for (BindGroupIndex group : GetBindGroupLayoutsMask()) {
         const BindGroupLayoutInternalBase* bgl = GetBindGroupLayout(group);
@@ -84,7 +84,13 @@ PipelineLayout::PipelineLayout(Device* device,
                     mIndexInfo[group][bindingIndex] = storageTextureIndex;
                     storageTextureIndex++;
                 },
-                [](const InputAttachmentBindingInfo&) { DAWN_UNREACHABLE(); });
+                [&](const TexelBufferBindingInfo&) {
+                    // OpenGL does not support texel buffers.
+                    // TODO(crbug/382544164): Prototype texel buffer feature
+                    DAWN_UNREACHABLE();
+                },
+                [](const InputAttachmentBindingInfo&) { DAWN_UNREACHABLE(); },
+                [](const ExternalTextureBindingInfo&) { DAWN_UNREACHABLE(); });
         }
     }
 
@@ -102,27 +108,23 @@ const PipelineLayout::BindingIndexInfo& PipelineLayout::GetBindingIndexInfo() co
     return mIndexInfo;
 }
 
-GLuint PipelineLayout::GetTextureUnitsUsed() const {
-    return 0;
-}
-
-size_t PipelineLayout::GetNumSamplers() const {
+FlatBindingIndex PipelineLayout::GetNumSamplers() const {
     return mNumSamplers;
 }
 
-size_t PipelineLayout::GetNumSampledTextures() const {
+FlatBindingIndex PipelineLayout::GetNumSampledTextures() const {
     return mNumSampledTextures;
 }
 
-size_t PipelineLayout::GetNumSSBO() const {
+FlatBindingIndex PipelineLayout::GetNumSSBO() const {
     return mNumSSBO;
 }
 
-GLuint PipelineLayout::GetInternalTextureBuiltinsUniformBinding() const {
+FlatBindingIndex PipelineLayout::GetInternalTextureBuiltinsUniformBinding() const {
     return mInternalTextureBuiltinsUniformBinding;
 }
 
-GLuint PipelineLayout::GetInternalArrayLengthUniformBinding() const {
+FlatBindingIndex PipelineLayout::GetInternalArrayLengthUniformBinding() const {
     return mInternalArrayLengthUniformBinding;
 }
 

@@ -29,17 +29,25 @@
 
 #include <webgpu/webgpu_cpp.h>
 
+#include <concepts>
+
 #include "dawn/common/NonMovable.h"
 
 namespace dawn::utils {
 
 {% set limits_and_extensions = [types['limits']] + types['limits'].extensions %}
+{% set ns = namespace(member_count=0) %}
+{% for type in limits_and_extensions %}
+    {% set ns.member_count = ns.member_count + (type.members | length) %}
+{% endfor %}
 class ComboLimits : public NonMovable
     {% for type in limits_and_extensions %}
-        , private wgpu::{{as_cppType(type.name)}}
+            , private wgpu::{{as_cppType(type.name)}}
     {% endfor %}
     {
   public:
+    static constexpr size_t kMemberCount = {{ ns.member_count }};
+
     ComboLimits();
 
     // This is not copyable or movable to avoid surprises with nextInChain pointers becoming stale
@@ -47,10 +55,29 @@ class ComboLimits : public NonMovable
     void UnlinkedCopyTo(ComboLimits*) const;
 
     // Modify the ComboLimits in-place to link the extension structs correctly, and return the base
-    // struct. Use this (rather than &comboLimits) whenever passing a ComboLimits to the API.
-    wgpu::Limits* GetLinked();
-    {% for type in limits_and_extensions %}
+    // struct. Optionally accepts any number of additional structs to add to the
+    // end of the chain, e.g.: `comboLimits.GetLinked(&extension1, &extension2)`.
+    // Always use GetLinked (rather than `&comboLimits`) whenever passing a ComboLimits to the API.
+    template <typename... Extension>
+        requires (std::convertible_to<Extension, wgpu::ChainedStructOut*> && ...)
+    wgpu::Limits* GetLinked(Extension... extension) {
+        wgpu::ChainedStructOut* lastExtension = nullptr;
+        // Link all of the standard extensions.
+        {% for type in types['limits'].extensions %}
+            {% if loop.first %}
+                lastExtension = this->wgpu::Limits::nextInChain =
+            {% else %}
+                lastExtension = lastExtension->nextInChain =
+            {% endif %}
+                static_cast<wgpu::{{as_cppType(type.name)}}*>(this);
+        {% endfor %}
+        // Link any extensions passed by the caller.
+        ((lastExtension = lastExtension->nextInChain = extension), ...);
+        lastExtension->nextInChain = nullptr;
+        return this;
+    }
 
+    {% for type in limits_and_extensions %}
         {% for member in type.members %}
             using wgpu::{{as_cppType(type.name)}}::{{as_varName(member.name)}};
         {% endfor %}

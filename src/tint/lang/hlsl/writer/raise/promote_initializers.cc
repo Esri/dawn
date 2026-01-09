@@ -137,7 +137,7 @@ struct State {
                                                         core::ir::Construct* parent,
                                                         size_t idx) {
         auto* const_val = operand->As<core::ir::Constant>();
-        TINT_ASSERT(const_val);
+        TINT_IR_ASSERT(ir, const_val);
 
         if (!const_val->Type()->Is<core::type::Struct>()) {
             return std::nullopt;
@@ -238,11 +238,8 @@ struct State {
 }  // namespace
 
 Result<SuccessType> PromoteInitializers(core::ir::Module& ir) {
-    auto result =
-        ValidateAndDumpIfNeeded(ir, "hlsl.PromoteInitializers", kPromoteInitializersCapabilities);
-    if (result != Success) {
-        return result;
-    }
+    TINT_CHECK_RESULT(
+        ValidateAndDumpIfNeeded(ir, "hlsl.PromoteInitializers", kPromoteInitializersCapabilities));
 
     State{ir}.Process();
 

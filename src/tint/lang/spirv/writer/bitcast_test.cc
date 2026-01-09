@@ -59,6 +59,12 @@ TEST_P(Bitcast, Scalar) {
         mod.SetName(result, "result");
     });
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func, b.Zero(MakeScalarType(params.in))));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << Error() << output_;
     if (params.in == params.out) {
         EXPECT_INST("OpReturnValue %arg");
@@ -74,6 +80,12 @@ TEST_P(Bitcast, Vector) {
         auto* result = b.Bitcast(MakeVectorType(params.out), func->Params()[0]);
         b.Return(func, result);
         mod.SetName(result, "result");
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func, b.Zero(MakeVectorType(params.in))));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
@@ -106,12 +118,18 @@ INSTANTIATE_TEST_SUITE_P(SpirvWriterTest,
                          PrintCase);
 
 TEST_F(SpirvWriterTest, Bitcast_u32_to_vec2h) {
-    auto* func = b.Function("foo", ty.vec2<f16>());
+    auto* func = b.Function("foo", ty.vec2h());
     func->SetParams({b.FunctionParam("arg", ty.u32())});
     b.Append(func->Block(), [&] {
-        auto* result = b.Bitcast(ty.vec2<f16>(), func->Params()[0]);
+        auto* result = b.Bitcast(ty.vec2h(), func->Params()[0]);
         b.Return(func, result);
         mod.SetName(result, "result");
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func, b.Zero(ty.u32())));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
@@ -119,12 +137,18 @@ TEST_F(SpirvWriterTest, Bitcast_u32_to_vec2h) {
 }
 
 TEST_F(SpirvWriterTest, Bitcast_vec2i_to_vec4h) {
-    auto* func = b.Function("foo", ty.vec4<f16>());
-    func->SetParams({b.FunctionParam("arg", ty.vec2<i32>())});
+    auto* func = b.Function("foo", ty.vec4h());
+    func->SetParams({b.FunctionParam("arg", ty.vec2i())});
     b.Append(func->Block(), [&] {
-        auto* result = b.Bitcast(ty.vec4<f16>(), func->Params()[0]);
+        auto* result = b.Bitcast(ty.vec4h(), func->Params()[0]);
         b.Return(func, result);
         mod.SetName(result, "result");
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func, b.Zero(ty.vec2i())));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
@@ -133,11 +157,17 @@ TEST_F(SpirvWriterTest, Bitcast_vec2i_to_vec4h) {
 
 TEST_F(SpirvWriterTest, Bitcast_vec2h_to_u32) {
     auto* func = b.Function("foo", ty.u32());
-    func->SetParams({b.FunctionParam("arg", ty.vec2<f16>())});
+    func->SetParams({b.FunctionParam("arg", ty.vec2h())});
     b.Append(func->Block(), [&] {
         auto* result = b.Bitcast(ty.u32(), func->Params()[0]);
         b.Return(func, result);
         mod.SetName(result, "result");
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func, b.Zero(ty.vec2h())));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
@@ -145,12 +175,18 @@ TEST_F(SpirvWriterTest, Bitcast_vec2h_to_u32) {
 }
 
 TEST_F(SpirvWriterTest, Bitcast_vec4h_to_vec2i) {
-    auto* func = b.Function("foo", ty.vec2<i32>());
-    func->SetParams({b.FunctionParam("arg", ty.vec4<f16>())});
+    auto* func = b.Function("foo", ty.vec2i());
+    func->SetParams({b.FunctionParam("arg", ty.vec4h())});
     b.Append(func->Block(), [&] {
-        auto* result = b.Bitcast(ty.vec2<i32>(), func->Params()[0]);
+        auto* result = b.Bitcast(ty.vec2i(), func->Params()[0]);
         b.Return(func, result);
         mod.SetName(result, "result");
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func, b.Zero(ty.vec4h())));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;

@@ -34,6 +34,7 @@
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"
+#include "dawn/common/FutureUtils.h"
 #include "dawn/common/LinkedList.h"
 #include "dawn/common/NonCopyable.h"
 #include "dawn/wire/ChunkedCommandSerializer.h"
@@ -41,6 +42,7 @@
 #include "dawn/wire/WireClient.h"
 #include "dawn/wire/WireCmd_autogen.h"
 #include "dawn/wire/WireDeserializeAllocator.h"
+#include "dawn/wire/WireResult.h"
 #include "dawn/wire/client/ClientBase_autogen.h"
 #include "dawn/wire/client/EventManager.h"
 #include "dawn/wire/client/ObjectStore.h"
@@ -67,7 +69,7 @@ class Client : public ClientBase {
         ObjectBaseParams params = {this, mObjects[type].ReserveHandle()};
         Ref<T> object = AcquireRef(new T(params, std::forward<Args>(args)...));
 
-        mObjects[type].Insert(object.Get());
+        mObjects[type].Insert(object.Get(), this);
 
         return object;
     }
@@ -80,7 +82,7 @@ class Client : public ClientBase {
     }
 
     // ChunkedCommandHandler implementation
-    const volatile char* HandleCommandsImpl(const volatile char* commands, size_t size) override;
+    const volatile char* HandleCommands(const volatile char* commands, size_t size) override;
 
     MemoryTransferService* GetMemoryTransferService() const { return mMemoryTransferService; }
 
@@ -119,10 +121,28 @@ class Client : public ClientBase {
         ReclaimReservation(obj, ObjectTypeToTypeEnum<T>);
     }
 
+    template <typename Event, typename... ReadyArgs>
+    WireResult SetFutureReady(ObjectHandle eventManager,
+                              FutureID futureID,
+                              ReadyArgs&&... readyArgs) {
+        // Validate that the event manager exists.
+        auto it = mEventManagers.find(eventManager);
+        if (it == mEventManagers.end()) {
+            return WireResult::FatalError;
+        }
+
+        // Validate that the future id is a valid id.
+        if (futureID <= kNullFutureID) {
+            return WireResult::FatalError;
+        }
+
+        return GetEventManager(eventManager)
+            .SetFutureReady<Event>(futureID, std::forward<ReadyArgs>(readyArgs)...);
+    }
+
 #include "dawn/wire/client/ClientPrototypes_autogen.inc"
 
     ChunkedCommandSerializer mSerializer;
-    WireDeserializeAllocator mWireCommandAllocator;
     PerObjectType<ObjectStore> mObjects;
     std::unique_ptr<MemoryTransferService> mOwnedMemoryTransferService = nullptr;
     raw_ptr<MemoryTransferService> mMemoryTransferService = nullptr;

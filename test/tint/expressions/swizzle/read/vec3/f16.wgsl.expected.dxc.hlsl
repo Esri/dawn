@@ -1,14 +1,10 @@
-[numthreads(1, 1, 1)]
-void unused_entry_point() {
-  return;
-}
-
 struct S {
   vector<float16_t, 3> v;
 };
 
-static S P = (S)0;
 
+static S P = (S)0;
+[numthreads(1, 1, 1)]
 void f() {
   vector<float16_t, 3> v = P.v;
   float16_t x = P.v.x;
@@ -132,3 +128,4 @@ void f() {
   vector<float16_t, 4> zzzy = P.v.zzzy;
   vector<float16_t, 4> zzzz = P.v.zzzz;
 }
+

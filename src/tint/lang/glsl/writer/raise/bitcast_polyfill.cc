@@ -153,7 +153,7 @@ struct State {
                                              const core::type::Type* dst_type) {
         return bitcast_funcs_.GetOrAdd(
             BitcastType{{src_type, dst_type}}, [&]() -> core::ir::Function* {
-                TINT_ASSERT(src_type->Is<core::type::Vector>());
+                TINT_IR_ASSERT(ir, src_type->Is<core::type::Vector>());
 
                 // Generate a helper function that performs the following (in GLSL):
                 //
@@ -179,13 +179,13 @@ struct State {
                     } else if (src_vec->Width() == 4) {
                         auto* left =
                             b.Call<glsl::ir::BuiltinCall>(ty.u32(), glsl::BuiltinFn::kPackFloat2X16,
-                                                          b.Swizzle(ty.vec2<f16>(), src, {0, 1}));
+                                                          b.Swizzle(ty.vec2h(), src, {0, 1}));
                         auto* right =
                             b.Call<glsl::ir::BuiltinCall>(ty.u32(), glsl::BuiltinFn::kPackFloat2X16,
-                                                          b.Swizzle(ty.vec2<f16>(), src, {2, 3}));
-                        packed = b.Construct(ty.vec2<u32>(), left, right)->Result();
+                                                          b.Swizzle(ty.vec2h(), src, {2, 3}));
+                        packed = b.Construct(ty.vec2u(), left, right)->Result();
                     } else {
-                        TINT_UNREACHABLE();
+                        TINT_IR_UNREACHABLE(ir);
                     }
 
                     if (dst_type->DeepestElement()->Is<core::type::F32>()) {
@@ -215,7 +215,7 @@ struct State {
                                            const core::type::Type* dst_type) {
         return bitcast_funcs_.GetOrAdd(
             BitcastType{{src_type, dst_type}}, [&]() -> core::ir::Function* {
-                TINT_ASSERT(dst_type->Is<core::type::Vector>());
+                TINT_IR_ASSERT(ir, dst_type->Is<core::type::Vector>());
 
                 // Generate a helper function that performs the following (in GLSL):
                 //
@@ -244,15 +244,15 @@ struct State {
                     core::ir::Value* val = nullptr;
                     if (conv->Type()->Is<core::type::Vector>()) {
                         auto* left = b.Call<glsl::ir::BuiltinCall>(
-                            ty.vec2<f16>(), glsl::BuiltinFn::kUnpackFloat2X16,
+                            ty.vec2h(), glsl::BuiltinFn::kUnpackFloat2X16,
                             b.Swizzle(ty.u32(), conv, {0}));
                         auto* right = b.Call<glsl::ir::BuiltinCall>(
-                            ty.vec2<f16>(), glsl::BuiltinFn::kUnpackFloat2X16,
+                            ty.vec2h(), glsl::BuiltinFn::kUnpackFloat2X16,
                             b.Swizzle(ty.u32(), conv, {1}));
 
                         val = b.Construct(dst_type, left, right)->Result();
                     } else {
-                        val = b.Call<glsl::ir::BuiltinCall>(ty.vec2<f16>(),
+                        val = b.Call<glsl::ir::BuiltinCall>(ty.vec2h(),
                                                             glsl::BuiltinFn::kUnpackFloat2X16, conv)
                                   ->Result();
                     }
@@ -276,13 +276,10 @@ struct State {
 }  // namespace
 
 Result<SuccessType> BitcastPolyfill(core::ir::Module& ir) {
-    auto result = ValidateAndDumpIfNeeded(
+    TINT_CHECK_RESULT(ValidateAndDumpIfNeeded(
         ir, "glsl.BitcastPolyfill",
         core::ir::Capabilities{core::ir::Capability::kAllowHandleVarsWithoutBindings,
-                               core::ir::Capability::kAllowDuplicateBindings});
-    if (result != Success) {
-        return result.Failure();
-    }
+                               core::ir::Capability::kAllowDuplicateBindings}));
 
     State{ir}.Process();
 

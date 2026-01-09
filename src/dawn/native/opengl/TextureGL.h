@@ -36,6 +36,7 @@ namespace dawn::native::opengl {
 
 class Device;
 struct GLFormat;
+struct OpenGLFunctions;
 class SharedTextureMemory;
 
 enum class OwnsHandle : uint8_t {
@@ -60,15 +61,18 @@ class Texture final : public TextureBase {
     GLenum GetGLTarget() const;
     const GLFormat& GetGLFormat() const;
 
-    MaybeError EnsureSubresourceContentInitialized(const SubresourceRange& range);
+    MaybeError EnsureSubresourceContentInitialized(const OpenGLFunctions& gl,
+                                                   const SubresourceRange& range);
 
     MaybeError SynchronizeTextureBeforeUse();
 
   private:
     ~Texture() override;
 
-    void DestroyImpl() override;
-    MaybeError ClearTexture(const SubresourceRange& range, TextureBase::ClearValue clearValue);
+    void DestroyImpl(DestroyReason reason) override;
+    MaybeError ClearTexture(const OpenGLFunctions& gl,
+                            const SubresourceRange& range,
+                            TextureBase::ClearValue clearValue);
 
     GLuint mHandle;
     OwnsHandle mOwnsHandle = OwnsHandle::No;
@@ -83,7 +87,10 @@ class TextureView final : public TextureViewBase {
 
     GLuint GetHandle() const;
     GLenum GetGLTarget() const;
-    MaybeError BindToFramebuffer(GLenum target, GLenum attachment, GLuint depthLayer = 0);
+    MaybeError BindToFramebuffer(const OpenGLFunctions& gl,
+                                 GLenum target,
+                                 GLenum attachment,
+                                 GLuint depthLayer = 0);
 
   private:
     TextureView(TextureBase* texture,
@@ -92,7 +99,7 @@ class TextureView final : public TextureViewBase {
                 OwnsHandle ownsHandle);
 
     ~TextureView() override;
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
     GLenum GetInternalFormat() const;
 
     // TODO(crbug.com/dawn/1355): Delete this handle on texture destroy.

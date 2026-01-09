@@ -42,6 +42,9 @@ class DepthStencilStateTest : public DawnTest {
     void SetUp() override {
         DawnTest::SetUp();
 
+        // TODO(crbug.com/458102531): Flaky on WARP.
+        DAWN_SUPPRESS_TEST_IF(IsWindows() && IsWARP());
+
         wgpu::TextureDescriptor renderTargetDescriptor;
         renderTargetDescriptor.dimension = wgpu::TextureDimension::e2D;
         renderTargetDescriptor.size.width = kRTSize;
@@ -860,7 +863,8 @@ DAWN_INSTANTIATE_TEST(DepthStencilStateTest,
                       OpenGLBackend(),
                       OpenGLESBackend(),
                       VulkanBackend({"vulkan_use_d32s8"}, {}),
-                      VulkanBackend({}, {"vulkan_use_d32s8"}));
+                      VulkanBackend({}, {"vulkan_use_d32s8"}),
+                      WebGPUBackend());
 
 }  // anonymous namespace
 }  // namespace dawn

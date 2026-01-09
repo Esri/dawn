@@ -52,13 +52,16 @@ class ComputePipelineBase : public PipelineBase,
 
     ObjectType GetType() const override;
 
+    const ComputePipelineBase* AsComputePipeline() const override { return this; }
+    ComputePipelineBase* AsComputePipeline() override { return this; }
+
     // Functors necessary for the unordered_set<ComputePipelineBase*>-based cache.
     struct EqualityFunc {
         bool operator()(const ComputePipelineBase* a, const ComputePipelineBase* b) const;
     };
 
   protected:
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 
   private:
     ComputePipelineBase(DeviceBase* device, ObjectBase::ErrorTag tag, StringView label);

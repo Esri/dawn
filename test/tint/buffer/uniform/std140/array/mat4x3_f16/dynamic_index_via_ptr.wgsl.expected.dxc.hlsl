@@ -1,63 +1,77 @@
+
 cbuffer cbuffer_a : register(b0) {
   uint4 a[8];
 };
 RWByteAddressBuffer s : register(u1);
-static int counter = 0;
-
+static int counter = int(0);
 int i() {
-  counter = (counter + 1);
+  counter = asint((asuint(counter) + asuint(int(1))));
   return counter;
 }
 
-matrix<float16_t, 4, 3> a_load_1(uint offset) {
-  const uint scalar_offset = ((offset + 0u)) / 4;
-  uint4 ubo_load_1 = a[scalar_offset / 4];
-  uint2 ubo_load = ((scalar_offset & 2) ? ubo_load_1.zw : ubo_load_1.xy);
-  vector<float16_t, 2> ubo_load_xz = vector<float16_t, 2>(f16tof32(ubo_load & 0xFFFF));
-  float16_t ubo_load_y = f16tof32(ubo_load[0] >> 16);
-  const uint scalar_offset_1 = ((offset + 8u)) / 4;
-  uint4 ubo_load_3 = a[scalar_offset_1 / 4];
-  uint2 ubo_load_2 = ((scalar_offset_1 & 2) ? ubo_load_3.zw : ubo_load_3.xy);
-  vector<float16_t, 2> ubo_load_2_xz = vector<float16_t, 2>(f16tof32(ubo_load_2 & 0xFFFF));
-  float16_t ubo_load_2_y = f16tof32(ubo_load_2[0] >> 16);
-  const uint scalar_offset_2 = ((offset + 16u)) / 4;
-  uint4 ubo_load_5 = a[scalar_offset_2 / 4];
-  uint2 ubo_load_4 = ((scalar_offset_2 & 2) ? ubo_load_5.zw : ubo_load_5.xy);
-  vector<float16_t, 2> ubo_load_4_xz = vector<float16_t, 2>(f16tof32(ubo_load_4 & 0xFFFF));
-  float16_t ubo_load_4_y = f16tof32(ubo_load_4[0] >> 16);
-  const uint scalar_offset_3 = ((offset + 24u)) / 4;
-  uint4 ubo_load_7 = a[scalar_offset_3 / 4];
-  uint2 ubo_load_6 = ((scalar_offset_3 & 2) ? ubo_load_7.zw : ubo_load_7.xy);
-  vector<float16_t, 2> ubo_load_6_xz = vector<float16_t, 2>(f16tof32(ubo_load_6 & 0xFFFF));
-  float16_t ubo_load_6_y = f16tof32(ubo_load_6[0] >> 16);
-  return matrix<float16_t, 4, 3>(vector<float16_t, 3>(ubo_load_xz[0], ubo_load_y, ubo_load_xz[1]), vector<float16_t, 3>(ubo_load_2_xz[0], ubo_load_2_y, ubo_load_2_xz[1]), vector<float16_t, 3>(ubo_load_4_xz[0], ubo_load_4_y, ubo_load_4_xz[1]), vector<float16_t, 3>(ubo_load_6_xz[0], ubo_load_6_y, ubo_load_6_xz[1]));
+vector<float16_t, 2> tint_bitcast_to_f16_1(uint src) {
+  uint v = src;
+  float t_low = f16tof32((v & 65535u));
+  float t_high = f16tof32(((v >> 16u) & 65535u));
+  float16_t v_1 = float16_t(t_low);
+  return vector<float16_t, 2>(v_1, float16_t(t_high));
 }
 
-typedef matrix<float16_t, 4, 3> a_load_ret[4];
-a_load_ret a_load(uint offset) {
-  matrix<float16_t, 4, 3> arr[4] = (matrix<float16_t, 4, 3>[4])0;
+vector<float16_t, 4> tint_bitcast_to_f16(uint2 src) {
+  uint2 v = src;
+  uint2 mask = (65535u).xx;
+  uint2 shift = (16u).xx;
+  float2 t_low = f16tof32((v & mask));
+  float2 t_high = f16tof32(((v >> shift) & mask));
+  float16_t v_2 = float16_t(t_low.x);
+  float16_t v_3 = float16_t(t_high.x);
+  float16_t v_4 = float16_t(t_low.y);
+  return vector<float16_t, 4>(v_2, v_3, v_4, float16_t(t_high.y));
+}
+
+matrix<float16_t, 4, 3> v_5(uint start_byte_offset) {
+  uint4 v_6 = a[(start_byte_offset / 16u)];
+  vector<float16_t, 3> v_7 = tint_bitcast_to_f16((((((start_byte_offset & 15u) >> 2u) == 2u)) ? (v_6.zw) : (v_6.xy))).xyz;
+  uint4 v_8 = a[((8u + start_byte_offset) / 16u)];
+  vector<float16_t, 3> v_9 = tint_bitcast_to_f16(((((((8u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_8.zw) : (v_8.xy))).xyz;
+  uint4 v_10 = a[((16u + start_byte_offset) / 16u)];
+  vector<float16_t, 3> v_11 = tint_bitcast_to_f16(((((((16u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_10.zw) : (v_10.xy))).xyz;
+  uint4 v_12 = a[((24u + start_byte_offset) / 16u)];
+  return matrix<float16_t, 4, 3>(v_7, v_9, v_11, tint_bitcast_to_f16(((((((24u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_12.zw) : (v_12.xy))).xyz);
+}
+
+typedef matrix<float16_t, 4, 3> ary_ret[4];
+ary_ret v_13(uint start_byte_offset) {
+  matrix<float16_t, 4, 3> a_1[4] = (matrix<float16_t, 4, 3>[4])0;
   {
-    for(uint i_1 = 0u; (i_1 < 4u); i_1 = (i_1 + 1u)) {
-      arr[i_1] = a_load_1((offset + (i_1 * 32u)));
+    uint v_14 = 0u;
+    v_14 = 0u;
+    while(true) {
+      uint v_15 = v_14;
+      if ((v_15 >= 4u)) {
+        break;
+      }
+      a_1[v_15] = v_5((start_byte_offset + (v_15 * 32u)));
+      {
+        v_14 = (v_15 + 1u);
+      }
+      continue;
     }
   }
-  return arr;
+  matrix<float16_t, 4, 3> v_16[4] = a_1;
+  return v_16;
 }
 
 [numthreads(1, 1, 1)]
 void f() {
-  int p_a_i_save = i();
-  int p_a_i_i_save = i();
-  matrix<float16_t, 4, 3> l_a[4] = a_load(0u);
-  matrix<float16_t, 4, 3> l_a_i = a_load_1((32u * min(uint(p_a_i_save), 3u)));
-  const uint scalar_offset_4 = (((32u * min(uint(p_a_i_save), 3u)) + (8u * min(uint(p_a_i_i_save), 3u)))) / 4;
-  uint4 ubo_load_9 = a[scalar_offset_4 / 4];
-  uint2 ubo_load_8 = ((scalar_offset_4 & 2) ? ubo_load_9.zw : ubo_load_9.xy);
-  vector<float16_t, 2> ubo_load_8_xz = vector<float16_t, 2>(f16tof32(ubo_load_8 & 0xFFFF));
-  float16_t ubo_load_8_y = f16tof32(ubo_load_8[0] >> 16);
-  vector<float16_t, 3> l_a_i_i = vector<float16_t, 3>(ubo_load_8_xz[0], ubo_load_8_y, ubo_load_8_xz[1]);
-  const uint scalar_offset_bytes = (((32u * min(uint(p_a_i_save), 3u)) + (8u * min(uint(p_a_i_i_save), 3u))));
-  const uint scalar_offset_index = scalar_offset_bytes / 4;
-  s.Store<float16_t>(0u, (((float16_t(f16tof32(((a[scalar_offset_index / 4][scalar_offset_index % 4] >> (scalar_offset_bytes % 4 == 0 ? 0 : 16)) & 0xFFFF))) + l_a[0][0].x) + l_a_i[0].x) + l_a_i_i.x));
-  return;
+  uint v_17 = (32u * min(uint(i()), 3u));
+  uint v_18 = (8u * min(uint(i()), 3u));
+  matrix<float16_t, 4, 3> l_a[4] = v_13(0u);
+  matrix<float16_t, 4, 3> l_a_i = v_5(v_17);
+  uint4 v_19 = a[((v_17 + v_18) / 16u)];
+  vector<float16_t, 3> l_a_i_i = tint_bitcast_to_f16(((((((v_17 + v_18) & 15u) >> 2u) == 2u)) ? (v_19.zw) : (v_19.xy))).xyz;
+  uint v_20 = a[((v_17 + v_18) / 16u)][(((v_17 + v_18) & 15u) >> 2u)];
+  uint v_21 = (((((v_17 + v_18) % 4u) == 0u)) ? (0u) : (1u));
+  s.Store<float16_t>(0u, (((tint_bitcast_to_f16_1(v_20)[v_21] + l_a[0u][0u].x) + l_a_i[0u].x) + l_a_i_i.x));
 }
+

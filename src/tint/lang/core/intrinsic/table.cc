@@ -243,12 +243,9 @@ Result<Overload, StyledText> MatchIntrinsic(Context& context,
     if (num_matched == 1) {
         match = std::move(candidates[match_idx]);
     } else {
-        auto result =
-            ResolveCandidate(context, std::move(candidates), intrinsic_name, template_args, args);
-        if (DAWN_UNLIKELY(result != Success)) {
-            return result.Failure();
-        }
-        match = result.Get();
+        TINT_CHECK_RESULT_UNWRAP(result, ResolveCandidate(context, std::move(candidates),
+                                                          intrinsic_name, template_args, args));
+        match = result;
     }
 
     // Build the return type

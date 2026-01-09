@@ -30,103 +30,27 @@
 
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 
 #include "src/tint/api/common/binding_point.h"
+#include "src/tint/api/common/bindings.h"
+#include "src/tint/api/common/resource_table_config.h"
+#include "src/tint/api/common/substitute_overrides_config.h"
 #include "src/tint/utils/reflection.h"
 
 namespace tint::spirv::writer {
-namespace binding {
 
-/// Generic binding point
-struct BindingInfo {
-    /// The group
-    uint32_t group = 0;
-    /// The binding
-    uint32_t binding = 0;
-
-    /// Equality operator
-    /// @param rhs the BindingInfo to compare against
-    /// @returns true if this BindingInfo is equal to `rhs`
-    inline bool operator==(const BindingInfo& rhs) const {
-        return group == rhs.group && binding == rhs.binding;
-    }
-    /// Inequality operator
-    /// @param rhs the BindingInfo to compare against
-    /// @returns true if this BindingInfo is not equal to `rhs`
-    inline bool operator!=(const BindingInfo& rhs) const { return !(*this == rhs); }
-
-    /// @returns the hash code of the BindingInfo
-    tint::HashCode HashCode() const { return Hash(group, binding); }
-
-    /// Reflect the fields of this class so that it can be used by tint::ForeachField()
-    TINT_REFLECT(BindingInfo, group, binding);
-};
-
-using Uniform = BindingInfo;
-using Storage = BindingInfo;
-using Texture = BindingInfo;
-using StorageTexture = BindingInfo;
-using Sampler = BindingInfo;
-using InputAttachment = BindingInfo;
-
-/// An external texture
-struct ExternalTexture {
-    /// Metadata
-    BindingInfo metadata{};
-    /// Plane0 binding data
-    BindingInfo plane0{};
-    /// Plane1 binding data
-    BindingInfo plane1{};
-
-    /// Reflect the fields of this class so that it can be used by tint::ForeachField()
-    TINT_REFLECT(ExternalTexture, metadata, plane0, plane1);
-};
-
-}  // namespace binding
-
-// Maps the WGSL binding point to the SPIR-V group,binding for uniforms
-using UniformBindings = std::unordered_map<BindingPoint, binding::Uniform>;
-// Maps the WGSL binding point to the SPIR-V group,binding for storage
-using StorageBindings = std::unordered_map<BindingPoint, binding::Storage>;
-// Maps the WGSL binding point to the SPIR-V group,binding for textures
-using TextureBindings = std::unordered_map<BindingPoint, binding::Texture>;
-// Maps the WGSL binding point to the SPIR-V group,binding for storage textures
-using StorageTextureBindings = std::unordered_map<BindingPoint, binding::StorageTexture>;
-// Maps the WGSL binding point to the SPIR-V group,binding for samplers
-using SamplerBindings = std::unordered_map<BindingPoint, binding::Sampler>;
-// Maps the WGSL binding point to the plane0, plane1, and metadata information for external textures
-using ExternalTextureBindings = std::unordered_map<BindingPoint, binding::ExternalTexture>;
-// Maps the WGSL binding point to the SPIR-V group,binding for input attachments
-using InputAttachmentBindings = std::unordered_map<BindingPoint, binding::InputAttachment>;
-
-/// Binding information
-struct Bindings {
-    /// Uniform bindings
-    UniformBindings uniform{};
-    /// Storage bindings
-    StorageBindings storage{};
-    /// Texture bindings
-    TextureBindings texture{};
-    /// Storage texture bindings
-    StorageTextureBindings storage_texture{};
-    /// Sampler bindings
-    SamplerBindings sampler{};
-    /// External bindings
-    ExternalTextureBindings external_texture{};
-    /// Input attachment bindings
-    InputAttachmentBindings input_attachment{};
-
-    /// Reflect the fields of this class so that it can be used by tint::ForeachField()
-    TINT_REFLECT(Bindings,
-                 uniform,
-                 storage,
-                 texture,
-                 storage_texture,
-                 sampler,
-                 external_texture,
-                 input_attachment);
+/// Supported SPIR-V binary versions.
+/// If a new version is added here, also add it to:
+/// * Writer::CanGenerate
+/// * Printer::Code
+/// Fully usable version will also need additions to:
+/// * --spir-version on the command line
+/// * Dawn in the Vulkan backend
+enum class SpvVersion : uint32_t {
+    kSpv13,  // SPIR-V 1.3
+    kSpv14,  // SPIR-V 1.4
+    kSpv15,  // SPIR-V 1.5, for testing purposes only
 };
 
 /// Configuration options used for generating SPIR-V.
@@ -139,7 +63,115 @@ struct Options {
 
         /// Reflect the fields of this class so that it can be used by tint::ForeachField()
         TINT_REFLECT(RangeOffsets, min, max);
+        TINT_REFLECT_HASH_CODE(RangeOffsets);
     };
+
+    /// The set of options which control workarounds for driver issues in the SPIR-V generator.
+    struct Workarounds {
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // NOTE: When adding a new option here, it should also be added to the FuzzedOptions     //
+        // structure in writer_fuzz.cc.                                                          //
+        ///////////////////////////////////////////////////////////////////////////////////////////
+
+        /// Set to `true` to generate a polyfill for switch statements using if/else statements.
+        bool polyfill_case_switch = false;
+
+        /// Set to `true` to scalarize max min and clamp builtins.
+        bool scalarize_max_min_clamp = false;
+
+        /// Set to `true` if handles should be transformed by direct variable access.
+        bool dva_transform_handle = false;
+
+        /// Set to `true` to generate polyfill for `pack4x8snorm`, `pack4x8unorm`, `unpack4x8snorm`
+        /// and `unpack4x8unorm` builtins
+        bool polyfill_pack_unpack_4x8_norm = false;
+
+        /// Set to `true` to generate a polyfill clamp of `id` param of subgroupShuffle to within
+        /// the spec max subgroup size.
+        bool subgroup_shuffle_clamped = false;
+
+        /// Set to 'true' to force workaround for 'textureSampleCompare(Level)' for texture arrays
+        /// of cube depth.
+        bool texture_sample_compare_depth_cube_array = false;
+
+        /// Set to `true` to generate polyfill for `subgroupBroadcast(f16)`
+        bool polyfill_subgroup_broadcast_f16 = false;
+
+        /// Set to `true` to always pass matrices to user functions by pointer instead of by value.
+        bool pass_matrix_by_pointer = false;
+
+        /// Set to `true` to generate polyfill for f32 negation.
+        bool polyfill_unary_f32_negation = false;
+
+        /// Set to `true` to generate polyfill for f32 abs.
+        bool polyfill_f32_abs = false;
+
+        TINT_REFLECT(Workarounds,
+                     polyfill_case_switch,
+                     scalarize_max_min_clamp,
+                     dva_transform_handle,
+                     polyfill_pack_unpack_4x8_norm,
+                     subgroup_shuffle_clamped,
+                     texture_sample_compare_depth_cube_array,
+                     polyfill_subgroup_broadcast_f16,
+                     pass_matrix_by_pointer,
+                     polyfill_unary_f32_negation,
+                     polyfill_f32_abs);
+    };
+
+    /// Any options which are controlled by the presence/absence of a vulkan extension.
+    struct Extensions {
+        ///////////////////////////////////////////////////////////////////////////////////////////
+        // NOTE: When adding a new option here, it should also be added to the FuzzedOptions     //
+        // structure in writer_fuzz.cc.                                                          //
+        ///////////////////////////////////////////////////////////////////////////////////////////
+
+        /// Set to `true` to allow for the usage of the demote to helper extension.
+        bool use_demote_to_helper_invocation = false;
+
+        /// Set to `true` to use the StorageInputOutput16 capability for shader IO that uses f16
+        /// types.
+        bool use_storage_input_output_16 = true;
+
+        /// Set to `true` to initialize workgroup memory with OpConstantNull when
+        /// VK_KHR_zero_initialize_workgroup_memory is enabled.
+        bool use_zero_initialize_workgroup_memory = false;
+
+        /// Set to `true` if the Vulkan Memory Model should be used
+        bool use_vulkan_memory_model = false;
+
+        /// Set to `true` to skip robustness transform on textures.
+        bool disable_image_robustness = false;
+
+        /// Set to `true` to disable index clamping on the runtime-sized arrays in robustness
+        /// transform.
+        bool disable_runtime_sized_array_index_clamping = false;
+
+        /// Set to `true` to generate polyfill for `dot4I8Packed` and `dot4U8Packed` builtins
+        bool dot_4x8_packed = false;
+
+        /// Set to `true` to use the uniform buffer directly, `false` to decompose into array<vec4u,
+        /// ...>.
+        bool use_uniform_buffers = false;
+
+        TINT_REFLECT(Extensions,
+                     use_demote_to_helper_invocation,
+                     use_storage_input_output_16,
+                     use_zero_initialize_workgroup_memory,
+                     use_vulkan_memory_model,
+                     disable_image_robustness,
+                     disable_runtime_sized_array_index_clamping,
+                     dot_4x8_packed,
+                     use_uniform_buffers);
+    };
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    // NOTE: When adding a new option here, it should also be added to the FuzzedOptions     //
+    // structure in writer_fuzz.cc (if fuzzing is desired).                                  //
+    ///////////////////////////////////////////////////////////////////////////////////////////
+
+    /// The entry point name to generate
+    std::string entry_point_name;
 
     /// An optional remapped name to use when emitting the entry point.
     std::string remapped_entry_point_name = {};
@@ -159,82 +191,68 @@ struct Options {
     /// Set to `true` to disable software robustness that prevents out-of-bounds accesses.
     bool disable_robustness = false;
 
-    /// Set to `true` to enable integer range analysis in robustness transform.
-    bool enable_integer_range_analysis = false;
-
-    /// Set to `true` to skip robustness transform on textures.
-    bool disable_image_robustness = false;
-
-    /// Set to `true` to disable index clamping on the runtime-sized arrays in robustness transform.
-    bool disable_runtime_sized_array_index_clamping = false;
-
     /// Set to `true` to disable workgroup memory zero initialization
     bool disable_workgroup_init = false;
 
-    /// Set to `true` to allow for the usage of the demote to helper extension.
-    bool use_demote_to_helper_invocation_extensions = false;
+    /// Set to `true` to disable the polyfills on integer division and modulo.
+    bool disable_polyfill_integer_div_mod = false;
 
-    /// Set to `true` to initialize workgroup memory with OpConstantNull when
-    /// VK_KHR_zero_initialize_workgroup_memory is enabled.
-    bool use_zero_initialize_workgroup_memory_extension = false;
-
-    /// Set to `true` to use the StorageInputOutput16 capability for shader IO that uses f16 types.
-    bool use_storage_input_output_16 = true;
+    /// Set to `true` to enable integer range analysis in robustness transform.
+    bool disable_integer_range_analysis = false;
 
     /// Set to `true` to generate a PointSize builtin and have it set to 1.0
     /// from all vertex shaders in the module.
     bool emit_vertex_point_size = true;
 
-    /// Set to `true` to always pass matrices to user functions by pointer instead of by value.
-    bool pass_matrix_by_pointer = false;
+    /// Set to `true` to apply builtin 'position' pixel center emulation.
+    bool polyfill_pixel_center = false;
 
-    /// Set to `true` to generate polyfill for `dot4I8Packed` and `dot4U8Packed` builtins
-    bool polyfill_dot_4x8_packed = false;
+    /// Any workarounds to enable/disable.
+    Workarounds workarounds{};
 
-    /// Set to `true` to generate polyfill for `pack4x8snorm`, `pack4x8unorm`, `unpack4x8snorm` and
-    /// `unpack4x8unorm` builtins
-    bool polyfill_pack_unpack_4x8_norm = false;
-
-    /// Set to `true` to disable the polyfills on integer division and modulo.
-    bool disable_polyfill_integer_div_mod = false;
-
-    /// Set to `true` if the Vulkan Memory Model should be used
-    bool use_vulkan_memory_model = false;
-
-    /// Set to `true` if the clamp builtin should be scalarized for vector operations
-    bool scalarize_clamp_builtin = false;
-
-    /// Set to `true` if handles should be transformed by direct variable access.
-    bool dva_transform_handle = false;
+    /// Any used extensions
+    Extensions extensions{};
 
     /// Offsets of the minDepth and maxDepth push constants.
     std::optional<RangeOffsets> depth_range_offsets = std::nullopt;
 
+    /// SPIR-V binary version.
+    SpvVersion spirv_version = SpvVersion::kSpv13;
+
+    /// Resource table information
+    std::optional<ResourceTableConfig> resource_table = std::nullopt;
+
+    // Configuration for substitute overrides
+    SubstituteOverridesConfig substitute_overrides_config = {};
+
     /// Reflect the fields of this class so that it can be used by tint::ForeachField()
     TINT_REFLECT(Options,
+                 entry_point_name,
                  remapped_entry_point_name,
                  bindings,
                  statically_paired_texture_binding_points,
                  strip_all_names,
                  disable_robustness,
-                 enable_integer_range_analysis,
-                 disable_image_robustness,
-                 disable_runtime_sized_array_index_clamping,
                  disable_workgroup_init,
-                 use_demote_to_helper_invocation_extensions,
-                 use_zero_initialize_workgroup_memory_extension,
-                 use_storage_input_output_16,
-                 emit_vertex_point_size,
-                 pass_matrix_by_pointer,
-                 polyfill_dot_4x8_packed,
-                 polyfill_pack_unpack_4x8_norm,
                  disable_polyfill_integer_div_mod,
-                 use_vulkan_memory_model,
-                 scalarize_clamp_builtin,
-                 dva_transform_handle,
-                 depth_range_offsets);
+                 disable_integer_range_analysis,
+                 emit_vertex_point_size,
+                 polyfill_pixel_center,
+                 workarounds,
+                 extensions,
+                 depth_range_offsets,
+                 spirv_version,
+                 resource_table,
+                 substitute_overrides_config);
 };
 
 }  // namespace tint::spirv::writer
+
+namespace tint {
+
+/// Reflect enum information for SPIR-V version.
+TINT_REFLECT_ENUM_RANGE(spirv::writer::SpvVersion, kSpv13, kSpv14);
+
+}  // namespace tint
 
 #endif  // SRC_TINT_LANG_SPIRV_WRITER_COMMON_OPTIONS_H_

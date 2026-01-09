@@ -27,62 +27,19 @@
 
 #include "dawn/utils/WGPUHelpers.h"
 
+#include <algorithm>
 #include <cstring>
 #include <iomanip>
-#include <limits>
 #include <mutex>
+#include <queue>
 #include <sstream>
 
+#include "absl/container/flat_hash_map.h"
 #include "dawn/common/Constants.h"
 #include "dawn/common/Log.h"
 #include "dawn/common/Numeric.h"
 
-#if TINT_BUILD_SPV_READER
-#include "spirv-tools/optimizer.hpp"
-#endif
-
 namespace dawn::utils {
-#if TINT_BUILD_SPV_READER
-wgpu::ShaderModule CreateShaderModuleFromASM(
-    const wgpu::Device& device,
-    const char* source,
-    wgpu::DawnShaderModuleSPIRVOptionsDescriptor* spirv_options) {
-    // Use SPIRV-Tools's C API to assemble the SPIR-V assembly text to binary. Because the types
-    // aren't RAII, we don't return directly on success and instead always go through the code
-    // path that destroys the SPIRV-Tools objects.
-    wgpu::ShaderModule result = nullptr;
-
-    spv_context context = spvContextCreate(SPV_ENV_UNIVERSAL_1_3);
-    DAWN_ASSERT(context != nullptr);
-
-    spv_binary spirv = nullptr;
-    spv_diagnostic diagnostic = nullptr;
-    if (spvTextToBinary(context, source, strlen(source), &spirv, &diagnostic) == SPV_SUCCESS) {
-        DAWN_ASSERT(spirv != nullptr);
-        DAWN_ASSERT(spirv->wordCount <= std::numeric_limits<uint32_t>::max());
-
-        wgpu::ShaderSourceSPIRV spirvDesc;
-        spirvDesc.codeSize = static_cast<uint32_t>(spirv->wordCount);
-        spirvDesc.code = spirv->code;
-        spirvDesc.nextInChain = spirv_options;
-
-        wgpu::ShaderModuleDescriptor descriptor;
-        descriptor.nextInChain = &spirvDesc;
-        result = device.CreateShaderModule(&descriptor);
-    } else {
-        DAWN_ASSERT(diagnostic != nullptr);
-        dawn::WarningLog() << "CreateShaderModuleFromASM SPIRV assembly error:"
-                           << diagnostic->position.line + 1 << ":"
-                           << diagnostic->position.column + 1 << ": " << diagnostic->error;
-    }
-
-    spvDiagnosticDestroy(diagnostic);
-    spvBinaryDestroy(spirv);
-    spvContextDestroy(context);
-
-    return result;
-}
-#endif
 
 wgpu::ShaderModule CreateShaderModule(const wgpu::Device& device, const char* source) {
     wgpu::ShaderSourceWGSL wgslDesc;
@@ -99,8 +56,10 @@ wgpu::ShaderModule CreateShaderModule(const wgpu::Device& device, const std::str
 wgpu::Buffer CreateBufferFromData(const wgpu::Device& device,
                                   const void* data,
                                   uint64_t size,
-                                  wgpu::BufferUsage usage) {
+                                  wgpu::BufferUsage usage,
+                                  std::string_view label) {
     wgpu::BufferDescriptor descriptor;
+    descriptor.label = label;
     descriptor.size = size;
     descriptor.usage = usage | wgpu::BufferUsage::CopyDst;
     wgpu::Buffer buffer = device.CreateBuffer(&descriptor);
@@ -256,7 +215,8 @@ wgpu::TexelCopyBufferLayout CreateTexelCopyBufferLayout(uint64_t offset,
 }
 
 wgpu::PipelineLayout MakeBasicPipelineLayout(const wgpu::Device& device,
-                                             const wgpu::BindGroupLayout* bindGroupLayout) {
+                                             const wgpu::BindGroupLayout* bindGroupLayout,
+                                             uint32_t immediateDataByteSize) {
     wgpu::PipelineLayoutDescriptor descriptor;
     if (bindGroupLayout != nullptr) {
         descriptor.bindGroupLayoutCount = 1;
@@ -265,6 +225,11 @@ wgpu::PipelineLayout MakeBasicPipelineLayout(const wgpu::Device& device,
         descriptor.bindGroupLayoutCount = 0;
         descriptor.bindGroupLayouts = nullptr;
     }
+
+    if (immediateDataByteSize > 0) {
+        descriptor.immediateSize = immediateDataByteSize;
+    }
+
     return device.CreatePipelineLayout(&descriptor);
 }
 
@@ -338,7 +303,6 @@ BindingLayoutEntryInitializationHelper::BindingLayoutEntryInitializationHelper(
     storageTexture.viewDimension = textureViewDimension;
 }
 
-#ifndef __EMSCRIPTEN__
 // ExternalTextureBindingLayout never contains data, so just make one that can be reused instead
 // of declaring a new one every time it's needed.
 wgpu::ExternalTextureBindingLayout kExternalTextureBindingLayout = {};
@@ -357,6 +321,27 @@ BindingInitializationHelper::BindingInitializationHelper(
     const wgpu::ExternalTexture& externalTexture)
     : binding(binding) {
     externalTextureBindingEntry.externalTexture = externalTexture;
+}
+
+#ifndef __EMSCRIPTEN__
+wgpu::TexelBufferBindingLayout kTexelBufferBindingLayout = {};
+
+BindingLayoutEntryInitializationHelper::BindingLayoutEntryInitializationHelper(
+    uint32_t entryBinding,
+    wgpu::ShaderStage entryVisibility,
+    wgpu::TexelBufferBindingLayout* bindingLayout) {
+    binding = entryBinding;
+    visibility = entryVisibility;
+    nextInChain = bindingLayout;
+}
+#endif  // __EMSCRIPTEN__
+
+#ifndef __EMSCRIPTEN__
+BindingInitializationHelper::BindingInitializationHelper(
+    uint32_t binding,
+    const wgpu::TexelBufferView& texelBufferView)
+    : binding(binding) {
+    texelBufferBindingEntry.texelBufferView = texelBufferView;
 }
 #endif  // __EMSCRIPTEN__
 
@@ -392,9 +377,22 @@ wgpu::BindGroupEntry BindingInitializationHelper::GetAsBinding() const {
     result.buffer = buffer;
     result.offset = offset;
     result.size = size;
-#ifndef __EMSCRIPTEN__
+
     if (externalTextureBindingEntry.externalTexture != nullptr) {
+        // Similarly to texel buffers, external textures have their layout
+        // specified on the bind group layout entry. Chain only the binding entry
+        // here.
+        externalTextureBindingEntry.nextInChain = result.nextInChain;
         result.nextInChain = &externalTextureBindingEntry;
+    }
+#ifndef __EMSCRIPTEN__
+    if (texelBufferBindingEntry.texelBufferView != nullptr) {
+        // Insert the texel buffer binding entry at the head of the chain while
+        // preserving any existing chained structures on `result`. The layout is
+        // specified on the bind group *layout* entry, so no TexelBufferBindingLayout
+        // should be chained here.
+        texelBufferBindingEntry.nextInChain = result.nextInChain;
+        result.nextInChain = &texelBufferBindingEntry;
     }
 #endif  // __EMSCRIPTEN__
 
@@ -471,6 +469,57 @@ bool BackendRequiresCompat(wgpu::BackendType backend) {
         case wgpu::BackendType::Undefined:
             DAWN_UNREACHABLE();
     }
+}
+
+const absl::flat_hash_map<wgpu::FeatureName, absl::flat_hash_set<wgpu::FeatureName>>
+    kImplicitlyEnabledFeaturesMap = {
+        {wgpu::FeatureName::TextureFormatsTier1, {wgpu::FeatureName::RG11B10UfloatRenderable}},
+        {wgpu::FeatureName::TextureFormatsTier2, {wgpu::FeatureName::TextureFormatsTier1}},
+        // Add other implicit enabling rules here
+};
+
+absl::flat_hash_set<wgpu::FeatureName> FeatureAndImplicitlyEnabled(wgpu::FeatureName featureName) {
+    absl::flat_hash_set<wgpu::FeatureName> allFeatures;
+    std::queue<wgpu::FeatureName> q;
+
+    q.push(featureName);
+    allFeatures.insert(featureName);
+
+    const auto& implicitMap = kImplicitlyEnabledFeaturesMap;
+
+    while (!q.empty()) {
+        wgpu::FeatureName current = q.front();
+        q.pop();
+
+        auto it = implicitMap.find(current);
+        if (it != implicitMap.end()) {
+            for (wgpu::FeatureName implicitlyEnabled : it->second) {
+                if (allFeatures.insert(implicitlyEnabled).second) {
+                    q.push(implicitlyEnabled);
+                }
+            }
+        }
+    }
+
+    return allFeatures;
+}
+
+int8_t ConvertFloatToSnorm8(float value) {
+    float roundedValue = (value >= 0) ? (value + 0.5f) : (value - 0.5f);
+    float clampedValue = std::clamp(roundedValue, -128.0f, 127.0f);
+    return static_cast<int8_t>(clampedValue);
+}
+
+int16_t ConvertFloatToSnorm16(float value) {
+    float roundedValue = (value >= 0) ? (value + 0.5f) : (value - 0.5f);
+    float clampedValue = std::clamp(roundedValue, -32768.0f, 32767.0f);
+    return static_cast<int16_t>(clampedValue);
+}
+
+uint16_t ConvertFloatToUnorm16(float value) {
+    float roundedValue = value + 0.5f;
+    float clampedValue = std::clamp(roundedValue, 0.0f, 65535.0f);
+    return static_cast<uint16_t>(clampedValue);
 }
 
 }  // namespace dawn::utils

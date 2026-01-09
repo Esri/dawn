@@ -54,15 +54,15 @@ class QueueMock : public QueueBase {
                  const TexelCopyBufferLayout&,
                  const Extent3D&),
                 (override));
-    MOCK_METHOD(void, DestroyImpl, (), (override));
+    MOCK_METHOD(void, DestroyImpl, (DestroyReason), (override));
 
     MOCK_METHOD(ResultOrError<ExecutionSerial>, CheckAndUpdateCompletedSerials, (), (override));
     MOCK_METHOD(bool, HasPendingCommands, (), (const, override));
-    MOCK_METHOD(MaybeError, SubmitPendingCommands, (), (override));
+    MOCK_METHOD(MaybeError, SubmitPendingCommandsImpl, (), (override));
     MOCK_METHOD(void, ForceEventualFlushOfCommands, (), (override));
-    MOCK_METHOD(MaybeError, WaitForIdleForDestruction, (), (override));
-    MOCK_METHOD(ResultOrError<bool>,
-                WaitForQueueSerial,
+    MOCK_METHOD(MaybeError, WaitForIdleForDestructionImpl, (), (override));
+    MOCK_METHOD(ResultOrError<ExecutionSerial>,
+                WaitForQueueSerialImpl,
                 (ExecutionSerial, Nanoseconds),
                 (override));
 };

@@ -215,6 +215,44 @@ TEST_F(CompatValidationTest, CanNotCreatePipelineWithNonZeroDepthBiasClamp) {
     ASSERT_DEVICE_ERROR(device.CreateRenderPipeline(&testDescriptor));
 }
 
+TEST_F(CompatValidationTest, CanNotCreatePipelineWithFineDerivatives) {
+    std::string builtins[] = {"dpdx", "dpdxFine", "dpdyFine", "fwidthFine"};
+    for (auto builtin : builtins) {
+        auto wgsl = absl::StrFormat(
+            R"(
+                struct VOut {
+                  @builtin(position) pos: vec4f,
+                  @location(0) i: vec4f,
+                };
+
+                @vertex fn vs() -> VOut {
+                    return VOut(vec4f(0), vec4f(0));
+                }
+
+                @fragment fn fs(v: VOut) -> @location(0) vec4f {
+                    _ = %s(v.i);
+                    return vec4f(0);
+                }
+            )",
+            builtin);
+
+        wgpu::ShaderModule module = utils::CreateShaderModule(device, wgsl);
+
+        utils::ComboRenderPipelineDescriptor testDescriptor;
+        testDescriptor.layout = {};
+        testDescriptor.vertex.module = module;
+        testDescriptor.cFragment.module = module;
+        testDescriptor.cFragment.targetCount = 1;
+        testDescriptor.cTargets[1].format = wgpu::TextureFormat::RGBA8Unorm;
+
+        if (builtin == "dpdx") {
+            device.CreateRenderPipeline(&testDescriptor);
+        } else {
+            ASSERT_DEVICE_ERROR(device.CreateRenderPipeline(&testDescriptor));
+        }
+    }
+}
+
 TEST_F(CompatValidationTest, CanNotCreatePipelineWithTextureLoadOfDepthTexture) {
     wgpu::ShaderModule module = utils::CreateShaderModule(device, R"(
         @group(0) @binding(0) var<storage, read_write> dstBuf : array<vec4f>;
@@ -253,6 +291,45 @@ TEST_F(CompatValidationTest, CanNotCreatePipelineWithTextureLoadOfDepthTexture) 
                 testing::HasSubstr(
                     "textureLoad can not be used with depth textures in compatibility mode"));
         }
+    }
+}
+
+// Test that large group ids don't crash
+TEST_F(CompatValidationTest, LargeGroupIds) {
+    wgpu::ShaderModule module = utils::CreateShaderModule(device, R"(
+@group(0) @binding(0) var smp: sampler;
+@group(2345) @binding(0) var tex1: texture_2d<f32>;
+@group(6789) @binding(0) var tex2: texture_2d<f32>;
+
+@vertex fn vs() -> @builtin(position) vec4f {
+    let c = textureLoad(tex1, vec2u(0), 0) + textureLoad(tex2, vec2u(0), 0);
+    return c;
+}
+
+@fragment fn fs() -> @location(0) vec4f {
+    let c = textureSample(tex1, smp, vec2f(0)) + textureSample(tex2, smp, vec2f(0));
+    return c;
+}
+
+@compute @workgroup_size(1) fn main() {
+    let c = textureSampleLevel(tex1, smp, vec2f(0), 0) + textureSampleLevel(tex2, smp, vec2f(0), 0);
+})");
+
+    {
+        wgpu::ComputePipelineDescriptor pDesc;
+        pDesc.compute.module = module;
+        ASSERT_DEVICE_ERROR(device.CreateComputePipeline(&pDesc),
+                            testing::HasSubstr("exceeds maxBindGroups"));
+    }
+    {
+        utils::ComboRenderPipelineDescriptor pDesc;
+        pDesc.vertex.module = module;
+        pDesc.cFragment.module = module;
+        pDesc.cFragment.targetCount = 1;
+        pDesc.cTargets[0].format = wgpu::TextureFormat::RGBA8Unorm;
+
+        ASSERT_DEVICE_ERROR(device.CreateRenderPipeline(&pDesc),
+                            testing::HasSubstr("exceeds maxBindGroups"));
     }
 }
 
@@ -772,6 +849,27 @@ constexpr const char* kRenderTwoTexturesOneBindgroupWGSL = R"(
     }
 )";
 
+constexpr const char* kSampleDepthSampleStencilOneBindgroupWGSL = R"(
+    @vertex
+    fn vs(@builtin(vertex_index) VertexIndex : u32) -> @builtin(position) vec4f {
+        var pos = array(
+            vec4f(-1,  3, 0, 1),
+            vec4f( 3, -1, 0, 1),
+            vec4f(-1, -1, 0, 1));
+        return pos[VertexIndex];
+    }
+
+    @group(0) @binding(0) var depth : texture_2d<f32>;
+    @group(0) @binding(1) var stencil : texture_2d<u32>;
+
+    @fragment
+    fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
+        _ = depth;
+        _ = stencil;
+        return vec4f(0);
+    }
+)";
+
 constexpr const char* kRenderTwoTexturesTwoBindgroupsWGSL = R"(
     @vertex
     fn vs(@builtin(vertex_index) VertexIndex : u32) -> @builtin(position) vec4f {
@@ -795,6 +893,7 @@ constexpr const char* kRenderTwoTexturesTwoBindgroupsWGSL = R"(
 
 void TestMultipleTextureViewValidationInRenderPass(
     wgpu::Device device,
+    wgpu::TextureFormat format,
     const char* wgsl,
     std::function<void(wgpu::Device device,
                        wgpu::Texture texture,
@@ -804,7 +903,7 @@ void TestMultipleTextureViewValidationInRenderPass(
     descriptor.size = {2, 1, 1};
     descriptor.mipLevelCount = 2;
     descriptor.dimension = wgpu::TextureDimension::e2D;
-    descriptor.format = wgpu::TextureFormat::RGBA8Unorm;
+    descriptor.format = format;
     descriptor.usage = wgpu::TextureUsage::TextureBinding;
     wgpu::Texture texture = device.CreateTexture(&descriptor);
 
@@ -881,7 +980,7 @@ class CompatTextureViewValidationTests
 // in the same bind group. Unless FlexibleTextureViews is enabled.
 TEST_P(CompatTextureViewValidationTests, CanNotDrawDifferentMipsSameTextureSameBindGroup) {
     TestMultipleTextureViewValidationInRenderPass(
-        device, kRenderTwoTexturesOneBindgroupWGSL,
+        device, wgpu::TextureFormat::RGBA8Unorm, kRenderTwoTexturesOneBindgroupWGSL,
         [this](wgpu::Device device, wgpu::Texture texture, wgpu::RenderPipeline pipeline,
                std::function<void(wgpu::RenderPassEncoder pass)> drawFn) {
             wgpu::TextureViewDescriptor mip0ViewDesc;
@@ -916,7 +1015,7 @@ TEST_P(CompatTextureViewValidationTests, CanNotDrawDifferentMipsSameTextureSameB
 // different bind groups. Unless FlexibleTextureViews is enabled.
 TEST_P(CompatTextureViewValidationTests, CanNotDrawDifferentMipsSameTextureDifferentBindGroups) {
     TestMultipleTextureViewValidationInRenderPass(
-        device, kRenderTwoTexturesTwoBindgroupsWGSL,
+        device, wgpu::TextureFormat::RGBA8Unorm, kRenderTwoTexturesTwoBindgroupsWGSL,
         [this](wgpu::Device device, wgpu::Texture texture, wgpu::RenderPipeline pipeline,
                std::function<void(wgpu::RenderPassEncoder pass)> drawFn) {
             wgpu::TextureViewDescriptor mip0ViewDesc;
@@ -957,7 +1056,7 @@ TEST_P(CompatTextureViewValidationTests, CanNotDrawDifferentMipsSameTextureDiffe
 TEST_P(CompatTextureViewValidationTests,
        CanBindDifferentMipsSameTextureSameBindGroupAndFixWithoutError) {
     TestMultipleTextureViewValidationInRenderPass(
-        device, kRenderTwoTexturesOneBindgroupWGSL,
+        device, wgpu::TextureFormat::RGBA8Unorm, kRenderTwoTexturesOneBindgroupWGSL,
         [](wgpu::Device device, wgpu::Texture texture, wgpu::RenderPipeline pipeline,
            std::function<void(wgpu::RenderPassEncoder pass)> drawFn) {
             wgpu::TextureViewDescriptor mip0ViewDesc;
@@ -999,7 +1098,7 @@ TEST_P(CompatTextureViewValidationTests,
 // bindgroups, does not generate a validation error.
 TEST_P(CompatTextureViewValidationTests, CanBindSameViewIn2BindGroups) {
     TestMultipleTextureViewValidationInRenderPass(
-        device, kRenderTwoTexturesTwoBindgroupsWGSL,
+        device, wgpu::TextureFormat::RGBA8Unorm, kRenderTwoTexturesTwoBindgroupsWGSL,
         [](wgpu::Device device, wgpu::Texture texture, wgpu::RenderPipeline pipeline,
            std::function<void(wgpu::RenderPassEncoder pass)> drawFn) {
             wgpu::TextureViewDescriptor mip0ViewDesc;
@@ -1034,7 +1133,7 @@ TEST_P(CompatTextureViewValidationTests, CanBindSameViewIn2BindGroups) {
 // but don't draw.
 TEST_P(CompatTextureViewValidationTests, NoErrorIfMultipleDifferentViewsOfTextureAreNotUsed) {
     TestMultipleTextureViewValidationInRenderPass(
-        device, kRenderTwoTexturesTwoBindgroupsWGSL,
+        device, wgpu::TextureFormat::RGBA8Unorm, kRenderTwoTexturesTwoBindgroupsWGSL,
         [](wgpu::Device device, wgpu::Texture texture, wgpu::RenderPipeline pipeline,
            std::function<void(wgpu::RenderPassEncoder pass)> drawFn) {
             wgpu::TextureViewDescriptor mip0ViewDesc;
@@ -1632,7 +1731,7 @@ class CompatTextureViewDimensionValidationTests : public CompatTextureViewValida
             CreateTextureWithViewDimension(depth, dimension, textureBindingViewDimension);
         } else {
             ASSERT_DEVICE_ERROR(
-                CreateTextureWithViewDimension(depth, dimension, textureBindingViewDimension);
+                CreateTextureWithViewDimension(depth, dimension, textureBindingViewDimension),
                 testing::HasSubstr(expectedSubstr));
         }
     }
@@ -1653,7 +1752,7 @@ class CompatTextureViewDimensionValidationTests : public CompatTextureViewValida
         bool success) {
         TestCreateTextureWithViewDimensionImpl(depth, dimension, textureBindingViewDimension,
                                                success,
-                                               "is only compatible with depthOrArrayLayers ==");
+                                               "is only compatible with depthOrArrayLayers equals");
     }
 
     wgpu::Texture CreateTextureWithViewDimension(
@@ -1773,6 +1872,37 @@ TEST_P(CompatTextureViewDimensionValidationTests, CubeTextureViewDimensionCanNot
     TestBindingTextureViewDimensions(6, wgpu::TextureViewDimension::Cube,
                                      wgpu::TextureViewDimension::e2DArray,
                                      HasFlexibleTextureViews());
+}
+
+TEST_P(CompatTextureViewValidationTests, CanNotDrawDifferentAspectSameTextureSameBindGroup) {
+    TestMultipleTextureViewValidationInRenderPass(
+        device, wgpu::TextureFormat::Depth24PlusStencil8, kSampleDepthSampleStencilOneBindgroupWGSL,
+        [this](wgpu::Device device, wgpu::Texture texture, wgpu::RenderPipeline pipeline,
+               std::function<void(wgpu::RenderPassEncoder pass)> drawFn) {
+            wgpu::TextureViewDescriptor viewDesc1;
+            viewDesc1.dimension = wgpu::TextureViewDimension::e2D;
+            viewDesc1.aspect = wgpu::TextureAspect::DepthOnly;
+
+            wgpu::TextureViewDescriptor viewDesc2;
+            viewDesc2.dimension = wgpu::TextureViewDimension::e2D;
+            viewDesc2.aspect = wgpu::TextureAspect::StencilOnly;
+
+            wgpu::BindGroup bindGroup = utils::MakeBindGroup(
+                device, pipeline.GetBindGroupLayout(0),
+                {{0, texture.CreateView(&viewDesc1)}, {1, texture.CreateView(&viewDesc2)}});
+
+            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+
+            utils::BasicRenderPass rp = utils::CreateBasicRenderPass(device, 4, 1);
+            wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+            pass.SetPipeline(pipeline);
+            pass.SetBindGroup(0, bindGroup);
+            drawFn(pass);
+            pass.End();
+
+            ASSERT_TEXTURE_VIEW_ERROR_IF_NO_FLEXIBLE_FEATURE(encoder.Finish(),
+                                                             testing::HasSubstr("different views"));
+        });
 }
 
 // Test 2Darray != 2d
@@ -1950,6 +2080,86 @@ TEST_F(CompatMaxVertexAttributesTest, VertexAndInstanceIndexEachTakeAnAttribute)
     TestMaxVertexAttributes(true, true);
 }
 
+enum class SwizzleChannel {
+    Red,
+    Green,
+    Blue,
+    Alpha,
+};
+
+class CompatTextureViewSwizzleValidationTests : public CompatTextureViewValidationTests {
+  protected:
+    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
+        std::vector<wgpu::FeatureName> requiredFeatures =
+            CompatTextureViewValidationTests::GetRequiredFeatures();
+        requiredFeatures.push_back(wgpu::FeatureName::TextureComponentSwizzle);
+        return requiredFeatures;
+    }
+
+    void SetSwizzleChannel(wgpu::TextureComponentSwizzle& swizzle,
+                           SwizzleChannel channel,
+                           wgpu::ComponentSwizzle value) {
+        switch (channel) {
+            case SwizzleChannel::Red:
+                swizzle.r = value;
+                break;
+            case SwizzleChannel::Green:
+                swizzle.g = value;
+                break;
+            case SwizzleChannel::Blue:
+                swizzle.b = value;
+                break;
+            case SwizzleChannel::Alpha:
+                swizzle.a = value;
+                break;
+            default:
+                DAWN_UNREACHABLE();
+        }
+    }
+};
+
+// Test we get a validation error if we have 2 different swizzles of a texture
+// in the same bind group. Unless FlexibleTextureViews is enabled.
+TEST_P(CompatTextureViewSwizzleValidationTests,
+       CanNotDrawDifferentSwizzleSameTextureSameBindGroup) {
+    for (auto swizzleChannel : {SwizzleChannel::Red, SwizzleChannel::Green, SwizzleChannel::Blue,
+                                SwizzleChannel::Alpha}) {
+        TestMultipleTextureViewValidationInRenderPass(
+            device, wgpu::TextureFormat::RGBA8Unorm, kRenderTwoTexturesOneBindgroupWGSL,
+            [this, &swizzleChannel](wgpu::Device device, wgpu::Texture texture,
+                                    wgpu::RenderPipeline pipeline,
+                                    std::function<void(wgpu::RenderPassEncoder pass)> drawFn) {
+                wgpu::TextureViewDescriptor viewDesc1;
+                wgpu::TextureComponentSwizzleDescriptor swizzleDesc1 = {};
+                SetSwizzleChannel(swizzleDesc1.swizzle, swizzleChannel,
+                                  wgpu::ComponentSwizzle::Zero);
+                viewDesc1.nextInChain = &swizzleDesc1;
+
+                wgpu::TextureViewDescriptor viewDesc2;
+                wgpu::TextureComponentSwizzleDescriptor swizzleDesc2 = {};
+                SetSwizzleChannel(swizzleDesc2.swizzle, swizzleChannel,
+                                  wgpu::ComponentSwizzle::One);
+                viewDesc2.nextInChain = &swizzleDesc2;
+
+                wgpu::BindGroup bindGroup = utils::MakeBindGroup(
+                    device, pipeline.GetBindGroupLayout(0),
+                    {{0, texture.CreateView(&viewDesc1)}, {1, texture.CreateView(&viewDesc2)}});
+
+                wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+
+                utils::BasicRenderPass rp = utils::CreateBasicRenderPass(device, 4, 1);
+                wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+                pass.SetPipeline(pipeline);
+                pass.SetBindGroup(0, bindGroup);
+                drawFn(pass);
+                pass.End();
+
+                ASSERT_TEXTURE_VIEW_ERROR_IF_NO_FLEXIBLE_FEATURE(
+                    encoder.Finish(), testing::HasSubstr("different views"));
+            });
+    }
+}
+
 INSTANTIATE_TEST_SUITE_P(,
                          CompatTextureViewValidationTests,
                          ::testing::Values(FlexibleTextureViewsFeature::Disabled,
@@ -1958,6 +2168,12 @@ INSTANTIATE_TEST_SUITE_P(,
 
 INSTANTIATE_TEST_SUITE_P(,
                          CompatTextureViewDimensionValidationTests,
+                         ::testing::Values(FlexibleTextureViewsFeature::Disabled,
+                                           FlexibleTextureViewsFeature::Enabled),
+                         CompatTextureViewValidationTests::PrintToStringParamName);
+
+INSTANTIATE_TEST_SUITE_P(,
+                         CompatTextureViewSwizzleValidationTests,
                          ::testing::Values(FlexibleTextureViewsFeature::Disabled,
                                            FlexibleTextureViewsFeature::Enabled),
                          CompatTextureViewValidationTests::PrintToStringParamName);

@@ -253,7 +253,7 @@ class TextureFormatTest : public DawnTest {
             })");
 
         // Compute the WGSL type of the texture's data.
-        const char* type = utils::GetWGSLColorTextureComponentType(sampleFormatInfo.format);
+        const char* type = utils::GetWGSLColorTextureComponentTypeStr(sampleFormatInfo.format);
 
         std::ostringstream fsSource;
         fsSource << "@group(0) @binding(0) var myTexture : texture_2d<" << type << ">;\n";
@@ -554,9 +554,9 @@ class TextureFormatTest : public DawnTest {
             mIsUnorm16TextureFormatsSupported = true;
             requiredFeatures.push_back(wgpu::FeatureName::Unorm16TextureFormats);
         }
-        if (SupportsFeatures({wgpu::FeatureName::Snorm16TextureFormats})) {
+        if (SupportsFeatures({wgpu::FeatureName::TextureFormatsTier1})) {
             mIsSnorm16TextureFormatsSupported = true;
-            requiredFeatures.push_back(wgpu::FeatureName::Snorm16TextureFormats);
+            requiredFeatures.push_back(wgpu::FeatureName::TextureFormatsTier1);
         }
         return requiredFeatures;
     }
@@ -1013,7 +1013,8 @@ DAWN_INSTANTIATE_TEST(TextureFormatTest,
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
-                      VulkanBackend());
+                      VulkanBackend(),
+                      WebGPUBackend());
 
 }  // anonymous namespace
 }  // namespace dawn

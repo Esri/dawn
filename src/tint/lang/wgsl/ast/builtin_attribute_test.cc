@@ -25,7 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/core/builtin_value.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/wgsl/ast/helper_test.h"
 
 namespace tint::ast {
@@ -37,6 +37,7 @@ using BuiltinAttributeDeathTest = BuiltinAttributeTest;
 TEST_F(BuiltinAttributeTest, Creation) {
     auto* d = Builtin(core::BuiltinValue::kFragDepth);
     EXPECT_EQ(d->builtin, core::BuiltinValue::kFragDepth);
+    EXPECT_EQ(d->depth_mode, core::BuiltinDepthMode::kUndefined);
 }
 
 }  // namespace

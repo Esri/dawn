@@ -25,6 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/439062058): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 // This is an example to manually test surface code. Controls are the following, scoped to the
 // currently focused window:
 //  - W: creates a new window.
@@ -265,7 +270,8 @@ void DoRender(WindowData* data) {
     wgpu::CommandBuffer commands = encoder.Finish();
     queue.Submit(1, &commands);
 
-    data->surface.Present();
+    wgpu::Status presentStatus = data->surface.Present();
+    DAWN_ASSERT(presentStatus == wgpu::Status::Success);
 }
 
 std::ostream& operator<<(std::ostream& o, const wgpu::SurfaceConfiguration& desc) {
@@ -409,7 +415,9 @@ int main(int argc, const char* argv[]) {
 
     wgpu::InstanceDescriptor instanceDescriptor{};
     instanceDescriptor.nextInChain = &toggles;
-    instanceDescriptor.capabilities.timedWaitAnyEnable = true;
+    static constexpr auto kTimedWaitAny = wgpu::InstanceFeatureName::TimedWaitAny;
+    instanceDescriptor.requiredFeatureCount = 1;
+    instanceDescriptor.requiredFeatures = &kTimedWaitAny;
     instance = wgpu::CreateInstance(&instanceDescriptor);
 
     // Choose an adapter we like.

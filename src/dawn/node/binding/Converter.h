@@ -30,11 +30,14 @@
 
 #include <webgpu/webgpu_cpp.h>
 
+#include <concepts>
 #include <functional>
+#include <span>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "dawn/native/DawnNative.h"
@@ -144,6 +147,10 @@ class Converter {
 
     [[nodiscard]] bool Convert(wgpu::TextureUsage& out, const interop::GPUTextureUsageFlags& in);
 
+    [[nodiscard]] bool Convert(wgpu::TextureComponentSwizzle& out, const std::string& in);
+
+    [[nodiscard]] bool Convert(wgpu::ComponentSwizzle& out, const char& in);
+
     [[nodiscard]] bool Convert(wgpu::ColorWriteMask& out, const interop::GPUColorWriteFlags& in);
 
     [[nodiscard]] bool Convert(wgpu::BufferUsage& out, const interop::GPUBufferUsageFlags& in);
@@ -207,6 +214,11 @@ class Converter {
     [[nodiscard]] bool Convert(wgpu::VertexAttribute& out, const interop::GPUVertexAttribute& in);
 
     [[nodiscard]] bool Convert(wgpu::VertexFormat& out, const interop::GPUVertexFormat& in);
+
+    [[nodiscard]] bool Convert(wgpu::TextureView& outView,
+                               const std::variant<interop::Interface<interop::GPUTexture>,
+                                                  interop::Interface<interop::GPUTextureView>>& in,
+                               const char* name);
 
     [[nodiscard]] bool Convert(wgpu::RenderPassColorAttachment& out,
                                const interop::GPURenderPassColorAttachment& in);
@@ -307,10 +319,8 @@ class Converter {
 
     // Floating point number conversion. IDL rules are that double/float that isn't "unrestricted"
     // must be finite.
-    template <typename OUT,
-              typename IN,
-              std::enable_if_t<std::is_floating_point_v<IN> && std::is_floating_point_v<OUT>,
-                               bool> = true>
+    template <typename OUT, typename IN>
+        requires std::floating_point<IN> && std::floating_point<OUT>
     [[nodiscard]] inline bool Convert(OUT& out, const IN& in) {
         out = in;
         if (!std::isfinite(out)) {
@@ -321,9 +331,8 @@ class Converter {
     }
 
     // Integral number conversion, with dynamic limit checking
-    template <typename OUT,
-              typename IN,
-              std::enable_if_t<std::is_integral_v<IN> && std::is_integral_v<OUT>, bool> = true>
+    template <typename OUT, typename IN>
+        requires std::integral<IN> && std::integral<OUT>
     [[nodiscard]] inline bool Convert(OUT& out, const IN& in) {
         out = static_cast<OUT>(in);
         if (static_cast<IN>(out) != in) {
@@ -366,9 +375,8 @@ class Converter {
     // std::optional -> T*
     // OUT* is assigned either a pointer to the converted value, or nullptr, depending on
     // whether 'in' has a value.
-    template <typename OUT,
-              typename IN,
-              typename _ = std::enable_if_t<!std::is_same_v<IN, std::string>>>
+    template <typename OUT, typename IN>
+        requires(!std::same_as<IN, std::string>)
     [[nodiscard]] inline bool Convert(OUT*& out, const std::optional<IN>& in) {
         if (in.has_value()) {
             auto* el = Allocate<std::remove_const_t<OUT>>();
@@ -478,6 +486,13 @@ class Converter {
 };
 
 std::string CopyLabel(StringView label);
+
+// Does the conversion from [AllowShared] BufferSource and offset, size? in elements to a span.
+bool ConvertDataElementsToSpan(Napi::Env env,
+                               std::span<const uint8_t>* out,
+                               interop::AllowSharedBufferSource data,
+                               interop::GPUSize64 data_offset_elements,
+                               std::optional<interop::GPUSize64> size_elements);
 
 }  // namespace wgpu::binding
 

@@ -152,7 +152,7 @@ class Buffer : public BufferBase {
            wgpu::BufferUsage internalMappableFlags);
     ~Buffer() override;
 
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 
     virtual MaybeError InitializeInternal() = 0;
 
@@ -177,10 +177,11 @@ class Buffer : public BufferBase {
                           const ScopedCommandRecordingContext* commandContext);
     MaybeError ClearInitialResource(const ScopedCommandRecordingContext* commandContext);
     MaybeError MapAsyncImpl(wgpu::MapMode mode, size_t offset, size_t size) override;
-    void UnmapImpl() override;
+    MaybeError FinalizeMapImpl(BufferState newState) override;
+    void UnmapImpl(BufferState oldState, BufferState newState) override;
     bool IsCPUWritableAtCreation() const override;
     MaybeError MapAtCreationImpl() override;
-    void* GetMappedPointer() override;
+    void* GetMappedPointerImpl() override;
 
     MaybeError InitializeToZero(const ScopedCommandRecordingContext* commandContext);
 
@@ -232,7 +233,7 @@ class GPUUsableBuffer final : public Buffer {
     class Storage;
 
     // Dawn API
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
     void SetLabelImpl() override;
 
     MaybeError InitializeInternal() override;

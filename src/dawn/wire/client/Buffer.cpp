@@ -25,6 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/439062058): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "dawn/wire/client/Buffer.h"
 
 #include <functional>
@@ -53,7 +58,7 @@ namespace {
     errorInfo.chain.sType = WGPUSType_DawnBufferDescriptorErrorInfoFromWireClient;
     errorInfo.outOfMemory = static_cast<WGPUBool>(true);
     errorBufferDescriptor.nextInChain = &errorInfo.chain;
-    return device->CreateErrorBuffer(&errorBufferDescriptor);
+    return device->APICreateErrorBuffer(&errorBufferDescriptor);
 }
 
 }  // anonymous namespace
@@ -214,12 +219,14 @@ WGPUBuffer Buffer::Create(Device* device, const WGPUBufferDescriptor* descriptor
     std::unique_ptr<MemoryTransferService::WriteHandle> writeHandle = nullptr;
 
     DeviceCreateBufferCmd cmd;
-    cmd.deviceId = device->GetWireId();
+    cmd.deviceId = device->GetWireHandle(wireClient).id;
     cmd.descriptor = descriptor;
+    // Set the pointer lengths, but the pointed-to data itself won't be serialized as usual (due
+    // to skip_serialize). Instead, the custom CommandExtensions below fill that memory.
     cmd.readHandleCreateInfoLength = 0;
-    cmd.readHandleCreateInfo = nullptr;
+    cmd.readHandleCreateInfo = nullptr;  // Skipped by skip_serialize.
     cmd.writeHandleCreateInfoLength = 0;
-    cmd.writeHandleCreateInfo = nullptr;
+    cmd.writeHandleCreateInfo = nullptr;  // Skipped by skip_serialize.
 
     size_t readHandleCreateInfoLength = 0;
     size_t writeHandleCreateInfoLength = 0;
@@ -264,13 +271,14 @@ WGPUBuffer Buffer::Create(Device* device, const WGPUBufferDescriptor* descriptor
         buffer->mMappedData = writeHandle->GetData();
     }
 
-    cmd.result = buffer->GetWireHandle();
+    cmd.result = buffer->GetWireHandle(wireClient);
 
     // clang-format off
     // Turning off clang format here because for some reason it does not format the
     // CommandExtensions consistently, making it harder to read.
     wireClient->SerializeCommand(
         cmd,
+        // Extensions to replace fields skipped by skip_serialize.
         CommandExtension{readHandleCreateInfoLength,
                          [&](char* readHandleBuffer) {
                              if (readHandle != nullptr) {
@@ -308,7 +316,7 @@ WGPUBuffer Buffer::CreateError(Device* device, const WGPUBufferDescriptor* descr
     DeviceCreateErrorBufferCmd cmd;
     cmd.self = ToAPI(device);
     cmd.descriptor = descriptor;
-    cmd.result = buffer->GetWireHandle();
+    cmd.result = buffer->GetWireHandle(client);
     client->SerializeCommand(cmd);
 
     return ReturnToAPI(std::move(buffer));
@@ -353,13 +361,13 @@ void Buffer::SetFutureStatus(WGPUMapAsyncStatus status, std::string_view message
                    futureID, status, ToOutputStringView(message)) == WireResult::Success);
 }
 
-WGPUFuture Buffer::MapAsync(WGPUMapMode mode,
-                            size_t offset,
-                            size_t size,
-                            const WGPUBufferMapCallbackInfo& callbackInfo) {
+WGPUFuture Buffer::APIMapAsync(WGPUMapMode mode,
+                               size_t offset,
+                               size_t size,
+                               const WGPUBufferMapCallbackInfo& callbackInfo) {
     Client* client = GetClient();
     auto [futureIDInternal, tracked] =
-        GetEventManager().TrackEvent(std::make_unique<MapAsyncEvent>(callbackInfo, this));
+        GetEventManager().TrackEvent(AcquireRef(new MapAsyncEvent(callbackInfo, this)));
     if (!tracked) {
         return {futureIDInternal};
     }
@@ -388,7 +396,7 @@ WGPUFuture Buffer::MapAsync(WGPUMapMode mode,
 
     // Serialize the command to send to the server.
     BufferMapAsyncCmd cmd;
-    cmd.bufferId = GetWireId();
+    cmd.bufferId = GetWireHandle(client).id;
     cmd.eventManagerHandle = GetEventManagerHandle();
     cmd.future = {futureIDInternal};
     cmd.mode = mode;
@@ -405,19 +413,18 @@ WireResult Client::DoBufferMapAsyncCallback(ObjectHandle eventManager,
                                             WGPUStringView message,
                                             uint64_t readDataUpdateInfoLength,
                                             const uint8_t* readDataUpdateInfo) {
-    return GetEventManager(eventManager)
-        .SetFutureReady<Buffer::MapAsyncEvent>(future.id, status, message, readDataUpdateInfoLength,
-                                               readDataUpdateInfo);
+    return SetFutureReady<Buffer::MapAsyncEvent>(eventManager, future.id, status, message,
+                                                 readDataUpdateInfoLength, readDataUpdateInfo);
 }
 
-void* Buffer::GetMappedRange(size_t offset, size_t size) {
+void* Buffer::APIGetMappedRange(size_t offset, size_t size) {
     if (!IsMappedForWriting() || !CheckGetMappedRangeOffsetSize(offset, size)) {
         return nullptr;
     }
     return static_cast<uint8_t*>(mMappedData) + offset;
 }
 
-const void* Buffer::GetConstMappedRange(size_t offset, size_t size) {
+const void* Buffer::APIGetConstMappedRange(size_t offset, size_t size) {
     if (!(IsMappedForWriting() || IsMappedForReading()) ||
         !CheckGetMappedRangeOffsetSize(offset, size)) {
         return nullptr;
@@ -425,8 +432,8 @@ const void* Buffer::GetConstMappedRange(size_t offset, size_t size) {
     return static_cast<uint8_t*>(mMappedData) + offset;
 }
 
-WGPUStatus Buffer::WriteMappedRange(size_t offset, void const* data, size_t size) {
-    void* range = GetMappedRange(offset, size);
+WGPUStatus Buffer::APIWriteMappedRange(size_t offset, void const* data, size_t size) {
+    void* range = APIGetMappedRange(offset, size);
     if (range == nullptr) {
         return WGPUStatus_Error;
     }
@@ -435,8 +442,8 @@ WGPUStatus Buffer::WriteMappedRange(size_t offset, void const* data, size_t size
     return WGPUStatus_Success;
 }
 
-WGPUStatus Buffer::ReadMappedRange(size_t offset, void* data, size_t size) {
-    const void* range = GetConstMappedRange(offset, size);
+WGPUStatus Buffer::APIReadMappedRange(size_t offset, void* data, size_t size) {
+    const void* range = APIGetConstMappedRange(offset, size);
     if (range == nullptr) {
         return WGPUStatus_Error;
     }
@@ -445,7 +452,7 @@ WGPUStatus Buffer::ReadMappedRange(size_t offset, void* data, size_t size) {
     return WGPUStatus_Success;
 }
 
-void Buffer::Unmap() {
+void Buffer::APIUnmap() {
     // Invalidate the local pointer, and cancel all other in-flight requests that would
     // turn into errors anyway (you can't double map). This prevents race when the following
     // happens, where the application code would have unmapped a buffer but still receive a
@@ -465,19 +472,23 @@ void Buffer::Unmap() {
             mWriteHandle->SizeOfSerializeDataUpdate(mMappedOffset, mMappedSize);
 
         BufferUpdateMappedDataCmd cmd;
-        cmd.bufferId = GetWireId();
+        cmd.bufferId = GetWireHandle(client).id;
+        // Set the pointer length, but the pointed-to data itself won't be serialized as usual (due
+        // to skip_serialize). Instead, the custom CommandExtension below fills that memory.
         cmd.writeDataUpdateInfoLength = writeDataUpdateInfoLength;
-        cmd.writeDataUpdateInfo = nullptr;
+        cmd.writeDataUpdateInfo = nullptr;  // Skipped by skip_serialize.
         cmd.offset = mMappedOffset;
         cmd.size = mMappedSize;
 
         client->SerializeCommand(
-            cmd, CommandExtension{writeDataUpdateInfoLength, [&](char* writeHandleBuffer) {
-                                      // Serialize flush metadata into the space after the command.
-                                      // This closes the handle for writing.
-                                      mWriteHandle->SerializeDataUpdate(writeHandleBuffer,
-                                                                        cmd.offset, cmd.size);
-                                  }});
+            cmd,
+            // Extensions to replace fields skipped by skip_serialize.
+            CommandExtension{writeDataUpdateInfoLength, [&](char* writeHandleBuffer) {
+                                 // Serialize flush metadata into the space after the command.
+                                 // This closes the handle for writing.
+                                 mWriteHandle->SerializeDataUpdate(writeHandleBuffer, cmd.offset,
+                                                                   cmd.size);
+                             }});
 
         // If mDestructWriteHandleOnUnmap is true, that means the write handle is merely
         // for mappedAtCreation usage. It is destroyed on unmap after flush to server
@@ -506,7 +517,7 @@ void Buffer::Unmap() {
     SetFutureStatus(WGPUMapAsyncStatus_Aborted, "Buffer was unmapped before mapping was resolved.");
 }
 
-void Buffer::Destroy() {
+void Buffer::APIDestroy() {
     Client* client = GetClient();
 
     // Remove the current mapping and destroy Read/WriteHandles.
@@ -520,15 +531,15 @@ void Buffer::Destroy() {
                     "Buffer was destroyed before mapping was resolved.");
 }
 
-WGPUBufferUsage Buffer::GetUsage() const {
+WGPUBufferUsage Buffer::APIGetUsage() const {
     return mUsage;
 }
 
-uint64_t Buffer::GetSize() const {
+uint64_t Buffer::APIGetSize() const {
     return mSize;
 }
 
-WGPUBufferMapState Buffer::GetMapState() const {
+WGPUBufferMapState Buffer::APIGetMapState() const {
     switch (mMappedState) {
         case MapState::MappedForRead:
         case MapState::MappedForWrite:

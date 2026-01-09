@@ -129,7 +129,7 @@ struct State {
         core::ir::Function* ep = nullptr;
         for (auto& func : ir.functions) {
             if (func->IsVertex()) {
-                TINT_ASSERT(!ep);
+                TINT_IR_ASSERT(ir, !ep);
                 ep = func;
             }
         }
@@ -157,7 +157,7 @@ struct State {
                     // instance indices. Replace any user-declared indices with the ones that we
                     // created when setting up the buffers.
                     auto builtin = param->Builtin();
-                    TINT_ASSERT(builtin);
+                    TINT_IR_ASSERT(ir, builtin);
                     switch (*builtin) {
                         case core::BuiltinValue::kVertexIndex:
                             if (vertex_index_) {
@@ -176,7 +176,7 @@ struct State {
                             }
                             break;
                         default:
-                            TINT_UNREACHABLE();
+                            TINT_IR_UNREACHABLE(ir);
                     }
                 }
             }
@@ -232,15 +232,19 @@ struct State {
             }
             if (buffer.array_stride != 4) {
                 // Multiply the index by the stride in words.
-                TINT_ASSERT((buffer.array_stride & 3u) == 0u);
-                index = b.Multiply<u32>(index, u32(buffer.array_stride / 4))->Result();
+                TINT_IR_ASSERT(ir, (buffer.array_stride & 3u) == 0u);
+                index = b.Multiply(index, u32(buffer.array_stride / 4))->Result();
                 ir.SetName(index, buffer_name + "_base");
             }
 
             // Register the format, buffer, and offset for each location slot.
             for (auto& attr : buffer.attributes) {
-                locations_.Add(attr.shader_location,
-                               LocationInfo{attr.format, var->Result(), index, attr.offset});
+                locations_.Add(attr.shader_location, LocationInfo{
+                                                         .format = attr.format,
+                                                         .buffer = var->Result(),
+                                                         .base_offset = index,
+                                                         .attr_byte_offset = attr.offset,
+                                                     });
             }
         }
     }
@@ -258,7 +262,7 @@ struct State {
                 // Other parameters should be builtins, which can only be the vertex and instance
                 // indices. Use the separate parameters that we created for these indices. Because
                 // there are no duplicates, this doesn't conflict with the param handling above.
-                TINT_ASSERT(member->Attributes().builtin);
+                TINT_IR_ASSERT(ir, member->Attributes().builtin);
                 switch (*member->Attributes().builtin) {
                     case core::BuiltinValue::kVertexIndex:
                         construct_args.Push(GetVertexIndex());
@@ -267,7 +271,7 @@ struct State {
                         construct_args.Push(GetInstanceIndex());
                         break;
                     default:
-                        TINT_UNREACHABLE();
+                        TINT_IR_UNREACHABLE(ir);
                 }
             }
         }
@@ -280,7 +284,7 @@ struct State {
     /// @returns the loaded attribute value
     core::ir::Value* Load(uint32_t location, const core::type::Type* shader_type) {
         auto info = locations_.Get(location);
-        TINT_ASSERT(info);
+        TINT_IR_ASSERT(ir, info);
 
         // Load the attribute data from the buffer.
         auto* value = LoadFromBuffer(*info, shader_type->DeepestElement());
@@ -306,7 +310,7 @@ struct State {
                     value = b.Swizzle(shader_type, value, Vector{0u, 1u, 2u})->Result();
                     break;
                 default:
-                    TINT_UNREACHABLE() << dst_width;
+                    TINT_IR_UNREACHABLE(ir) << dst_width;
             }
         } else if (dst_width > src_width) {
             // The type declared in the shader is wider than the vertex attribute format, so append
@@ -343,7 +347,7 @@ struct State {
             auto offset_value = info.base_offset;
             offset += (info.attr_byte_offset / 4u);
             if (offset > 0) {
-                offset_value = b.Add<u32>(offset_value, u32(offset))->Result();
+                offset_value = b.Add(offset_value, u32(offset))->Result();
             }
             auto* word =
                 b.Load(b.Access<ptr<storage, u32, read>>(info.buffer, offset_value))->Result();
@@ -351,7 +355,7 @@ struct State {
             // at the first byte. The shift amount is the offset of the byte within a word
             // multiplied by 8 to get the bit offset.
             if (info.attr_byte_offset & 3) {
-                word = b.ShiftRight<u32>(word, u32((info.attr_byte_offset & 3) * 8))->Result();
+                word = b.ShiftRight(word, u32((info.attr_byte_offset & 3) * 8))->Result();
             }
             return word;
         };
@@ -375,22 +379,22 @@ struct State {
             switch (vec->Width()) {
                 case 2:
                     if (bits == 8) {
-                        shift_left = b.ShiftLeft(vec, splat, b.Composite(uvec, 24_u, 16_u));
+                        shift_left = b.ShiftLeft(splat, b.Composite(uvec, 24_u, 16_u));
                     } else if (bits == 16) {
-                        shift_left = b.ShiftLeft(vec, splat, b.Composite(uvec, 16_u, 0_u));
+                        shift_left = b.ShiftLeft(splat, b.Composite(uvec, 16_u, 0_u));
                     } else {
-                        TINT_UNREACHABLE();
+                        TINT_IR_UNREACHABLE(ir);
                     }
                     break;
                 case 4:
-                    TINT_ASSERT(bits == 8);
-                    shift_left = b.ShiftLeft(vec, splat, b.Composite(uvec, 24_u, 16_u, 8_u, 0_u));
+                    TINT_IR_ASSERT(ir, bits == 8);
+                    shift_left = b.ShiftLeft(splat, b.Composite(uvec, 24_u, 16_u, 8_u, 0_u));
                     break;
                 default:
-                    TINT_UNREACHABLE();
+                    TINT_IR_UNREACHABLE(ir);
             }
             // 0000xxxx, 0000yyyy
-            return b.ShiftRight(vec, shift_left, b.Splat(uvec, u32(32 - bits)))->Result();
+            return b.ShiftRight(shift_left, b.Splat(uvec, u32(32 - bits)))->Result();
         };
         // Helper to convert a value to f16 if required by the shader, otherwise returns the f32.
         auto float_value = [&](core::ir::Value* value) -> core::ir::Value* {
@@ -405,18 +409,18 @@ struct State {
             // Formats that are always u32 in the shader (or vectors of u32).
             // Shift/mask values to expand to 32-bits.
             case VertexFormat::kUint8:
-                return b.And<u32>(load_u32(0), 0xFF_u)->Result();
+                return b.And(load_u32(0), 0xFF_u)->Result();
             case VertexFormat::kUint8x2:
-                return load_ivec(0, 8, ty.vec2<u32>());
+                return load_ivec(0, 8, ty.vec2u());
             case VertexFormat::kUint8x4:
-                return load_ivec(0, 8, ty.vec4<u32>());
+                return load_ivec(0, 8, ty.vec4u());
             case VertexFormat::kUint16:
-                return b.And<u32>(load_u32(0), 0xFFFF_u)->Result();
+                return b.And(load_u32(0), 0xFFFF_u)->Result();
             case VertexFormat::kUint16x2:
-                return load_ivec(0, 16, ty.vec2<u32>());
+                return load_ivec(0, 16, ty.vec2u());
             case VertexFormat::kUint16x4: {
-                auto* xy = load_ivec(0, 16, ty.vec2<u32>());
-                auto* zw = load_ivec(1, 16, ty.vec2<u32>());
+                auto* xy = load_ivec(0, 16, ty.vec2u());
+                auto* zw = load_ivec(1, 16, ty.vec2u());
                 return b.Construct<vec4<u32>>(xy, zw)->Result();
             }
             case VertexFormat::kUint32:
@@ -446,23 +450,23 @@ struct State {
                 // ******xx
                 auto* word = b.Bitcast<i32>(load_u32(0));
                 // 000000xx
-                return b.ShiftRight<i32>(b.ShiftLeft<i32>(word, 24_u), 24_u)->Result();
+                return b.ShiftRight(b.ShiftLeft(word, 24_u), 24_u)->Result();
             }
             case VertexFormat::kSint8x2:
-                return load_ivec(0, 8, ty.vec2<i32>());
+                return load_ivec(0, 8, ty.vec2i());
             case VertexFormat::kSint8x4:
-                return load_ivec(0, 8, ty.vec4<i32>());
+                return load_ivec(0, 8, ty.vec4i());
             case VertexFormat::kSint16: {
                 // ****xxxx
                 auto* word = b.Bitcast<i32>(load_u32(0));
                 // 0000xxxx
-                return b.ShiftRight<i32>(b.ShiftLeft<i32>(word, 16_u), 16_u)->Result();
+                return b.ShiftRight(b.ShiftLeft(word, 16_u), 16_u)->Result();
             }
             case VertexFormat::kSint16x2:
-                return load_ivec(0, 16, ty.vec2<i32>());
+                return load_ivec(0, 16, ty.vec2i());
             case VertexFormat::kSint16x4: {
-                auto* xy = load_ivec(0, 16, ty.vec2<i32>());
-                auto* zw = load_ivec(1, 16, ty.vec2<i32>());
+                auto* xy = load_ivec(0, 16, ty.vec2i());
+                auto* zw = load_ivec(1, 16, ty.vec2i());
                 return b.Construct<vec4<i32>>(xy, zw)->Result();
             }
             case VertexFormat::kSint32:
@@ -667,27 +671,23 @@ struct State {
             case VertexFormat::kUnorm10_10_10_2: {
                 auto* u32s = b.Construct<vec4<u32>>(load_u32(0));
                 // shr = u32s >> vec4u(0, 10, 20, 30);
-                auto* shr =
-                    b.ShiftRight<vec4<u32>>(u32s, b.Composite<vec4<u32>>(0_u, 10_u, 20_u, 30_u));
+                auto* shr = b.ShiftRight(u32s, b.Composite<vec4<u32>>(0_u, 10_u, 20_u, 30_u));
                 // mask = shr & vec4u(0x3FF, 0x3FF, 0x3FF, 0x3);
-                auto* mask =
-                    b.And<vec4<u32>>(shr, b.Composite<vec4<u32>>(0x3FF_u, 0x3FF_u, 0x3FF_u, 0x3_u));
+                auto* mask = b.And(shr, b.Composite<vec4<u32>>(0x3FF_u, 0x3FF_u, 0x3FF_u, 0x3_u));
                 // vec4f(mask) / vec4f(1023, 1023, 1023, 3);
                 auto* div = b.Composite<vec4<f32>>(1023_f, 1023_f, 1023_f, 3_f);
-                return float_value(b.Divide<vec4<f32>>(b.Convert<vec4<f32>>(mask), div)->Result());
+                return float_value(b.Divide(b.Convert<vec4<f32>>(mask), div)->Result());
             }
         }
-        TINT_UNREACHABLE();
+        TINT_IR_UNREACHABLE(ir);
     }
 };
 
 }  // namespace
 
 Result<SuccessType> VertexPulling(core::ir::Module& ir, const VertexPullingConfig& config) {
-    auto result = ValidateAndDumpIfNeeded(ir, "core.VertexPulling", kVertexPullingCapabilities);
-    if (result != Success) {
-        return result.Failure();
-    }
+    TINT_CHECK_RESULT(
+        ValidateAndDumpIfNeeded(ir, "core.VertexPulling", kVertexPullingCapabilities));
 
     State{config, ir}.Process();
 

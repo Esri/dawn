@@ -32,8 +32,7 @@
 
 #include "gtest/gtest.h"
 #include "src/tint/lang/core/ir/builder.h"
-#include "src/tint/lang/core/ir/disassembler.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/transform/helper_test.h"
 #include "src/tint/lang/core/type/matrix.h"
 
 namespace tint::core::ir::transform {
@@ -42,39 +41,7 @@ namespace {
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
 
-class IRToProgramRenameConflictsTest : public testing::Test {
-  public:
-    /// Transforms the module, using the transforms `TRANSFORMS`.
-    void Run() {
-        // Validate the input IR.
-        {
-            auto res = core::ir::Validate(mod);
-            EXPECT_EQ(res, Success);
-            if (res != Success) {
-                return;
-            }
-        }
-
-        // Run the transforms.
-        auto result = RenameConflicts(mod);
-        EXPECT_EQ(result, Success);
-
-        // Validate the output IR.
-        auto res = core::ir::Validate(mod);
-        EXPECT_EQ(res, Success);
-    }
-
-    /// @returns the transformed module as a disassembled string
-    std::string str() { return "\n" + core::ir::Disassembler(mod).Plain(); }
-
-  protected:
-    /// The test IR module.
-    core::ir::Module mod;
-    /// The test IR builder.
-    core::ir::Builder b{mod};
-    /// The type manager.
-    core::type::Manager& ty{mod.Types()};
-};
+using IRToProgramRenameConflictsTest = TransformTest;
 
 TEST_F(IRToProgramRenameConflictsTest, NoModify_SingleNamedRootBlockVar) {
     b.Append(mod.root_block, [&] { b.ir.SetName(b.Var(ty.ptr<private_, i32>()), "v"); });
@@ -89,7 +56,7 @@ $B1: {  # root
 
     auto* expect = src;
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -117,7 +84,7 @@ $B1: {  # root
 
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -149,7 +116,7 @@ $B1: {  # root
 
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -185,7 +152,7 @@ $B1: {  # root
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -203,7 +170,7 @@ TEST_F(IRToProgramRenameConflictsTest, RootBlockVar_ShadowedBy_FnVar) {
             b.ir.SetName(inner, "v");
 
             auto* load_inner = b.Load(inner);
-            b.Return(fn, b.Add(ty.i32(), load_outer, load_inner));
+            b.Return(fn, b.Add(load_outer, load_inner));
         });
     });
 
@@ -240,7 +207,7 @@ $B1: {  # root
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -284,7 +251,7 @@ TEST_F(IRToProgramRenameConflictsTest, NoModify_FnVar_After_IfVar) {
 
     auto* expect = src;
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -302,7 +269,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_FnVar_ShadowedBy_IfVar) {
 
             auto* load_outer = b.Load(outer);
             auto* load_inner = b.Load(inner);
-            b.Return(fn, b.Add(ty.i32(), load_outer, load_inner));
+            b.Return(fn, b.Add(load_outer, load_inner));
         });
 
         b.Unreachable();
@@ -345,7 +312,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_FnVar_ShadowedBy_IfVar) {
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -360,7 +327,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_FnLet_ShadowedBy_IfVar) {
         b.Append(if_->True(), [&] {
             auto* inner = b.Let("v", 42_i);
             auto* load_outer = b.Load(outer);
-            b.Return(fn, b.Add(ty.i32(), load_outer, inner));
+            b.Return(fn, b.Add(load_outer, inner));
         });
 
         b.Unreachable();
@@ -401,7 +368,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_FnLet_ShadowedBy_IfVar) {
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -422,7 +389,7 @@ TEST_F(IRToProgramRenameConflictsTest, LoopInitVar_ShadowedBy_LoopBodyVar) {
                 b.ir.SetName(inner, "v");
 
                 auto* load_inner = b.Load(inner);
-                b.Return(fn, b.Add(ty.i32(), load_outer, load_inner));
+                b.Return(fn, b.Add(load_outer, load_inner));
             });
         });
 
@@ -472,7 +439,7 @@ TEST_F(IRToProgramRenameConflictsTest, LoopInitVar_ShadowedBy_LoopBodyVar) {
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -494,7 +461,8 @@ TEST_F(IRToProgramRenameConflictsTest, LoopBodyVar_ShadowedBy_LoopContVar) {
                 b.ir.SetName(inner, "v");
 
                 auto* load_inner = b.Load(inner);
-                b.Return(fn, b.Add(ty.i32(), load_outer, load_inner));
+                b.Let("add", b.Add(load_outer, load_inner));
+                b.NextIteration(loop);
             });
         });
 
@@ -517,7 +485,8 @@ TEST_F(IRToProgramRenameConflictsTest, LoopBodyVar_ShadowedBy_LoopContVar) {
         %v_1:ptr<function, i32, read_write> = var undef  # %v_1: 'v'
         %5:i32 = load %v_1
         %6:i32 = add %3, %5
-        ret %6
+        %add:i32 = let %6
+        next_iteration  # -> $B3
       }
     }
     unreachable
@@ -542,7 +511,8 @@ TEST_F(IRToProgramRenameConflictsTest, LoopBodyVar_ShadowedBy_LoopContVar) {
         %v_1:ptr<function, i32, read_write> = var undef
         %5:i32 = load %v_1
         %6:i32 = add %3, %5
-        ret %6
+        %add:i32 = let %6
+        next_iteration  # -> $B3
       }
     }
     unreachable
@@ -550,7 +520,7 @@ TEST_F(IRToProgramRenameConflictsTest, LoopBodyVar_ShadowedBy_LoopContVar) {
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -585,7 +555,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinScalar_ShadowedBy_Param) 
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -613,7 +583,7 @@ TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinVector_ShadowedBy_Param) 
 
     auto* expect = src;
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -648,7 +618,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinVector_ShadowedBy_Param) 
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -676,7 +646,7 @@ TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinMatrix_ShadowedBy_Param) 
 
     auto* expect = src;
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -711,7 +681,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinMatrix_ShadowedBy_Param) 
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -745,7 +715,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinArray_ShadowedBy_Param) {
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -779,7 +749,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_ArrayElement_ShadowedBy_Param) {
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -806,7 +776,7 @@ TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinScalar_ShadowedBy_FnVar) 
 
     auto* expect = src;
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -841,7 +811,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinScalar_ShadowedBy_FnVar) 
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -849,7 +819,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinScalar_ShadowedBy_FnVar) 
 TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinScalar_ShadowedBy_NamedInst) {
     auto* fn = b.Function("f", ty.i32());
     b.Append(fn->Block(), [&] {
-        auto* i = b.Add(ty.i32(), 1_i, 2_i);
+        auto* i = b.Add(1_i, 2_i);
         b.ir.SetName(i, "i32");
 
         b.Return(fn, i);
@@ -867,7 +837,7 @@ TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinScalar_ShadowedBy_NamedIn
 
     auto* expect = src;
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -875,17 +845,17 @@ TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinScalar_ShadowedBy_NamedIn
 TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinScalar_ShadowedBy_NamedInst) {
     auto* fn = b.Function("f", ty.f32());
     b.Append(fn->Block(), [&] {
-        auto* i = b.Add(ty.i32(), 1_i, 2_i);
+        auto* i = b.Add(1_i, 2_i);
         b.ir.SetName(i, "f32");
 
-        b.Return(fn, b.Construct(ty.f32(), i));
+        b.Return(fn, b.Convert(ty.f32(), i));
     });
 
     auto* src = R"(
 %f = func():f32 {
   $B1: {
     %f32:i32 = add 1i, 2i
-    %3:f32 = construct %f32
+    %3:f32 = convert %f32
     ret %3
   }
 }
@@ -896,13 +866,13 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinScalar_ShadowedBy_NamedIn
 %f = func():f32 {
   $B1: {
     %f32_1:i32 = add 1i, 2i
-    %3:f32 = construct %f32_1
+    %3:f32 = convert %f32_1
     ret %3
   }
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -922,7 +892,7 @@ $B1: {  # root
 
     auto* expect = src;
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -947,7 +917,7 @@ $B1: {  # root
 
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -967,7 +937,7 @@ $B1: {  # root
 
     auto* expect = src;
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -992,7 +962,7 @@ $B1: {  # root
 
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -1005,7 +975,7 @@ TEST_F(IRToProgramRenameConflictsTest, NoModify_BuiltinFn_ShadowedBy_RootBlockVa
 
     auto* fn = b.Function("f", ty.i32());
     b.Append(fn->Block(), [&] {  //
-        auto* res = b.Call(ty.i32(), core::BuiltinFn::kMax, 1_i, 2_i)->Result();
+        auto* res = b.Max(1_i, 2_i)->Result();
         b.Return(fn, res);
     });
 
@@ -1025,7 +995,7 @@ $B1: {  # root
 
     auto* expect = src;
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -1038,7 +1008,7 @@ TEST_F(IRToProgramRenameConflictsTest, Conflict_BuiltinFn_ShadowedBy_RootBlockVa
 
     auto* fn = b.Function("f", ty.i32());
     b.Append(fn->Block(), [&] {  //
-        auto* res = b.Call(ty.i32(), core::BuiltinFn::kMax, 1_i, 2_i)->Result();
+        auto* res = b.Max(1_i, 2_i)->Result();
         b.Return(fn, res);
     });
 
@@ -1069,7 +1039,7 @@ $B1: {  # root
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }
@@ -1119,7 +1089,7 @@ $B1: {  # root
 }
 )";
 
-    Run();
+    Run(RenameConflicts);
 
     EXPECT_EQ(expect, str());
 }

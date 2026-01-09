@@ -1056,7 +1056,7 @@ TEST_F(IR_ZeroInitWorkgroupMemoryTest, NestedStructOfScalarsWithAtomic) {
 
     auto* func = MakeEntryPoint("main", 1, 1, 1);
     b.Append(func->Block(), [&] {  //
-        b.Load(var);
+        b.Load(b.Access<ptr<workgroup, f32>>(var, 0_u));
         b.Return(func);
     });
 
@@ -1078,7 +1078,8 @@ $B1: {  # root
 
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %3:Outer = load %wgvar
+    %3:ptr<workgroup, f32, read_write> = access %wgvar, 0u
+    %4:f32 = load %3
     ret
   }
 }
@@ -1118,7 +1119,8 @@ $B1: {  # root
       }
     }
     %10:void = workgroupBarrier
-    %11:Outer = load %wgvar
+    %11:ptr<workgroup, f32, read_write> = access %wgvar, 0u
+    %12:f32 = load %11
     ret
   }
 }
@@ -1144,7 +1146,7 @@ TEST_F(IR_ZeroInitWorkgroupMemoryTest, ArrayOfStructOfArrayOfStructWithAtomic) {
 
     auto* func = MakeEntryPoint("main", 7, 3, 2);
     b.Append(func->Block(), [&] {  //
-        b.Load(var);
+        b.Load(b.Access<ptr<workgroup, f32>>(var, 0_u, 0_u));
         b.Return(func);
     });
 
@@ -1166,7 +1168,8 @@ $B1: {  # root
 
 %main = @compute @workgroup_size(7u, 3u, 2u) func():void {
   $B2: {
-    %3:array<Outer, 7> = load %wgvar
+    %3:ptr<workgroup, f32, read_write> = access %wgvar, 0u, 0u
+    %4:f32 = load %3
     ret
   }
 }
@@ -1228,7 +1231,8 @@ $B1: {  # root
       }
     }
     %17:void = workgroupBarrier
-    %18:array<Outer, 7> = load %wgvar
+    %18:ptr<workgroup, f32, read_write> = access %wgvar, 0u, 0u
+    %19:f32 = load %18
     ret
   }
 }
@@ -1402,7 +1406,7 @@ TEST_F(IR_ZeroInitWorkgroupMemoryTest, ExistingLocalInvocationIndex) {
     auto* var = MakeVar("wgvar", ty.bool_());
 
     auto* func = MakeEntryPoint("main", 1, 1, 1);
-    auto* global_id = b.FunctionParam("global_id", ty.vec3<u32>());
+    auto* global_id = b.FunctionParam("global_id", ty.vec3u());
     global_id->SetBuiltin(BuiltinValue::kGlobalInvocationId);
     auto* index = b.FunctionParam("index", ty.u32());
     index->SetBuiltin(BuiltinValue::kLocalInvocationIndex);
@@ -1459,7 +1463,7 @@ TEST_F(IR_ZeroInitWorkgroupMemoryTest, ExistingLocalInvocationIndexInStruct) {
                                 {
                                     {
                                         mod.symbols.New("global_id"),
-                                        ty.vec3<u32>(),
+                                        ty.vec3u(),
                                         core::IOAttributes{
                                             .builtin = core::BuiltinValue::kGlobalInvocationId,
                                         },

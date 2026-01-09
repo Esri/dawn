@@ -31,6 +31,7 @@
 #include <utility>
 
 #include "dawn/native/ChainUtils.h"
+#include "dawn/native/ShaderModuleParseRequest.h"
 
 namespace dawn::native {
 
@@ -39,7 +40,9 @@ using ::testing::NiceMock;
 ShaderModuleMock::ShaderModuleMock(DeviceMock* device,
                                    const UnpackedPtr<ShaderModuleDescriptor>& descriptor)
     : ShaderModuleBase(device, descriptor, {}) {
-    ON_CALL(*this, DestroyImpl).WillByDefault([this] { this->ShaderModuleBase::DestroyImpl(); });
+    ON_CALL(*this, DestroyImpl).WillByDefault([this](DestroyReason reason) {
+        this->ShaderModuleBase::DestroyImpl(reason);
+    });
 
     SetContentHash(ComputeContentHash());
 }
@@ -50,15 +53,10 @@ ShaderModuleMock::~ShaderModuleMock() = default;
 Ref<ShaderModuleMock> ShaderModuleMock::Create(
     DeviceMock* device,
     const UnpackedPtr<ShaderModuleDescriptor>& descriptor) {
-    ShaderModuleParseResult parseResult;
-    ParsedCompilationMessages compilationMessages;
-    ParseShaderModule(device, descriptor, {}, &parseResult, &compilationMessages).AcquireSuccess();
-    auto ownedCompilationMessages =
-        std::make_unique<OwnedCompilationMessages>(std::move(compilationMessages));
 
     Ref<ShaderModuleMock> shaderModule =
         AcquireRef(new NiceMock<ShaderModuleMock>(device, descriptor));
-    shaderModule->InitializeBase(&parseResult, &ownedCompilationMessages).AcquireSuccess();
+    shaderModule->Initialize();
     return shaderModule;
 }
 

@@ -75,7 +75,7 @@ class SharedResourceMemory : public ApiObjectBase, public WeakRefSupport<SharedR
 
     ~SharedResourceMemory() override;
     void Initialize();
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 
     // Returns true if access was acquired. If it returns true, then APIEndAccess must
     // be called to release access. Other errors may occur even if `true` is returned.
@@ -163,6 +163,7 @@ class SharedResourceMemoryContents : public RefCounted {
     bool HasWriteAccess() const;
     bool HasExclusiveReadAccess() const;
     int GetReadAccessCount() const;
+    bool HasAccess() const;
 
   private:
     friend class SharedResourceMemory;

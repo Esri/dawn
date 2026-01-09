@@ -1,16 +1,12 @@
-[numthreads(1, 1, 1)]
-void unused_entry_point() {
-  return;
-}
 
-static int t = 0;
-
+static int t = int(0);
 int m() {
-  t = 1;
+  t = int(1);
   return int(t);
 }
 
+[numthreads(1, 1, 1)]
 void f() {
-  int tint_symbol = m();
-  float v = float(tint_symbol);
+  float v = float(m());
 }
+

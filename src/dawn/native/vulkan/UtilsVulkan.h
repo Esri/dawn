@@ -119,14 +119,24 @@ VkFilter ToVulkanSamplerFilter(wgpu::FilterMode filter);
 
 VkImageAspectFlags VulkanAspectMask(const Aspect& aspects);
 
-Extent3D ComputeTextureCopyExtent(const TextureCopy& textureCopy, const Extent3D& copySize);
+VkShaderStageFlags VulkanShaderStages(wgpu::ShaderStage stages);
+VkShaderStageFlagBits VulkanShaderStage(SingleShaderStage stage);
 
-VkBufferImageCopy ComputeBufferImageCopyRegion(const BufferCopy& bufferCopy,
-                                               const TextureCopy& textureCopy,
-                                               const Extent3D& copySize);
+VkAttachmentLoadOp VulkanAttachmentLoadOp(wgpu::LoadOp op);
+VkAttachmentStoreOp VulkanAttachmentStoreOp(wgpu::StoreOp op);
+
+TexelExtent3D ComputeTextureCopyExtent(const TextureCopy& textureCopy,
+                                       const TexelExtent3D& copySize);
+
+// TODO(crbug.com/424536624): Remove this overload and use BufferCopy instead of
+// TexelCopyBufferLayout.
 VkBufferImageCopy ComputeBufferImageCopyRegion(const TexelCopyBufferLayout& dataLayout,
                                                const TextureCopy& textureCopy,
-                                               const Extent3D& copySize);
+                                               const BlockExtent3D& copySize);
+// Note: bufferCopy.buffer is ignored
+VkBufferImageCopy ComputeBufferImageCopyRegion(const BufferCopy& bufferCopy,
+                                               const TextureCopy& textureCopy,
+                                               const BlockExtent3D& copySize);
 
 // Gets the associated VkObjectType for any non-dispatchable handle
 template <class HandleType>
@@ -171,6 +181,8 @@ void SetDebugName(Device* device,
 
 std::string GetNextDeviceDebugPrefix();
 std::string GetDeviceDebugPrefixFromDebugName(const char* debugName);
+
+std::string FormatAPIVersion(uint32_t version);
 
 // Get the properties for the given format.
 // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkDrmFormatModifierPropertiesEXT.html

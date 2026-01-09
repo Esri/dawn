@@ -51,8 +51,10 @@ class Device : public DeviceBase {
 
     virtual void DisposeKeyedMutex(ComPtr<IDXGIKeyedMutex> dxgiKeyedMutex) = 0;
 
+    void RecordDeviceRemovedReason(HRESULT result);
+
   protected:
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 };
 
 }  // namespace dawn::native::d3d

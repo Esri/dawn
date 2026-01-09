@@ -43,12 +43,38 @@ ManualConstructors::ManualConstructors(Napi::Env env) {
           }
           this.error = eventInitDict.error;
         }
-      }
+      };
     })())";
     Napi::Value gpuUncapturedErrorEvent_value =
         env.RunScript(Napi::String::New(env, gpuUncapturedErrorEventJs));
     GPUUncapturedErrorEvent_ctor =
         Napi::Persistent(gpuUncapturedErrorEvent_value.As<Napi::Function>());
+
+    // Lookup the DOMException class
+    Napi::Object global = env.Global();
+    DOMException_ctor = Napi::Persistent(global.Get("DOMException").As<Napi::Function>());
+
+    // Lookup the EventTarget class
+    EventTarget_ctor = Napi::Persistent(global.Get("EventTarget").As<Napi::Function>());
+
+    // We have to pass in the DOMException constructor from above so we first
+    // generate a function we can pass it to using RunScript. We then call
+    // that function and pass in the DOMException constructor so we can
+    // make a class that extends it.
+    const char* gpuPipelineErrorJs = R"(
+    (function() {
+      return class GPUPipelineError extends DOMException {
+        constructor(message, gpuPipelineErrorInit) {
+          super(message, "GPUPipelineError");
+          if (!gpuPipelineErrorInit || gpuPipelineErrorInit.reason === undefined) {
+            throw new TypeError("Failed to construct 'GPUPipelineError': Required member 'reason' in 'gpuPipelineErrorInit' is undefined.");
+          }
+          this.reason = gpuPipelineErrorInit.reason;
+        }
+      };
+    })())";
+    Napi::Value gpuPipelineError_value = env.RunScript(Napi::String::New(env, gpuPipelineErrorJs));
+    GPUPipelineError_ctor = Napi::Persistent(gpuPipelineError_value.As<Napi::Function>());
 }
 
 }  // namespace wgpu::interop

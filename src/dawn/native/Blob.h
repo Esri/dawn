@@ -75,12 +75,16 @@ class Blob {
 
 Blob CreateBlob(size_t size);
 
-template <typename T, typename = std::enable_if_t<std::is_fundamental_v<T>>>
-Blob CreateBlob(std::vector<T> vec) {
-    uint8_t* data = reinterpret_cast<uint8_t*>(vec.data());
-    size_t size = vec.size() * sizeof(T);
+template <typename T>
+Blob CreateBlob(std::vector<T> vec)
+    requires std::is_fundamental_v<T>
+{
     // Move the vector into a new allocation so we can destruct it in the deleter.
     auto* wrapped_vec = new std::vector<T>(std::move(vec));
+
+    uint8_t* data = reinterpret_cast<uint8_t*>(wrapped_vec->data());
+    size_t size = wrapped_vec->size() * sizeof(T);
+
     return Blob::UnsafeCreateWithDeleter(data, size, [wrapped_vec] { delete wrapped_vec; });
 }
 

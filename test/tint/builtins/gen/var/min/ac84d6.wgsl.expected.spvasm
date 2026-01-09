@@ -8,7 +8,6 @@
 ; Schema: 0
                OpCapability Shader
                OpCapability Float16
-               OpCapability UniformAndStorageBuffer16BitAccess
                OpCapability StorageBuffer16BitAccess
          %15 = OpExtInstImport "GLSL.std.450"
                OpMemoryModel Logical GLSL450
@@ -47,7 +46,7 @@
                OpStore %arg_1 %half_0x1p_0
          %12 = OpLoad %half %arg_0 None
          %13 = OpLoad %half %arg_1 None
-         %14 = OpExtInst %half %15 FMin %12 %13
+         %14 = OpExtInst %half %15 NMin %12 %13
                OpStore %res %14
          %17 = OpLoad %half %res None
                OpReturnValue %17
@@ -69,7 +68,6 @@
 ; Schema: 0
                OpCapability Shader
                OpCapability Float16
-               OpCapability UniformAndStorageBuffer16BitAccess
                OpCapability StorageBuffer16BitAccess
          %15 = OpExtInstImport "GLSL.std.450"
                OpMemoryModel Logical GLSL450
@@ -108,7 +106,7 @@
                OpStore %arg_1 %half_0x1p_0
          %12 = OpLoad %half %arg_0 None
          %13 = OpLoad %half %arg_1 None
-         %14 = OpExtInst %half %15 FMin %12 %13
+         %14 = OpExtInst %half %15 NMin %12 %13
                OpStore %res %14
          %17 = OpLoad %half %res None
                OpReturnValue %17
@@ -130,7 +128,6 @@
 ; Schema: 0
                OpCapability Shader
                OpCapability Float16
-               OpCapability UniformAndStorageBuffer16BitAccess
                OpCapability StorageBuffer16BitAccess
                OpCapability StorageInputOutput16
          %20 = OpExtInstImport "GLSL.std.450"
@@ -186,7 +183,7 @@
                OpStore %arg_1 %half_0x1p_0
          %17 = OpLoad %half %arg_0 None
          %18 = OpLoad %half %arg_1 None
-         %19 = OpExtInst %half %20 FMin %17 %18
+         %19 = OpExtInst %half %20 NMin %17 %18
                OpStore %res %19
          %22 = OpLoad %half %res None
                OpReturnValue %22

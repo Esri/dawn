@@ -28,12 +28,17 @@
 #ifndef SRC_DAWN_NATIVE_DAWN_PLATFORM_H_
 #define SRC_DAWN_NATIVE_DAWN_PLATFORM_H_
 
+// This file is used by dawn native to see everything from webgpu_cpp.h, updated to use dawn::native
+// types. It also adds conversions back to the C webgpu.h API, and augments types in various ways.
+
 // Use webgpu_cpp to have the enum and bitfield definitions
 #include <webgpu/webgpu_cpp.h>
 
 #include "dawn/native/dawn_platform_autogen.h"
 
 namespace dawn::native {
+
+struct TexelBlockInfo;
 
 // kEnumCount is a constant specifying the number of enums in a WebGPU enum type,
 // if the enums are contiguous, making it suitable for iteration.
@@ -61,6 +66,9 @@ static constexpr wgpu::BufferUsage kInternalCopySrcBuffer =
 // on the backends.
 static constexpr wgpu::BufferUsage kIndirectBufferForBackendResourceTracking =
     static_cast<wgpu::BufferUsage>(1u << 28);
+
+// Add an extra buffer usage (readonly texel buffer usage) for resource tracking
+static constexpr wgpu::BufferUsage kReadOnlyTexelBuffer = static_cast<wgpu::BufferUsage>(1u << 27);
 
 // Define `kIndirectBufferForFrontendValidation` as an alias of wgpu::BufferUsage::Indirect just
 // for front-end validation on the indirect buffer usage.
@@ -124,6 +132,9 @@ struct Rect2D {
     uint32_t width;
     uint32_t height;
 };
+
+// Returns the TexelBlockInfo for t's texture and aspect
+const TexelBlockInfo& GetBlockInfo(const TexelCopyTextureInfo& t);
 
 }  // namespace dawn::native
 

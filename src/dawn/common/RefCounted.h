@@ -30,7 +30,6 @@
 
 #include <atomic>
 #include <cstdint>
-#include <type_traits>
 
 namespace dawn {
 
@@ -47,6 +46,11 @@ class RefCount {
 
     uint64_t GetValueForTesting() const;
     uint64_t GetPayload() const;
+
+    // Perform atomic bitwise operations on the playload. External synchronization MUST be used if
+    // threads are racing to modify and read the payload values.
+    uint64_t PayloadFetchAnd(uint64_t arg);
+    uint64_t PayloadFetchOr(uint64_t arg);
 
     // Add a reference, return true if the previous count is 0.
     bool Increment();
@@ -70,19 +74,22 @@ class RefCounted {
 
     uint64_t GetRefCountForTesting() const;
     uint64_t GetRefCountPayload() const;
+    uint64_t RefCountPayloadFetchAnd(uint64_t arg);
+    uint64_t RefCountPayloadFetchOr(uint64_t arg);
 
     void AddRef();
     // Release() is called by internal code, so it's assumed that there is already a thread
     // synchronization in place for destruction.
     void Release();
 
+    // Tries to add a reference. Returns false if the ref count is already at 0. This is used when
+    // operating on a raw pointer to a RefCounted instead of a valid Ref that may be soon deleted.
+    bool TryAddRef();
+
     void APIAddRef() { AddRef(); }
     void APIRelease() { Release(); }
 
   protected:
-    // Friend class is needed to access the RefCount to TryIncrement.
-    friend class detail::WeakRefData;
-
     virtual ~RefCounted();
 
     void ReleaseAndLockBeforeDestroy();

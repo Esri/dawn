@@ -58,12 +58,6 @@ void VideoViewsTestsBase::SetUp() {
     DAWN_TEST_UNSUPPORTED_IF(!IsMultiPlanarFormatsSupported());
     // TODO(crbug.com/342213634): Crashes on ChromeOS volteer devices.
     DAWN_SUPPRESS_TEST_IF(IsChromeOS() && IsVulkan() && IsIntel() && IsBackendValidationEnabled());
-
-    // compat mode doesn't allow different texture views to be used in a draw call unless
-    // FlexibleTextureViews feature is enabled. The tests need texture views to sample and render to
-    // separate planes of a multiplanar texture.
-    DAWN_TEST_UNSUPPORTED_IF(IsCompatibilityMode() &&
-                             !SupportsFeatures({wgpu::FeatureName::FlexibleTextureViews}));
 }
 
 std::vector<wgpu::FeatureName> VideoViewsTestsBase::GetRequiredFeatures() {
@@ -129,11 +123,6 @@ std::vector<wgpu::FeatureName> VideoViewsTestsBase::GetRequiredFeatures() {
     if (mIsUnorm16TextureFormatsSupported) {
         requiredFeatures.push_back(wgpu::FeatureName::Unorm16TextureFormats);
     }
-    mIsSnorm16TextureFormatsSupported =
-        SupportsFeatures({wgpu::FeatureName::Snorm16TextureFormats});
-    if (mIsSnorm16TextureFormatsSupported) {
-        requiredFeatures.push_back(wgpu::FeatureName::Snorm16TextureFormats);
-    }
     if (SupportsFeatures({wgpu::FeatureName::FlexibleTextureViews})) {
         requiredFeatures.push_back(wgpu::FeatureName::FlexibleTextureViews);
     }
@@ -172,10 +161,6 @@ bool VideoViewsTestsBase::IsMultiPlanarFormatNv12aSupported() const {
 
 bool VideoViewsTestsBase::IsUnorm16TextureFormatsSupported() const {
     return mIsUnorm16TextureFormatsSupported;
-}
-
-bool VideoViewsTestsBase::IsSnorm16TextureFormatsSupported() const {
-    return mIsSnorm16TextureFormatsSupported;
 }
 
 bool VideoViewsTestsBase::IsFormatSupported() const {
@@ -2736,7 +2721,7 @@ DAWN_INSTANTIATE_TEST_B(VideoViewsRenderTargetTests,
 
 DAWN_INSTANTIATE_TEST_B(VideoViewsExtendedUsagesTests,
                         {D3D11Backend(), D3D12Backend(), MetalBackend(), OpenGLBackend(),
-                         OpenGLESBackend(), VulkanBackend()},
+                         OpenGLESBackend(), VulkanBackend(), WebGPUBackend()},
                         {wgpu::TextureFormat::R8BG8Biplanar420Unorm,
                          wgpu::TextureFormat::R8BG8Biplanar422Unorm,
                          wgpu::TextureFormat::R8BG8Biplanar444Unorm,

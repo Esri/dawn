@@ -37,7 +37,12 @@ namespace {
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
 
-using GlslWriter_ShaderIOTest = core::ir::transform::TransformTest;
+class GlslWriter_ShaderIOTest : public core::ir::transform::TransformTest {
+  public:
+    GlslWriter_ShaderIOTest() {
+        capabilities.Add(core::ir::Capability::kLoosenValidationForShaderIO);
+    }
+};
 
 TEST_F(GlslWriter_ShaderIOTest, NoInputsOrOutputs) {
     auto* ep = b.ComputeFunction("foo");
@@ -68,7 +73,7 @@ TEST_F(GlslWriter_ShaderIOTest, Parameters_NonStruct) {
     auto* ep = b.Function("foo", ty.void_());
     auto* front_facing = b.FunctionParam("front_facing", ty.bool_());
     front_facing->SetBuiltin(core::BuiltinValue::kFrontFacing);
-    auto* position = b.FunctionParam("position", ty.vec4<f32>());
+    auto* position = b.FunctionParam("position", ty.vec4f());
     position->SetBuiltin(core::BuiltinValue::kPosition);
     position->SetInvariant(true);
     auto* color1 = b.FunctionParam("color1", ty.f32());
@@ -84,7 +89,7 @@ TEST_F(GlslWriter_ShaderIOTest, Parameters_NonStruct) {
     b.Append(ep->Block(), [&] {
         auto* ifelse = b.If(front_facing);
         b.Append(ifelse->True(), [&] {
-            b.Multiply(ty.vec4<f32>(), position, b.Add(ty.f32(), color1, color2));
+            b.Multiply(position, b.Add(color1, color2));
             b.ExitIf(ifelse);
         });
         b.Return(ep);
@@ -156,7 +161,7 @@ TEST_F(GlslWriter_ShaderIOTest, Parameters_Struct) {
                                  },
                                  {
                                      mod.symbols.New("position"),
-                                     ty.vec4<f32>(),
+                                     ty.vec4f(),
                                      core::IOAttributes{
                                          .builtin = core::BuiltinValue::kPosition,
                                          .invariant = true,
@@ -191,10 +196,10 @@ TEST_F(GlslWriter_ShaderIOTest, Parameters_Struct) {
     b.Append(ep->Block(), [&] {
         auto* ifelse = b.If(b.Access(ty.bool_(), str_param, 0_i));
         b.Append(ifelse->True(), [&] {
-            auto* position = b.Access(ty.vec4<f32>(), str_param, 1_i);
+            auto* position = b.Access(ty.vec4f(), str_param, 1_i);
             auto* color1 = b.Access(ty.f32(), str_param, 2_i);
             auto* color2 = b.Access(ty.f32(), str_param, 3_i);
-            b.Multiply(ty.vec4<f32>(), position, b.Add(ty.f32(), color1, color2));
+            b.Multiply(position, b.Add(color1, color2));
             b.ExitIf(ifelse);
         });
         b.Return(ep);
@@ -283,7 +288,7 @@ TEST_F(GlslWriter_ShaderIOTest, Parameters_Mixed) {
         ty.Struct(mod.symbols.New("Inputs"), {
                                                  {
                                                      mod.symbols.New("position"),
-                                                     ty.vec4<f32>(),
+                                                     ty.vec4f(),
                                                      core::IOAttributes{
                                                          .builtin = core::BuiltinValue::kPosition,
                                                          .invariant = true,
@@ -313,9 +318,9 @@ TEST_F(GlslWriter_ShaderIOTest, Parameters_Mixed) {
     b.Append(ep->Block(), [&] {
         auto* ifelse = b.If(front_facing);
         b.Append(ifelse->True(), [&] {
-            auto* position = b.Access(ty.vec4<f32>(), str_param, 0_i);
+            auto* position = b.Access(ty.vec4f(), str_param, 0_i);
             auto* color1 = b.Access(ty.f32(), str_param, 1_i);
-            b.Multiply(ty.vec4<f32>(), position, b.Add(ty.f32(), color1, color2));
+            b.Multiply(position, b.Add(color1, color2));
             b.ExitIf(ifelse);
         });
         b.Return(ep);
@@ -392,13 +397,13 @@ $B1: {  # root
 }
 
 TEST_F(GlslWriter_ShaderIOTest, ReturnValue_NonStructBuiltin) {
-    auto* ep = b.Function("foo", ty.vec4<f32>());
+    auto* ep = b.Function("foo", ty.vec4f());
     ep->SetReturnBuiltin(core::BuiltinValue::kPosition);
     ep->SetReturnInvariant(true);
     ep->SetStage(core::ir::Function::PipelineStage::kVertex);
 
     b.Append(ep->Block(), [&] {  //
-        b.Return(ep, b.Construct(ty.vec4<f32>(), 0.5_f));
+        b.Return(ep, b.Construct(ty.vec4f(), 0.5_f));
     });
 
     auto* src = R"(
@@ -449,12 +454,12 @@ $B1: {  # root
 }
 
 TEST_F(GlslWriter_ShaderIOTest, ReturnValue_NonStructLocation) {
-    auto* ep = b.Function("foo", ty.vec4<f32>());
+    auto* ep = b.Function("foo", ty.vec4f());
     ep->SetReturnLocation(1u);
     ep->SetStage(core::ir::Function::PipelineStage::kFragment);
 
     b.Append(ep->Block(), [&] {  //
-        b.Return(ep, b.Construct(ty.vec4<f32>(), 0.5_f));
+        b.Return(ep, b.Construct(ty.vec4f(), 0.5_f));
     });
 
     auto* src = R"(
@@ -499,7 +504,7 @@ TEST_F(GlslWriter_ShaderIOTest, ReturnValue_Struct) {
                              {
                                  {
                                      mod.symbols.New("position"),
-                                     ty.vec4<f32>(),
+                                     ty.vec4f(),
                                      core::IOAttributes{
                                          .builtin = core::BuiltinValue::kPosition,
                                          .invariant = true,
@@ -530,7 +535,7 @@ TEST_F(GlslWriter_ShaderIOTest, ReturnValue_Struct) {
     ep->SetStage(core::ir::Function::PipelineStage::kVertex);
 
     b.Append(ep->Block(), [&] {  //
-        b.Return(ep, b.Construct(str_ty, b.Construct(ty.vec4<f32>(), 0_f), 0.25_f, 0.75_f));
+        b.Return(ep, b.Construct(str_ty, b.Construct(ty.vec4f(), 0_f), 0.25_f, 0.75_f));
     });
 
     auto* src = R"(
@@ -680,7 +685,7 @@ $B1: {  # root
 }
 
 TEST_F(GlslWriter_ShaderIOTest, Struct_SharedWithBuffer) {
-    auto* vec4f = ty.vec4<f32>();
+    auto* vec4f = ty.vec4f();
     auto* str_ty =
         ty.Struct(mod.symbols.New("Outputs"), {
                                                   {
@@ -882,19 +887,19 @@ TEST_F(GlslWriter_ShaderIOTest, InterpolationOnVertexInput) {
                                  },
                              });
 
-    auto* ep = b.Function("vert", ty.vec4<f32>());
+    auto* ep = b.Function("vert", ty.vec4f());
     ep->SetReturnBuiltin(core::BuiltinValue::kPosition);
     ep->SetReturnInvariant(true);
     ep->SetStage(core::ir::Function::PipelineStage::kVertex);
 
     auto* str_param = b.FunctionParam("input", str_ty);
     auto* ival = b.FunctionParam("ival", ty.i32());
-    ival->SetLocation(1);
+    ival->SetLocation(2);
     ival->SetInterpolation(core::Interpolation{core::InterpolationType::kFlat});
     ep->SetParams({str_param, ival});
 
     b.Append(ep->Block(), [&] {  //
-        b.Return(ep, b.Construct(ty.vec4<f32>(), 0.5_f));
+        b.Return(ep, b.Construct(ty.vec4f(), 0.5_f));
     });
 
     auto* src = R"(
@@ -902,7 +907,7 @@ MyStruct = struct @align(4) {
   color:f32 @offset(0), @location(1), @interpolate(linear, sample)
 }
 
-%vert = @vertex func(%input:MyStruct, %ival:i32 [@location(1), @interpolate(flat)]):vec4<f32> [@invariant, @position] {
+%vert = @vertex func(%input:MyStruct, %ival:i32 [@location(2), @interpolate(flat)]):vec4<f32> [@invariant, @position] {
   $B1: {
     %4:vec4<f32> = construct 0.5f
     ret %4
@@ -918,7 +923,7 @@ MyStruct = struct @align(4) {
 
 $B1: {  # root
   %vert_loc1_Input:ptr<__in, f32, read> = var undef @location(1)
-  %vert_loc1_Input_1:ptr<__in, i32, read> = var undef @location(1)  # %vert_loc1_Input_1: 'vert_loc1_Input'
+  %vert_loc2_Input:ptr<__in, i32, read> = var undef @location(2)
   %vert_position:ptr<__out, vec4<f32>, write> = var undef @invariant @builtin(position)
   %vert___point_size:ptr<__out, f32, write> = var undef @builtin(__point_size)
 }
@@ -933,7 +938,7 @@ $B1: {  # root
   $B3: {
     %10:f32 = load %vert_loc1_Input
     %11:MyStruct = construct %10
-    %12:i32 = load %vert_loc1_Input_1
+    %12:i32 = load %vert_loc2_Input
     %13:vec4<f32> = call %vert_inner, %11, %12
     %14:f32 = swizzle %13, x
     %15:f32 = swizzle %13, y
@@ -1156,8 +1161,12 @@ $B1: {  # root
 )";
 
     core::ir::transform::PrepareImmediateDataConfig immediate_data_config;
-    immediate_data_config.AddInternalImmediateData(4, mod.symbols.New("depth_min"), ty.f32());
-    immediate_data_config.AddInternalImmediateData(8, mod.symbols.New("depth_max"), ty.f32());
+    ASSERT_EQ(
+        immediate_data_config.AddInternalImmediateData(4, mod.symbols.New("depth_min"), ty.f32()),
+        Success);
+    ASSERT_EQ(
+        immediate_data_config.AddInternalImmediateData(8, mod.symbols.New("depth_max"), ty.f32()),
+        Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
     ShaderIOConfig config{immediate_data.Get()};
@@ -1168,17 +1177,17 @@ $B1: {  # root
 }
 
 TEST_F(GlslWriter_ShaderIOTest, BGRASwizzleSingleValue) {
-    auto* ep = b.Function("vert", ty.vec4<f32>());
+    auto* ep = b.Function("vert", ty.vec4f());
     ep->SetReturnBuiltin(core::BuiltinValue::kPosition);
     ep->SetReturnInvariant(true);
     ep->SetStage(core::ir::Function::PipelineStage::kVertex);
 
-    auto* val = b.FunctionParam("val", ty.vec4<f32>());
+    auto* val = b.FunctionParam("val", ty.vec4f());
     val->SetLocation(0);
     ep->SetParams({val});
 
     b.Append(ep->Block(), [&] {  //
-        b.Return(ep, b.Construct(ty.vec4<f32>(), 0.5_f));
+        b.Return(ep, b.Construct(ty.vec4f(), 0.5_f));
     });
 
     auto* src = R"(
@@ -1233,7 +1242,7 @@ $B1: {  # root
 }
 
 TEST_F(GlslWriter_ShaderIOTest, BGRASwizzleMultipleValueMixedTypes) {
-    auto* ep = b.Function("vert", ty.vec4<f32>());
+    auto* ep = b.Function("vert", ty.vec4f());
     ep->SetReturnBuiltin(core::BuiltinValue::kPosition);
     ep->SetReturnInvariant(true);
     ep->SetStage(core::ir::Function::PipelineStage::kVertex);
@@ -1245,25 +1254,25 @@ TEST_F(GlslWriter_ShaderIOTest, BGRASwizzleMultipleValueMixedTypes) {
     val1->SetLocation(5);
     swizzled_locations.insert(5);
 
-    auto* val2 = b.FunctionParam("val2", ty.vec2<f32>());
+    auto* val2 = b.FunctionParam("val2", ty.vec2f());
     val2->SetLocation(0);
     swizzled_locations.insert(0);
 
-    auto* val3 = b.FunctionParam("val3", ty.vec3<f32>());
+    auto* val3 = b.FunctionParam("val3", ty.vec3f());
     val3->SetLocation(3);
     swizzled_locations.insert(3);
 
-    auto* val4 = b.FunctionParam("val4", ty.vec4<f32>());
+    auto* val4 = b.FunctionParam("val4", ty.vec4f());
     val4->SetLocation(7);
     swizzled_locations.insert(7);
 
     // Checks that the sentinel doesn't get swizzled.
-    auto* sentinel = b.FunctionParam("sentinel", ty.vec4<f32>());
+    auto* sentinel = b.FunctionParam("sentinel", ty.vec4f());
     sentinel->SetLocation(4);
 
     ep->SetParams({val1, val2, sentinel, val3, val4});
     b.Append(ep->Block(), [&] {  //
-        b.Return(ep, b.Construct(ty.vec4<f32>(), 0.5_f));
+        b.Return(ep, b.Construct(ty.vec4f(), 0.5_f));
     });
 
     auto* src = R"(

@@ -109,13 +109,20 @@ class Texture : public TextureBase {
 
     void SetLabelHelper(const char* prefix);
 
+    void NotifySwapChainPresent();
+
+    void SetIsExternalSwapchainTexture(bool isSwapChainTexture);
+
     // Dawn API
     void SetLabelImpl() override;
 
   protected:
     Texture(Device* device, const UnpackedPtr<TextureDescriptor>& descriptor);
 
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
+    MaybeError PinImpl(wgpu::TextureUsage usage) override;
+    void UnpinImpl() override;
+
     MaybeError ClearTexture(CommandRecordingContext* recordingContext,
                             const SubresourceRange& range,
                             TextureBase::ClearValue);
@@ -163,6 +170,8 @@ class Texture : public TextureBase {
 
     SubresourceStorage<TextureSyncInfo> mSubresourceLastSyncInfos;
     VkImage mHandle = VK_NULL_HANDLE;
+
+    bool mIsExternalSwapChainTexture = false;
 };
 
 // A texture created and fully owned by Dawn. Typically the result of device.CreateTexture.
@@ -176,7 +185,7 @@ class InternalTexture final : public Texture {
   private:
     using Texture::Texture;
     MaybeError Initialize(VkImageUsageFlags extraUsages);
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 
     ResourceMemoryAllocation mMemoryAllocation;
 };
@@ -218,7 +227,7 @@ class ImportedTextureBase : public Texture {
     using Texture::Texture;
     ~ImportedTextureBase() override;
 
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 
     // Eagerly transition the texture for export.
     void TransitionEagerlyForExport(CommandRecordingContext* recordingContext);
@@ -278,7 +287,7 @@ class ExternalVkImageTexture final : public ImportedTextureBase {
     using ImportedTextureBase::ImportedTextureBase;
     MaybeError Initialize(const ExternalImageDescriptorVk* descriptor,
                           external_memory::Service* externalMemoryService);
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 
     VkDeviceMemory mExternalAllocation = VK_NULL_HANDLE;
     std::vector<VkSemaphore> mWaitRequirements;
@@ -299,7 +308,7 @@ class SharedTexture final : public ImportedTextureBase {
   private:
     using ImportedTextureBase::ImportedTextureBase;
     void Initialize(SharedTextureMemory* memory);
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 
     struct SharedTextureMemoryObjects {
         Ref<RefCountedVkHandle<VkImage>> vkImage;
@@ -308,10 +317,11 @@ class SharedTexture final : public ImportedTextureBase {
     SharedTextureMemoryObjects mSharedTextureMemoryObjects;
 };
 
-class TextureView final : public TextureViewBase {
+class TextureView final : public TextureViewBase, public WeakRefSupport<TextureView> {
   public:
     static ResultOrError<Ref<TextureView>> Create(
         TextureBase* texture,
+        uint64_t textureViewId,
         const UnpackedPtr<TextureViewDescriptor>& descriptor);
     VkImageView GetHandle() const;
     VkImageView GetHandleForBGRA8UnormStorage() const;
@@ -321,9 +331,15 @@ class TextureView final : public TextureViewBase {
     bool IsYCbCr() const override;
     YCbCrVkDescriptor GetYCbCrVkDescriptor() const override;
 
+    // Unique per-device.
+    uint64_t GetTextureViewId() const { return mTextureViewId; }
+
   private:
+    TextureView(TextureBase* texture,
+                uint64_t textureViewId,
+                const UnpackedPtr<TextureViewDescriptor>& descriptor);
     ~TextureView() override;
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
     using TextureViewBase::TextureViewBase;
     MaybeError Initialize(const UnpackedPtr<TextureViewDescriptor>& descriptor);
 
@@ -340,6 +356,8 @@ class TextureView final : public TextureViewBase {
     bool mIsYCbCr = false;
     YCbCrVkDescriptor mYCbCrVkDescriptor;
     std::vector<VkImageView> mHandlesFor2DViewOn3D;
+
+    const uint64_t mTextureViewId;
 };
 
 }  // namespace dawn::native::vulkan

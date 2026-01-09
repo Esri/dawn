@@ -27,28 +27,36 @@
 
 #include "dawn/native/WaitListEvent.h"
 
+#include <array>
+
+#include "dawn/common/Ref.h"
+
 namespace dawn::native {
 
-WaitListEvent::WaitListEvent() = default;
+WaitListEvent::WaitListEvent(uint64_t requiredSignalCount)
+    : mRemainingSignalCount(requiredSignalCount) {
+}
 WaitListEvent::~WaitListEvent() = default;
 
 bool WaitListEvent::IsSignaled() const {
-    return mSignaled.load(std::memory_order_acquire);
+    return mRemainingSignalCount.load(std::memory_order_acquire) == 0;
 }
 
 void WaitListEvent::Signal() {
-    std::lock_guard<std::mutex> lock(mMutex);
-    DAWN_ASSERT(!mSignaled);
-    mSignaled.store(true, std::memory_order_release);
-    for (SyncWaiter* w : std::move(mSyncWaiters)) {
-        {
-            std::lock_guard<std::mutex> waiterLock(w->mutex);
-            w->waitDone = true;
+    uint64_t prevSignalCount = mRemainingSignalCount.fetch_sub(1, std::memory_order_release);
+    DAWN_ASSERT(prevSignalCount != 0);
+    if (prevSignalCount == 1) {
+        std::lock_guard<std::mutex> lock(mMutex);
+        for (SyncWaiter* w : std::move(mSyncWaiters)) {
+            {
+                std::lock_guard<std::mutex> waiterLock(w->mutex);
+                w->waitDone = true;
+            }
+            w->cv.notify_all();
         }
-        w->cv.notify_all();
-    }
-    for (auto& sender : std::move(mAsyncWaiters)) {
-        std::move(sender).Signal();
+        for (auto& sender : std::move(mAsyncWaiters)) {
+            std::move(sender).Signal();
+        }
     }
 }
 

@@ -72,12 +72,19 @@ TEST_F(GlslWriterTest, FunctionWithParams) {
     func->SetParams({b.FunctionParam("a", ty.f32()), b.FunctionParam("b", ty.i32())});
     func->Block()->Append(b.Return(func));
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Call(func, b.Zero(ty.f32()), b.Zero(ty.i32()));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << err_ << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 void my_func(float a, int b) {
 }
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
+  my_func(0.0f, 0);
 }
 )");
 }
@@ -153,7 +160,7 @@ TEST_F(GlslWriterTest, WorkgroupStorageSizeCompoundTypes) {
 TEST_F(GlslWriterTest, WorkgroupStorageSizeAlignmentPadding) {
     // vec3<f32> has an alignment of 16 but a size of 12. We leverage this to test
     // that our padded size calculation for workgroup storage is accurate.
-    auto* var = mod.root_block->Append(b.Var("var_f32", ty.ptr(workgroup, ty.vec3<f32>())));
+    auto* var = mod.root_block->Append(b.Var("var_f32", ty.ptr(workgroup, ty.vec3f())));
 
     auto* func = b.ComputeFunction("main", 32_u, 4_u, 1_u);
     b.Append(func->Block(), [&] {  //

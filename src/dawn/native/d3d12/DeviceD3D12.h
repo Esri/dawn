@@ -40,10 +40,6 @@
 #include "dawn/native/d3d12/ResourceAllocatorManagerD3D12.h"
 #include "dawn/native/d3d12/TextureD3D12.h"
 
-namespace dawn::native::d3d {
-class ExternalImageDXGIImpl;
-}  // namespace dawn::native::d3d
-
 namespace dawn::native::d3d12 {
 
 class PlatformFunctions;
@@ -76,6 +72,8 @@ class Device final : public d3d::Device {
     MaybeError TickImpl() override;
 
     ID3D12Device* GetD3D12Device() const;
+    ComPtr<ID3D11On12Device> GetOrCreateD3D11On12Device();
+    ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue() const;
 
     ComPtr<ID3D12CommandSignature> GetDispatchIndirectSignature() const;
     ComPtr<ID3D12CommandSignature> GetDrawIndirectSignature() const;
@@ -94,11 +92,11 @@ class Device final : public d3d::Device {
 
     void ReferenceUntilUnused(ComPtr<IUnknown> object);
 
-    MaybeError CopyFromStagingToBufferImpl(BufferBase* source,
-                                           uint64_t sourceOffset,
-                                           BufferBase* destination,
-                                           uint64_t destinationOffset,
-                                           uint64_t size) override;
+    MaybeError CopyFromStagingToBuffer(BufferBase* source,
+                                       uint64_t sourceOffset,
+                                       BufferBase* destination,
+                                       uint64_t destinationOffset,
+                                       uint64_t size) override;
 
     void CopyFromStagingToBufferHelper(CommandRecordingContext* commandContext,
                                        BufferBase* source,
@@ -107,7 +105,7 @@ class Device final : public d3d::Device {
                                        uint64_t destinationOffset,
                                        uint64_t size);
 
-    MaybeError CopyFromStagingToTextureImpl(const BufferBase* source,
+    MaybeError CopyFromStagingToTextureImpl(BufferBase* source,
                                             const TexelCopyBufferLayout& src,
                                             const TextureCopy& dst,
                                             const Extent3D& copySizePixels) override;
@@ -148,6 +146,8 @@ class Device final : public d3d::Device {
 
     uint32_t GetOptimalBytesPerRowAlignment() const override;
     uint64_t GetOptimalBufferToTextureCopyOffsetAlignment() const override;
+    bool CanTextureLoadResolveTargetInTheSameRenderpass() const override;
+    bool CanResolveSubRect() const override;
 
     float GetTimestampPeriodInNS() const override;
 
@@ -181,21 +181,21 @@ class Device final : public d3d::Device {
            Ref<DeviceBase::DeviceLostEvent>&& lostEvent);
 
     ResultOrError<Ref<BindGroupBase>> CreateBindGroupImpl(
-        const BindGroupDescriptor* descriptor) override;
+        const UnpackedPtr<BindGroupDescriptor>& descriptor) override;
     ResultOrError<Ref<BindGroupLayoutInternalBase>> CreateBindGroupLayoutImpl(
-        const BindGroupLayoutDescriptor* descriptor) override;
+        const UnpackedPtr<BindGroupLayoutDescriptor>& descriptor) override;
     ResultOrError<Ref<BufferBase>> CreateBufferImpl(
         const UnpackedPtr<BufferDescriptor>& descriptor) override;
     ResultOrError<Ref<PipelineLayoutBase>> CreatePipelineLayoutImpl(
         const UnpackedPtr<PipelineLayoutDescriptor>& descriptor) override;
     ResultOrError<Ref<QuerySetBase>> CreateQuerySetImpl(
         const QuerySetDescriptor* descriptor) override;
+    ResultOrError<Ref<ResourceTableBase>> CreateResourceTableImpl(
+        const ResourceTableDescriptor* descriptor) override;
     ResultOrError<Ref<SamplerBase>> CreateSamplerImpl(const SamplerDescriptor* descriptor) override;
     ResultOrError<Ref<ShaderModuleBase>> CreateShaderModuleImpl(
         const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
-        const std::vector<tint::wgsl::Extension>& internalExtensions,
-        ShaderModuleParseResult* parseResult,
-        std::unique_ptr<OwnedCompilationMessages>* compilationMessages) override;
+        const std::vector<tint::wgsl::Extension>& internalExtensions) override;
     ResultOrError<Ref<SwapChainBase>> CreateSwapChainImpl(
         Surface* surface,
         SwapChainBase* previousSwapChain,
@@ -219,16 +219,16 @@ class Device final : public d3d::Device {
     ResultOrError<Ref<SharedFenceBase>> ImportSharedFenceImpl(
         const SharedFenceDescriptor* descriptor) override;
 
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 
     MaybeError CheckDebugLayerAndGenerateErrors();
     void AppendDebugLayerMessages(ErrorData* error) override;
     void AppendDeviceLostMessage(ErrorData* error) override;
 
-    ResultOrError<ComPtr<ID3D11On12Device>> GetOrCreateD3D11on12Device();
+    ResultOrError<ComPtr<ID3D11On12Device>> GetOrCreateD3D11On12DeviceInternal();
     void Flush11On12DeviceToAvoidLeaks();
 
-    MaybeError EnsureDXCIfRequired();
+    MaybeError EnsureCompilerLibraries();
 
     MaybeError CreateZeroBuffer();
 

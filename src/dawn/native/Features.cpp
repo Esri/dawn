@@ -55,7 +55,7 @@ static constexpr FeatureEnumAndInfo kFeatureInfo[] = {
     {Feature::TextureCompressionBCSliced3D,
      {"Allows Block Compressed (BC) texture formats to be used with 3D dimensions",
       "https://gpuweb.github.io/gpuweb/#texture-compression-bc-sliced-3d",
-      FeatureInfo::FeatureState::Experimental}},
+      FeatureInfo::FeatureState::Stable}},
     {Feature::TextureCompressionETC2,
      {"Support Ericsson Texture Compressed (ETC2/EAC) texture formats",
       "https://gpuweb.github.io/gpuweb/#texture-compression-etc2",
@@ -69,7 +69,7 @@ static constexpr FeatureEnumAndInfo kFeatureInfo[] = {
      {"Allows Adaptable Scalable Texture Compressed (ASTC) texture formats to be used with 3D "
       "dimensions",
       "https://gpuweb.github.io/gpuweb/#texture-compression-astc-sliced-3d",
-      FeatureInfo::FeatureState::Experimental}},
+      FeatureInfo::FeatureState::Stable}},
     {Feature::TimestampQuery,
      {"Support Timestamp Query", "https://gpuweb.github.io/gpuweb/#timestamp-query",
       FeatureInfo::FeatureState::Stable}},
@@ -219,16 +219,6 @@ static constexpr FeatureEnumAndInfo kFeatureInfo[] = {
       "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
       "norm16_texture_formats.md",
       FeatureInfo::FeatureState::Stable}},
-    {Feature::Snorm16TextureFormats,
-     {"Supports R/RG/RGBA16 snorm texture formats",
-      "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
-      "norm16_texture_formats.md",
-      FeatureInfo::FeatureState::Stable}},
-    {Feature::Norm16TextureFormats,
-     {"DEPRECATED Supports R/RG/RGBA16 norm texture formats.",
-      "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
-      "norm16_texture_formats.md",
-      FeatureInfo::FeatureState::Stable}},
     {Feature::SharedTextureMemoryVkDedicatedAllocation,
      {"Support specifying whether a Vulkan allocation for shared texture memory is a dedicated "
       "memory allocation.",
@@ -332,12 +322,7 @@ static constexpr FeatureEnumAndInfo kFeatureInfo[] = {
     {Feature::SharedBufferMemoryD3D12Resource,
      {"Support importing ID3D12Resource as shared buffer memory.",
       "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/shared_buffer.md",
-      FeatureInfo::FeatureState::Experimental}},
-    {Feature::R8UnormStorage,
-     {"Supports using r8unorm texture as storage texture.",
-      "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
-      "r8unorm_storage.md",
-      FeatureInfo::FeatureState::Experimental}},
+      FeatureInfo::FeatureState::Stable}},
     {Feature::DawnFormatCapabilities,
      {"Supports querying the capabilities of a texture format.",
       "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
@@ -371,7 +356,7 @@ static constexpr FeatureEnumAndInfo kFeatureInfo[] = {
       "dawn_load_resolve_texture.md",
       FeatureInfo::FeatureState::Stable}},
     {Feature::DawnPartialLoadResolveTexture,
-     {"Support RenderPassDescriptorExpandResolveRect as chained struct into RenderPassDescriptor "
+     {"Support RenderPassDescriptorResolveRect as chained struct into RenderPassDescriptor "
       "for a render pass. This will expand and resolve the texels within the rect of texture.",
       "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
       "dawn_partial_load_resolve_texture.md",
@@ -379,6 +364,19 @@ static constexpr FeatureEnumAndInfo kFeatureInfo[] = {
     {Feature::Subgroups,
      {"Supports the \"enable subgroups;\" directive in WGSL.",
       "https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroups.md",
+      FeatureInfo::FeatureState::Stable}},
+    {Feature::TextureFormatsTier1,
+     {"Supports some new GPUTextureFormats with the RENDER_ATTACHMENT, blendable, multisampling "
+      "capabilities and the STORAGE_BINDING capability with the 'read-only' and 'write-only'"
+      "GPUStorageTextureAccesses.",
+      "https://gpuweb.github.io/gpuweb/#texture-formats-tier1", FeatureInfo::FeatureState::Stable}},
+    {Feature::TextureFormatsTier2,
+     {"Supports StorageTextureAccess 'read-write' on several additional formats.",
+      "https://gpuweb.github.io/gpuweb/#texture-formats-tier2", FeatureInfo::FeatureState::Stable}},
+    {Feature::TextureComponentSwizzle,
+     {"Allows GPUTextureViews to rearrange or replace the color components from texture's "
+      "red/green/blue/alpha channels when used as a TEXTURE_BINDING.",
+      "https://gpuweb.github.io/gpuweb/#texture-component-swizzle",
       FeatureInfo::FeatureState::Stable}},
     {Feature::CoreFeaturesAndLimits,
      {"Lifts all compatibility mode restrictions (features and limits) to core when enabled on a "
@@ -413,6 +411,27 @@ static constexpr FeatureEnumAndInfo kFeatureInfo[] = {
      {"Supports configuring device allocator via DawnDeviceAllocatorControl",
       "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
       "dawn_device_allocator_control.md",
+      FeatureInfo::FeatureState::Experimental}},
+    {Feature::PrimitiveIndex,
+     {"Supports the \"enable primitive_index;\" directive in WGSL",
+      "https://gpuweb.github.io/gpuweb/#dom-gpufeaturename-primitive-index",
+      FeatureInfo::FeatureState::Stable}},
+    {Feature::AdapterPropertiesWGPU,
+     {"Support querying WebGPU backend info from the adapter.",
+      "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/"
+      "adapter_properties.md",
+      FeatureInfo::FeatureState::Experimental}},
+    {Feature::SharedBufferMemoryD3D12SharedMemoryFileMappingHandle,
+     {"Supports importing a shared memory file mapping handle as shared buffer memory.",
+      "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/shared_buffer.md",
+      FeatureInfo::FeatureState::Experimental}},
+    {Feature::SharedTextureMemoryD3D12Resource,
+     {"Support importing ID3D12Resource as shared texture memory.",
+      "https://dawn.googlesource.com/dawn/+/refs/heads/main/docs/dawn/features/shared_texture.md",
+      FeatureInfo::FeatureState::Experimental}},
+    {Feature::ChromiumExperimentalSamplingResourceTable,
+     {"Experimental support for the bindless sampling resource table",
+      "https://github.com/Kangz/gpuweb/blob/bindless/proposals/bindless.md",
       FeatureInfo::FeatureState::Experimental}}};
 
 }  // anonymous namespace

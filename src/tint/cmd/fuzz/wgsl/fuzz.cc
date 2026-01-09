@@ -28,12 +28,12 @@
 #include "src/tint/cmd/fuzz/wgsl/fuzz.h"
 
 #include <iostream>
+#include <span>
 #include <string>
 #include <string_view>
 #include <thread>
 
-#include "src/tint/lang/core/address_space.h"
-#include "src/tint/lang/core/builtin_type.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/wgsl/allowed_features.h"
 #include "src/tint/lang/wgsl/ast/alias.h"
 #include "src/tint/lang/wgsl/ast/function.h"
@@ -41,7 +41,7 @@
 #include "src/tint/lang/wgsl/ast/module.h"
 #include "src/tint/lang/wgsl/ast/struct.h"
 #include "src/tint/lang/wgsl/ast/variable.h"
-#include "src/tint/lang/wgsl/builtin_fn.h"
+#include "src/tint/lang/wgsl/enums.h"
 #include "src/tint/lang/wgsl/reader/options.h"
 #include "src/tint/lang/wgsl/reader/reader.h"
 #include "src/tint/utils/containers/vector.h"
@@ -129,11 +129,11 @@ void Register(const ProgramFuzzer& fuzzer) {
     Fuzzers().Push(fuzzer);
 }
 
-void Run(std::string_view wgsl, const Options& options, Slice<const std::byte> data) {
+void Run(std::string_view wgsl, const Options& options, std::span<const std::byte> data) {
 #if TINT_BUILD_WGSL_WRITER
     // Register the Program printer. This is used for debugging purposes.
     tint::Program::printer = [](const tint::Program& program) {
-        auto result = tint::wgsl::writer::Generate(program, {});
+        auto result = tint::wgsl::writer::Generate(program);
         if (result != Success) {
             return result.Failure().reason;
         }

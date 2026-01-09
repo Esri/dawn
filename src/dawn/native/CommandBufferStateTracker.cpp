@@ -120,9 +120,8 @@ Return FindStorageBufferBindingAliasing(const PipelineLayoutBase* pipelineLayout
     for (BindGroupIndex groupIndex : pipelineLayout->GetBindGroupLayoutsMask()) {
         BindGroupLayoutInternalBase* bgl = bindGroups[groupIndex]->GetLayout();
 
-        for (BindingIndex bindingIndex{0}; bindingIndex < bgl->GetBufferCount(); ++bindingIndex) {
+        for (BindingIndex bindingIndex : bgl->GetBufferIndices()) {
             const BindingInfo& bindingInfo = bgl->GetBindingInfo(bindingIndex);
-            // Buffer bindings are sorted to have smallest of bindingIndex.
             const BufferBindingInfo& layout =
                 std::get<BufferBindingInfo>(bindingInfo.bindingLayout);
 
@@ -158,16 +157,11 @@ Return FindStorageBufferBindingAliasing(const PipelineLayoutBase* pipelineLayout
         }
 
         // TODO(dawn:1642): optimize: precompute start/end range of storage textures bindings.
-        for (BindingIndex bindingIndex{bgl->GetBufferCount()};
-             bindingIndex < bgl->GetBindingCount(); ++bindingIndex) {
+        for (BindingIndex bindingIndex : bgl->GetStorageTextureIndices()) {
             const BindingInfo& bindingInfo = bgl->GetBindingInfo(bindingIndex);
+            const auto& layout = std::get<StorageTextureBindingInfo>(bindingInfo.bindingLayout);
 
-            const auto* layout = std::get_if<StorageTextureBindingInfo>(&bindingInfo.bindingLayout);
-            if (layout == nullptr) {
-                continue;
-            }
-
-            switch (layout->access) {
+            switch (layout.access) {
                 case wgpu::StorageTextureAccess::WriteOnly:
                 case wgpu::StorageTextureAccess::ReadWrite:
                     break;
@@ -276,11 +270,18 @@ Return FindStorageBufferBindingAliasing(const PipelineLayoutBase* pipelineLayout
 
 bool TextureViewsMatch(const TextureViewBase* a, const TextureViewBase* b) {
     DAWN_ASSERT(a->GetTexture() == b->GetTexture());
-    return a->GetFormat().GetIndex() == b->GetFormat().GetIndex() &&
+    // If the texture format is multiplanar, the view formats are permitted to differ (e.g., R8
+    // and RG8), referring to different planes of the same YUV texture. This cannot happen in
+    // OpenGL that actually needs the validation of texture views matching so it's safe for
+    // backends to ignore this here. We don't allow creating multiplanar texture views directly in
+    // WebGPU so this code cannot be triggered in JavaScript and only occurs hit when Chromium
+    // creates a YUV texture internally.
+    return (a->GetFormat().GetIndex() == b->GetFormat().GetIndex() ||
+            a->GetTexture()->GetFormat().IsMultiPlanar()) &&
            a->GetDimension() == b->GetDimension() && a->GetBaseMipLevel() == b->GetBaseMipLevel() &&
            a->GetLevelCount() == b->GetLevelCount() &&
            a->GetBaseArrayLayer() == b->GetBaseArrayLayer() &&
-           a->GetLayerCount() == b->GetLayerCount();
+           a->GetLayerCount() == b->GetLayerCount() && a->GetSwizzle() == b->GetSwizzle();
 }
 
 using VectorOfTextureViews = absl::InlinedVector<const TextureViewBase*, 8>;
@@ -302,6 +303,7 @@ bool TextureViewsAllMatch(const VectorOfTextureViews& views) {
 enum ValidationAspect {
     VALIDATION_ASPECT_PIPELINE,
     VALIDATION_ASPECT_BIND_GROUPS,
+    VALIDATION_ASPECT_RESOURCE_TABLES,
     VALIDATION_ASPECT_VERTEX_BUFFERS,
     VALIDATION_ASPECT_INDEX_BUFFER,
 
@@ -310,19 +312,21 @@ enum ValidationAspect {
 static_assert(VALIDATION_ASPECT_COUNT == CommandBufferStateTracker::kNumAspects);
 
 static constexpr CommandBufferStateTracker::ValidationAspects kDispatchAspects =
-    1 << VALIDATION_ASPECT_PIPELINE | 1 << VALIDATION_ASPECT_BIND_GROUPS;
+    1 << VALIDATION_ASPECT_PIPELINE | 1 << VALIDATION_ASPECT_BIND_GROUPS |
+    1 << VALIDATION_ASPECT_RESOURCE_TABLES;
 
 static constexpr CommandBufferStateTracker::ValidationAspects kDrawAspects =
     1 << VALIDATION_ASPECT_PIPELINE | 1 << VALIDATION_ASPECT_BIND_GROUPS |
-    1 << VALIDATION_ASPECT_VERTEX_BUFFERS;
+    1 << VALIDATION_ASPECT_RESOURCE_TABLES | 1 << VALIDATION_ASPECT_VERTEX_BUFFERS;
 
 static constexpr CommandBufferStateTracker::ValidationAspects kDrawIndexedAspects =
     1 << VALIDATION_ASPECT_PIPELINE | 1 << VALIDATION_ASPECT_BIND_GROUPS |
-    1 << VALIDATION_ASPECT_VERTEX_BUFFERS | 1 << VALIDATION_ASPECT_INDEX_BUFFER;
+    1 << VALIDATION_ASPECT_RESOURCE_TABLES | 1 << VALIDATION_ASPECT_VERTEX_BUFFERS |
+    1 << VALIDATION_ASPECT_INDEX_BUFFER;
 
 static constexpr CommandBufferStateTracker::ValidationAspects kLazyAspects =
-    1 << VALIDATION_ASPECT_BIND_GROUPS | 1 << VALIDATION_ASPECT_VERTEX_BUFFERS |
-    1 << VALIDATION_ASPECT_INDEX_BUFFER;
+    1 << VALIDATION_ASPECT_BIND_GROUPS | 1 << VALIDATION_ASPECT_RESOURCE_TABLES |
+    1 << VALIDATION_ASPECT_VERTEX_BUFFERS | 1 << VALIDATION_ASPECT_INDEX_BUFFER;
 
 CommandBufferStateTracker::CommandBufferStateTracker() = default;
 
@@ -545,6 +549,14 @@ void CommandBufferStateTracker::RecomputeLazyAspects(ValidationAspects aspects) 
         }
     }
 
+    if (aspects[VALIDATION_ASPECT_RESOURCE_TABLES]) {
+        // If current pipeline uses a resource table, make sure one has been set on the command
+        // encoder
+        if (!mLastPipelineLayout->UsesResourceTable() || mResourceTable) {
+            mAspects.set(VALIDATION_ASPECT_RESOURCE_TABLES);
+        }
+    }
+
     if (aspects[VALIDATION_ASPECT_VERTEX_BUFFERS]) {
         RenderPipelineBase* lastRenderPipeline = GetRenderPipeline();
 
@@ -596,6 +608,13 @@ MaybeError CommandBufferStateTracker::CheckMissingAspects(ValidationAspects aspe
         // If this is reached, make sure lazy aspects and the error checks above are consistent.
         DAWN_UNREACHABLE();
         return DAWN_VALIDATION_ERROR("Index buffer is invalid.");
+    }
+
+    if (aspects[VALIDATION_ASPECT_RESOURCE_TABLES]) {
+        return DAWN_VALIDATION_ERROR(
+            "The current pipeline (%s) was created with `usesResourceTable` but no resource table "
+            "was set on the command encoder.",
+            mLastPipeline);
     }
 
     if (aspects[VALIDATION_ASPECT_VERTEX_BUFFERS]) {
@@ -665,11 +684,9 @@ MaybeError CommandBufferStateTracker::CheckMissingAspects(ValidationAspects aspe
                             std::numeric_limits<uint32_t>::max());
 
                 const auto& bindingInfo = mBindgroups[i]->GetLayout()->GetBindingInfo(bindingIndex);
-                const BufferBinding& bufferBinding =
-                    mBindgroups[i]->GetBindingAsBufferBinding(bindingIndex);
+                const BufferBase* buffer = mBindgroups[i]->GetBindingAsBuffer(bindingIndex);
 
                 BindingNumber bindingNumber = bindingInfo.binding;
-                const BufferBase* buffer = bufferBinding.buffer;
 
                 uint64_t bufferSize =
                     mBindgroups[i]->GetUnverifiedBufferSizes()[packedIndex.value()];
@@ -700,9 +717,7 @@ MaybeError CommandBufferStateTracker::CheckMissingAspects(ValidationAspects aspe
                 mBindgroups[a.e0.bindGroupIndex], a.e0.bindGroupIndex, a.e0.bindingIndex,
                 mBindgroups[a.e1.bindGroupIndex], a.e1.bindGroupIndex, a.e1.bindingIndex,
                 a.e0.offset, a.e0.size, a.e1.offset, a.e1.size,
-                mBindgroups[a.e0.bindGroupIndex]
-                    ->GetBindingAsBufferBinding(a.e0.bindingIndex)
-                    .buffer);
+                mBindgroups[a.e0.bindGroupIndex]->GetBindingAsBuffer(a.e0.bindingIndex));
         } else {
             DAWN_ASSERT(std::holds_alternative<TextureAliasing>(result));
             const auto& a = std::get<TextureAliasing>(result);
@@ -751,6 +766,11 @@ void CommandBufferStateTracker::SetBindGroup(BindGroupIndex index,
     mBindgroups[index] = bindgroup;
     mDynamicOffsets[index].assign(dynamicOffsets, dynamicOffsets + dynamicOffsetCount);
     mAspects.reset(VALIDATION_ASPECT_BIND_GROUPS);
+}
+
+void CommandBufferStateTracker::SetResourceTable(ResourceTableBase* resourceTable) {
+    mResourceTable = resourceTable;
+    mAspects.reset(VALIDATION_ASPECT_RESOURCE_TABLES);
 }
 
 void CommandBufferStateTracker::SetIndexBuffer(BufferBase* buffer,
@@ -837,6 +857,7 @@ void CommandBufferStateTracker::End() {
     mLastPipeline = nullptr;
     mMinBufferSizes = nullptr;
     mBindgroups.fill(nullptr);
+    mResourceTable = nullptr;
 }
 
 }  // namespace dawn::native

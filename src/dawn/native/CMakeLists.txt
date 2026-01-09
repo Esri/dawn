@@ -25,6 +25,9 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# Include Windows SDK DLL copying utilities
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/CopyWindowsSDKDLL.cmake")
+
 DawnJSONGenerator(
     TARGET "native_utils"
     PRINT_NAME "Dawn native utilities"
@@ -56,6 +59,7 @@ set(private_headers
     "BlitTextureToBuffer.h"
     "Blob.h"
     "BlobCache.h"
+    "BlockInfo.h"
     "BuddyAllocator.h"
     "BuddyMemoryAllocator.h"
     "Buffer.h"
@@ -78,6 +82,7 @@ set(private_headers
     "CreatePipelineAsyncEvent.h"
     "dawn_platform.h"
     "Device.h"
+    "DeviceGuard.h"
     "DynamicUploader.h"
     "EncodingContext.h"
     "EnumClassBitmasks.h"
@@ -101,6 +106,7 @@ set(private_headers
     "IntegerTypes.h"
     "InternalPipelineStore.h"
     "Limits.h"
+    "LogEmitter.h"
     "ObjectBase.h"
     "ObjectContentHasher.h"
     "PassResourceUsage.h"
@@ -124,11 +130,13 @@ set(private_headers
     "ResourceHeap.h"
     "ResourceHeapAllocator.h"
     "ResourceMemoryAllocation.h"
+    "ResourceTable.h"
     "RingBufferAllocator.h"
     "Sampler.h"
     "ScratchBuffer.h"
     "Serializable.h"
     "ShaderModule.h"
+    "ShaderModuleParseRequest.h"
     "SharedBufferMemory.h"
     "SharedFence.h"
     "SharedResourceMemory.h"
@@ -143,8 +151,8 @@ set(private_headers
     "Surface.h"
     "SwapChain.h"
     "SystemEvent.h"
-    "SystemHandle.h"
     "Texture.h"
+    "TexelBufferView.h"
     "TintUtils.h"
     "ToBackend.h"
     "Toggles.h"
@@ -194,7 +202,9 @@ set(sources
     "ComputePipeline.cpp"
     "CopyTextureForBrowserHelper.cpp"
     "CreatePipelineAsyncEvent.cpp"
+    "dawn_platform.cpp"
     "Device.cpp"
+    "DeviceGuard.cpp"
     "DynamicUploader.cpp"
     "EncodingContext.cpp"
     "Error.cpp"
@@ -233,10 +243,12 @@ set(sources
     "RenderPassWorkaroundsHelper.cpp"
     "RenderPipeline.cpp"
     "ResourceMemoryAllocation.cpp"
+    "ResourceTable.cpp"
     "RingBufferAllocator.cpp"
     "Sampler.cpp"
     "ScratchBuffer.cpp"
     "ShaderModule.cpp"
+    "ShaderModuleParseRequest.cpp"
     "SharedBufferMemory.cpp"
     "SharedFence.cpp"
     "SharedResourceMemory.cpp"
@@ -248,8 +260,8 @@ set(sources
     "Surface.cpp"
     "SwapChain.cpp"
     "SystemEvent.cpp"
-    "SystemHandle.cpp"
     "Texture.cpp"
+    "TexelBufferView.cpp"
     "TintUtils.cpp"
     "Toggles.cpp"
     "utils/WGPUHelpers.cpp"
@@ -287,11 +299,14 @@ list(APPEND conditional_private_platform_depends
     ${CMAKE_DL_LIBS}
 )
 
-# Only win32 app needs to link with user32.lib
+# Only win32 app needs to link with user32.lib and onecore_apiset.lib
 # In UWP, all availiable APIs are defined in WindowsApp.lib
 # and is automatically linked when WINDOWS_STORE set
 if (WIN32 AND NOT WINDOWS_STORE)
-  list(APPEND conditional_private_platform_depends user32.lib)
+  list(APPEND conditional_private_platform_depends
+       user32.lib
+       onecore_apiset.lib
+  )
 endif()
 
 # DXGIGetDebugInterface1 is defined in dxgi.lib
@@ -569,23 +584,54 @@ endif()
 if (DAWN_ENABLE_WEBGPU_ON_WEBGPU)
     list(APPEND headers
         "${DAWN_INCLUDE_DIR}/dawn/native/WebGPUBackend.h"
+        "${DAWN_INCLUDE_DIR}/dawn/serialization/Schema.h"
     )
     list(APPEND private_headers
         "webgpu/BackendWGPU.h"
+        "webgpu/BindGroupWGPU.h"
+        "webgpu/BindGroupLayoutWGPU.h"
         "webgpu/BufferWGPU.h"
+        "webgpu/CaptureContext.h"
         "webgpu/CommandBufferWGPU.h"
+        "webgpu/ComputePipelineWGPU.h"
         "webgpu/DeviceWGPU.h"
         "webgpu/Forward.h"
+        "webgpu/ObjectWGPU.h"
         "webgpu/PhysicalDeviceWGPU.h"
+        "webgpu/PipelineLayoutWGPU.h"
+        "webgpu/QuerySetWGPU.h"
         "webgpu/QueueWGPU.h"
+        "webgpu/RecordableObject.h"
+        "webgpu/RenderBundleWGPU.h"
+        "webgpu/RenderPipelineWGPU.h"
+        "webgpu/SamplerWGPU.h"
+        "webgpu/Serialization.h"
+        "webgpu/ShaderModuleWGPU.h"
+        "webgpu/ToWGPU.h"
+        "webgpu/TextureWGPU.h"
+        "webgpu/WebGPUError.h"
     )
     list(APPEND sources
         "webgpu/BackendWGPU.cpp"
+        "webgpu/BindGroupWGPU.cpp"
+        "webgpu/BindGroupLayoutWGPU.cpp"
         "webgpu/BufferWGPU.cpp"
+        "webgpu/CaptureContext.cpp"
         "webgpu/CommandBufferWGPU.cpp"
+        "webgpu/ComputePipelineWGPU.cpp"
         "webgpu/DeviceWGPU.cpp"
         "webgpu/PhysicalDeviceWGPU.cpp"
+        "webgpu/PipelineLayoutWGPU.cpp"
+        "webgpu/QuerySetWGPU.cpp"
         "webgpu/QueueWGPU.cpp"
+        "webgpu/RecordableObject.cpp"
+        "webgpu/RenderBundleWGPU.cpp"
+        "webgpu/RenderPipelineWGPU.cpp"
+        "webgpu/SamplerWGPU.cpp"
+        "webgpu/Serialization.cpp"
+        "webgpu/ShaderModuleWGPU.cpp"
+        "webgpu/ToWGPU.cpp"
+        "webgpu/TextureWGPU.cpp"
     )
 endif()
 
@@ -606,7 +652,7 @@ if (DAWN_ENABLE_OPENGL)
         SCRIPT "${Dawn_SOURCE_DIR}/generator/opengl_loader_generator.py"
         PRINT_NAME "OpenGL function loader"
         EXTRA_PARAMETERS "--gl-xml"
-             "${Dawn_SOURCE_DIR}/third_party/khronos/OpenGL-Registry/xml/gl.xml"
+             "${DAWN_OPENGL_REGISTRY_DIR}/xml/gl.xml"
              "--supported-extensions"
              "${Dawn_SOURCE_DIR}/src/dawn/native/opengl/supported_extensions.json"
         OUTPUT_HEADERS DAWN_NATIVE_OPENGL_AUTOGEN_HEADERS
@@ -621,7 +667,6 @@ if (DAWN_ENABLE_OPENGL)
         "opengl/BackendGL.h"
         "opengl/BindGroupGL.h"
         "opengl/BindGroupLayoutGL.h"
-        "opengl/BindingPoint.h"
         "opengl/BufferGL.h"
         "opengl/CommandBufferGL.h"
         "opengl/ComputePipelineGL.h"
@@ -631,6 +676,7 @@ if (DAWN_ENABLE_OPENGL)
         "opengl/EGLFunctions.h"
         "opengl/Forward.h"
         "opengl/GLFormat.h"
+        "opengl/IntegerTypes.h"
         "opengl/opengl_platform.h"
         "opengl/OpenGLFunctions.h"
         "opengl/OpenGLVersion.h"
@@ -707,6 +753,8 @@ if (DAWN_ENABLE_VULKAN)
         "vulkan/ExternalHandle.h"
         "vulkan/FencedDeleter.h"
         "vulkan/Forward.h"
+        "vulkan/FramebufferCache.h"
+        "vulkan/MemoryTypeSelector.h"
         "vulkan/PhysicalDeviceVk.h"
         "vulkan/PipelineVk.h"
         "vulkan/PipelineCacheVk.h"
@@ -719,6 +767,7 @@ if (DAWN_ENABLE_VULKAN)
         "vulkan/ResolveTextureLoadingUtilsVk.h"
         "vulkan/ResourceHeapVk.h"
         "vulkan/ResourceMemoryAllocatorVk.h"
+        "vulkan/ResourceTableVk.h"
         "vulkan/SamplerVk.h"
         "vulkan/ShaderModuleVk.h"
         "vulkan/SharedFenceVk.h"
@@ -748,6 +797,8 @@ if (DAWN_ENABLE_VULKAN)
         "vulkan/DescriptorSetAllocator.cpp"
         "vulkan/DeviceVk.cpp"
         "vulkan/FencedDeleter.cpp"
+        "vulkan/FramebufferCache.cpp"
+        "vulkan/MemoryTypeSelector.cpp"
         "vulkan/PhysicalDeviceVk.cpp"
         "vulkan/PipelineVk.cpp"
         "vulkan/PipelineCacheVk.cpp"
@@ -759,6 +810,7 @@ if (DAWN_ENABLE_VULKAN)
         "vulkan/ResolveTextureLoadingUtilsVk.cpp"
         "vulkan/ResourceHeapVk.cpp"
         "vulkan/ResourceMemoryAllocatorVk.cpp"
+        "vulkan/ResourceTableVk.cpp"
         "vulkan/SamplerVk.cpp"
         "vulkan/ShaderModuleVk.cpp"
         "vulkan/SharedFenceVk.cpp"
@@ -805,6 +857,12 @@ if (DAWN_ENABLE_VULKAN)
     endif()
 endif()
 
+if (DAWN_ENABLE_D3D12 OR DAWN_ENABLE_VULKAN)
+    list(APPEND conditional_private_depends RenderDocApi)
+    list(APPEND private_headers "utils/RenderDoc.h")
+    list(APPEND sources "utils/RenderDoc.cpp")
+endif()
+
 set(dawn_component_srcs)
 list(APPEND dawn_component_srcs "DawnNative.cpp")
 if (DAWN_ENABLE_D3D11 OR DAWN_ENABLE_D3D12)
@@ -845,6 +903,7 @@ set(dawn_native_private_depends
     absl::inlined_vector
     absl::str_format_internal
     absl::strings
+    dawn::dawn_system_utils
     libtint
     ${conditional_private_depends}
 )
@@ -889,6 +948,7 @@ endif()
 
 if (DAWN_USE_X11)
     target_include_directories(dawn_native PRIVATE ${X11_INCLUDE_DIR})
+    target_include_directories(dawn_native_objects PRIVATE ${X11_INCLUDE_DIR})
 endif()
 
 if (DAWN_ENABLE_D3D12)
@@ -922,39 +982,63 @@ if (DAWN_BUILD_MONOLITHIC_LIBRARY)
     # Note that this library name is referenced in several places, search for it and things like:
     # "{{.*}}_dawn" when you rename it.
     ###############################################################################
+
+    # First make an object library for webgpu_dawn_native_proc sources for the export macros to
+    # get applied as well as backend-specific dawn_native entrypoints that also use export macros.
+    # This is essentially the same as dawn_native but using OBJECT as a library type and the
+    # DAWN_BUILD_MONOLITHIC_LIBRARY option to choose the export macros.
     DawnJSONGenerator(
         TARGET "webgpu_dawn_native_proc"
         PRINT_NAME "Dawn native WebGPU procs"
         OUTPUT_SOURCES WEBGPU_DAWN_NATIVE_PROC_GEN_SOURCES
     )
-    # Bundle all objects of dawn_native, it's public dependencies and private dependencies.
-    include(BundleLibraries)
-    bundle_libraries(webgpu_dawn dawn::dawn_native_objects)
-    add_library(dawn::webgpu_dawn ALIAS webgpu_dawn)
-    # Compile backend specific sources along with webgpu_dawn_native_proc sources for export macros to get applied.
-    target_sources(webgpu_dawn
-        PRIVATE
+
+    dawn_add_library(
+      webgpu_dawn_objects
+      UTILITY_TARGET dawn_internal_config
+      FORCE_OBJECT
+      SOURCES
         ${WEBGPU_DAWN_NATIVE_PROC_GEN_SOURCES}
         ${dawn_component_srcs}
+      DEPENDS
+        ${dawn_native_public_depends}
+      PRIVATE_DEPENDS
+        dawn::dawn_native_objects
+        ${dawn_native_private_depends}
+        ${conditional_private_platform_depends}
     )
-    target_compile_definitions(webgpu_dawn
+
+    target_compile_definitions(webgpu_dawn_objects
         PRIVATE
             "WGPU_IMPLEMENTATION"
             "DAWN_NATIVE_IMPLEMENTATION"
-        PUBLIC
-            "WGPU_SHARED_LIBRARY"
-            "DAWN_NATIVE_SHARED_LIBRARY"
     )
-    # Apart from dawn_public_config, everything else goes inside PRIVATE, otherwise install rules will complain that they were not exported.
-    target_link_libraries(webgpu_dawn
-        PUBLIC
-            dawn_public_config
-        PRIVATE
-            dawn_internal_config
-            ${dawn_native_public_depends}
-            ${dawn_native_private_depends}
-            ${conditional_private_platform_depends}
+    if (DAWN_BUILD_MONOLITHIC_LIBRARY STREQUAL SHARED)
+        target_compile_definitions(webgpu_dawn_objects
+            PUBLIC
+                "WGPU_SHARED_LIBRARY"
+                "DAWN_NATIVE_SHARED_LIBRARY"
+        )
+    endif()
+
+    if (DAWN_USE_X11)
+        target_include_directories(webgpu_dawn_objects PRIVATE ${X11_INCLUDE_DIR})
+    endif()
+
+    # Do the bundling of all the objects and dependencies together.
+    include(BundleLibraries)
+    bundle_libraries(webgpu_dawn ${DAWN_BUILD_MONOLITHIC_LIBRARY} webgpu_dawn_objects)
+    add_library(dawn::webgpu_dawn ALIAS webgpu_dawn)
+
+    # Since this is a bundled library, the only dependency is the config needed to use it.
+    target_link_libraries(
+      webgpu_dawn
+      PUBLIC
+        dawn_public_config
+      PRIVATE
+        ${conditional_private_platform_depends}
     )
+
     set(webgpu_dawn_public_headers)
     foreach(dawn_target_name IN ITEMS dawn_headers dawncpp_headers dawn_native_objects)
         get_target_property(headers "${dawn_target_name}" INTERFACE_SOURCES)
@@ -973,4 +1057,10 @@ endif ()
 # doesn't work well with shared libs
 if (DAWN_USE_BUILT_DXC)
     target_link_libraries(dawn_native PRIVATE dxcompiler)
+endif()
+
+# Copy d3dcompiler_47.dll from Windows SDK when not using system component loading
+if (WIN32 AND NOT DAWN_FORCE_SYSTEM_COMPONENT_LOAD AND (DAWN_ENABLE_D3D11 OR DAWN_ENABLE_D3D12))
+    AddCopyWindowsSDKDLLTarget(copy_d3dcompiler_dll "d3dcompiler_47.dll")
+    add_dependencies(dawn_native copy_d3dcompiler_dll)
 endif()

@@ -32,18 +32,12 @@ set(BUILD_TESTING OFF)
 # It is particularly interesting when building dawn as a subdirectory in
 # a parent project that does not want to use depot_tools.
 if (DAWN_FETCH_DEPENDENCIES)
-    set(EXTRA_FETCH_ARGS)
-    if (NOT TARGET gmock AND (DAWN_BUILD_TESTS OR TINT_BUILD_TESTS))
-        list(APPEND EXTRA_FETCH_ARGS --use-test-deps)
-    endif()
-
     message(STATUS "Running fetch_dawn_dependencies:")
     execute_process(
         COMMAND
             ${Python3_EXECUTABLE}
             "${PROJECT_SOURCE_DIR}/tools/fetch_dawn_dependencies.py"
             --directory ${PROJECT_SOURCE_DIR}
-            ${EXTRA_FETCH_ARGS}
     )
 endif ()
 
@@ -62,6 +56,7 @@ if (NOT TARGET absl::strings)
                 -Wno-unreachable-code-break
                 -Wno-nullability-extension
                 -Wno-shadow
+                -Wno-redundant-parens
         )
     endif()
 
@@ -89,16 +84,34 @@ if ((DAWN_BUILD_TESTS OR TINT_BUILD_TESTS) AND NOT TARGET gmock)
     set(gtest_force_shared_crt ON CACHE BOOL "Controls whether a shared run-time library should be used even when Google Test is built as static library" FORCE)
     if (EMSCRIPTEN)
         # For Emscripten builds, we need to disable pthreads.
+        # https://discourse.cmake.org/t/set-definitions-for-external-sub-directory/1136
         set(gtest_disable_pthreads ON)
     endif()
 
-    # We don't use exceptions, so we don't need gtest to handle them. Emscripten
-    # builds in particular, with JSPI enabled, crash without this enabled.
-    # There doesn't seem to be an option to tell the gtest build files to do
-    # this, so we set it globally. (This seems to be the intended usage.)
-    add_definitions(-DGTEST_HAS_EXCEPTIONS=0)
-
     add_subdirectory(${DAWN_GOOGLETEST_DIR} "${CMAKE_CURRENT_BINARY_DIR}/googletest" EXCLUDE_FROM_ALL)
+
+    # The CMake target GTest::gmock_main always sets -fexceptions, which is
+    # incompatible with WASM JSPI (though works with Asyncify). The only way to
+    # avoid this is to define our own custom CMake rule for it.
+    # (This is based on GMock's internal `gmock_main_no_exception` target.)
+    add_library(gmock_main_wasmsafe
+        "${gtest_SOURCE_DIR}/src/gtest-all.cc"
+        "${gmock_SOURCE_DIR}/src/gmock-all.cc"
+        "${gmock_SOURCE_DIR}/src/gmock_main.cc"
+    )
+    target_compile_options(gmock_main_wasmsafe
+        PUBLIC
+            "-fno-exceptions"
+            "-fno-rtti"
+    )
+    target_include_directories(gmock_main_wasmsafe SYSTEM
+        PRIVATE
+            "${gtest_SOURCE_DIR}"
+            "${gmock_SOURCE_DIR}"
+        PUBLIC
+            "${gtest_SOURCE_DIR}/include"
+            "${gmock_SOURCE_DIR}/include"
+    )
 endif()
 ################################################################################
 # End of Emscripten enabled third party directories
@@ -106,6 +119,9 @@ endif()
 if (EMSCRIPTEN)
     return()
 endif()
+
+# Force ENABLE_RTTI in spirv-tools and glslang.
+set(ENABLE_RTTI ${DAWN_ENABLE_RTTI} CACHE BOOL "" FORCE)
 
 if (NOT TARGET SPIRV-Headers)
     set(SPIRV_HEADERS_SKIP_EXAMPLES ON CACHE BOOL "" FORCE)
@@ -125,7 +141,6 @@ if (NOT TARGET SPIRV-Tools AND
     set(SPIRV_SKIP_EXECUTABLES ON CACHE BOOL "" FORCE)
     set(SKIP_SPIRV_TOOLS_INSTALL ON CACHE BOOL "" FORCE)
     set(SPIRV_WERROR OFF CACHE BOOL OFF FORCE)
-
     message(STATUS "Dawn: using SPIRV-Tools at ${DAWN_SPIRV_TOOLS_DIR}")
     add_subdirectory(${DAWN_SPIRV_TOOLS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/spirv-tools" EXCLUDE_FROM_ALL)
 endif()
@@ -159,11 +174,17 @@ if (DAWN_BUILD_PROTOBUF AND NOT TARGET libprotobuf-mutator)
     include("libprotobuf-mutator/BUILD.cmake")
 endif()
 
+if (NOT TARGET renderdoc-api)
+    add_library(RenderDocApi INTERFACE)
+    target_include_directories(RenderDocApi INTERFACE "renderdoc")
+    target_compile_definitions(RenderDocApi INTERFACE "DAWN_ENABLE_RENDERDOC")
+endif()
+
 if (DAWN_ENABLE_DESKTOP_GL OR DAWN_ENABLE_OPENGLES)
     # Header-only library for khrplatform.h
     add_library(dawn_khronos_platform INTERFACE)
-    target_sources(dawn_khronos_platform INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/khronos/EGL-Registry/api/KHR/khrplatform.h")
-    target_include_directories(dawn_khronos_platform INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/khronos/EGL-Registry/api")
+    target_sources(dawn_khronos_platform INTERFACE "${DAWN_EGL_REGISTRY_DIR}/api/KHR/khrplatform.h")
+    target_include_directories(dawn_khronos_platform INTERFACE "${DAWN_EGL_REGISTRY_DIR}/api")
 endif()
 
 if (NOT TARGET Vulkan::Headers AND DAWN_ENABLE_VULKAN)
@@ -190,6 +211,9 @@ if (TINT_BUILD_BENCHMARKS OR DAWN_BUILD_BENCHMARKS)
     set(BENCHMARK_ENABLE_TESTING FALSE CACHE BOOL FALSE FORCE)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/google_benchmark/src EXCLUDE_FROM_ALL)
 endif()
+
+# Include Windows SDK DLL copying utilities
+include("${CMAKE_CURRENT_SOURCE_DIR}/CopyWindowsSDKDLL.cmake")
 
 # Populates 'targets' with list of all targets under 'dir'
 # Use 'get_all_targets_recursive' instead of this macro
@@ -324,50 +348,7 @@ function(AddSubdirectoryDXC)
 
     # Create a target that copies dxil.dll from the platform SDK
     if (WIN32)
-        message(STATUS "Finding Windows SDK Directory")
-
-        message(STATUS "Display environment variables:")
-        execute_process(COMMAND ${CMAKE_COMMAND} -E environment COMMAND_ECHO STDOUT)
-
-        if(DEFINED ENV{WINDOWSSDKDIR})
-            # If WINDOWSSDKDIR env var is defined, use its value. This is defined, for example, when
-            # using a Visual Studio command prompt.
-            set(WIN10_SDK_PATH "$ENV{WINDOWSSDKDIR}")
-            message(STATUS "Found WINDOWSSDKDIR environment variable: ${WIN10_SDK_PATH}")
-        else()
-            # There's no easy way to get the Windows SDK path in CMake; however, conveniently, DXC
-            # contains a FindD3D12.cmake file that returns WIN10_SDK_PATH and WIN10_SDK_VERSION,
-            # so let's use that.
-            # TODO(crbug.com/tint/2106): Get the Win10 SDK path and version ourselves until
-            # dxc/cmake/modules/FindD3D12.cmake supports non-VS generators.
-            get_filename_component(WIN10_SDK_PATH "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots;KitsRoot10]" ABSOLUTE CACHE)
-            message(STATUS "WINDOWSSDKDIR environment variable is not defined, retrieving from registry: ${WIN10_SDK_PATH}")
-        endif()
-
-        message(STATUS "Finding Windows SDK version")
-        if (CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION)
-            set (WIN10_SDK_VERSION ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION})
-            message(STATUS "Found Windows SDK version from CMake variable 'CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION': ${WIN10_SDK_VERSION}")
-        else()
-            # CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION may not be defined if, for example,
-            # the Ninja generator is used instead of Visual Studio. Attempt to retrieve the
-            # most recent SDK version from the list of paths under "${WIN10_SDK_PATH}/Include/".
-            file(GLOB sdk_dirs RELATIVE "${WIN10_SDK_PATH}/Include/" "${WIN10_SDK_PATH}/Include/10.*")
-            if (sdk_dirs)
-                list(POP_BACK sdk_dirs WIN10_SDK_VERSION)
-            endif()
-            unset(sdk_dirs)
-            message(STATUS "Windows SDK version not found from CMake variable 'CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION', attempted to find from SDK path: ${WIN10_SDK_VERSION}")
-        endif()
-
-        set(DXIL_DLL_PATH "${WIN10_SDK_PATH}/bin/${WIN10_SDK_VERSION}/x64/dxil.dll")
-        add_custom_target(copy_dxil_dll)
-        add_custom_command(
-            TARGET copy_dxil_dll
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DXIL_DLL_PATH} $<TARGET_FILE_DIR:dxcompiler>
-            COMMENT "Copying ${DXIL_DLL_PATH} to $<TARGET_FILE_DIR:dxcompiler>")
-        # Ensure folder "$<TARGET_FILE_DIR:dxcompiler>" exists when copying the dll
-        add_dependencies(copy_dxil_dll dxcompiler)
+        AddCopyWindowsSDKDLLTarget("copy_dxil_dll" "dxil.dll")
         # Make dxc target depend on copy_dxil_dll
         add_dependencies(dxc copy_dxil_dll)
     endif()

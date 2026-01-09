@@ -51,23 +51,16 @@ include(lang/wgsl/writer/BUILD.cmake)
 ################################################################################
 tint_add_target(tint_lang_wgsl lib
   lang/wgsl/allowed_features.h
-  lang/wgsl/builtin_fn.cc
-  lang/wgsl/builtin_fn.h
-  lang/wgsl/diagnostic_rule.cc
-  lang/wgsl/diagnostic_rule.h
-  lang/wgsl/diagnostic_severity.cc
-  lang/wgsl/diagnostic_severity.h
-  lang/wgsl/extension.cc
-  lang/wgsl/extension.h
+  lang/wgsl/enums.cc
+  lang/wgsl/enums.h
   lang/wgsl/feature_status.cc
   lang/wgsl/feature_status.h
-  lang/wgsl/language_feature.cc
-  lang/wgsl/language_feature.h
   lang/wgsl/reserved_words.cc
   lang/wgsl/reserved_words.h
 )
 
 tint_target_add_dependencies(tint_lang_wgsl lib
+  tint_lang_core
   tint_utils
   tint_utils_containers
   tint_utils_diagnostic
@@ -89,11 +82,8 @@ tint_target_add_external_dependencies(tint_lang_wgsl lib
 ################################################################################
 tint_add_target(tint_lang_wgsl_test test
   lang/wgsl/allowed_features_test.cc
-  lang/wgsl/diagnostic_rule_test.cc
-  lang/wgsl/diagnostic_severity_test.cc
-  lang/wgsl/extension_test.cc
+  lang/wgsl/enums_test.cc
   lang/wgsl/language_feature_status_test.cc
-  lang/wgsl/language_feature_test.cc
 )
 
 tint_target_add_dependencies(tint_lang_wgsl_test test
@@ -106,6 +96,7 @@ tint_target_add_dependencies(tint_lang_wgsl_test test
   tint_lang_wgsl_ast
   tint_lang_wgsl_program
   tint_lang_wgsl_sem
+  tint_lang_wgsl_writer_common
   tint_lang_wgsl_writer_ir_to_program
   tint_lang_wgsl_writer_raise
   tint_utils
@@ -135,6 +126,7 @@ endif(TINT_BUILD_WGSL_READER)
 if(TINT_BUILD_WGSL_READER AND TINT_BUILD_WGSL_WRITER)
   tint_target_add_sources(tint_lang_wgsl_test test
     "lang/wgsl/ir_roundtrip_test.cc"
+    "lang/wgsl/minifier_test.cc"
   )
 endif(TINT_BUILD_WGSL_READER AND TINT_BUILD_WGSL_WRITER)
 

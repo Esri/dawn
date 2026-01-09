@@ -76,11 +76,11 @@ GLenum TargetForTextureViewDimension(wgpu::TextureViewDimension dimension, uint3
     }
 }
 
+// Note this only applies to Desktop OpenGL (texture views don't exist in GLES).
+// In compatibility mode, validation should mean we never need texture views.
 bool RequiresCreatingNewTextureView(
     const TextureBase* texture,
     const UnpackedPtr<TextureViewDescriptor>& textureViewDescriptor) {
-    // Compatibility mode validation should prevent the need for creation of
-    // new texture views.
     if (ToBackend(texture->GetDevice())->IsCompatibilityMode()) {
         return false;
     }
@@ -123,6 +123,16 @@ bool RequiresCreatingNewTextureView(
         // GL_DEPTH_STENCIL_TEXTURE_MODE. Choose the stencil aspect for the
         // extra handle since it is likely sampled less often.
         return true;
+    }
+
+    // Note: For formats with <4 channels, this could be refined to consider that some channels are
+    // nonexistent. We don't bother to optimize that, because such swizzles are not actually useful.
+    // (Also, this code is only reached on Desktop GL anyway.)
+    if (auto* swizzleDesc = textureViewDescriptor.Get<TextureComponentSwizzleDescriptor>()) {
+        auto swizzle = swizzleDesc->swizzle.WithTrivialFrontendDefaults();
+        if (*ToCppAPI(&swizzle) != kRGBASwizzle) {
+            return true;
+        }
     }
 
     return false;
@@ -269,8 +279,8 @@ ResultOrError<Ref<Texture>> Texture::Create(Device* device,
     DAWN_GL_TRY(gl, TexParameteri(target, GL_TEXTURE_MAX_LEVEL, levels - 1));
 
     if (device->IsToggleEnabled(Toggle::NonzeroClearResourcesOnCreationForTesting)) {
-        DAWN_TRY(
-            texture->ClearTexture(texture->GetAllSubresources(), TextureBase::ClearValue::NonZero));
+        DAWN_TRY(texture->ClearTexture(gl, texture->GetAllSubresources(),
+                                       TextureBase::ClearValue::NonZero));
     }
     return std::move(texture);
 }
@@ -300,8 +310,8 @@ Texture::Texture(Device* device,
 
 Texture::~Texture() {}
 
-void Texture::DestroyImpl() {
-    TextureBase::DestroyImpl();
+void Texture::DestroyImpl(DestroyReason reason) {
+    TextureBase::DestroyImpl(reason);
     if (mOwnsHandle == OwnsHandle::Yes) {
         const OpenGLFunctions& gl = ToBackend(GetDevice())->GetGL();
         DAWN_GL_TRY_IGNORE_ERRORS(gl, DeleteTextures(1, &mHandle));
@@ -321,15 +331,15 @@ const GLFormat& Texture::GetGLFormat() const {
     return ToBackend(GetDevice())->GetGLFormat(GetFormat());
 }
 
-MaybeError Texture::ClearTexture(const SubresourceRange& range,
+MaybeError Texture::ClearTexture(const OpenGLFunctions& gl,
+                                 const SubresourceRange& range,
                                  TextureBase::ClearValue clearValue) {
     Device* device = ToBackend(GetDevice());
-    const OpenGLFunctions& gl = device->GetGL();
 
     uint8_t clearColor = (clearValue == TextureBase::ClearValue::Zero) ? 0 : 1;
     float fClearColor = (clearValue == TextureBase::ClearValue::Zero) ? 0.f : 1.f;
 
-    if (GetFormat().isRenderable) {
+    if (GetFormat().IsRenderable()) {
         if (range.aspects & (Aspect::Depth | Aspect::Stencil)) {
             GLfloat depth = fClearColor;
             GLint stencil = clearColor;
@@ -558,7 +568,7 @@ MaybeError Texture::ClearTexture(const SubresourceRange& range,
             TexelCopyBufferLayout dataLayout;
             dataLayout.offset = 0;
             dataLayout.bytesPerRow = bytesPerRow;
-            dataLayout.rowsPerImage = largestMipSize.height;
+            dataLayout.rowsPerImage = largestMipSize.height / blockInfo.height;
 
             Extent3D mipSize = GetMipLevelSingleSubresourcePhysicalSize(level, Aspect::Color);
 
@@ -571,7 +581,7 @@ MaybeError Texture::ClearTexture(const SubresourceRange& range,
                     continue;
                 }
 
-                textureCopy.origin.z = layer;
+                textureCopy.origin.z = TexelCount{layer};
                 DAWN_TRY(DoTexSubImage(gl, textureCopy, 0, dataLayout, mipSize));
             }
         }
@@ -584,12 +594,13 @@ MaybeError Texture::ClearTexture(const SubresourceRange& range,
     return {};
 }
 
-MaybeError Texture::EnsureSubresourceContentInitialized(const SubresourceRange& range) {
+MaybeError Texture::EnsureSubresourceContentInitialized(const OpenGLFunctions& gl,
+                                                        const SubresourceRange& range) {
     if (!GetDevice()->IsToggleEnabled(Toggle::LazyClearResourceOnFirstUse)) {
         return {};
     }
     if (!IsSubresourceContentInitialized(range)) {
-        DAWN_TRY(ClearTexture(range, TextureBase::ClearValue::Zero));
+        DAWN_TRY(ClearTexture(gl, range, TextureBase::ClearValue::Zero));
     }
     return {};
 }
@@ -656,8 +667,8 @@ TextureView::TextureView(TextureBase* texture,
 
 TextureView::~TextureView() {}
 
-void TextureView::DestroyImpl() {
-    TextureViewBase::DestroyImpl();
+void TextureView::DestroyImpl(DestroyReason reason) {
+    TextureViewBase::DestroyImpl(reason);
     if (mOwnsHandle == OwnsHandle::Yes) {
         const OpenGLFunctions& gl = ToBackend(GetDevice())->GetGL();
         DAWN_GL_TRY_IGNORE_ERRORS(gl, DeleteTextures(1, &mHandle));
@@ -673,11 +684,12 @@ GLenum TextureView::GetGLTarget() const {
     return mTarget;
 }
 
-MaybeError TextureView::BindToFramebuffer(GLenum target, GLenum attachment, GLuint depthSlice) {
+MaybeError TextureView::BindToFramebuffer(const OpenGLFunctions& gl,
+                                          GLenum target,
+                                          GLenum attachment,
+                                          GLuint depthSlice) {
     DAWN_ASSERT(depthSlice <
                 static_cast<GLuint>(GetSingleSubresourceVirtualSize().depthOrArrayLayers));
-
-    const OpenGLFunctions& gl = ToBackend(GetDevice())->GetGL();
 
     // Use the base texture where possible to minimize the amount of copying required on GLES.
     bool useOwnView = GetFormat().format != GetTexture()->GetFormat().format &&

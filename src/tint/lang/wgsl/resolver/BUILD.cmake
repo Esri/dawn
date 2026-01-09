@@ -97,6 +97,7 @@ tint_add_target(tint_lang_wgsl_resolver_test test
   lang/wgsl/resolver/atomics_test.cc
   lang/wgsl/resolver/atomics_validation_test.cc
   lang/wgsl/resolver/attribute_validation_test.cc
+  lang/wgsl/resolver/barycentric_coord_extension_test.cc
   lang/wgsl/resolver/binding_array_test.cc
   lang/wgsl/resolver/bitcast_validation_test.cc
   lang/wgsl/resolver/builtin_enum_test.cc
@@ -129,7 +130,6 @@ tint_add_target(tint_lang_wgsl_resolver_test test
   lang/wgsl/resolver/f16_extension_test.cc
   lang/wgsl/resolver/framebuffer_fetch_extension_test.cc
   lang/wgsl/resolver/function_validation_test.cc
-  lang/wgsl/resolver/graphite_extension_test.cc
   lang/wgsl/resolver/host_shareable_validation_test.cc
   lang/wgsl/resolver/increment_decrement_validation_test.cc
   lang/wgsl/resolver/inferred_type_test.cc
@@ -140,19 +140,23 @@ tint_add_target(tint_lang_wgsl_resolver_test test
   lang/wgsl/resolver/materialize_test.cc
   lang/wgsl/resolver/override_test.cc
   lang/wgsl/resolver/pixel_local_extension_test.cc
+  lang/wgsl/resolver/primitive_index_extension_test.cc
   lang/wgsl/resolver/ptr_ref_test.cc
   lang/wgsl/resolver/ptr_ref_validation_test.cc
   lang/wgsl/resolver/resolver_behavior_test.cc
   lang/wgsl/resolver/resolver_helper_test.cc
   lang/wgsl/resolver/resolver_helper_test.h
   lang/wgsl/resolver/resolver_test.cc
+  lang/wgsl/resolver/resource_table_extension_test.cc
   lang/wgsl/resolver/root_identifier_test.cc
-  lang/wgsl/resolver/side_effects_test.cc
   lang/wgsl/resolver/struct_address_space_use_test.cc
   lang/wgsl/resolver/struct_layout_test.cc
   lang/wgsl/resolver/struct_pipeline_stage_use_test.cc
   lang/wgsl/resolver/subgroup_matrix_test.cc
+  lang/wgsl/resolver/subgroup_size_control_extension_test.cc
   lang/wgsl/resolver/subgroups_extension_test.cc
+  lang/wgsl/resolver/texel_buffer_test.cc
+  lang/wgsl/resolver/texture_and_sampler_let_extension_test.cc
   lang/wgsl/resolver/type_validation_test.cc
   lang/wgsl/resolver/unresolved_identifier_test.cc
   lang/wgsl/resolver/validation_test.cc

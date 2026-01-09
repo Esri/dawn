@@ -25,9 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -38,12 +40,57 @@
 #include "dawn/utils/ComboRenderPipelineDescriptor.h"
 #include "dawn/utils/WGPUHelpers.h"
 
+#if TINT_BUILD_SPV_READER && !defined(__EMSCRIPTEN__)
+#include "spirv-tools/optimizer.hpp"
+#endif  // TINT_BUILD_SPV_READER && !defined(__EMSCRIPTEN__)
+
 namespace dawn {
 namespace {
 
 class ShaderModuleValidationTest : public ValidationTest {};
 
-#if TINT_BUILD_SPV_READER
+#if TINT_BUILD_SPV_READER && !defined(__EMSCRIPTEN__)
+
+wgpu::ShaderModule CreateShaderModuleFromASM(
+    const wgpu::Device& device,
+    const char* source,
+    wgpu::DawnShaderModuleSPIRVOptionsDescriptor* spirv_options = nullptr) {
+    // Use SPIRV-Tools's C API to assemble the SPIR-V assembly text to binary. Because the types
+    // aren't RAII, we don't return directly on success and instead always go through the code
+    // path that destroys the SPIRV-Tools objects.
+    wgpu::ShaderModule result = nullptr;
+
+    spv_context context = spvContextCreate(SPV_ENV_UNIVERSAL_1_3);
+    DAWN_ASSERT(context != nullptr);
+
+    spv_binary spirv = nullptr;
+    spv_diagnostic diagnostic = nullptr;
+    if (spvTextToBinary(context, source, strlen(source), &spirv, &diagnostic) == SPV_SUCCESS) {
+        DAWN_ASSERT(spirv != nullptr);
+        DAWN_ASSERT(spirv->wordCount <= std::numeric_limits<uint32_t>::max());
+
+        wgpu::ShaderSourceSPIRV spirvDesc;
+        spirvDesc.codeSize = static_cast<uint32_t>(spirv->wordCount);
+        spirvDesc.code = spirv->code;
+        spirvDesc.nextInChain = spirv_options;
+
+        wgpu::ShaderModuleDescriptor descriptor;
+        descriptor.nextInChain = &spirvDesc;
+        result = device.CreateShaderModule(&descriptor);
+    } else {
+        DAWN_ASSERT(diagnostic != nullptr);
+        dawn::WarningLog() << "CreateShaderModuleFromASM SPIRV assembly error:"
+                           << diagnostic->position.line + 1 << ":"
+                           << diagnostic->position.column + 1 << ": " << diagnostic->error;
+    }
+
+    spvDiagnosticDestroy(diagnostic);
+    spvBinaryDestroy(spirv);
+    spvContextDestroy(context);
+
+    return result;
+}
+
 // Test case with a simpler shader that should successfully be created
 TEST_F(ShaderModuleValidationTest, CreationSuccess) {
     const char* shader = R"(
@@ -73,7 +120,7 @@ TEST_F(ShaderModuleValidationTest, CreationSuccess) {
                    OpReturn
                    OpFunctionEnd)";
 
-    utils::CreateShaderModuleFromASM(device, shader);
+    CreateShaderModuleFromASM(device, shader);
 }
 
 // Tint's SPIR-V reader transforms a combined image sampler into two
@@ -118,7 +165,7 @@ TEST_F(ShaderModuleValidationTest, CombinedTextureAndSampler) {
                OpFunctionEnd
         )";
 
-    utils::CreateShaderModuleFromASM(device, shader);
+    CreateShaderModuleFromASM(device, shader);
 }
 
 TEST_F(ShaderModuleValidationTest, ArrayOfCombinedTextureAndSampler) {
@@ -156,7 +203,7 @@ TEST_F(ShaderModuleValidationTest, ArrayOfCombinedTextureAndSampler) {
                OpFunctionEnd
         )";
 
-    ASSERT_DEVICE_ERROR(utils::CreateShaderModuleFromASM(device, shader));
+    ASSERT_DEVICE_ERROR(CreateShaderModuleFromASM(device, shader));
 }
 
 // Test that it is not allowed to declare a multisampled-array interface texture.
@@ -197,7 +244,7 @@ TEST_F(ShaderModuleValidationTest, MultisampledArrayTexture) {
                OpFunctionEnd
         )";
 
-    ASSERT_DEVICE_ERROR(utils::CreateShaderModuleFromASM(device, shader));
+    ASSERT_DEVICE_ERROR(CreateShaderModuleFromASM(device, shader));
 }
 
 const char* kShaderWithNonUniformDerivative = R"(
@@ -229,7 +276,7 @@ const char* kShaderWithNonUniformDerivative = R"(
 // Test that creating a module with a SPIR-V shader that has a uniformity violation fails when no
 // SPIR-V options descriptor is used.
 TEST_F(ShaderModuleValidationTest, NonUniformDerivatives_NoOptions) {
-    ASSERT_DEVICE_ERROR(utils::CreateShaderModuleFromASM(device, kShaderWithNonUniformDerivative));
+    ASSERT_DEVICE_ERROR(CreateShaderModuleFromASM(device, kShaderWithNonUniformDerivative));
 }
 
 // Test that creating a module with a SPIR-V shader that has a uniformity violation fails when
@@ -237,8 +284,8 @@ TEST_F(ShaderModuleValidationTest, NonUniformDerivatives_NoOptions) {
 TEST_F(ShaderModuleValidationTest, NonUniformDerivatives_FlagSetToFalse) {
     wgpu::DawnShaderModuleSPIRVOptionsDescriptor spirv_options_desc = {};
     spirv_options_desc.allowNonUniformDerivatives = false;
-    ASSERT_DEVICE_ERROR(utils::CreateShaderModuleFromASM(device, kShaderWithNonUniformDerivative,
-                                                         &spirv_options_desc));
+    ASSERT_DEVICE_ERROR(
+        CreateShaderModuleFromASM(device, kShaderWithNonUniformDerivative, &spirv_options_desc));
 }
 
 // Test that creating a module with a SPIR-V shader that has a uniformity violation succeeds when
@@ -246,10 +293,10 @@ TEST_F(ShaderModuleValidationTest, NonUniformDerivatives_FlagSetToFalse) {
 TEST_F(ShaderModuleValidationTest, NonUniformDerivatives_FlagSetToTrue) {
     wgpu::DawnShaderModuleSPIRVOptionsDescriptor spirv_options_desc = {};
     spirv_options_desc.allowNonUniformDerivatives = true;
-    utils::CreateShaderModuleFromASM(device, kShaderWithNonUniformDerivative, &spirv_options_desc);
+    CreateShaderModuleFromASM(device, kShaderWithNonUniformDerivative, &spirv_options_desc);
 }
 
-#endif  // TINT_BUILD_SPV_READER
+#endif  // TINT_BUILD_SPV_READER && !defined(__EMSCRIPTEN__)
 
 // Test that it is invalid to create a shader module with no chained descriptor. (It must be
 // WGSL or SPIRV, not empty)
@@ -814,45 +861,90 @@ TEST_F(ShaderModuleValidationTest, CreateErrorShaderModule) {
     FlushWire();
 }
 
+// Test that creating shader modules with invalid UTF-8 is an error.
+TEST_F(ShaderModuleValidationTest, UnicodeValidity) {
+    // Referenced from src/tint/utils/text/unicode_test.cc
+    constexpr std::array<const char*, 14> kValidTestCases = {{
+        "", "abc", "\xe4\xbd\xa0\xe5\xa5\xbd\xe4\xb8\x96\xe7\x95\x8c",
+        "def\xf0\x9f\x91\x8b\xf0\x9f\x8c\x8e",
+        "\xed\x9f\xbf",      // CodePoint == 0xD7FF
+        "\xed\x9f\xbe",      // CodePoint == 0xD7FF - 1
+        "\xee\x80\x80",      // CodePoint == 0xE000
+        "\xee\x80\x81",      // CodePoint == 0xE000 + 1
+        "\xef\xbf\xbf",      // CodePoint == 0xFFFF
+        "\xef\xbf\xbe",      // CodePoint == 0xFFFF - 1
+        "\xf0\x90\x80\x80",  // CodePoint == 0x10000
+        "\xf0\x90\x80\x81",  // CodePoint == 0x10000 + 1
+
+        // Surrogates are technically invalid code points but most software supports them (including
+        // Tint). WGSL coming from JS should never contain surrogates because the JS strings are
+        // valid UTF-16.
+        "\xed\xa0\x80",  // CodePoint == 0xD7FF + 1
+        "\xed\xbf\xbf",  // CodePoint == 0xE000 - 1
+    }};
+    constexpr std::array<const char*, 9> kErrorTestCases = {{
+        "\xd0",              // 2-bytes, missing second byte
+        "\xe8\x8f",          // 3-bytes, missing third byte
+        "\xf4\x8f\x8f",      // 4-bytes, missing fourth byte
+        "\xd0\x7f",          // 2-bytes, second byte MSB unset
+        "\xe8\x7f\x8f",      // 3-bytes, second byte MSB unset
+        "\xe8\x8f\x7f",      // 3-bytes, third byte MSB unset
+        "\xf4\x7f\x8f\x8f",  // 4-bytes, second byte MSB unset
+        "\xf4\x8f\x7f\x8f",  // 4-bytes, third byte MSB unset
+        "\xf4\x8f\x8f\x7f",  // 4-bytes, fourth byte MSB unset
+    }};
+
+    // Puts the UTF-8 in a comment as that's where arbitrary (valid) UTF-8 is allowed.
+    const std::string kPrefix = "@compute @workgroup_size(1) fn main () {} \n //";
+
+    for (const char* testCase : kValidTestCases) {
+        utils::CreateShaderModule(device, kPrefix + testCase);
+    }
+    for (const char* testCase : kErrorTestCases) {
+        ASSERT_DEVICE_ERROR(utils::CreateShaderModule(device, kPrefix + testCase));
+    }
+}
+
 struct WGSLExtensionInfo {
     const char* wgslName;
     // Is this WGSL extension experimental, i.e. guarded by AllowUnsafeAPIs toggle
     bool isExperimental;
-    // The WebGPU features that required to enable this extension, set to empty if no feature
+    // The WebGPU features required to enable this extension, set to empty if no feature
     // required.
-    const std::vector<const char*> requiredFeatureNames;
-    // The WGSL extensions dependency that required to enable this extension, set to empty if no
+    const std::vector<wgpu::FeatureName> requiredFeatureNames;
+    // The WGSL extensions dependency required to enable this extension, set to empty if no
     // dependency.
     const std::vector<const char*> dependingExtensionNames;
 };
+std::ostream& operator<<(std::ostream& os, const WGSLExtensionInfo& info) {
+    return os << "WGSLExtensionInfo{wgslName: " << info.wgslName
+              << ", isExperimental: " << info.isExperimental
+              << ", requiredFeatureNames size: " << info.requiredFeatureNames.size()
+              << ", dependingExtensionNames size: " << info.dependingExtensionNames.size() << "}";
+}
 
-const struct WGSLExtensionInfo kExtensions[] = {
-    {"f16", false, {"shader-f16"}, {}},
-    {"clip_distances", false, {"clip-distances"}, {}},
-    {"dual_source_blending", false, {"dual-source-blending"}, {}},
-    {"subgroups", false, {"subgroups"}, {}},
-    {"chromium_experimental_pixel_local", true, {"pixel-local-storage-coherent"}, {}},
+// clang-format off
+const WGSLExtensionInfo kExtensions[] = {
+    {"f16", false, {wgpu::FeatureName::ShaderF16}, {}},
+    {"clip_distances", false, {wgpu::FeatureName::ClipDistances}, {}},
+    {"dual_source_blending", false, {wgpu::FeatureName::DualSourceBlending}, {}},
+    {"subgroups", false, {wgpu::FeatureName::Subgroups}, {}},
+    {"primitive_index", false, {wgpu::FeatureName::PrimitiveIndex}, {}},
+    {"chromium_experimental_pixel_local", true, {wgpu::FeatureName::PixelLocalStorageCoherent}, {}},
     {"chromium_disable_uniformity_analysis", true, {}, {}},
     {"chromium_internal_graphite", true, {}, {}},
-    {"chromium_experimental_framebuffer_fetch", true, {"framebuffer-fetch"}, {}},
-    {"chromium_experimental_subgroup_matrix", true, {"chromium-experimental-subgroup-matrix"}, {}},
+    {"chromium_experimental_framebuffer_fetch", true, {wgpu::FeatureName::FramebufferFetch}, {}},
+    {"chromium_experimental_subgroup_matrix", true, {wgpu::FeatureName::ChromiumExperimentalSubgroupMatrix}, {}},
+    {"chromium_experimental_resource_table", true, {wgpu::FeatureName::ChromiumExperimentalSamplingResourceTable}, {}}
 
     // Currently the following WGSL extensions are not enabled under any situation.
     /*
-    {"chromium_experimental_immediate", true, {}},
     {"chromium_internal_relaxed_uniform_layout", true, {}},
     */
 };
+// clang-format on
 
-std::string EnableDependingWGSLExtensions(const WGSLExtensionInfo& extension) {
-    std::stringstream s;
-    for (const char* dependency : extension.dependingExtensionNames) {
-        s << "enable " << dependency << ";\n";
-    }
-    return s.str();
-}
-
-class ShaderModuleExtensionValidationTestBase : public ValidationTest {
+class ShaderModuleExtensionValidationTest : public ValidationTest {
   protected:
     // Skip tests if using Wire, because some features are not supported by the wire and cause the
     // device creation failed.
@@ -870,11 +962,25 @@ class ShaderModuleExtensionValidationTestBase : public ValidationTest {
         }
         return requiredFeatures;
     }
+
+    std::string EnabledExtensionsShader(const WGSLExtensionInfo& extension) {
+        std::stringstream s;
+        for (const char* dependency : extension.dependingExtensionNames) {
+            s << "enable " << dependency << ";\n";
+        }
+        s << "enable " << extension.wgslName << ";\n";
+        s << "@compute @workgroup_size(1) fn main() {}";
+        return s.str();
+    }
 };
 
-// Test validating WGSL extension on safe device with no feature required.
+template <typename T>
+class ShaderModuleExtensionValidationTestWithParams
+    : public ValidationTestWithParam<T, ShaderModuleExtensionValidationTest> {};
+
+// Test validating WGSL extension on safe device with no required features.
 class ShaderModuleExtensionValidationTestSafeNoFeature
-    : public ShaderModuleExtensionValidationTestBase {
+    : public ShaderModuleExtensionValidationTest {
   protected:
     bool AllowUnsafeAPIs() override { return false; }
     std::vector<wgpu::FeatureName> GetRequiredFeatures() override { return {}; }
@@ -883,10 +989,7 @@ class ShaderModuleExtensionValidationTestSafeNoFeature
 TEST_F(ShaderModuleExtensionValidationTestSafeNoFeature,
        OnlyStableExtensionsRequiringNoFeatureAllowed) {
     for (auto& extension : kExtensions) {
-        std::string wgsl = EnableDependingWGSLExtensions(extension) + std::string("enable ") +
-                           extension.wgslName + R"(;
-
-@compute @workgroup_size(1) fn main() {})";
+        std::string wgsl = EnabledExtensionsShader(extension);
 
         // On a safe device with no feature required, only stable extensions requiring no features
         // are allowed.
@@ -898,9 +1001,9 @@ TEST_F(ShaderModuleExtensionValidationTestSafeNoFeature,
     }
 }
 
-// Test validating WGSL extension on unsafe device with no feature required.
+// Test validating WGSL extension on unsafe device with no required features.
 class ShaderModuleExtensionValidationTestUnsafeNoFeature
-    : public ShaderModuleExtensionValidationTestBase {
+    : public ShaderModuleExtensionValidationTest {
   protected:
     std::vector<wgpu::FeatureName> GetRequiredFeatures() override { return {}; }
 };
@@ -908,10 +1011,7 @@ class ShaderModuleExtensionValidationTestUnsafeNoFeature
 TEST_F(ShaderModuleExtensionValidationTestUnsafeNoFeature,
        OnlyExtensionsRequiringNoFeatureAllowed) {
     for (auto& extension : kExtensions) {
-        std::string wgsl = EnableDependingWGSLExtensions(extension) + std::string("enable ") +
-                           extension.wgslName + R"(;
-
-@compute @workgroup_size(1) fn main() {})";
+        std::string wgsl = EnabledExtensionsShader(extension);
 
         // On an unsafe device with no feature required, only extensions requiring no features are
         // allowed.
@@ -923,9 +1023,9 @@ TEST_F(ShaderModuleExtensionValidationTestUnsafeNoFeature,
     }
 }
 
-// Test validating WGSL extension on safe device with all features required.
+// Test validating WGSL extension on safe device with required features set to all.
 class ShaderModuleExtensionValidationTestSafeAllFeatures
-    : public ShaderModuleExtensionValidationTestBase {
+    : public ShaderModuleExtensionValidationTest {
   protected:
     bool AllowUnsafeAPIs() override { return false; }
     std::vector<wgpu::FeatureName> GetRequiredFeatures() override { return GetAllFeatures(); }
@@ -933,10 +1033,7 @@ class ShaderModuleExtensionValidationTestSafeAllFeatures
 
 TEST_F(ShaderModuleExtensionValidationTestSafeAllFeatures, OnlyStableExtensionsAllowed) {
     for (auto& extension : kExtensions) {
-        std::string wgsl = EnableDependingWGSLExtensions(extension) + std::string("enable ") +
-                           extension.wgslName + R"(;
-
-@compute @workgroup_size(1) fn main() {})";
+        std::string wgsl = EnabledExtensionsShader(extension);
 
         // On a safe device with all feature required, only stable extensions are allowed.
         if (!extension.isExperimental) {
@@ -947,19 +1044,16 @@ TEST_F(ShaderModuleExtensionValidationTestSafeAllFeatures, OnlyStableExtensionsA
     }
 }
 
-// Test validating WGSL extension on unsafe device with all features required.
+// Test validating WGSL extension on unsafe device with required features set to all.
 class ShaderModuleExtensionValidationTestUnsafeAllFeatures
-    : public ShaderModuleExtensionValidationTestBase {
+    : public ShaderModuleExtensionValidationTest {
   protected:
     std::vector<wgpu::FeatureName> GetRequiredFeatures() override { return GetAllFeatures(); }
 };
 
 TEST_F(ShaderModuleExtensionValidationTestUnsafeAllFeatures, AllExtensionsAllowed) {
     for (auto& extension : kExtensions) {
-        std::string wgsl = EnableDependingWGSLExtensions(extension) + std::string("enable ") +
-                           extension.wgslName + R"(;
-
-@compute @workgroup_size(1) fn main() {})";
+        std::string wgsl = EnabledExtensionsShader(extension);
 
         // On an unsafe device with all feature required, all extensions are allowed.
         utils::CreateShaderModule(device, wgsl.c_str());
@@ -982,6 +1076,39 @@ TEST_F(ShaderModuleExtensionValidationTestUnsafeAllFeatures, ShaderModuleCompila
     compilationOptions.strictMath = true;
     device.CreateShaderModule(&desc);
 }
+
+// Test that each WGSL language extension requires a specific feature to be enabled
+class ShaderModuleExtensionValidationTestUnsafeOnlyRequiredFeatures
+    : public ShaderModuleExtensionValidationTestWithParams<std::tuple<WGSLExtensionInfo, bool>> {
+  public:
+    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
+        auto [extension, enabled] = GetParam();
+        if (enabled) {
+            return extension.requiredFeatureNames;
+        }
+        return {};
+    }
+};
+
+TEST_P(ShaderModuleExtensionValidationTestUnsafeOnlyRequiredFeatures,
+       RequiredExtensionsMustBeEnabled) {
+    auto [extension, enabled] = GetParam();
+    std::string wgsl = EnabledExtensionsShader(extension);
+
+    if (enabled || extension.requiredFeatureNames.empty()) {
+        // On an unsafe device with the required feature enabled, or if it doesn't require one, the
+        // wgsl extension should be valid
+        utils::CreateShaderModule(device, wgsl.c_str());
+    } else {
+        // On an unsafe device with the required feature not enabled, the wgsl extension should be
+        // invalid
+        ASSERT_DEVICE_ERROR(utils::CreateShaderModule(device, wgsl.c_str()));
+    }
+}
+INSTANTIATE_TEST_SUITE_P(,
+                         ShaderModuleExtensionValidationTestUnsafeOnlyRequiredFeatures,
+                         ::testing::Combine(::testing::ValuesIn(kExtensions),
+                                            ::testing::Values(true, false)));
 
 }  // anonymous namespace
 }  // namespace dawn

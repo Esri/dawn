@@ -45,6 +45,7 @@
 #include "src/tint/lang/wgsl/reader/reader.h"
 #endif
 
+#include "src/tint/lang/core/ir/disassembler.h"
 #include "src/tint/utils/diagnostic/formatter.h"
 #include "src/tint/utils/rtti/traits.h"
 #include "src/tint/utils/text/string.h"
@@ -83,11 +84,11 @@ auto& operator<<(STREAM& out, InputFormat value) {
 
 InputFormat InputFormatFromFilename(const std::string& filename) {
     auto input_format = InputFormat::kUnknown;
-    if (tint::HasSuffix(filename, ".wgsl")) {
+    if (filename.ends_with(".wgsl")) {
         input_format = InputFormat::kWgsl;
-    } else if (tint::HasSuffix(filename, ".spv")) {
+    } else if (filename.ends_with(".spv")) {
         input_format = InputFormat::kSpirvBin;
-    } else if (tint::HasSuffix(filename, ".spvasm")) {
+    } else if (filename.ends_with(".spvasm")) {
         input_format = InputFormat::kSpirvAsm;
     }
     return input_format;
@@ -110,34 +111,31 @@ void PrintBindings(tint::inspector::Inspector& inspector, const std::string& ep_
 
 #if TINT_BUILD_SPV_READER
 tint::Program ReadSpirv(const std::vector<uint32_t>& data, const LoadProgramOptions& opts) {
-    if (opts.use_ir) {
 #if TINT_BUILD_WGSL_WRITER
-        // Parse the SPIR-V binary to a core Tint IR module.
-        auto result = tint::spirv::reader::ReadIR(data, opts.spirv_reader_options);
-        if (result != Success) {
-            std::cerr << "Failed to parse SPIR-V: " << result.Failure() << "\n";
-            exit(1);
-        }
-
-        // Convert the IR module to a Program.
-        tint::wgsl::writer::ProgramOptions writer_options;
-        writer_options.allow_non_uniform_derivatives =
-            opts.spirv_reader_options.allow_non_uniform_derivatives;
-        writer_options.allowed_features = opts.spirv_reader_options.allowed_features;
-        auto prog_result = tint::wgsl::writer::ProgramFromIR(result.Get(), writer_options);
-        if (prog_result != Success) {
-            std::cerr << "Failed to convert IR to Program:\n\n" << prog_result.Failure() << "\n";
-            exit(1);
-        }
-
-        return prog_result.Move();
-#else
-        std::cerr << "Tint not built with the WGSL writer enabled\n";
+    // Parse the SPIR-V binary to a core Tint IR module.
+    auto result = tint::spirv::reader::ReadIR(data, opts.spirv_reader_options);
+    if (result != Success) {
+        std::cerr << "Failed to parse SPIR-V: " << result.Failure() << "\n";
         exit(1);
-#endif  // TINT_BUILD_WGSL_READER
-    } else {
-        return tint::spirv::reader::Read(data, opts.spirv_reader_options);
     }
+
+    // Convert the IR module to a Program.
+    tint::wgsl::writer::Options writer_options;
+    writer_options.allow_non_uniform_derivatives =
+        opts.spirv_reader_options.allow_non_uniform_derivatives;
+    writer_options.allowed_features = opts.spirv_reader_options.allowed_features;
+    auto prog_result = tint::wgsl::writer::ProgramFromIR(result.Get(), writer_options);
+    if (prog_result != Success) {
+        std::cerr << "Failed to convert IR to Program:\n\n" << prog_result.Failure() << "\n\n";
+        std::cerr << tint::core::ir::Disassembler(result.Get()).Plain() << "\n";
+        exit(1);
+    }
+
+    return prog_result.Move();
+#else
+    std::cerr << "Tint not built with the WGSL writer enabled\n";
+    exit(1);
+#endif  // TINT_BUILD_WGSL_READER
 }
 #endif  // TINT_BUILD_SPV_READER
 
@@ -145,8 +143,7 @@ tint::Program ReadSpirv(const std::vector<uint32_t>& data, const LoadProgramOpti
 
 void PrintWGSL(std::ostream& out, const tint::Program& program) {
 #if TINT_BUILD_WGSL_WRITER
-    tint::wgsl::writer::Options options;
-    auto result = tint::wgsl::writer::Generate(program, options);
+    auto result = tint::wgsl::writer::Generate(program);
     if (result == Success) {
         out << "\n" << result->wgsl << "\n";
     } else {
@@ -259,10 +256,6 @@ ProgramInfo LoadProgramInfo(const LoadProgramOptions& opts) {
         // Flush any diagnostics written to stderr. We depend on these being emitted to the console
         // before the program for end-to-end tests.
         fflush(stderr);
-    }
-
-    if (!info.program.IsValid()) {
-        exit(1);
     }
 
     return info;
@@ -425,6 +418,10 @@ std::string TexelFormatToString(tint::inspector::ResourceBinding::TexelFormat fo
             return "Rg32Sint";
         case tint::inspector::ResourceBinding::TexelFormat::kRg32Float:
             return "Rg32Float";
+        case tint::inspector::ResourceBinding::TexelFormat::kRgba16Unorm:
+            return "Rgba16Unorm";
+        case tint::inspector::ResourceBinding::TexelFormat::kRgba16Snorm:
+            return "Rgba16Snorm";
         case tint::inspector::ResourceBinding::TexelFormat::kRgba16Uint:
             return "Rgba16Uint";
         case tint::inspector::ResourceBinding::TexelFormat::kRgba16Sint:
@@ -439,6 +436,46 @@ std::string TexelFormatToString(tint::inspector::ResourceBinding::TexelFormat fo
             return "Rgba32Float";
         case tint::inspector::ResourceBinding::TexelFormat::kR8Unorm:
             return "R8Unorm";
+        case tint::inspector::ResourceBinding::TexelFormat::kR8Snorm:
+            return "R8Snorm";
+        case tint::inspector::ResourceBinding::TexelFormat::kR8Uint:
+            return "R8Uint";
+        case tint::inspector::ResourceBinding::TexelFormat::kR8Sint:
+            return "R8Sint";
+        case tint::inspector::ResourceBinding::TexelFormat::kRg8Unorm:
+            return "Rg8Unorm";
+        case tint::inspector::ResourceBinding::TexelFormat::kRg8Snorm:
+            return "Rg8Snorm";
+        case tint::inspector::ResourceBinding::TexelFormat::kRg8Uint:
+            return "Rg8Uint";
+        case tint::inspector::ResourceBinding::TexelFormat::kRg8Sint:
+            return "Rg8Sint";
+        case tint::inspector::ResourceBinding::TexelFormat::kR16Unorm:
+            return "R16Unorm";
+        case tint::inspector::ResourceBinding::TexelFormat::kR16Snorm:
+            return "R16Snorm";
+        case tint::inspector::ResourceBinding::TexelFormat::kR16Uint:
+            return "R16Uint";
+        case tint::inspector::ResourceBinding::TexelFormat::kR16Sint:
+            return "R16Sint";
+        case tint::inspector::ResourceBinding::TexelFormat::kR16Float:
+            return "R16Float";
+        case tint::inspector::ResourceBinding::TexelFormat::kRg16Unorm:
+            return "Rg16Unorm";
+        case tint::inspector::ResourceBinding::TexelFormat::kRg16Snorm:
+            return "Rg16Snorm";
+        case tint::inspector::ResourceBinding::TexelFormat::kRg16Uint:
+            return "Rg16Uint";
+        case tint::inspector::ResourceBinding::TexelFormat::kRg16Sint:
+            return "Rg16Sint";
+        case tint::inspector::ResourceBinding::TexelFormat::kRg16Float:
+            return "Rg16Float";
+        case tint::inspector::ResourceBinding::TexelFormat::kRgb10A2Uint:
+            return "Rgb10A2Uint";
+        case tint::inspector::ResourceBinding::TexelFormat::kRgb10A2Unorm:
+            return "Rgb10A2Unorm";
+        case tint::inspector::ResourceBinding::TexelFormat::kRg11B10Ufloat:
+            return "Rg11B10Ufloat";
         case tint::inspector::ResourceBinding::TexelFormat::kNone:
             return "None";
     }
@@ -473,6 +510,10 @@ std::string ResourceTypeToString(tint::inspector::ResourceBinding::ResourceType 
             return "DepthMultisampledTexture";
         case tint::inspector::ResourceBinding::ResourceType::kExternalTexture:
             return "ExternalTexture";
+        case tint::inspector::ResourceBinding::ResourceType::kReadOnlyTexelBuffer:
+            return "ReadOnlyTexelBuffer";
+        case tint::inspector::ResourceBinding::ResourceType::kReadWriteTexelBuffer:
+            return "ReadWriteTexelBuffer";
         case tint::inspector::ResourceBinding::ResourceType::kInputAttachment:
             return "InputAttachment";
     }

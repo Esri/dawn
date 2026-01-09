@@ -712,6 +712,78 @@ TEST_F(TextureValidationTest, UseASTCFormatWithoutEnablingFeature) {
     }
 }
 
+class TextureCompatValidationTest : public ValidationTest {
+  protected:
+    bool UseCompatibilityMode() const override { return true; }
+
+    wgpu::TextureDescriptor CreateDefaultTextureDescriptor() {
+        wgpu::TextureDescriptor descriptor;
+        descriptor.size.width = 1;
+        descriptor.size.height = 1;
+        descriptor.size.depthOrArrayLayers = 1;
+        descriptor.mipLevelCount = 1;
+        descriptor.sampleCount = 1;
+        descriptor.dimension = wgpu::TextureDimension::e2D;
+        descriptor.format = wgpu::TextureFormat::RGBA8Unorm;
+        descriptor.usage = wgpu::TextureUsage::TextureBinding;
+        return descriptor;
+    }
+};
+
+TEST_F(TextureCompatValidationTest, TextureBindingViewDimension1DDefaultsTo1D) {
+    wgpu::TextureDescriptor descriptor = CreateDefaultTextureDescriptor();
+    descriptor.dimension = wgpu::TextureDimension::e1D;
+    wgpu::Texture tex = device.CreateTexture(&descriptor);
+
+    EXPECT_EQ(wgpu::TextureViewDimension::e1D, tex.GetTextureBindingViewDimension());
+}
+
+TEST_F(TextureCompatValidationTest, TextureBindingViewDimension2DDefaultsTo2D) {
+    wgpu::TextureDescriptor descriptor = CreateDefaultTextureDescriptor();
+    descriptor.dimension = wgpu::TextureDimension::e2D;
+    wgpu::Texture tex = device.CreateTexture(&descriptor);
+
+    EXPECT_EQ(wgpu::TextureViewDimension::e2D, tex.GetTextureBindingViewDimension());
+}
+
+TEST_F(TextureCompatValidationTest, TextureBindingViewDimension2DWith2PlusLayersDefaultsTo2D) {
+    wgpu::TextureDescriptor descriptor = CreateDefaultTextureDescriptor();
+    descriptor.dimension = wgpu::TextureDimension::e2D;
+    descriptor.size.depthOrArrayLayers = 2;
+    wgpu::Texture tex = device.CreateTexture(&descriptor);
+
+    EXPECT_EQ(wgpu::TextureViewDimension::e2DArray, tex.GetTextureBindingViewDimension());
+}
+
+TEST_F(TextureCompatValidationTest, TextureBindingViewDimension3DDefaultsTo3D) {
+    wgpu::TextureDescriptor descriptor = CreateDefaultTextureDescriptor();
+    descriptor.dimension = wgpu::TextureDimension::e3D;
+    wgpu::Texture tex = device.CreateTexture(&descriptor);
+
+    EXPECT_EQ(wgpu::TextureViewDimension::e3D, tex.GetTextureBindingViewDimension());
+}
+
+TEST_F(TextureCompatValidationTest, TextureBindingViewDimensionInvalidDefaultsToUndefined) {
+    wgpu::TextureDescriptor descriptor = CreateDefaultTextureDescriptor();
+    descriptor.dimension = static_cast<wgpu::TextureDimension>(12345);
+
+    wgpu::Texture tex;
+    ASSERT_DEVICE_ERROR(tex = device.CreateTexture(&descriptor));
+
+    EXPECT_EQ(wgpu::TextureViewDimension::Undefined, tex.GetTextureBindingViewDimension());
+}
+
+TEST_F(TextureCompatValidationTest, TextureBindingViewDimensionInvalidFormatStillSetsDimension) {
+    wgpu::TextureDescriptor descriptor = CreateDefaultTextureDescriptor();
+    descriptor.format = static_cast<wgpu::TextureFormat>(12345);
+    descriptor.size.depthOrArrayLayers = 2;
+
+    wgpu::Texture tex;
+    ASSERT_DEVICE_ERROR(tex = device.CreateTexture(&descriptor));
+
+    EXPECT_EQ(wgpu::TextureViewDimension::e2DArray, tex.GetTextureBindingViewDimension());
+}
+
 class D32S8TextureFormatsValidationTests : public TextureValidationTest {
   protected:
     std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
@@ -987,30 +1059,6 @@ TEST_F(Unorm16TextureFormatsValidationTests, RenderAndSample) {
     device.CreateTexture(&descriptor);
 }
 
-class Snorm16TextureFormatsValidationTests : public TextureValidationTest {
-  protected:
-    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
-        return {wgpu::FeatureName::Snorm16TextureFormats};
-    }
-};
-
-// Test that Norm16 formats are valid as renderable and sample-able texture if
-// 'norm16-texture-formats' is enabled.
-TEST_F(Snorm16TextureFormatsValidationTests, RenderAndSample) {
-    wgpu::TextureDescriptor descriptor;
-    descriptor.size = {1, 1, 1};
-    descriptor.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
-
-    descriptor.format = wgpu::TextureFormat::R16Snorm;
-    device.CreateTexture(&descriptor);
-
-    descriptor.format = wgpu::TextureFormat::RG16Snorm;
-    device.CreateTexture(&descriptor);
-
-    descriptor.format = wgpu::TextureFormat::RGBA16Snorm;
-    device.CreateTexture(&descriptor);
-}
-
 // Test that the Norm16 formats are not available even for just TextureBinding when the optional
 // feature is not specified.
 TEST_F(TextureValidationTest, Norm16NotAvailableWithoutExtension) {
@@ -1051,6 +1099,8 @@ static void CheckTextureMatchesDescriptor(const wgpu::Texture& tex,
     }
     EXPECT_EQ(desc.usage, tex.GetUsage());
     EXPECT_EQ(desc.format, tex.GetFormat());
+    // This is undefined in core, set in compat.
+    EXPECT_EQ(wgpu::TextureViewDimension::Undefined, tex.GetTextureBindingViewDimension());
 }
 
 // Test that the texture creation parameters are correctly reflected for succesfully created
@@ -1147,27 +1197,9 @@ TEST_F(TextureValidationTest, APIValidateTextureDescriptor) {
     ASSERT_DEVICE_ERROR(device.ValidateTextureDescriptor(&desc));
 }
 
-// Tests that specification of the transient attachment on an unsupported device
-// causes an error.
-TEST_F(TextureValidationTest, TransientAttachmentOnUnsupportedDevice) {
-    wgpu::TextureDescriptor desc;
-    desc.format = wgpu::TextureFormat::RGBA8Unorm;
-    desc.size = {1, 1, 1};
-    desc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TransientAttachment;
-
-    ASSERT_DEVICE_ERROR(device.CreateTexture(&desc));
-}
-
-class TransientAttachmentValidationTest : public TextureValidationTest {
-  protected:
-    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
-        return {wgpu::FeatureName::TransientAttachments};
-    }
-};
-
 // Tests that specification of the transient attachment with supported usage on
 // a supported device does not raise a validation error.
-TEST_F(TransientAttachmentValidationTest, Success) {
+TEST_F(TextureValidationTest, Success) {
     wgpu::TextureDescriptor desc;
     desc.format = wgpu::TextureFormat::RGBA8Unorm;
     desc.size = {1, 1, 1};
@@ -1178,7 +1210,7 @@ TEST_F(TransientAttachmentValidationTest, Success) {
 
 // Tests that specification of the transient attachment without specification of
 // the render attachment causes an error.
-TEST_F(TransientAttachmentValidationTest, NoRenderAttachment) {
+TEST_F(TextureValidationTest, NoRenderAttachment) {
     wgpu::TextureDescriptor desc;
     desc.format = wgpu::TextureFormat::RGBA8Unorm;
     desc.size = {1, 1, 1};
@@ -1189,7 +1221,7 @@ TEST_F(TransientAttachmentValidationTest, NoRenderAttachment) {
 
 // Tests that specification of the transient attachment with flags beyond just
 // render attachment causes an error.
-TEST_F(TransientAttachmentValidationTest, FlagsBeyondRenderAttachment) {
+TEST_F(TextureValidationTest, FlagsBeyondRenderAttachment) {
     wgpu::TextureDescriptor desc;
     desc.format = wgpu::TextureFormat::RGBA8Unorm;
     desc.size = {1, 1, 1};
@@ -1197,6 +1229,73 @@ TEST_F(TransientAttachmentValidationTest, FlagsBeyondRenderAttachment) {
                  wgpu::TextureUsage::CopySrc;
 
     ASSERT_DEVICE_ERROR(device.CreateTexture(&desc));
+}
+
+// Test that kTier1AdditionalRenderableFormats formats are invalid as renderable texture without
+// TextureFormatsTier1.
+TEST_F(TextureValidationTest, NoRenderableSupport) {
+    for (const auto format : utils::kTier1AdditionalRenderableFormats) {
+        SCOPED_TRACE(absl::StrFormat("Test format: %s", format));
+        wgpu::TextureDescriptor descriptor;
+        descriptor.size = {1, 1, 1};
+        descriptor.usage = wgpu::TextureUsage::RenderAttachment;
+        descriptor.format = format;
+        ASSERT_DEVICE_ERROR(device.CreateTexture(&descriptor));
+    }
+}
+
+class TextureFormatsTier1TextureTest : public TextureValidationTest {
+  protected:
+    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
+        return {wgpu::FeatureName::TextureFormatsTier1};
+    }
+};
+
+// Test that kTier1AdditionalRenderableFormats formats are valid as renderable texture and they also
+// allow multisampling with TextureFormatsTier1.
+TEST_F(TextureFormatsTier1TextureTest, RenderableAndMultisampleSupport) {
+    for (const auto format : utils::kTier1AdditionalRenderableFormats) {
+        SCOPED_TRACE(absl::StrFormat("Test format: %s", format));
+        wgpu::TextureDescriptor descriptor;
+        descriptor.size = {1, 1, 1};
+        descriptor.usage = wgpu::TextureUsage::RenderAttachment;
+        descriptor.format = format;
+        descriptor.sampleCount = 4;
+        device.CreateTexture(&descriptor);
+    }
+}
+
+// Test that creating a storage texture using kTier1AdditionalStorageFormats succeeds when
+// TextureFormatsTier1 feature is enabled.
+TEST_F(TextureFormatsTier1TextureTest, StorageBindingSuppport) {
+    for (wgpu::TextureFormat format : utils::kTier1AdditionalStorageFormats) {
+        wgpu::TextureDescriptor descriptor;
+        descriptor.size = {1, 1, 1};
+        descriptor.usage = wgpu::TextureUsage::StorageBinding;
+        SCOPED_TRACE(absl::StrFormat("Test format: %s", format));
+        descriptor.format = format;
+        device.CreateTexture(&descriptor);
+    }
+}
+
+class TextureFormatsTier2TextureTest : public TextureValidationTest {
+  protected:
+    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
+        return {wgpu::FeatureName::TextureFormatsTier2};
+    }
+};
+
+// Test that creating a storage texture using kTier2AdditionalStorageFormats succeeds when
+// TextureFormatsTier2 feature is enabled.
+TEST_F(TextureFormatsTier2TextureTest, StorageBindingSuppport) {
+    for (wgpu::TextureFormat format : utils::kTier2AdditionalStorageFormats) {
+        wgpu::TextureDescriptor descriptor;
+        descriptor.size = {1, 1, 1};
+        descriptor.usage = wgpu::TextureUsage::StorageBinding;
+        SCOPED_TRACE(absl::StrFormat("Test format: %s", format));
+        descriptor.format = format;
+        device.CreateTexture(&descriptor);
+    }
 }
 
 }  // anonymous namespace

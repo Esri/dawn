@@ -41,8 +41,7 @@ using namespace tint::core::number_suffixes;  // NOLINT
 class MslWriter_ArgumentBuffersTest : public core::ir::transform::TransformTest {
   public:
     void SetUp() override {
-        capabilities.Add(core::ir::Capability::kAllowPointersAndHandlesInStructures,
-                         core::ir::Capability::kAllowPrivateVarsInFunctions,
+        capabilities.Add(core::ir::Capability::kMslAllowEntryPointInterface,
                          core::ir::Capability::kAllowAnyLetType);
     }
 };
@@ -68,7 +67,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, NoArgumentBuffers) {
 
     auto* expect = src;
 
-    Run(ArgumentBuffers);
+    Run(ArgumentBuffers, ArgumentBuffersConfig{});
 
     EXPECT_EQ(expect, str());
 }
@@ -83,7 +82,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, Private_NoChange) {
     b.Append(func->Block(), [&] {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
-        b.Store(var_a, b.Add<i32>(load_a, load_b));
+        b.Store(var_a, b.Add(load_a, load_b));
         b.Return(func);
     });
 
@@ -122,7 +121,7 @@ $B1: {  # root
 }
 )";
 
-    Run(ArgumentBuffers);
+    Run(ArgumentBuffers, ArgumentBuffersConfig{});
 
     EXPECT_EQ(expect, str());
 }
@@ -137,7 +136,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, Workgroup_NoChange) {
     b.Append(func->Block(), [&] {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
-        b.Store(var_a, b.Add<i32>(load_a, load_b));
+        b.Store(var_a, b.Add(load_a, load_b));
         b.Return(func);
     });
 
@@ -176,7 +175,7 @@ $B1: {  # root
 }
 )";
 
-    Run(ArgumentBuffers);
+    Run(ArgumentBuffers, ArgumentBuffersConfig{});
 
     EXPECT_EQ(expect, str());
 }
@@ -199,7 +198,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, Storage) {
         auto* load_c = b.Load(var_c);
         auto* conv_b = b.Convert(ty.i32(), load_b);
         auto* conv_c = b.Convert(ty.i32(), load_c);
-        auto* add = b.Add<i32>(b.Add<i32>(load_a, conv_b), conv_c);
+        auto* add = b.Add(b.Add(load_a, conv_b), conv_c);
         auto* conv = b.Convert(ty.u32(), add);
         b.Store(var_b, conv);
         b.Return(func);
@@ -231,15 +230,15 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  a:ptr<storage, i32, read> @offset(0), @binding_point(0, 2)
+  a:ptr<storage, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  c:ptr<storage, f32, read_write> @offset(0), @binding_point(0, 2)
-  b:ptr<storage, u32, read_write> @offset(0), @binding_point(0, 4)
+  c:ptr<storage, f32, read_write> @offset(0), @binding_point(3, 2)
+  b:ptr<storage, u32, read_write> @offset(0), @binding_point(3, 4)
 }
 
-%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B1: {
     %4:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %5:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -261,7 +260,17 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -278,7 +287,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, Uniform) {
     b.Append(func->Block(), [&] {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
-        b.Add<i32>(load_a, load_b);
+        b.Add(load_a, load_b);
         b.Return(func);
     });
 
@@ -301,14 +310,14 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  a:ptr<uniform, i32, read> @offset(0), @binding_point(0, 2)
+  a:ptr<uniform, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  b:ptr<uniform, i32, read> @offset(0), @binding_point(0, 4)
+  b:ptr<uniform, i32, read> @offset(0), @binding_point(3, 4)
 }
 
-%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B1: {
     %4:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %5:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -322,7 +331,17 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -363,14 +382,14 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  t:texture_2d<f32> @offset(0), @binding_point(0, 2)
+  t:texture_2d<f32> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  s:sampler @offset(0), @binding_point(0, 4)
+  s:sampler @offset(0), @binding_point(3, 4)
 }
 
-%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B1: {
     %4:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %5:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -382,7 +401,17 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -390,7 +419,7 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 TEST_F(MslWriter_ArgumentBuffersTest, HandleTypes_BindingArray) {
     auto* texture_type = ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32());
     auto* var_t = b.Var("t", ty.ptr<handle>(ty.binding_array(texture_type, 3u)));
-    auto* var_s = b.Var("s", ty.ptr<handle>(ty.binding_array(ty.sampler(), 3u)));
+    auto* var_s = b.Var("s", ty.ptr<handle>(ty.sampler()));
     var_t->SetBindingPoint(1, 2);
     var_s->SetBindingPoint(3, 4);
     mod.root_block->Append(var_t);
@@ -399,7 +428,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, HandleTypes_BindingArray) {
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     b.Append(func->Block(), [&] {
         auto* load_t = b.Load(b.Access(ty.ptr<handle>(texture_type), var_t, 0_i));
-        auto* load_s = b.Load(b.Access(ty.ptr<handle>(ty.sampler()), var_s, 0_i));
+        auto* load_s = b.Load(var_s);
         b.Call<vec4<f32>>(core::BuiltinFn::kTextureSample, load_t, load_s, b.Splat<vec2<f32>>(0_f));
         b.Return(func);
     });
@@ -407,16 +436,15 @@ TEST_F(MslWriter_ArgumentBuffersTest, HandleTypes_BindingArray) {
     auto* src = R"(
 $B1: {  # root
   %t:ptr<handle, binding_array<texture_2d<f32>, 3>, read> = var undef @binding_point(1, 2)
-  %s:ptr<handle, binding_array<sampler, 3>, read> = var undef @binding_point(3, 4)
+  %s:ptr<handle, sampler, read> = var undef @binding_point(3, 4)
 }
 
 %foo = @fragment func():void {
   $B2: {
     %4:ptr<handle, texture_2d<f32>, read> = access %t, 0i
     %5:texture_2d<f32> = load %4
-    %6:ptr<handle, sampler, read> = access %s, 0i
-    %7:sampler = load %6
-    %8:vec4<f32> = textureSample %5, %7, vec2<f32>(0.0f)
+    %6:sampler = load %s
+    %7:vec4<f32> = textureSample %5, %6, vec2<f32>(0.0f)
     ret
   }
 }
@@ -425,28 +453,37 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  t:binding_array<texture_2d<f32>, 3> @offset(0), @binding_point(0, 2)
+  t:binding_array<texture_2d<f32>, 3> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  s:binding_array<sampler, 3> @offset(0), @binding_point(0, 4)
+  s:sampler @offset(0), @binding_point(3, 4)
 }
 
-%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B1: {
     %4:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %5:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
     %6:binding_array<texture_2d<f32>, 3> = access %5, 0u
     %7:texture_2d<f32> = access %6, 0i
-    %8:binding_array<sampler, 3> = access %4, 0u
-    %9:sampler = access %8, 0i
-    %10:vec4<f32> = textureSample %7, %9, vec2<f32>(0.0f)
+    %8:sampler = access %4, 0u
+    %9:vec4<f32> = textureSample %7, %8, vec2<f32>(0.0f)
     ret
   }
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -466,7 +503,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, MultipleAddressSpaces) {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
         auto* load_c = b.Load(var_c);
-        b.Store(var_b, b.Add<i32>(load_a, b.Add<i32>(load_b, load_c)));
+        b.Store(var_b, b.Add(load_a, b.Add(load_b, load_c)));
         b.Return(func);
     });
 
@@ -493,18 +530,18 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  a:ptr<uniform, i32, read> @offset(0), @binding_point(0, 2)
+  a:ptr<uniform, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  b:ptr<storage, i32, read_write> @offset(0), @binding_point(0, 4)
+  b:ptr<storage, i32, read_write> @offset(0), @binding_point(3, 4)
 }
 
 $B1: {  # root
   %c:ptr<private, i32, read_write> = var undef
 }
 
-%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B2: {
     %5:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %6:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -522,7 +559,17 @@ $B1: {  # root
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -543,7 +590,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, EntryPointHasExistingParameters) {
     b.Append(func->Block(), [&] {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
-        b.Store(var_b, b.Add<i32>(load_a, b.Add<i32>(load_b, param)));
+        b.Store(var_b, b.Add(load_a, b.Add(load_b, param)));
         b.Return(func);
     });
 
@@ -568,14 +615,14 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  a:ptr<storage, i32, read> @offset(0), @binding_point(0, 2)
+  a:ptr<storage, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  b:ptr<storage, i32, read_write> @offset(0), @binding_point(0, 4)
+  b:ptr<storage, i32, read_write> @offset(0), @binding_point(3, 4)
 }
 
-%foo = @fragment func(%param:i32 [@location(1), @interpolate(flat)], %tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%foo = @fragment func(%param:i32 [@location(1), @interpolate(flat)], %tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B1: {
     %5:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %6:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -592,7 +639,17 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -609,7 +666,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatUsesVars_NoArgs) {
     b.Append(foo->Block(), [&] {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
-        b.Store(var_b, b.Add<i32>(load_a, load_b));
+        b.Store(var_b, b.Add(load_a, load_b));
         b.Return(foo);
     });
 
@@ -645,11 +702,11 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  a:ptr<storage, i32, read> @offset(0), @binding_point(0, 2)
+  a:ptr<storage, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  b:ptr<storage, i32, read_write> @offset(0), @binding_point(0, 4)
+  b:ptr<storage, i32, read_write> @offset(0), @binding_point(3, 4)
 }
 
 %foo = func(%a:ptr<storage, i32, read>, %b:ptr<storage, i32, read_write>):void {
@@ -661,7 +718,7 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
     ret
   }
 }
-%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B2: {
     %10:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %11:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -673,7 +730,17 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -692,7 +759,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatUsesVars_WithExistingParam
     b.Append(foo->Block(), [&] {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
-        b.Store(var_b, b.Add<i32>(load_a, b.Add<i32>(load_b, param)));
+        b.Store(var_b, b.Add(load_a, b.Add(load_b, param)));
         b.Return(foo);
     });
 
@@ -729,11 +796,11 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  a:ptr<storage, i32, read> @offset(0), @binding_point(0, 2)
+  a:ptr<storage, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  b:ptr<storage, i32, read_write> @offset(0), @binding_point(0, 4)
+  b:ptr<storage, i32, read_write> @offset(0), @binding_point(3, 4)
 }
 
 %foo = func(%param:i32, %a:ptr<storage, i32, read>, %b:ptr<storage, i32, read_write>):void {
@@ -746,7 +813,7 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
     ret
   }
 }
-%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B2: {
     %12:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %13:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -758,7 +825,17 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -772,7 +849,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatUsesVars_HandleTypes) {
     mod.root_block->Append(var_t);
     mod.root_block->Append(var_s);
 
-    auto* foo = b.Function("foo", ty.vec4<f32>());
+    auto* foo = b.Function("foo", ty.vec4f());
     auto* param = b.FunctionParam<i32>("param");
     foo->SetParams({param});
     b.Append(foo->Block(), [&] {
@@ -814,11 +891,11 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  t:texture_2d<f32> @offset(0), @binding_point(0, 2)
+  t:texture_2d<f32> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  s:sampler @offset(0), @binding_point(0, 4)
+  s:sampler @offset(0), @binding_point(3, 4)
 }
 
 %foo = func(%param:i32, %t:texture_2d<f32>, %s:sampler):vec4<f32> {
@@ -827,7 +904,7 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
     ret %5
   }
 }
-%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B2: {
     %9:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %10:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -839,7 +916,17 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -847,18 +934,18 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatUsesVars_HandleTypes_BindingArray) {
     auto* texture_type = ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32());
     auto* var_t = b.Var("t", ty.ptr<handle>(ty.binding_array(texture_type, 3u)));
-    auto* var_s = b.Var("s", ty.ptr<handle>(ty.binding_array(ty.sampler(), 3u)));
+    auto* var_s = b.Var("s", ty.ptr<handle>(ty.sampler()));
     var_t->SetBindingPoint(1, 2);
     var_s->SetBindingPoint(3, 4);
     mod.root_block->Append(var_t);
     mod.root_block->Append(var_s);
 
-    auto* foo = b.Function("foo", ty.vec4<f32>());
+    auto* foo = b.Function("foo", ty.vec4f());
     auto* param = b.FunctionParam<i32>("param");
     foo->SetParams({param});
     b.Append(foo->Block(), [&] {
         auto* load_t = b.Load(b.Access(ty.ptr<handle>(texture_type), var_t, 0_i));
-        auto* load_s = b.Load(b.Access(ty.ptr<handle>(ty.sampler()), var_s, 0_i));
+        auto* load_s = b.Load(var_s);
         auto* result = b.Call<vec4<f32>>(core::BuiltinFn::kTextureSample, load_t, load_s,
                                          b.Splat<vec2<f32>>(0_f));
         b.Return(foo, result);
@@ -873,22 +960,21 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatUsesVars_HandleTypes_Bindi
     auto* src = R"(
 $B1: {  # root
   %t:ptr<handle, binding_array<texture_2d<f32>, 3>, read> = var undef @binding_point(1, 2)
-  %s:ptr<handle, binding_array<sampler, 3>, read> = var undef @binding_point(3, 4)
+  %s:ptr<handle, sampler, read> = var undef @binding_point(3, 4)
 }
 
 %foo = func(%param:i32):vec4<f32> {
   $B2: {
     %5:ptr<handle, texture_2d<f32>, read> = access %t, 0i
     %6:texture_2d<f32> = load %5
-    %7:ptr<handle, sampler, read> = access %s, 0i
-    %8:sampler = load %7
-    %9:vec4<f32> = textureSample %6, %8, vec2<f32>(0.0f)
-    ret %9
+    %7:sampler = load %s
+    %8:vec4<f32> = textureSample %6, %7, vec2<f32>(0.0f)
+    ret %8
   }
 }
 %main = @fragment func():void {
   $B3: {
-    %11:vec4<f32> = call %foo, 42i
+    %10:vec4<f32> = call %foo, 42i
     ret
   }
 }
@@ -897,34 +983,43 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  t:binding_array<texture_2d<f32>, 3> @offset(0), @binding_point(0, 2)
+  t:binding_array<texture_2d<f32>, 3> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  s:binding_array<sampler, 3> @offset(0), @binding_point(0, 4)
+  s:sampler @offset(0), @binding_point(3, 4)
 }
 
-%foo = func(%param:i32, %t:binding_array<texture_2d<f32>, 3>, %s:binding_array<sampler, 3>):vec4<f32> {
+%foo = func(%param:i32, %t:binding_array<texture_2d<f32>, 3>, %s:sampler):vec4<f32> {
   $B1: {
     %5:texture_2d<f32> = access %t, 0i
-    %6:sampler = access %s, 0i
-    %7:vec4<f32> = textureSample %5, %6, vec2<f32>(0.0f)
-    ret %7
+    %6:vec4<f32> = textureSample %5, %s, vec2<f32>(0.0f)
+    ret %6
   }
 }
-%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B2: {
-    %11:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
-    %12:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
-    %13:binding_array<texture_2d<f32>, 3> = access %12, 0u
-    %14:binding_array<sampler, 3> = access %11, 0u
-    %15:vec4<f32> = call %foo, 42i, %13, %14
+    %10:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
+    %11:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
+    %12:binding_array<texture_2d<f32>, 3> = access %11, 0u
+    %13:sampler = access %10, 0u
+    %14:vec4<f32> = call %foo, 42i, %12, %13
     ret
   }
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -943,7 +1038,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatUsesVars_OutOfOrder) {
     b.Append(foo->Block(), [&] {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
-        b.Store(var_b, b.Add<i32>(load_a, load_b));
+        b.Store(var_b, b.Add(load_a, load_b));
         b.Return(foo);
     });
 
@@ -978,14 +1073,14 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  a:ptr<storage, i32, read> @offset(0), @binding_point(0, 2)
+  a:ptr<storage, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  b:ptr<storage, i32, read_write> @offset(0), @binding_point(0, 4)
+  b:ptr<storage, i32, read_write> @offset(0), @binding_point(3, 4)
 }
 
-%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B1: {
     %4:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %5:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -1006,7 +1101,17 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -1029,7 +1134,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionThatDoesNotUseVars) {
     b.Append(func->Block(), [&] {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
-        b.Store(var_b, b.Add<i32>(load_a, b.Add<i32>(load_b, b.Call(foo))));
+        b.Store(var_b, b.Add(load_a, b.Add(load_b, b.Call(foo))));
         b.Return(func);
     });
 
@@ -1060,11 +1165,11 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  a:ptr<storage, i32, read> @offset(0), @binding_point(0, 2)
+  a:ptr<storage, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  b:ptr<storage, i32, read_write> @offset(0), @binding_point(0, 4)
+  b:ptr<storage, i32, read_write> @offset(0), @binding_point(3, 4)
 }
 
 %foo = func():i32 {
@@ -1072,7 +1177,7 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
     ret 42i
   }
 }
-%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B2: {
     %5:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %6:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -1090,7 +1195,17 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -1118,7 +1233,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionWithOnlyTransitiveUses) {
     b.Append(func->Block(), [&] {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
-        b.Store(var_b, b.Add<i32>(load_a, b.Add<i32>(load_b, b.Call(foo))));
+        b.Store(var_b, b.Add(load_a, b.Add(load_b, b.Call(foo))));
         b.Return(func);
     });
 
@@ -1156,11 +1271,11 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  a:ptr<storage, i32, read> @offset(0), @binding_point(0, 2)
+  a:ptr<storage, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  b:ptr<storage, i32, read_write> @offset(0), @binding_point(0, 4)
+  b:ptr<storage, i32, read_write> @offset(0), @binding_point(3, 4)
 }
 
 %bar = func(%a:ptr<storage, i32, read>):i32 {
@@ -1175,7 +1290,7 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
     ret %6
   }
 }
-%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B3: {
     %10:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %11:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -1194,7 +1309,17 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -1224,7 +1349,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, CallFunctionWithOnlyTransitiveUses_OutOfOr
     b.Append(func->Block(), [&] {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
-        b.Store(var_b, b.Add<i32>(load_a, b.Add<i32>(load_b, b.Call(foo))));
+        b.Store(var_b, b.Add(load_a, b.Add(load_b, b.Call(foo))));
         b.Return(func);
     });
 
@@ -1262,11 +1387,11 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  a:ptr<storage, i32, read> @offset(0), @binding_point(0, 2)
+  a:ptr<storage, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  b:ptr<storage, i32, read_write> @offset(0), @binding_point(0, 4)
+  b:ptr<storage, i32, read_write> @offset(0), @binding_point(3, 4)
 }
 
 %foo = func(%a:ptr<storage, i32, read>):i32 {
@@ -1281,7 +1406,7 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
     ret %6
   }
 }
-%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B3: {
     %10:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %11:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -1300,7 +1425,17 @@ tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }
@@ -1330,7 +1465,7 @@ TEST_F(MslWriter_ArgumentBuffersTest, VarsWithNoNames) {
     b.Append(func->Block(), [&] {
         auto* load_a = b.Load(var_a);
         auto* load_b = b.Load(var_b);
-        b.Store(var_b, b.Add<i32>(load_a, b.Add<i32>(load_b, b.Call(foo))));
+        b.Store(var_b, b.Add(load_a, b.Add(load_b, b.Call(foo))));
         b.Return(func);
     });
 
@@ -1369,11 +1504,11 @@ $B1: {  # root
 
     auto* expect = R"(
 tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
-  tint_symbol:ptr<uniform, i32, read> @offset(0), @binding_point(0, 2)
+  tint_symbol:ptr<uniform, i32, read> @offset(0), @binding_point(1, 2)
 }
 
 tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
-  tint_symbol_1:ptr<storage, i32, read_write> @offset(0), @binding_point(0, 4)
+  tint_symbol_1:ptr<storage, i32, read_write> @offset(0), @binding_point(3, 4)
 }
 
 $B1: {  # root
@@ -1392,7 +1527,7 @@ $B1: {  # root
     ret %7
   }
 }
-%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(1, 0)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(3, 0)]):void {
+%main = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
   $B4: {
     %11:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
     %12:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
@@ -1411,7 +1546,240 @@ $B1: {  # root
 }
 )";
 
-    Run(ArgumentBuffers);
+    ArgumentBuffersConfig cfg{
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+    Run(ArgumentBuffers, cfg);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, SkipBuffers) {
+    auto* var_a = b.Var("a", ty.ptr<storage, i32, core::Access::kRead>());
+    auto* var_b = b.Var("b", ty.ptr<storage, u32, core::Access::kReadWrite>());
+    auto* var_c = b.Var("c", ty.ptr<storage, f32, core::Access::kReadWrite>());
+    var_a->SetBindingPoint(1, 2);
+    var_b->SetBindingPoint(3, 4);
+    var_c->SetBindingPoint(3, 2);
+    mod.root_block->Append(var_a);
+    mod.root_block->Append(var_b);
+    mod.root_block->Append(var_c);
+
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] {
+        auto* load_a = b.Load(var_a);
+        auto* load_b = b.Load(var_b);
+        auto* load_c = b.Load(var_c);
+        auto* conv_b = b.Convert(ty.i32(), load_b);
+        auto* conv_c = b.Convert(ty.i32(), load_c);
+        auto* add = b.Add(b.Add(load_a, conv_b), conv_c);
+        auto* conv = b.Convert(ty.u32(), add);
+        b.Store(var_b, conv);
+        b.Return(func);
+    });
+
+    auto* src = R"(
+$B1: {  # root
+  %a:ptr<storage, i32, read> = var undef @binding_point(1, 2)
+  %b:ptr<storage, u32, read_write> = var undef @binding_point(3, 4)
+  %c:ptr<storage, f32, read_write> = var undef @binding_point(3, 2)
+}
+
+%foo = @fragment func():void {
+  $B2: {
+    %5:i32 = load %a
+    %6:u32 = load %b
+    %7:f32 = load %c
+    %8:i32 = convert %6
+    %9:i32 = convert %7
+    %10:i32 = add %5, %8
+    %11:i32 = add %10, %9
+    %12:u32 = convert %11
+    store %b, %12
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
+  a:ptr<storage, i32, read> @offset(0), @binding_point(1, 2)
+}
+
+tint_arg_buffer_struct_3 = struct @align(1), @core.explicit_layout {
+  c:ptr<storage, f32, read_write> @offset(0), @binding_point(3, 2)
+}
+
+$B1: {  # root
+  %b:ptr<storage, u32, read_write> = var undef @binding_point(3, 4)
+}
+
+%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 20)], %tint_arg_buffer_3:ptr<uniform, tint_arg_buffer_struct_3, read> [@binding_point(0, 30)]):void {
+  $B2: {
+    %5:tint_arg_buffer_struct_3 = load %tint_arg_buffer_3
+    %6:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
+    %7:ptr<storage, i32, read> = access %6, 0u
+    %8:i32 = load %7
+    %9:u32 = load %b
+    %10:ptr<storage, f32, read_write> = access %5, 0u
+    %11:f32 = load %10
+    %12:i32 = convert %9
+    %13:i32 = convert %11
+    %14:i32 = add %8, %12
+    %15:i32 = add %14, %13
+    %16:u32 = convert %15
+    store %b, %16
+    ret
+  }
+}
+)";
+
+    ArgumentBuffersConfig cfg{
+        .skip_bindings = {BindingPoint{.group = 3, .binding = 4}},
+        .group_to_argument_buffer_info = {{1,
+                                           ArgumentBufferInfo{
+                                               .id = 20,
+                                           }},
+                                          {3,
+                                           ArgumentBufferInfo{
+                                               .id = 30,
+                                           }}},
+    };
+
+    Run(ArgumentBuffers, cfg);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, DynamicOffset) {
+    auto* var_a = b.Var("a", ty.ptr<storage, i32, core::Access::kReadWrite>());
+    var_a->SetBindingPoint(1, 2);
+    mod.root_block->Append(var_a);
+
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] {
+        auto* load_a = b.Load(var_a);
+        auto* add = b.Add(load_a, load_a);
+        b.Store(var_a, add);
+        b.Return(func);
+    });
+
+    auto* src = R"(
+$B1: {  # root
+  %a:ptr<storage, i32, read_write> = var undef @binding_point(1, 2)
+}
+
+%foo = @fragment func():void {
+  $B2: {
+    %3:i32 = load %a
+    %4:i32 = add %3, %3
+    store %a, %4
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
+  a:ptr<storage, i32, read_write> @offset(0), @binding_point(1, 2)
+}
+
+%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 2)], %tint_dynamic_offset_buffer_1:ptr<storage, array<u32>, read> [@binding_point(0, 3)]):void {
+  $B1: {
+    %4:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
+    %5:ptr<storage, i32, read_write> = access %4, 0u
+    %6:ptr<storage, u32, read> = access %tint_dynamic_offset_buffer_1, 3u
+    %7:u32 = load %6
+    %8:ptr<storage, i32, read_write> = msl.pointer_offset %5, %7
+    %9:i32 = load %8
+    %10:i32 = add %9, %9
+    %11:ptr<storage, i32, read_write> = access %4, 0u
+    %12:ptr<storage, u32, read> = access %tint_dynamic_offset_buffer_1, 3u
+    %13:u32 = load %12
+    %14:ptr<storage, i32, read_write> = msl.pointer_offset %11, %13
+    store %14, %10
+    ret
+  }
+}
+)";
+
+    ArgumentBufferInfo info{
+        .id = 2,
+        .dynamic_buffer_id = 3,
+        .binding_info_to_offset_index = {{2, 3}},
+    };
+
+    ArgumentBuffersConfig cfg{};
+    cfg.group_to_argument_buffer_info.insert({1, info});
+    Run(ArgumentBuffers, cfg);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(MslWriter_ArgumentBuffersTest, NoDynamicOffset) {
+    auto* var_a = b.Var("a", ty.ptr<storage, i32, core::Access::kReadWrite>());
+    var_a->SetBindingPoint(1, 2);
+    mod.root_block->Append(var_a);
+
+    auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(func->Block(), [&] {
+        auto* load_a = b.Load(var_a);
+        auto* add = b.Add(load_a, load_a);
+        b.Store(var_a, add);
+        b.Return(func);
+    });
+
+    auto* src = R"(
+$B1: {  # root
+  %a:ptr<storage, i32, read_write> = var undef @binding_point(1, 2)
+}
+
+%foo = @fragment func():void {
+  $B2: {
+    %3:i32 = load %a
+    %4:i32 = add %3, %3
+    store %a, %4
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
+  a:ptr<storage, i32, read_write> @offset(0), @binding_point(1, 2)
+}
+
+%foo = @fragment func(%tint_arg_buffer_1:ptr<uniform, tint_arg_buffer_struct_1, read> [@binding_point(0, 2)]):void {
+  $B1: {
+    %3:tint_arg_buffer_struct_1 = load %tint_arg_buffer_1
+    %4:ptr<storage, i32, read_write> = access %3, 0u
+    %5:i32 = load %4
+    %6:i32 = add %5, %5
+    %7:ptr<storage, i32, read_write> = access %3, 0u
+    store %7, %6
+    ret
+  }
+}
+)";
+
+    ArgumentBufferInfo info{
+        .id = 2,
+        .binding_info_to_offset_index = {{2, 3}},
+    };
+
+    ArgumentBuffersConfig cfg{};
+    cfg.group_to_argument_buffer_info.insert({1, info});
+    Run(ArgumentBuffers, cfg);
 
     EXPECT_EQ(expect, str());
 }

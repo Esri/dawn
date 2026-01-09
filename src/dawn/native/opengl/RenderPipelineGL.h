@@ -49,16 +49,17 @@ class RenderPipeline final : public RenderPipelineBase, public PipelineGL {
     GLenum GetGLPrimitiveTopology() const;
     VertexAttributeMask GetAttributesUsingVertexBuffer(VertexBufferSlot slot) const;
 
-    MaybeError ApplyNow(PersistentPipelineState& persistentPipelineState);
+    MaybeError ApplyNow(const OpenGLFunctions& gl,
+                        PersistentPipelineState& persistentPipelineState);
 
     MaybeError InitializeImpl() override;
 
   private:
     RenderPipeline(Device* device, const UnpackedPtr<RenderPipelineDescriptor>& descriptor);
     ~RenderPipeline() override;
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 
-    MaybeError CreateVAOForVertexState();
+    MaybeError CreateVAOForVertexState(const OpenGLFunctions& gl);
 
     MaybeError ApplyDepthStencilState(const OpenGLFunctions& gl,
                                       PersistentPipelineState* persistentPipelineState);

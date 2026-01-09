@@ -1,42 +1,48 @@
-[numthreads(1, 1, 1)]
-void unused_entry_point() {
-  return;
-}
+struct foo_inputs {
+  uint tint_local_index : SV_GroupIndex;
+};
+
 
 groupshared int a;
-
-int tint_workgroupUniformLoad_a() {
-  GroupMemoryBarrierWithGroupSync();
-  int result = a;
-  GroupMemoryBarrierWithGroupSync();
-  return result;
-}
-
 groupshared int b;
-
-int tint_workgroupUniformLoad_b() {
+void foo_inner(uint tint_local_index) {
+  if ((tint_local_index < 1u)) {
+    a = int(0);
+    b = int(0);
+  }
   GroupMemoryBarrierWithGroupSync();
-  int result = b;
-  GroupMemoryBarrierWithGroupSync();
-  return result;
-}
-
-void foo() {
   {
-    int i = 0;
-    while (true) {
-      int tint_symbol = i;
-      int tint_symbol_1 = tint_workgroupUniformLoad_a();
-      if (!((tint_symbol < tint_symbol_1))) {
+    uint2 tint_loop_idx = (4294967295u).xx;
+    int i = int(0);
+    while(true) {
+      if (all((tint_loop_idx == (0u).xx))) {
+        break;
+      }
+      int v = i;
+      GroupMemoryBarrierWithGroupSync();
+      int v_1 = a;
+      GroupMemoryBarrierWithGroupSync();
+      if ((v < v_1)) {
+      } else {
         break;
       }
       {
+        uint tint_low_inc = (tint_loop_idx.x - 1u);
+        tint_loop_idx.x = tint_low_inc;
+        uint tint_carry = uint((tint_low_inc == 4294967295u));
+        tint_loop_idx.y = (tint_loop_idx.y - tint_carry);
+        GroupMemoryBarrierWithGroupSync();
+        int v_2 = b;
+        GroupMemoryBarrierWithGroupSync();
+        i = asint((asuint(i) + asuint(v_2)));
       }
-      {
-        int tint_symbol_2 = i;
-        int tint_symbol_3 = tint_workgroupUniformLoad_b();
-        i = (tint_symbol_2 + tint_symbol_3);
-      }
+      continue;
     }
   }
 }
+
+[numthreads(1, 1, 1)]
+void foo(foo_inputs inputs) {
+  foo_inner(inputs.tint_local_index);
+}
+

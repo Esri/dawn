@@ -52,7 +52,8 @@ ResultOrError<Ref<Buffer>> Buffer::CreateInternalBuffer(Device* device,
     }
 
     if (descriptor->mappedAtCreation) {
-        DAWN_TRY(buffer->MapAtCreationInternal());
+        [[maybe_unused]] bool usingStagingBuffer;
+        DAWN_TRY_ASSIGN(usingStagingBuffer, buffer->MapAtCreationInternal());
     }
 
     return std::move(buffer);
@@ -92,7 +93,13 @@ Buffer::Buffer(Device* device, const UnpackedPtr<BufferDescriptor>& descriptor, 
     // Allocate at least 4 bytes so clamped accesses are always in bounds.
     // Align with 4 byte to avoid out-of-bounds access issue in compute emulation for 2 byte
     // element.
-    mAllocatedSize = Align(std::max(GetSize(), uint64_t(4u)), uint64_t(4u));
+    uint64_t alignment = 4u;
+    // Round uniform buffer sizes up to a multiple of 16 bytes since Tint will polyfill them as
+    // array<vec4u, ...>.
+    if (GetUsage() & wgpu::BufferUsage::Uniform) {
+        alignment = 16u;
+    }
+    mAllocatedSize = Align(std::max(GetSize(), uint64_t(4u)), alignment);
 }
 
 Buffer::~Buffer() = default;
@@ -230,12 +237,18 @@ MaybeError Buffer::MapAsyncImpl(wgpu::MapMode mode, size_t offset, size_t size) 
     return {};
 }
 
-void* Buffer::GetMappedPointer() {
+MaybeError Buffer::FinalizeMapImpl(BufferState newState) {
+    return {};
+}
+
+void* Buffer::GetMappedPointerImpl() {
     // The mapping offset has already been removed.
     return mMappedData;
 }
 
-void Buffer::UnmapImpl() {
+void Buffer::UnmapImpl(BufferState oldState, BufferState newState) {
+    auto deviceGuard = GetDevice()->GetGuard();
+
     const OpenGLFunctions& gl = ToBackend(GetDevice())->GetGL();
 
     DAWN_GL_TRY_IGNORE_ERRORS(gl, BindBuffer(GL_ARRAY_BUFFER, mBuffer));
@@ -243,10 +256,10 @@ void Buffer::UnmapImpl() {
     mMappedData = nullptr;
 }
 
-void Buffer::DestroyImpl() {
+void Buffer::DestroyImpl(DestroyReason reason) {
     const OpenGLFunctions& gl = ToBackend(GetDevice())->GetGL();
 
-    BufferBase::DestroyImpl();
+    BufferBase::DestroyImpl(reason);
     DAWN_GL_TRY_IGNORE_ERRORS(gl, DeleteBuffers(1, &mBuffer));
     mBuffer = 0;
 }

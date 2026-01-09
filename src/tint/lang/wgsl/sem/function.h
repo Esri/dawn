@@ -32,7 +32,7 @@
 #include <optional>
 #include <utility>
 
-#include "src/tint/lang/wgsl/diagnostic_severity.h"
+#include "src/tint/lang/wgsl/enums.h"
 #include "src/tint/lang/wgsl/sem/call.h"
 #include "src/tint/utils/containers/unique_vector.h"
 #include "src/tint/utils/containers/vector.h"
@@ -72,10 +72,6 @@ class Function final : public Castable<Function, CallTarget> {
     /// @param return_location the location value
     void SetReturnLocation(uint32_t return_location) { return_location_ = return_location; }
 
-    // Sets the function's return index
-    /// @param return_index the index value
-    void SetReturnIndex(uint32_t return_index) { return_index_ = return_index; }
-
     /// @returns the ast::Function declaration
     const ast::Function* Declaration() const { return declaration_; }
 
@@ -87,6 +83,13 @@ class Function final : public Castable<Function, CallTarget> {
     void SetWorkgroupSize(sem::WorkgroupSize workgroup_size) {
         workgroup_size_ = std::move(workgroup_size);
     }
+
+    /// Sets the subgroup size for the function.
+    /// @param subgroup_size the new subgroup size of the function
+    void SetSubgroupSize(uint32_t subgroup_size) { subgroup_size_ = subgroup_size; }
+
+    /// @returns the subgroup size for the functions.
+    std::optional<uint32_t> SubgroupSize() const { return subgroup_size_; }
 
     /// @returns all directly referenced global variables
     const UniqueVector<const GlobalVariable*, 4>& DirectlyReferencedGlobals() const {
@@ -212,9 +215,6 @@ class Function final : public Castable<Function, CallTarget> {
     /// @return the location for the return, if provided
     std::optional<uint32_t> ReturnLocation() const { return return_location_; }
 
-    /// @return the index for the return, if provided
-    std::optional<uint32_t> ReturnIndex() const { return return_index_; }
-
     /// Modifies the severity of a specific diagnostic rule for this function.
     /// @param rule the diagnostic rule
     /// @param severity the new diagnostic severity
@@ -232,6 +232,7 @@ class Function final : public Castable<Function, CallTarget> {
     const ast::Function* const declaration_;
 
     sem::WorkgroupSize workgroup_size_;
+    std::optional<uint32_t> subgroup_size_;
     UniqueVector<const GlobalVariable*, 4> directly_referenced_globals_;
     UniqueVector<const GlobalVariable*, 8> transitively_referenced_globals_;
     UniqueVector<const Function*, 8> transitively_called_functions_;
@@ -246,7 +247,6 @@ class Function final : public Castable<Function, CallTarget> {
     std::optional<const Source*> directly_used_subgroup_matrix_ = std::nullopt;
 
     std::optional<uint32_t> return_location_;
-    std::optional<uint32_t> return_index_;
 };
 
 }  // namespace tint::sem

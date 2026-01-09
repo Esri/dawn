@@ -98,14 +98,15 @@ InstanceBase* AdapterBase::APIGetInstance() const {
 void AdapterBase::UpdateLimits() {
     mLimits = mPhysicalDevice->GetLimits();
 
-    // Disable unsafe limits if needed.
-    if (!mTogglesState.IsEnabled(Toggle::AllowUnsafeAPIs)) {
-        mLimits.v1.maxImmediateSize = 0;
-    }
-
     // Apply the tiered limits if needed.
     if (mUseTieredLimits) {
         ApplyLimitTiers(&mLimits);
+    }
+
+    // If immediates are not enabled, report a maxImmediateSize of 0
+    // TODO(crbug.com/366291600): Remove when immediates are implemented on all backends
+    if (!GetInstance()->HasFeature(wgpu::WGSLLanguageFeatureName::ImmediateAddressSpace)) {
+        mLimits.v1.maxImmediateSize = 0;
     }
 }
 
@@ -129,22 +130,22 @@ wgpu::Status AdapterBase::APIGetInfo(AdapterInfo* info) const {
     }
 
     bool hadError = false;
-    if (unpacked.Get<AdapterPropertiesMemoryHeaps>() != nullptr &&
+    if (unpacked.Has<AdapterPropertiesMemoryHeaps>() &&
         !mSupportedFeatures.IsEnabled(wgpu::FeatureName::AdapterPropertiesMemoryHeaps)) {
         hadError |= mInstance->ConsumedError(
             DAWN_VALIDATION_ERROR("Feature AdapterPropertiesMemoryHeaps is not available."));
     }
-    if (unpacked.Get<AdapterPropertiesD3D>() != nullptr &&
+    if (unpacked.Has<AdapterPropertiesD3D>() &&
         !mSupportedFeatures.IsEnabled(wgpu::FeatureName::AdapterPropertiesD3D)) {
         hadError |= mInstance->ConsumedError(
             DAWN_VALIDATION_ERROR("Feature AdapterPropertiesD3D is not available."));
     }
-    if (unpacked.Get<AdapterPropertiesVk>() != nullptr &&
+    if (unpacked.Has<AdapterPropertiesVk>() &&
         !mSupportedFeatures.IsEnabled(wgpu::FeatureName::AdapterPropertiesVk)) {
         hadError |= mInstance->ConsumedError(
             DAWN_VALIDATION_ERROR("Feature AdapterPropertiesVk is not available."));
     }
-    if (unpacked.Get<AdapterPropertiesSubgroupMatrixConfigs>() != nullptr &&
+    if (unpacked.Has<AdapterPropertiesSubgroupMatrixConfigs>() &&
         !mSupportedFeatures.IsEnabled(wgpu::FeatureName::ChromiumExperimentalSubgroupMatrix)) {
         hadError |= mInstance->ConsumedError(
             DAWN_VALIDATION_ERROR("Feature ChromiumExperimentalSubgroupMatrix is not available."));
@@ -157,7 +158,7 @@ wgpu::Status AdapterBase::APIGetInfo(AdapterInfo* info) const {
         powerPreferenceDesc->powerPreference = mPowerPreference;
     }
 
-    mPhysicalDevice->PopulateBackendProperties(unpacked);
+    mPhysicalDevice->PopulateBackendProperties(unpacked, mTogglesState);
 
     // Allocate space for all strings.
     size_t allocSize = mPhysicalDevice->GetVendorName().length() +
@@ -265,6 +266,10 @@ ResultOrError<Ref<DeviceBase>> AdapterBase::CreateDeviceInternal(
     if (mInstance->IsBackendValidationEnabled()) {
         deviceToggles.Default(Toggle::UseUserDefinedLabelsInBackend, true);
     }
+    // Currently enable the blob cache hash validation by default to catch possible collapse.
+    // TODO(crbug.com/429938352): Disable default hash validation to prevent performance cost when
+    // no longer necessary.
+    deviceToggles.Default(Toggle::BlobCacheHashValidation, true);
 
     // Backend-specific forced and default device toggles
     mPhysicalDevice->SetupBackendDeviceToggles(mInstance->GetPlatform(), &deviceToggles);
@@ -305,7 +310,23 @@ ResultOrError<Ref<DeviceBase>> AdapterBase::CreateDeviceInternal(
                         allocatorDesc->allocatorHeapBlockSize);
     }
 
-    return mPhysicalDevice->CreateDevice(this, descriptor, deviceToggles, std::move(lostEvent));
+    DAWN_INVALID_IF(mAdapterIsConsumed,
+                    "adapter is \"consumed\": it has already been used to create a device");
+
+    auto result =
+        mPhysicalDevice->CreateDevice(this, descriptor, deviceToggles, std::move(lostEvent));
+
+    // The adapter should be consumed only upon successful device creation if the instance doesn't
+    // allow multiple devices per adapter, or if the descriptor explicitly requests consumption.
+    auto* consumeAdapterDesc = descriptor.Get<DawnConsumeAdapterDescriptor>();
+    const bool consumeOnSuccess =
+        !mInstance->HasFeature(wgpu::InstanceFeatureName::MultipleDevicesPerAdapter) ||
+        (consumeAdapterDesc && consumeAdapterDesc->consumeAdapter);
+    if (result.IsSuccess() && consumeOnSuccess) {
+        mAdapterIsConsumed = true;
+    }
+
+    return result;
 }
 
 std::pair<Ref<DeviceBase::DeviceLostEvent>, ResultOrError<Ref<DeviceBase>>>
@@ -318,15 +339,17 @@ AdapterBase::CreateDevice(const DeviceDescriptor* descriptor) {
     // Catch any errors to directly complete the device lost event with the error message.
     if (result.IsError()) {
         auto error = result.AcquireError();
-        lostEvent->mReason = wgpu::DeviceLostReason::FailedCreation;
-        lostEvent->mMessage = "Failed to create device:\n" + error->GetFormattedMessage();
+        lostEvent->SetLost(mInstance->GetEventManager(), wgpu::DeviceLostReason::FailedCreation,
+                           "Failed to create device:\n" + error->GetFormattedMessage());
 
         // When the device fails to initialize, we need to both promote the device ref to an
         // external ref to clean up resources, and drop it, so we acquire it in this scope.
         APIRef<DeviceBase> device;
         device.Acquire(ReturnToAPI(std::move(lostEvent->mDevice)));
-
-        mInstance->GetEventManager()->SetFutureReady(lostEvent.Get());
+        // Reset the device's lost event to avoid double SetLost during destruction.
+        if (device) {
+            device->ResetLostEvent();
+        }
         return {lostEvent, std::move(error)};
     }
 

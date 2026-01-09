@@ -28,12 +28,11 @@
 #ifndef SRC_TINT_LANG_HLSL_WRITER_COMMON_OUTPUT_H_
 #define SRC_TINT_LANG_HLSL_WRITER_COMMON_OUTPUT_H_
 
+#include <optional>
 #include <string>
 #include <unordered_set>
-#include <utility>
-#include <vector>
 
-#include "src/tint/lang/wgsl/ast/pipeline_stage.h"
+#include "src/tint/lang/core/ir/function.h"
 
 namespace tint::hlsl::writer {
 
@@ -67,15 +66,21 @@ struct Output {
     /// The generated HLSL.
     std::string hlsl = "";
 
-    /// The list of entry points in the generated HLSL.
-    std::vector<std::pair<std::string, ast::PipelineStage>> entry_points;
+    /// The name of the entry point that was generated.
+    std::string entry_point_name = "";
 
-    /// Indices into the array_length_from_uniform binding that are statically
-    /// used.
+    /// The pipeline stage of the entry point that was generated.
+    core::ir::Function::PipelineStage pipeline_stage =
+        core::ir::Function::PipelineStage::kUndefined;
+
+    /// Indices into the array_length_from_uniform binding that are statically used.
     std::unordered_set<uint32_t> used_array_length_from_uniform_indices;
 
     /// The workgroup size information, if the entry point was a compute shader
     WorkgroupInfo workgroup_info{};
+
+    /// The subgroup size information, if the entry point used the `@subgroup_size` attribute.
+    std::optional<uint32_t> subgroup_size = {};
 
     /// True if the shader uses vertex_index
     bool has_vertex_index = false;

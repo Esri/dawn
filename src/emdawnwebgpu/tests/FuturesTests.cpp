@@ -44,21 +44,15 @@ class InstanceLevelTests : public testing::Test {
     void SetUp() override {
         wgpu::InstanceDescriptor descriptor = {};
         // The unit tests use wgpuInstanceWaitAny(WGPUFuture, timeoutNS) with timeoutNS > 0
-        // which requires the `timedWaitAnyEnable` property enabled on the instance capability.
-        descriptor.capabilities.timedWaitAnyEnable = true;
+        // which requires TimedWaitAny enabled on the instance.
+        static constexpr auto kTimedWaitAny = wgpu::InstanceFeatureName::TimedWaitAny;
+        descriptor.requiredFeatureCount = 1;
+        descriptor.requiredFeatures = &kTimedWaitAny;
         instance = wgpu::CreateInstance(&descriptor);
     }
 
   protected:
     wgpu::Adapter RequestAdapter(const wgpu::RequestAdapterOptions* adapterOptions = nullptr) {
-        // TODO(crbug.com/404535888): Remove this sleep once we figure out regression.
-        static bool sSleepWorkaround = false;
-        if (!sSleepWorkaround) {
-            // Make the test sleep for an additional 2 seconds before trying to requestAdapter.
-            emscripten_sleep(2000);
-            sSleepWorkaround = true;
-        }
-
         wgpu::RequestAdapterStatus status;
         wgpu::Adapter result = nullptr;
         EXPECT_EQ(instance.WaitAny(
@@ -77,6 +71,22 @@ class InstanceLevelTests : public testing::Test {
 
     wgpu::Instance instance;
 };
+
+// Test that waiting for a future that is already complete will indicate that it is completed.
+TEST_F(InstanceLevelTests, WaitAnySameFuture) {
+    wgpu::RequestAdapterStatus status;
+    auto future = instance.RequestAdapter(
+        nullptr, wgpu::CallbackMode::AllowSpontaneous,
+        [&status](wgpu::RequestAdapterStatus s, wgpu::Adapter, wgpu::StringView) { status = s; });
+
+    // First wait should succeed.
+    EXPECT_EQ(instance.WaitAny(future, UINT64_MAX), wgpu::WaitStatus::Success);
+    EXPECT_EQ(status, wgpu::RequestAdapterStatus::Success);
+
+    // Repeated wait should also all succeed.
+    EXPECT_EQ(instance.WaitAny(future, UINT64_MAX), wgpu::WaitStatus::Success);
+    EXPECT_EQ(instance.WaitAny(future, 0), wgpu::WaitStatus::Success);
+}
 
 TEST_F(InstanceLevelTests, RequestAdapter) {
     EXPECT_NE(RequestAdapter(), nullptr);
@@ -166,7 +176,10 @@ class DeviceLevelTests : public AdapterLevelTests {
             });
         descriptor.SetUncapturedErrorCallback(
             [](const wgpu::Device& d, wgpu::ErrorType t, wgpu::StringView m,
-               DeviceLevelTests* self) { self->uncapturedErrorCb.Call(d, t, m); },
+               DeviceLevelTests* self) {
+                self->uncapturedErrorCount++;
+                self->uncapturedErrorCb.Call(d, t, m);
+            },
             this);
         device = RequestDevice(&descriptor);
     }
@@ -195,6 +208,7 @@ class DeviceLevelTests : public AdapterLevelTests {
     testing::StrictMock<
         testing::MockFunction<void(const wgpu::Device&, wgpu::ErrorType, wgpu::StringView)>>
         uncapturedErrorCb;
+    int uncapturedErrorCount = 0;
 };
 
 TEST_F(DeviceLevelTests, ValidationError) {
@@ -204,6 +218,16 @@ TEST_F(DeviceLevelTests, ValidationError) {
     desc.size = 1024;
     desc.usage = static_cast<wgpu::BufferUsage>(UINT64_MAX);
     wgpu::Buffer buffer = device.CreateBuffer(&desc);
+
+    // Do something async to make sure the browser flushes uncaptured error
+    // messages back to the client. (Chromium won't do so without this.)
+    device.GetQueue().OnSubmittedWorkDone(wgpu::CallbackMode::AllowSpontaneous,
+                                          [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
+    // Wait until the uncaptured error callback runs before dropping the
+    // device, otherwise it probably won't arrive.
+    while (uncapturedErrorCount != 1) {
+        emscripten_sleep(50);
+    }
 }
 
 TEST_F(DeviceLevelTests, PopErrorScope) {
@@ -299,6 +323,26 @@ TEST_F(DeviceLevelTests, BufferMapAndWorkDone) {
     dst.Unmap();
 }
 
+TEST_F(DeviceLevelTests, BufferMappedAtCreationUnmapRemap) {
+    static constexpr size_t kSize = 4;
+    wgpu::BufferDescriptor desc{
+        .usage = wgpu::BufferUsage::MapWrite, .size = kSize, .mappedAtCreation = true};
+    wgpu::Buffer buffer = device.CreateBuffer(&desc);
+    EXPECT_EQ(buffer.GetMapState(), wgpu::BufferMapState::Mapped);
+
+    buffer.Unmap();
+    EXPECT_EQ(buffer.GetMapState(), wgpu::BufferMapState::Unmapped);
+
+    EXPECT_EQ(instance.WaitAny(
+                  buffer.MapAsync(wgpu::MapMode::Write, 0, kSize, wgpu::CallbackMode::WaitAnyOnly,
+                                  [&buffer](wgpu::MapAsyncStatus s, wgpu::StringView) {
+                                      ASSERT_EQ(s, wgpu::MapAsyncStatus::Success);
+                                      EXPECT_EQ(buffer.GetMapState(), wgpu::BufferMapState::Mapped);
+                                  }),
+                  UINT64_MAX),
+              wgpu::WaitStatus::Success);
+}
+
 TEST_F(DeviceLevelTests, CreateComputePipelineAsync) {
     wgpu::ComputePipelineDescriptor desc;
     desc.compute.module = CreateShaderModule(R"(
@@ -373,7 +417,7 @@ TEST_F(DeviceLevelTests, GetCompilationInfo) {
                                                           const wgpu::CompilationInfo* info) {
                           ASSERT_EQ(s, wgpu::CompilationInfoRequestStatus::Success);
                           ASSERT_NE(info, nullptr);
-                          ASSERT_EQ(info->messageCount, 1);
+                          ASSERT_EQ(info->messageCount, 1u);
 
                           message = info->messages[0].message;
                           messageType = info->messages[0].type;
@@ -386,7 +430,7 @@ TEST_F(DeviceLevelTests, GetCompilationInfo) {
                               }
                               chainLength++;
                           }
-                          ASSERT_EQ(chainLength, 1);
+                          ASSERT_EQ(chainLength, 1u);
                       }),
                   UINT64_MAX),
               wgpu::WaitStatus::Success);

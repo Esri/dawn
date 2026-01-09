@@ -33,6 +33,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <concepts>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -89,9 +90,8 @@ using FrozenArray = std::vector<T>;
 // A wrapper class for integers that's as transparent as possible and is used to distinguish
 // that the type is tagged with the [Clamp] WebIDL attribute.
 template <typename T>
+    requires std::integral<T>
 struct ClampedInteger {
-    static_assert(std::is_integral_v<T>);
-
     using IntegerType = T;
     ClampedInteger() : value(0) {}
     // NOLINTNEXTLINE(runtime/explicit)
@@ -103,9 +103,8 @@ struct ClampedInteger {
 // A wrapper class for integers that's as transparent as possible and is used to distinguish
 // that the type is tagged with the [EnforceRange] WebIDL attribute.
 template <typename T>
+    requires std::integral<T>
 struct EnforceRangeInteger {
-    static_assert(std::is_integral_v<T>);
-
     using IntegerType = T;
     EnforceRangeInteger() : value(0) {}
     // NOLINTNEXTLINE(runtime/explicit)
@@ -746,11 +745,11 @@ inline Result FromJS(Napi::Env env, Napi::Value value, T& out) {
     return Converter<T>::FromJS(env, value, out);
 }
 
-// FromJSOptional() is similar to FromJS(), but if 'value' is either null
-// or undefined then 'out' is left unassigned.
+// FromJSOptional() is similar to FromJS(), but if 'value' is undefined
+// then 'out' is left unassigned.
 template <typename T>
 inline Result FromJSOptional(Napi::Env env, Napi::Value value, T& out) {
-    if (value.IsNull() || value.IsUndefined()) {
+    if (value.IsUndefined()) {
         return Success;
     }
     return Converter<T>::FromJS(env, value, out);
@@ -800,7 +799,9 @@ inline Result FromJS(const Napi::CallbackInfo& info, PARAM_TYPES& args) {
         if constexpr (IsDefaultedParameter<T>::value) {
             // Parameter has a default value.
             // Check whether the argument was provided.
-            if (value.IsNull() || value.IsUndefined()) {
+            if (value.IsNull()) {
+                return Success;
+            } else if (value.IsUndefined()) {
                 // Use default value for this parameter
                 out.value = out.default_value;
             } else {

@@ -87,7 +87,8 @@ MaybeError ComputePipeline::InitializeImpl() {
     ShaderModule::ModuleAndSpirv moduleAndSpirv;
     DAWN_TRY_ASSIGN(moduleAndSpirv,
                     module->GetHandleAndSpirv(SingleShaderStage::Compute, computeStage, layout,
-                                              /*emitPointSize*/ false, GetImmediateMask()));
+                                              /*emitPointSize*/ false, /*isSampled*/ false,
+                                              GetImmediateMask()));
 
     createInfo.stage.module = moduleAndSpirv.module;
     // string_view returned by GetIsolatedEntryPointName() points to a null-terminated string.
@@ -97,7 +98,6 @@ MaybeError ComputePipeline::InitializeImpl() {
     // If the shader stage uses subgroup matrix types, we need to enable full subgroups to guarantee
     // that all shader invocations are active. This becomes unnecessary with SPIR-V 1.6.
     if (computeStage.metadata->usesSubgroupMatrix) {
-        createInfo.flags |= VK_PIPELINE_SHADER_STAGE_CREATE_ALLOW_VARYING_SUBGROUP_SIZE_BIT;
         createInfo.flags |= VK_PIPELINE_SHADER_STAGE_CREATE_REQUIRE_FULL_SUBGROUPS_BIT;
     }
 
@@ -111,6 +111,15 @@ MaybeError ComputePipeline::InitializeImpl() {
         stageExtChain.Add(
             &subgroupSizeInfo,
             VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO_EXT);
+    } else {
+        // This is required to ensure SubgroupSize is reported as the actual size of the subgroups
+        // (even if some invocations may be disabled), and that the subgroup size will be uniform
+        // across the entire dispatch. This becomes unnecessary with SPIR-V 1.6. Note that according
+        // to Vulkan SPEC (VUID-VkPipelineShaderStageCreateInfo-pNext-02754) flags must not have the
+        // `VK_PIPELINE_SHADER_STAGE_CREATE_ALLOW_VARYING_SUBGROUP_SIZE_BIT flag` set if a
+        // `VkPipelineShaderStageRequiredSubgroupSizeCreateInfo` structure is included in the pNext
+        // chain,
+        createInfo.flags |= VK_PIPELINE_SHADER_STAGE_CREATE_ALLOW_VARYING_SUBGROUP_SIZE_BIT;
     }
 
     if (buildCacheKey) {
@@ -143,9 +152,9 @@ void ComputePipeline::SetLabelImpl() {
 
 ComputePipeline::~ComputePipeline() = default;
 
-void ComputePipeline::DestroyImpl() {
-    ComputePipelineBase::DestroyImpl();
-    PipelineVk::DestroyImpl();
+void ComputePipeline::DestroyImpl(DestroyReason reason) {
+    ComputePipelineBase::DestroyImpl(reason);
+    PipelineVk::DestroyImpl(reason);
     if (mHandle != VK_NULL_HANDLE) {
         ToBackend(GetDevice())->GetFencedDeleter()->DeleteWhenUnused(mHandle);
         mHandle = VK_NULL_HANDLE;

@@ -45,16 +45,21 @@ if (tint_build_unittests || tint_build_benchmarks) {
 
 libtint_source_set("analysis") {
   sources = [
+    "for_loop_analysis.cc",
+    "for_loop_analysis.h",
     "integer_range_analysis.cc",
     "integer_range_analysis.h",
     "loop_analysis.cc",
     "loop_analysis.h",
+    "subgroup_matrix.cc",
+    "subgroup_matrix.h",
   ]
   deps = [
-    "${dawn_root}/src/utils:utils",
+    "${dawn_root}/src/utils",
     "${tint_src_dir}/api/common",
     "${tint_src_dir}/lang/core",
     "${tint_src_dir}/lang/core/constant",
+    "${tint_src_dir}/lang/core/intrinsic",
     "${tint_src_dir}/lang/core/ir",
     "${tint_src_dir}/lang/core/type",
     "${tint_src_dir}/utils",
@@ -72,11 +77,13 @@ libtint_source_set("analysis") {
 if (tint_build_unittests) {
   tint_unittests_source_set("unittests") {
     sources = [
+      "for_loop_analysis_test.cc",
       "integer_range_analysis_test.cc",
       "loop_analysis_test.cc",
+      "subgroup_matrix_test.cc",
     ]
     deps = [
-      "${dawn_root}/src/utils:utils",
+      "${dawn_root}/src/utils",
       "${tint_src_dir}:gmock_and_gtest",
       "${tint_src_dir}/api/common",
       "${tint_src_dir}/lang/core",
@@ -85,6 +92,7 @@ if (tint_build_unittests) {
       "${tint_src_dir}/lang/core/ir",
       "${tint_src_dir}/lang/core/ir:unittests",
       "${tint_src_dir}/lang/core/ir/analysis",
+      "${tint_src_dir}/lang/core/ir/transform",
       "${tint_src_dir}/lang/core/type",
       "${tint_src_dir}/utils",
       "${tint_src_dir}/utils/containers",

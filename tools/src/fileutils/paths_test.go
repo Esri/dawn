@@ -103,10 +103,8 @@ func TestExpandHome(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			wrapper := oswrapper.CreateMemMapOSWrapper()
-			wrapper.Environment = map[string]string{
-				"HOME": "/home",
-			}
+			wrapper := oswrapper.CreateFSTestOSWrapper()
+			wrapper.Setenv("HOME", "/home")
 
 			expandedPath := fileutils.ExpandHome(testCase.input, wrapper)
 			require.Equal(t, testCase.want, expandedPath)
@@ -117,12 +115,12 @@ func TestExpandHome(t *testing.T) {
 func TestBuildPath(t *testing.T) {
 	tests := []struct {
 		name    string
-		setupFS func(fs oswrapper.MemMapOSWrapper) (expectedPath string) // Sets up FS and returns expected path
+		setupFS func(fs oswrapper.FSTestOSWrapper) (expectedPath string) // Sets up FS and returns expected path
 		want    string
 	}{
 		{
 			name: "out/active exists",
-			setupFS: func(fs oswrapper.MemMapOSWrapper) string {
+			setupFS: func(fs oswrapper.FSTestOSWrapper) string {
 				require.NoError(t, fileutils.SetUpFakeDawnRoot(fs))
 				fakeDawnRoot := fileutils.DawnRoot(fs)
 				require.NotEmpty(t, fakeDawnRoot, "Failed to find fake Dawn root")
@@ -134,14 +132,14 @@ func TestBuildPath(t *testing.T) {
 		},
 		{
 			name: "out/active does not exist",
-			setupFS: func(fs oswrapper.MemMapOSWrapper) string {
+			setupFS: func(fs oswrapper.FSTestOSWrapper) string {
 				require.NoError(t, fileutils.SetUpFakeDawnRoot(fs))
 				return "" // Expect empty string as out/active won't be found.
 			},
 		},
 		{
 			name: "dawn root does not exist",
-			setupFS: func(fs oswrapper.MemMapOSWrapper) string {
+			setupFS: func(fs oswrapper.FSTestOSWrapper) string {
 				return "" // Expect empty string as dawn root won't be found.
 			},
 		},
@@ -149,7 +147,7 @@ func TestBuildPath(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			wrapper := oswrapper.CreateMemMapOSWrapper()
+			wrapper := oswrapper.CreateFSTestOSWrapper()
 			expectedPath := tc.setupFS(wrapper)
 
 			got := fileutils.BuildPath(wrapper)
@@ -178,5 +176,179 @@ func TestCommonRootDir(t *testing.T) {
 		if got := fileutils.CommonRootDir(test.b, test.a); got != test.expect {
 			t.Errorf("CommonRootDir('%v', '%v') returned '%v'.\nExpected: '%v'", test.b, test.a, got, test.expect)
 		}
+	}
+}
+
+func TestIsDir(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		setupFS func(fs oswrapper.FSTestOSWrapper) // Sets up the filesystem
+		want    bool
+	}{
+		{
+			name: "Is a directory",
+			path: "/a/b/c",
+			setupFS: func(fs oswrapper.FSTestOSWrapper) {
+				require.NoError(t, fs.MkdirAll("/a/b/c", 0777))
+			},
+			want: true,
+		},
+		{
+			name: "Is a file",
+			path: "/a/b/file.txt",
+			setupFS: func(fs oswrapper.FSTestOSWrapper) {
+				require.NoError(t, fs.MkdirAll("/a/b", 0777))
+				require.NoError(t, fs.WriteFile("/a/b/file.txt", []byte("hello"), 0666))
+			},
+			want: false,
+		},
+		{
+			name:    "Does not exist",
+			path:    "/a/b/c",
+			setupFS: nil,
+			want:    false,
+		},
+		{
+			// Empty path is treated as the CWD.
+			name:    "Empty path",
+			path:    "",
+			setupFS: nil,
+			want:    true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			wrapper := oswrapper.CreateFSTestOSWrapper()
+			if tc.setupFS != nil {
+				tc.setupFS(wrapper)
+			}
+
+			got := fileutils.IsDir(tc.path, wrapper)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestIsFile(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		setupFS func(fs oswrapper.FSTestOSWrapper) // Sets up the filesystem
+		want    bool
+	}{
+		{
+			name: "Is a file",
+			path: "/a/b/file.txt",
+			setupFS: func(fs oswrapper.FSTestOSWrapper) {
+				require.NoError(t, fs.MkdirAll("/a/b", 0777))
+				require.NoError(t, fs.WriteFile("/a/b/file.txt", []byte("hello"), 0666))
+			},
+			want: true,
+		},
+		{
+			name: "Is a directory",
+			path: "/a/b/c",
+			setupFS: func(fs oswrapper.FSTestOSWrapper) {
+				require.NoError(t, fs.MkdirAll("/a/b/c", 0777))
+			},
+			want: false,
+		},
+		{
+			name:    "Does not exist",
+			path:    "/a/b/c",
+			setupFS: nil,
+			want:    false,
+		},
+		{
+			name:    "Empty path",
+			path:    "",
+			setupFS: nil,
+			want:    false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			wrapper := oswrapper.CreateFSTestOSWrapper()
+			if tc.setupFS != nil {
+				tc.setupFS(wrapper)
+			}
+
+			got := fileutils.IsFile(tc.path, wrapper)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestIsEmptyDir(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		setupFS func(fs oswrapper.FSTestOSWrapper)
+		want    bool
+		wantErr bool
+	}{
+		{
+			name:    "Path does not exist",
+			path:    "/nonexistent",
+			setupFS: nil,
+			wantErr: true,
+		},
+		{
+			name: "Path is a file",
+			path: "/myfile.txt",
+			setupFS: func(fs oswrapper.FSTestOSWrapper) {
+				require.NoError(t, fs.WriteFile("/myfile.txt", []byte("content"), 0666))
+			},
+			wantErr: true,
+		},
+		{
+			name: "Directory is empty",
+			path: "/mydir",
+			setupFS: func(fs oswrapper.FSTestOSWrapper) {
+				require.NoError(t, fs.MkdirAll("/mydir", 0777))
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "Directory with a file",
+			path: "/mydir",
+			setupFS: func(fs oswrapper.FSTestOSWrapper) {
+				require.NoError(t, fs.MkdirAll("/mydir", 0777))
+				require.NoError(t, fs.WriteFile(filepath.Join("/mydir", "file.txt"), []byte("content"), 0666))
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "Directory with a subdirectory",
+			path: "/mydir",
+			setupFS: func(fs oswrapper.FSTestOSWrapper) {
+				require.NoError(t, fs.MkdirAll(filepath.Join("/mydir", "subdir"), 0777))
+			},
+			want:    false,
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			wrapper := oswrapper.CreateFSTestOSWrapper()
+			if tc.setupFS != nil {
+				tc.setupFS(wrapper)
+			}
+
+			got, err := fileutils.IsEmptyDir(tc.path, wrapper)
+
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.want, got)
+			}
+		})
 	}
 }

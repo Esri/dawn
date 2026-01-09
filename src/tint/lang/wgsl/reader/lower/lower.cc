@@ -29,11 +29,11 @@
 
 #include <utility>
 
-#include "src/tint/lang/core/builtin_fn.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/core_builtin_call.h"
 #include "src/tint/lang/core/ir/validator.h"
-#include "src/tint/lang/wgsl/builtin_fn.h"
+#include "src/tint/lang/wgsl/enums.h"
 #include "src/tint/lang/wgsl/ir/builtin_call.h"
 #include "src/tint/utils/ice/ice.h"
 
@@ -195,7 +195,12 @@ core::BuiltinFn Convert(wgsl::BuiltinFn fn) {
         CASE(kSubgroupMatrixStore)
         CASE(kSubgroupMatrixMultiply)
         CASE(kSubgroupMatrixMultiplyAccumulate)
-
+        CASE(kSubgroupMatrixScalarAdd)
+        CASE(kSubgroupMatrixScalarSubtract)
+        CASE(kSubgroupMatrixScalarMultiply)
+        CASE(kPrint)
+        CASE(kHasResource)
+        CASE(kGetResource)
         case tint::wgsl::BuiltinFn::kBitcast:               // should lower to ir::Bitcast
         case tint::wgsl::BuiltinFn::kWorkgroupUniformLoad:  // should be handled in Lower()
         case tint::wgsl::BuiltinFn::kTintMaterialize:
@@ -208,15 +213,13 @@ core::BuiltinFn Convert(wgsl::BuiltinFn fn) {
 }  // namespace
 
 Result<SuccessType> Lower(core::ir::Module& mod) {
-    auto res =
+    TINT_CHECK_RESULT(
         core::ir::ValidateAndDumpIfNeeded(mod, "wgsl.Lower",
                                           core::ir::Capabilities{
                                               core::ir::Capability::kAllowMultipleEntryPoints,
                                               core::ir::Capability::kAllowOverrides,
-                                          });
-    if (res != Success) {
-        return res.Failure();
-    }
+                                              core::ir::Capability::kAllow8BitIntegers,
+                                          }));
 
     core::ir::Builder b{mod};
     core::type::Manager& ty{mod.Types()};

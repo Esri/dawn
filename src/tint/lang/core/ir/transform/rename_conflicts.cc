@@ -29,6 +29,7 @@
 #include "src/tint/lang/core/ir/transform/rename_conflicts.h"
 #include "src/tint/lang/core/ir/construct.h"
 #include "src/tint/lang/core/ir/control_instruction.h"
+#include "src/tint/lang/core/ir/convert.h"
 #include "src/tint/lang/core/ir/core_builtin_call.h"
 #include "src/tint/lang/core/ir/function.h"
 #include "src/tint/lang/core/ir/instruction.h"
@@ -191,6 +192,10 @@ struct State {
                 // Ensure the type of a type constructor is resolvable
                 EnsureResolvable(inst->Result()->Type());
             },
+            [&](core::ir::Convert*) {
+                // Ensure the type of a type constructor is resolvable
+                EnsureResolvable(inst->Result()->Type());
+            },
             [&](core::ir::CoreBuiltinCall* call) {
                 // Ensure builtin of a builtin call is resolvable
                 auto name = tint::ToString(call->Func());
@@ -271,7 +276,7 @@ struct State {
         // Add the declaration to the current scope, and make sure that it was either successfully
         // added or has already been added.
         auto add = scopes.Back().Add(name.NameView(), thing);
-        TINT_ASSERT(add || add.value == thing);
+        TINT_IR_ASSERT(ir, add || add.value == thing);
     }
 
     /// Rename changes the name of @p thing with the old name of @p old_name
@@ -288,17 +293,15 @@ struct State {
 
     /// @return true if @p s is a builtin (non-user declared) structure.
     bool IsBuiltinStruct(const core::type::Struct* s) {
-        return tint::HasPrefix(s->Name().NameView(), "__");
+        return s->Name().NameView().starts_with("__");
     }
 };
 
 }  // namespace
 
 Result<SuccessType> RenameConflicts(core::ir::Module& ir) {
-    auto result = ValidateAndDumpIfNeeded(ir, "core.RenameConflicts", kRenameConflictsCapabilities);
-    if (result != Success) {
-        return result;
-    }
+    TINT_CHECK_RESULT(
+        ValidateAndDumpIfNeeded(ir, "core.RenameConflicts", kRenameConflictsCapabilities));
 
     State{ir}.Process();
 

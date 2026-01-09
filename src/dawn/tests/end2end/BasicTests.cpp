@@ -25,6 +25,9 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <limits>
+#include <unordered_set>
+
 #include "dawn/common/FutureUtils.h"
 #include "dawn/tests/DawnTest.h"
 #include "dawn/utils/WGPUHelpers.h"
@@ -74,28 +77,68 @@ TEST_P(BasicTests, QueueWriteBufferError) {
     ASSERT_DEVICE_ERROR(queue.WriteBuffer(buffer, 1000, &value, sizeof(value)));
 }
 
-TEST_P(BasicTests, GetInstanceCapabilities) {
-    wgpu::InstanceCapabilities instanceCapabilities{};
-    auto status = wgpu::GetInstanceCapabilities(&instanceCapabilities);
+TEST_P(BasicTests, GetInstanceLimits) {
+    wgpu::InstanceLimits out{};
+    auto status = wgpu::GetInstanceLimits(&out);
     EXPECT_EQ(status, wgpu::Status::Success);
-    EXPECT_EQ(instanceCapabilities.timedWaitAnyEnable, !UsesWire());
-    EXPECT_EQ(instanceCapabilities.timedWaitAnyMaxCount, kTimedWaitAnyMaxCountDefault);
-    EXPECT_EQ(instanceCapabilities.nextInChain, nullptr);
+    if (UsesWire()) {
+        // The wire's limit is just the max size value.
+        EXPECT_EQ(out.timedWaitAnyMaxCount, std::numeric_limits<size_t>::max());
+    } else {
+        EXPECT_EQ(out.timedWaitAnyMaxCount, kTimedWaitAnyMaxCountDefault);
+    }
+    EXPECT_EQ(out.nextInChain, nullptr);
 
     wgpu::ChainedStructOut chained{};
-    instanceCapabilities.nextInChain = &chained;
-    status = wgpu::GetInstanceCapabilities(&instanceCapabilities);
+    out.nextInChain = &chained;
+    status = wgpu::GetInstanceLimits(&out);
     EXPECT_EQ(status, wgpu::Status::Error);
+    EXPECT_EQ(out.nextInChain, &chained);
 }
 
-DAWN_INSTANTIATE_TEST(BasicTests,
-                      D3D11Backend(),
-                      D3D12Backend(),
-                      MetalBackend(),
-                      OpenGLBackend(),
-                      OpenGLESBackend(),
-                      VulkanBackend(),
-                      WebGPUBackend());
+TEST_P(BasicTests, GetInstanceFeatures) {
+    wgpu::SupportedInstanceFeatures out{};
+    wgpu::GetInstanceFeatures(&out);
+
+    static const auto kKnownFeatures = std::unordered_set{
+        wgpu::InstanceFeatureName::ShaderSourceSPIRV,
+        wgpu::InstanceFeatureName::MultipleDevicesPerAdapter,
+        wgpu::InstanceFeatureName::TimedWaitAny,
+    };
+    auto features = std::unordered_set(out.features, out.features + out.featureCount);
+
+    if (UsesWire()) {
+        // Wire exposes a subset of features.
+        static const auto kWireFeatures = std::unordered_set{
+            wgpu::InstanceFeatureName::TimedWaitAny,
+        };
+        EXPECT_EQ(features, kWireFeatures);
+    } else {
+        // Native (currently) exposes all known features.
+        EXPECT_EQ(features, kKnownFeatures);
+    }
+
+    // Check that GetInstanceFeatures and HasInstanceFeature match.
+    for (auto feature : kKnownFeatures) {
+        EXPECT_EQ(features.contains(feature), wgpu::HasInstanceFeature(feature));
+    }
+    // Check some bogus feature enum values.
+    EXPECT_FALSE(wgpu::HasInstanceFeature(wgpu::InstanceFeatureName(0)));
+    EXPECT_FALSE(
+        wgpu::HasInstanceFeature(wgpu::InstanceFeatureName(WGPUInstanceFeatureName_Force32)));
+}
+
+DAWN_INSTANTIATE_TEST(
+    BasicTests,
+    D3D11Backend(),
+    D3D12Backend(),
+    MetalBackend(),
+    OpenGLBackend(),
+    OpenGLESBackend(),
+    VulkanBackend(),
+    WebGPUBackend(),
+    // TODO(crbug.com/462149555): Remove when the temp enable_for_check_capture_replay is removed.
+    WebGPUBackend({"enable_for_check_capture_replay"}));
 
 }  // anonymous namespace
 }  // namespace dawn

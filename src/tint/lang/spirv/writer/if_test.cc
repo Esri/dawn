@@ -47,6 +47,12 @@ TEST_F(SpirvWriterTest, If_TrueEmpty_FalseEmpty) {
         b.Return(func);
     });
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Call(func);
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << Error() << output_;
     EXPECT_INST(R"(
                OpSelectionMerge %5 None
@@ -64,7 +70,7 @@ TEST_F(SpirvWriterTest, If_FalseEmpty) {
     b.Append(func->Block(), [&] {
         auto* i = b.If(true);
         b.Append(i->True(), [&] {
-            b.Add(ty.i32(), 1_i, 1_i);
+            b.Add(1_i, 1_i);
             b.ExitIf(i);
         });
         b.Append(i->False(), [&] {  //
@@ -73,12 +79,21 @@ TEST_F(SpirvWriterTest, If_FalseEmpty) {
         b.Return(func);
     });
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Call(func);
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << Error() << output_;
     EXPECT_INST(R"(
                OpSelectionMerge %5 None
                OpBranchConditional %true %6 %5
           %6 = OpLabel
-          %9 = OpIAdd %int %int_1 %int_1
+         %10 = OpBitcast %uint %int_1
+         %13 = OpBitcast %uint %int_1
+         %14 = OpIAdd %uint %10 %13
+         %15 = OpBitcast %int %14
                OpBranch %5
           %5 = OpLabel
                OpReturn
@@ -94,10 +109,16 @@ TEST_F(SpirvWriterTest, If_TrueEmpty) {
             b.ExitIf(i);
         });
         b.Append(i->False(), [&] {
-            b.Add(ty.i32(), 1_i, 1_i);
+            b.Add(1_i, 1_i);
             b.ExitIf(i);
         });
         b.Return(func);
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Call(func);
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
@@ -106,7 +127,10 @@ TEST_F(SpirvWriterTest, If_TrueEmpty) {
                OpSelectionMerge %5 None
                OpBranchConditional %true %5 %6
           %6 = OpLabel
-          %9 = OpIAdd %int %int_1 %int_1
+         %10 = OpBitcast %uint %int_1
+         %13 = OpBitcast %uint %int_1
+         %14 = OpIAdd %uint %10 %13
+         %15 = OpBitcast %int %14
                OpBranch %5
           %5 = OpLabel
                OpReturn
@@ -125,6 +149,12 @@ TEST_F(SpirvWriterTest, If_BothBranchesReturn) {
             b.Return(func);
         });
         b.Unreachable();
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Call(func);
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
@@ -151,6 +181,12 @@ TEST_F(SpirvWriterTest, If_Phi_SingleValue) {
             b.ExitIf(i, 20_i);
         });
         b.Return(func, i);
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
@@ -181,6 +217,12 @@ TEST_F(SpirvWriterTest, If_Phi_SingleValue_TrueReturn) {
             b.ExitIf(i, 20_i);
         });
         b.Return(func, i);
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
@@ -223,6 +265,12 @@ TEST_F(SpirvWriterTest, If_Phi_SingleValue_FalseReturn) {
         b.Return(func, i);
     });
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << Error() << output_;
     EXPECT_INST("%17 = OpUndef %int");
     EXPECT_INST(R"(
@@ -260,6 +308,12 @@ TEST_F(SpirvWriterTest, If_Phi_SingleValue_ImplicitFalse) {
         b.Return(func, i);
     });
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << Error() << output_;
     EXPECT_INST("%12 = OpUndef %int");
     EXPECT_INST(R"(
@@ -291,6 +345,12 @@ TEST_F(SpirvWriterTest, If_Phi_MultipleValue_0) {
         b.Return(func, i->Result(0));
     });
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << Error() << output_;
     EXPECT_INST(R"(
           %4 = OpLabel
@@ -320,6 +380,12 @@ TEST_F(SpirvWriterTest, If_Phi_MultipleValue_1) {
             b.ExitIf(i, 20_i, false);
         });
         b.Return(func, i->Result(1));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;
@@ -359,6 +425,12 @@ TEST_F(SpirvWriterTest, If_Phi_Nested) {
             b.ExitIf(outer, 30_i);
         });
         b.Return(func, outer);
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(func));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << Error() << output_;

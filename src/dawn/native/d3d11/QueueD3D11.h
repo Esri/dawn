@@ -43,10 +43,10 @@ class Queue : public d3d::Queue {
   public:
     static ResultOrError<Ref<Queue>> Create(Device* device, const QueueDescriptor* descriptor);
 
-    ScopedCommandRecordingContext GetScopedPendingCommandContext(SubmitMode submitMode);
+    ScopedCommandRecordingContext GetScopedPendingCommandContext(SubmitMode submitMode,
+                                                                 bool lockD3D11Scope = true);
     ScopedSwapStateCommandRecordingContext GetScopedSwapStatePendingCommandContext(
         SubmitMode submitMode);
-    MaybeError SubmitPendingCommands() override;
     virtual MaybeError NextSerial() = 0;
 
     // Separated from creation because it creates resources, which is not valid before the
@@ -79,12 +79,16 @@ class Queue : public d3d::Queue {
                                 const TexelCopyBufferLayout& dataLayout,
                                 const Extent3D& writeSizePixel) override;
 
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
     bool HasPendingCommands() const override;
     void ForceEventualFlushOfCommands() override;
-    MaybeError WaitForIdleForDestruction() override;
+    MaybeError WaitForIdleForDestructionImpl() override;
+    MaybeError SubmitPendingCommandsImpl() override;
+    ResultOrError<ExecutionSerial> CheckAndUpdateCompletedSerials() override;
 
     ResultOrError<Ref<d3d::SharedFence>> GetOrCreateSharedFence() override;
+
+    virtual ResultOrError<ExecutionSerial> CheckCompletedSerialsImpl() = 0;
 
     // Check all pending map buffers, and actually map the ready ones.
     MaybeError CheckAndMapReadyBuffers(ExecutionSerial completedSerial);

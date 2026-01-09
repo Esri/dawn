@@ -51,12 +51,13 @@ cc_library(
     "//src/tint/lang/core/ir",
     "//src/tint/lang/core/type",
     "//src/tint/lang/hlsl/writer/common",
+    "//src/tint/lang/null/writer/common",
     "//src/tint/lang/wgsl",
     "//src/tint/lang/wgsl/ast",
     "//src/tint/lang/wgsl/inspector",
     "//src/tint/lang/wgsl/program",
     "//src/tint/lang/wgsl/sem",
-    "//src/tint/lang/wgsl/writer/ir_to_program",
+    "//src/tint/lang/wgsl/writer/common",
     "//src/tint/utils",
     "//src/tint/utils/containers",
     "//src/tint/utils/diagnostic",
@@ -86,6 +87,11 @@ cc_library(
     ],
     "//conditions:default": [],
   }) + select({
+    ":tint_build_null_writer": [
+      "//src/tint/lang/null/writer",
+    ],
+    "//conditions:default": [],
+  }) + select({
     ":tint_build_spv_reader": [
       "//src/tint/lang/spirv/reader",
       "//src/tint/lang/spirv/reader/common",
@@ -111,6 +117,36 @@ cc_library(
   copts = COPTS,
   visibility = ["//visibility:public"],
 )
+cc_library(
+  name = "test",
+  alwayslink = True,
+  srcs = [
+    "tint_api_test.cc",
+  ],
+  deps = [
+    "//src/tint/api",
+    "//src/tint/lang/wgsl",
+    "//src/tint/lang/wgsl/writer/common",
+    "//src/tint/utils",
+    "//src/tint/utils/containers",
+    "//src/tint/utils/diagnostic",
+    "//src/tint/utils/ice",
+    "//src/tint/utils/macros",
+    "//src/tint/utils/math",
+    "//src/tint/utils/memory",
+    "//src/tint/utils/rtti",
+    "//src/tint/utils/text",
+    "@gtest",
+    "//src/utils",
+  ] + select({
+    ":tint_build_spv_reader_or_tint_build_spv_writer": [
+      "@spirv_tools",
+    ],
+    "//conditions:default": [],
+  }),
+  copts = COPTS,
+  visibility = ["//visibility:public"],
+)
 
 alias(
   name = "tint_build_glsl_writer",
@@ -125,6 +161,11 @@ alias(
 alias(
   name = "tint_build_msl_writer",
   actual = "//src/tint:tint_build_msl_writer_true",
+)
+
+alias(
+  name = "tint_build_null_writer",
+  actual = "//src/tint:tint_build_null_writer_true",
 )
 
 alias(
@@ -145,5 +186,13 @@ alias(
 alias(
   name = "tint_build_wgsl_writer",
   actual = "//src/tint:tint_build_wgsl_writer_true",
+)
+
+selects.config_setting_group(
+    name = "tint_build_spv_reader_or_tint_build_spv_writer",
+    match_any = [
+        "tint_build_spv_reader",
+        "tint_build_spv_writer",
+    ],
 )
 

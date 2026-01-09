@@ -25,7 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/core/builtin_value.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/wgsl/ast/discard_statement.h"
 #include "src/tint/lang/wgsl/ast/return_statement.h"
 #include "src/tint/lang/wgsl/ast/stage_attribute.h"
@@ -1099,9 +1099,9 @@ TEST_P(ResolverFunctionParameterValidationTest, AddressSpaceWithoutUnrestrictedP
         ss << param.address_space;
         EXPECT_FALSE(r.Resolve());
         if (param.expectation == Expectation::kInvalid) {
-            std::string err = R"(12:34 error: unresolved address space '${addr_space}'
+            std::string err = R"(12:34 error: unresolved address space ')" +
+                              tint::ToString(param.address_space) + R"('
 12:34 note: Possible values: 'function', 'immediate', 'pixel_local', 'private', 'storage', 'uniform', 'workgroup')";
-            err = tint::ReplaceAll(err, "${addr_space}", tint::ToString(param.address_space));
             EXPECT_EQ(r.error(), err);
         } else {
             EXPECT_EQ(r.error(), "12:34 error: function parameter of pointer type cannot be in '" +
@@ -1126,9 +1126,9 @@ TEST_P(ResolverFunctionParameterValidationTest, AddressSpaceWithUnrestrictedPoin
     } else {
         EXPECT_FALSE(r()->Resolve());
         if (param.expectation == Expectation::kInvalid) {
-            std::string err = R"(12:34 error: unresolved address space '${addr_space}'
+            std::string err = R"(12:34 error: unresolved address space ')" +
+                              tint::ToString(param.address_space) + R"('
 12:34 note: Possible values: 'function', 'immediate', 'pixel_local', 'private', 'storage', 'uniform', 'workgroup')";
-            err = tint::ReplaceAll(err, "${addr_space}", tint::ToString(param.address_space));
             EXPECT_EQ(r()->error(), err);
         } else {
             EXPECT_EQ(r()->error(),
@@ -1149,6 +1149,8 @@ INSTANTIATE_TEST_SUITE_P(
                                Expectation::kPassWithUnrestrictedPointerParameters},
                     TestParams{core::AddressSpace::kHandle, Expectation::kInvalid},
                     TestParams{core::AddressSpace::kStorage,
+                               Expectation::kPassWithUnrestrictedPointerParameters},
+                    TestParams{core::AddressSpace::kImmediate,
                                Expectation::kPassWithUnrestrictedPointerParameters},
                     TestParams{core::AddressSpace::kPixelLocal, Expectation::kAlwaysFail},
                     TestParams{core::AddressSpace::kPrivate, Expectation::kAlwaysPass},

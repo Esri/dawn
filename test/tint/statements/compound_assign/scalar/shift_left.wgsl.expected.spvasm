@@ -5,14 +5,13 @@
 ; Schema: 0
                OpCapability Shader
                OpMemoryModel Logical GLSL450
-               OpEntryPoint GLCompute %unused_entry_point "unused_entry_point"
-               OpExecutionMode %unused_entry_point LocalSize 1 1 1
+               OpEntryPoint GLCompute %foo "foo"
+               OpExecutionMode %foo LocalSize 1 1 1
                OpMemberName %S 0 "a"
                OpName %S "S"
                OpMemberName %v_block 0 "inner"
                OpName %v_block "v_block"
                OpName %foo "foo"
-               OpName %unused_entry_point "unused_entry_point"
                OpMemberDecorate %S 0 Offset 0
                OpMemberDecorate %v_block 0 Offset 0
                OpDecorate %v_block Block
@@ -36,11 +35,9 @@
          %10 = OpAccessChain %_ptr_StorageBuffer_int %1 %uint_0 %uint_0
          %14 = OpLoad %int %10 None
          %15 = OpBitwiseAnd %uint %uint_2 %uint_31
-         %18 = OpShiftLeftLogical %int %14 %15
-               OpStore %10 %18 None
-               OpReturn
-               OpFunctionEnd
-%unused_entry_point = OpFunction %void None %8
-         %20 = OpLabel
+         %18 = OpBitcast %uint %14
+         %19 = OpShiftLeftLogical %uint %18 %15
+         %20 = OpBitcast %int %19
+               OpStore %10 %20 None
                OpReturn
                OpFunctionEnd

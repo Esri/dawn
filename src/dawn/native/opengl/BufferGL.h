@@ -60,11 +60,12 @@ class Buffer final : public BufferBase {
     Buffer(Device* device, const UnpackedPtr<BufferDescriptor>& descriptor, GLuint handle);
     ~Buffer() override;
     MaybeError MapAsyncImpl(wgpu::MapMode mode, size_t offset, size_t size) override;
-    void UnmapImpl() override;
-    void DestroyImpl() override;
+    MaybeError FinalizeMapImpl(BufferState newState) override;
+    void UnmapImpl(BufferState oldState, BufferState newState) override;
+    void DestroyImpl(DestroyReason reason) override;
     bool IsCPUWritableAtCreation() const override;
     MaybeError MapAtCreationImpl() override;
-    void* GetMappedPointer() override;
+    void* GetMappedPointerImpl() override;
 
     MaybeError InitializeToZero();
 

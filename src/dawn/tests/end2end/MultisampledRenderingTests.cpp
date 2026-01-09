@@ -51,6 +51,10 @@ class MultisampledRenderingTest : public DawnTest {
         DawnTest::SetUp();
 
         InitTexturesForTest();
+
+        // TODO(crbug.com/468061892): Fails on Windows 11/NVIDIA GTX 1660.
+        DAWN_SUPPRESS_TEST_IF(IsWindows11() && IsNvidia() && IsD3D12() &&
+                              IsBackendValidationEnabled());
     }
 
     void InitTexturesForTest() {
@@ -811,6 +815,10 @@ TEST_P(MultisampledRenderingTest, ResolveIntoMultipleResolveTargetsWithSampleMas
     DAWN_TEST_UNSUPPORTED_IF(IsAndroid() && IsQualcomm() &&
                              HasToggleEnabled("resolve_multiple_attachments_in_separate_passes"));
 
+    // TODO(crbug.com/454796308): Produces incorrect output on Mac/Intel with
+    // the WebGPU on WebGPU on Metal backend.
+    DAWN_SUPPRESS_TEST_IF(IsMacOS() && IsIntel() && IsWebGPUOn(wgpu::BackendType::Metal));
+
     wgpu::TextureView multisampledColorView2 =
         CreateTextureForRenderAttachment(kColorFormat, kSampleCount).CreateView();
     wgpu::Texture resolveTexture2 = CreateTextureForRenderAttachment(kColorFormat, 1);
@@ -982,6 +990,10 @@ TEST_P(MultisampledRenderingTest, ResolveIntoMultipleResolveTargetsWithShaderOut
     DAWN_TEST_UNSUPPORTED_IF(IsAndroid() && IsQualcomm() &&
                              HasToggleEnabled("resolve_multiple_attachments_in_separate_passes"));
 
+    // TODO(crbug.com/454796308): Produces incorrect output on Mac/Intel with
+    // the WebGPU on WebGPU on Metal backend.
+    DAWN_SUPPRESS_TEST_IF(IsMacOS() && IsIntel() && IsWebGPUOn(wgpu::BackendType::Metal));
+
     wgpu::TextureView multisampledColorView2 =
         CreateTextureForRenderAttachment(kColorFormat, kSampleCount).CreateView();
     wgpu::Texture resolveTexture2 = CreateTextureForRenderAttachment(kColorFormat, 1);
@@ -1044,6 +1056,9 @@ TEST_P(MultisampledRenderingTest, ResolveIntoMultipleResolveTargetsWithShaderOut
 // Test using one multisampled color attachment with resolve target can render correctly
 // with alphaToCoverageEnabled.
 TEST_P(MultisampledRenderingTest, ResolveInto2DTextureWithAlphaToCoverage) {
+    // TODO(crbug.com/458113207): Flaky w/ WARP.
+    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsWARP());
+
     constexpr bool kTestDepth = false;
     constexpr uint32_t kSampleMask = 0xFFFFFFFF;
     constexpr bool kAlphaToCoverageEnabled = true;
@@ -1093,6 +1108,9 @@ TEST_P(MultisampledRenderingTest, ResolveIntoMultipleResolveTargetsWithAlphaToCo
     // TODO(dawn:1550) Workaround introduces a bug on Qualcomm GPUs, but is necessary for ARM GPUs.
     DAWN_TEST_UNSUPPORTED_IF(IsAndroid() && IsQualcomm() &&
                              HasToggleEnabled("resolve_multiple_attachments_in_separate_passes"));
+
+    // TODO(crbug.com/458113207): Flaky w/ WARP.
+    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsWARP());
 
     wgpu::TextureView multisampledColorView2 =
         CreateTextureForRenderAttachment(kColorFormat, kSampleCount).CreateView();
@@ -1220,6 +1238,9 @@ TEST_P(MultisampledRenderingTest, ResolveInto2DTextureWithAlphaToCoverageAndSamp
     // at the same time. See the issue: https://github.com/gpuweb/gpuweb/issues/959.
     DAWN_SUPPRESS_TEST_IF(IsMetal() && !IsApple());
 
+    // TODO(crbug.com/458113207): Flaky w/ WARP.
+    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsWARP());
+
     constexpr bool kTestDepth = false;
     constexpr float kMSAACoverage = 0.50f;
     constexpr uint32_t kSampleMask = kFirstSampleMaskBit | kThirdSampleMaskBit;
@@ -1260,6 +1281,9 @@ TEST_P(MultisampledRenderingTest, ResolveInto2DTextureWithAlphaToCoverageAndSamp
 TEST_P(MultisampledRenderingTest, ResolveInto2DTextureWithAlphaToCoverageAndRasterizationMask) {
     // TODO(dawn:1550) Fails on ARM-based Android devices.
     DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsARM());
+
+    // TODO(crbug.com/458113207): Flaky w/ WARP.
+    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsWARP());
 
     constexpr bool kTestDepth = false;
     constexpr float kMSAACoverage = 0.50f;
@@ -1350,22 +1374,7 @@ TEST_P(MultisampledRenderingTest, ResolveInto2DTextureWithScissor) {
     VerifyResolveTarget(kGreen, mResolveTexture, 0, 0, kMSAACoverage, kGreenX, kGreenY);
 }
 
-class MultisampledRenderingWithTransientAttachmentTest : public MultisampledRenderingTest {
-    void SetUp() override {
-        MultisampledRenderingTest::SetUp();
-
-        // Skip all tests if the transient attachments feature is not supported.
-        DAWN_TEST_UNSUPPORTED_IF(!SupportsFeatures({wgpu::FeatureName::TransientAttachments}));
-    }
-
-    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
-        std::vector<wgpu::FeatureName> requiredFeatures = {};
-        if (SupportsFeatures({wgpu::FeatureName::TransientAttachments})) {
-            requiredFeatures.push_back(wgpu::FeatureName::TransientAttachments);
-        }
-        return requiredFeatures;
-    }
-};
+class MultisampledRenderingWithTransientAttachmentTest : public MultisampledRenderingTest {};
 
 // Test using one multisampled color transient attachment with resolve target can render correctly.
 TEST_P(MultisampledRenderingWithTransientAttachmentTest, ResolveTransientAttachmentInto2DTexture) {
@@ -2837,6 +2846,12 @@ TEST_P(DawnLoadResolveTextureTest, ExpandResolveDifferentNonZeroOffsetsWithSmall
         {5, 4, kGreen},
     };
     TestExpandAndResolveWithRect(rect, points);
+    points = {
+        {4, 4, kGreen},
+    };
+    // Test when resolveOffsetX - colorOffsetX and resolveOffsetY - colorOffsetY are different.
+    rect.resolveOffsetX = 2;
+    TestExpandAndResolveWithRect(rect, points);
 }
 
 // Test that RenderPassDescriptorResolveRect works with wgpu::LoadOp::Clear.
@@ -2859,6 +2874,7 @@ DAWN_INSTANTIATE_TEST(MultisampledRenderingTest,
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
+                      WebGPUBackend(),
                       VulkanBackend(),
                       VulkanBackend({"always_resolve_into_zero_level_and_layer"}),
                       VulkanBackend({"resolve_multiple_attachments_in_separate_passes"}),
@@ -2875,6 +2891,7 @@ DAWN_INSTANTIATE_TEST(MultisampledRenderingWithTransientAttachmentTest,
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
+                      WebGPUBackend(),
                       VulkanBackend(),
                       VulkanBackend({"always_resolve_into_zero_level_and_layer"}),
                       MetalBackend({"emulate_store_and_msaa_resolve"}),
@@ -2890,6 +2907,7 @@ DAWN_INSTANTIATE_TEST(MultisampledRenderToSingleSampledTest,
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
+                      WebGPUBackend(),
                       VulkanBackend(),
                       VulkanBackend({"always_resolve_into_zero_level_and_layer"}),
                       MetalBackend({"emulate_store_and_msaa_resolve"}),
@@ -2905,6 +2923,7 @@ DAWN_INSTANTIATE_TEST(DawnLoadResolveTextureTest,
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
+                      WebGPUBackend(),
                       VulkanBackend(),
                       VulkanBackend({"always_resolve_into_zero_level_and_layer"}),
                       VulkanBackend({"resolve_multiple_attachments_in_separate_passes"}),

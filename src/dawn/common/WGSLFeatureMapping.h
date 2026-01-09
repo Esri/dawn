@@ -35,6 +35,14 @@
     X(kReadonlyAndReadwriteStorageTextures, ReadonlyAndReadwriteStorageTextures)   \
     X(kUnrestrictedPointerParameters, UnrestrictedPointerParameters)               \
     X(kSizedBindingArray, SizedBindingArray)                                       \
+    X(kTexelBuffers, TexelBuffers)                                                 \
+    X(kFragmentDepth, FragmentDepth)                                               \
+    X(kImmediateAddressSpace, ImmediateAddressSpace)                               \
+    X(kChromiumPrint, ChromiumPrint)                                               \
+    X(kUniformBufferStandardLayout, UniformBufferStandardLayout)                   \
+    X(kSubgroupId, SubgroupId)                                                     \
+    X(kSubgroupUniformity, SubgroupUniformity)                                     \
+    X(kTextureAndSamplerLet, TextureAndSamplerLet)                                 \
     /* ----------------- entries below are only for testing  ------------------ */ \
     X(kChromiumTestingUnimplemented, ChromiumTestingUnimplemented)                 \
     X(kChromiumTestingUnsafeExperimental, ChromiumTestingUnsafeExperimental)       \

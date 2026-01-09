@@ -29,7 +29,6 @@
 
 #include <algorithm>
 #include <bitset>
-#include <limits>
 #include <string_view>
 #include <tuple>
 #include <utility>
@@ -38,8 +37,6 @@
 #include "src/tint/lang/core/type/abstract_numeric.h"
 #include "src/tint/lang/core/type/atomic.h"
 #include "src/tint/lang/core/type/binding_array.h"
-#include "src/tint/lang/core/type/depth_multisampled_texture.h"
-#include "src/tint/lang/core/type/depth_texture.h"
 #include "src/tint/lang/core/type/i8.h"
 #include "src/tint/lang/core/type/input_attachment.h"
 #include "src/tint/lang/core/type/multisampled_texture.h"
@@ -54,31 +51,24 @@
 #include "src/tint/lang/wgsl/ast/alias.h"
 #include "src/tint/lang/wgsl/ast/assignment_statement.h"
 #include "src/tint/lang/wgsl/ast/blend_src_attribute.h"
-#include "src/tint/lang/wgsl/ast/break_statement.h"
 #include "src/tint/lang/wgsl/ast/call_statement.h"
-#include "src/tint/lang/wgsl/ast/continue_statement.h"
-#include "src/tint/lang/wgsl/ast/disable_validation_attribute.h"
-#include "src/tint/lang/wgsl/ast/discard_statement.h"
 #include "src/tint/lang/wgsl/ast/for_loop_statement.h"
 #include "src/tint/lang/wgsl/ast/id_attribute.h"
-#include "src/tint/lang/wgsl/ast/if_statement.h"
-#include "src/tint/lang/wgsl/ast/internal_attribute.h"
 #include "src/tint/lang/wgsl/ast/interpolate_attribute.h"
-#include "src/tint/lang/wgsl/ast/loop_statement.h"
 #include "src/tint/lang/wgsl/ast/return_statement.h"
+#include "src/tint/lang/wgsl/ast/subgroup_size_attribute.h"
 #include "src/tint/lang/wgsl/ast/switch_statement.h"
 #include "src/tint/lang/wgsl/ast/traverse_expressions.h"
-#include "src/tint/lang/wgsl/ast/unary_op_expression.h"
 #include "src/tint/lang/wgsl/ast/variable_decl_statement.h"
 #include "src/tint/lang/wgsl/ast/workgroup_attribute.h"
 #include "src/tint/lang/wgsl/sem/array.h"
 #include "src/tint/lang/wgsl/sem/break_if_statement.h"
+#include "src/tint/lang/wgsl/sem/builtin_fn.h"
 #include "src/tint/lang/wgsl/sem/call.h"
 #include "src/tint/lang/wgsl/sem/for_loop_statement.h"
 #include "src/tint/lang/wgsl/sem/function.h"
 #include "src/tint/lang/wgsl/sem/if_statement.h"
 #include "src/tint/lang/wgsl/sem/loop_statement.h"
-#include "src/tint/lang/wgsl/sem/materialize.h"
 #include "src/tint/lang/wgsl/sem/member_accessor_expression.h"
 #include "src/tint/lang/wgsl/sem/statement.h"
 #include "src/tint/lang/wgsl/sem/struct.h"
@@ -87,15 +77,9 @@
 #include "src/tint/lang/wgsl/sem/value_conversion.h"
 #include "src/tint/lang/wgsl/sem/variable.h"
 #include "src/tint/lang/wgsl/sem/while_statement.h"
-#include "src/tint/utils/containers/map.h"
-#include "src/tint/utils/containers/reverse.h"
-#include "src/tint/utils/containers/transform.h"
 #include "src/tint/utils/internal_limits.h"
-#include "src/tint/utils/macros/defer.h"
-#include "src/tint/utils/macros/scoped_assignment.h"
 #include "src/tint/utils/math/math.h"
 #include "src/tint/utils/text/string.h"
-#include "src/tint/utils/text/string_stream.h"
 #include "src/tint/utils/text/styled_text.h"
 #include "src/tint/utils/text/text_style.h"
 
@@ -122,14 +106,33 @@ bool IsValidStorageTextureDimension(core::type::TextureDimension dim) {
 
 bool IsValidStorageTextureTexelFormat(core::TexelFormat format) {
     switch (format) {
+        case core::TexelFormat::kR8Unorm:
+        case core::TexelFormat::kR8Snorm:
+        case core::TexelFormat::kR8Uint:
+        case core::TexelFormat::kR8Sint:
+        case core::TexelFormat::kRg8Unorm:
+        case core::TexelFormat::kRg8Snorm:
+        case core::TexelFormat::kRg8Uint:
+        case core::TexelFormat::kRg8Sint:
+        case core::TexelFormat::kR16Unorm:
+        case core::TexelFormat::kR16Snorm:
+        case core::TexelFormat::kR16Uint:
+        case core::TexelFormat::kR16Sint:
+        case core::TexelFormat::kR16Float:
+        case core::TexelFormat::kRg16Unorm:
+        case core::TexelFormat::kRg16Snorm:
+        case core::TexelFormat::kRg16Uint:
+        case core::TexelFormat::kRg16Sint:
+        case core::TexelFormat::kRg16Float:
         case core::TexelFormat::kBgra8Unorm:
         case core::TexelFormat::kR32Float:
         case core::TexelFormat::kR32Sint:
         case core::TexelFormat::kR32Uint:
-        case core::TexelFormat::kR8Unorm:
         case core::TexelFormat::kRg32Float:
         case core::TexelFormat::kRg32Sint:
         case core::TexelFormat::kRg32Uint:
+        case core::TexelFormat::kRgba16Unorm:
+        case core::TexelFormat::kRgba16Snorm:
         case core::TexelFormat::kRgba16Float:
         case core::TexelFormat::kRgba16Sint:
         case core::TexelFormat::kRgba16Uint:
@@ -140,6 +143,9 @@ bool IsValidStorageTextureTexelFormat(core::TexelFormat format) {
         case core::TexelFormat::kRgba8Snorm:
         case core::TexelFormat::kRgba8Uint:
         case core::TexelFormat::kRgba8Unorm:
+        case core::TexelFormat::kRgb10A2Uint:
+        case core::TexelFormat::kRgb10A2Unorm:
+        case core::TexelFormat::kRg11B10Ufloat:
             return true;
         default:
             return false;
@@ -289,6 +295,15 @@ bool Validator::Enables(VectorRef<const ast::Enable*> enables) const {
         }
     }
 
+    if (enabled_extensions_.Contains(wgsl::Extension::kChromiumExperimentalSubgroupSizeControl) &&
+        !enabled_extensions_.Contains(wgsl::Extension::kSubgroups)) {
+        AddError(source_of(wgsl::Extension::kChromiumExperimentalSubgroupSizeControl))
+            << "extension "
+            << style::Code(wgsl::Extension::kChromiumExperimentalSubgroupSizeControl)
+            << " cannot be used without extension " << style::Code(wgsl::Extension::kSubgroups);
+        return false;
+    }
+
     return true;
 }
 
@@ -364,13 +379,6 @@ bool Validator::StorageTexture(const core::type::StorageTexture* t, const Source
         case core::Access::kUndefined:
             AddError(source) << "storage texture missing access control";
             return false;
-    }
-
-    if (DAWN_UNLIKELY(t->TexelFormat() == core::TexelFormat::kR8Unorm &&
-                      !enabled_extensions_.Contains(wgsl::Extension::kChromiumInternalGraphite))) {
-        AddError(source) << style::Enum(core::TexelFormat::kR8Unorm) << " requires the "
-                         << style::Code(wgsl::Extension::kChromiumInternalGraphite) << " extension";
-        return false;
     }
 
     if (!IsValidStorageTextureDimension(t->Dim())) {
@@ -456,6 +464,16 @@ bool Validator::BindingArray(const core::type::BindingArray* t, const Source& so
                          << "language feature, which is not allowed in the current environment";
         return false;
     }
+
+    if (t->Count()->Is<core::type::RuntimeArrayCount>()) {
+        if (!enabled_extensions_.Contains(wgsl::Extension::kChromiumExperimentalDynamicBinding)) {
+            AddError(source) << "use of a runtime " << style::Attribute("binding_array")
+                             << " requires enabling extension "
+                             << style::Code("chromium_experimental_dynamic_binding");
+            return false;
+        }
+    }
+
     if (!t->Count()->Is<core::type::ConstantArrayCount>()) {
         AddError(source) << "binding_array count must be a constant expression";
         return false;
@@ -480,6 +498,38 @@ bool Validator::SubgroupMatrix(const core::type::SubgroupMatrix* t, const Source
              ->IsAnyOf<core::type::F32, core::type::F16, core::type::I32, core::type::U32,
                        core::type::I8, core::type::U8>()) {
         AddError(source) << "subgroup_matrix element type must be f32, f16, i32, u32, i8 or u8";
+        return false;
+    }
+
+    return true;
+}
+
+bool Validator::TexelBuffer(const core::type::TexelBuffer* t, const Source& source) const {
+    if (!allowed_features_.features.count(wgsl::LanguageFeature::kTexelBuffers)) {
+        AddError(source) << "use of " << style::Type("texel_buffer")
+                         << " requires the texel_buffer language feature, which is not allowed "
+                            "in the current environment";
+        return false;
+    }
+
+    if (!IsValidStorageTextureTexelFormat(t->TexelFormat())) {
+        AddError(source) << "texel_buffer format must be one of the texel formats specified for "
+                            "texel buffers in https://gpuweb.github.io/gpuweb/wgsl/#texel-formats";
+        return false;
+    }
+
+    if (!t->Type()->IsAnyOf<core::type::F32, core::type::I32, core::type::U32>()) {
+        AddError(source) << "texel_buffer<format, access>: storage subtype must be f32, i32 or u32";
+        return false;
+    }
+
+    if (t->Dim() != core::type::TextureDimension::k1d) {
+        AddError(source) << "texel_buffer must be a 1d texture";
+        return false;
+    }
+
+    if (t->Access() != core::Access::kRead && t->Access() != core::Access::kReadWrite) {
+        AddError(source) << "texel_buffer access must be read or read_write";
         return false;
     }
 
@@ -531,7 +581,9 @@ bool Validator::AddressSpaceLayout(const core::type::Type* store_ty,
     auto required_alignment_of = [&](const core::type::Type* ty) {
         uint32_t actual_align = ty->Align();
         uint32_t required_align = actual_align;
-        if (is_uniform_struct_or_array(ty)) {
+        if (is_uniform_struct_or_array(ty) &&
+            !allowed_features_.features.contains(
+                wgsl::LanguageFeature::kUniformBufferStandardLayout)) {
             required_align = tint::RoundUp(16u, actual_align);
         }
         return required_align;
@@ -597,7 +649,9 @@ bool Validator::AddressSpaceLayout(const core::type::Type* store_ty,
             // For uniform buffers, validate that the number of bytes between the previous member of
             // type struct and the current is a multiple of 16 bytes.
             auto* const prev_member = (i == 0) ? nullptr : str->Members()[i - 1];
-            if (prev_member && is_uniform_struct(prev_member->Type())) {
+            if (prev_member && is_uniform_struct(prev_member->Type()) &&
+                !allowed_features_.features.contains(
+                    wgsl::LanguageFeature::kUniformBufferStandardLayout)) {
                 const uint32_t prev_to_curr_offset = m->Offset() - prev_member->Offset();
                 if (prev_to_curr_offset % 16 != 0) {
                     AddError(m->Declaration()->source)
@@ -648,10 +702,12 @@ bool Validator::AddressSpaceLayout(const core::type::Type* store_ty,
             return false;
         }
 
-        if (address_space == core::AddressSpace::kUniform) {
+        if (address_space == core::AddressSpace::kUniform &&
+            !allowed_features_.features.contains(
+                wgsl::LanguageFeature::kUniformBufferStandardLayout)) {
             // We already validated that this array member is itself aligned to 16 bytes above, so
             // we only need to validate that stride is a multiple of 16 bytes.
-            if (arr->Stride() % 16 != 0) {
+            if (arr->ImplicitStride() % 16 != 0) {
                 // Since WGSL has no stride attribute, try to provide a useful hint for how the
                 // shader author can resolve the issue.
                 StyledText hint;
@@ -671,7 +727,8 @@ bool Validator::AddressSpaceLayout(const core::type::Type* store_ty,
                                  << " storage requires that array elements are aligned to 16 "
                                     "bytes, but array element of type "
                                  << style::Type(arr->ElemType()->FriendlyName())
-                                 << " has a stride of " << arr->Stride() << " bytes. " << hint;
+                                 << " has a stride of " << arr->ImplicitStride() << " bytes. "
+                                 << hint;
                 return false;
             }
         }
@@ -682,11 +739,6 @@ bool Validator::AddressSpaceLayout(const core::type::Type* store_ty,
 
 bool Validator::LocalVariable(const sem::Variable* local) const {
     auto* decl = local->Declaration();
-    if (IsArrayWithOverrideCount(local->Type())) {
-        RaiseArrayWithOverrideCountError(decl->type ? decl->type->source
-                                                    : decl->initializer->source);
-        return false;
-    }
     return Switch(
         decl,  //
         [&](const ast::Var* var) {
@@ -707,12 +759,6 @@ bool Validator::GlobalVariable(
     const sem::GlobalVariable* global,
     const Hashmap<OverrideId, const sem::Variable*, 8>& override_ids) const {
     auto* decl = global->Declaration();
-    if (global->AddressSpace() != core::AddressSpace::kWorkgroup &&
-        IsArrayWithOverrideCount(global->Type())) {
-        RaiseArrayWithOverrideCountError(decl->type ? decl->type->source
-                                                    : decl->initializer->source);
-        return false;
-    }
     bool ok = Switch(
         decl,  //
         [&](const ast::Var* var) {
@@ -858,7 +904,15 @@ bool Validator::Let(const sem::Variable* v) const {
     auto* decl = v->Declaration();
     auto* storage_ty = v->Type()->UnwrapRef();
 
-    if (!(storage_ty->IsConstructible() || storage_ty->Is<core::type::Pointer>())) {
+    bool assignment_allowed =
+        storage_ty->IsConstructible() || storage_ty->Is<core::type::Pointer>();
+
+    if (allowed_features_.features.contains(wgsl::LanguageFeature::kTextureAndSamplerLet) &&
+        storage_ty->IsAnyOf<core::type::Texture, core::type::Sampler>()) {
+        assignment_allowed = true;
+    }
+
+    if (!assignment_allowed) {
         AddError(decl->source) << sem_.TypeNameOf(storage_ty) << " cannot be used as the type of a "
                                << style::Keyword("let");
         return false;
@@ -903,10 +957,6 @@ bool Validator::Const(const sem::Variable*) const {
 bool Validator::Parameter(const sem::Variable* var) const {
     auto* decl = var->Declaration();
 
-    if (IsValidationDisabled(decl->attributes, ast::DisabledValidation::kFunctionParameter)) {
-        return true;
-    }
-
     if (auto* ref = var->Type()->As<core::type::Pointer>()) {
         bool ok = false;
 
@@ -916,6 +966,7 @@ bool Validator::Parameter(const sem::Variable* var) const {
             case core::AddressSpace::kPrivate:
                 ok = true;
                 break;
+            case core::AddressSpace::kImmediate:
             case core::AddressSpace::kStorage:
             case core::AddressSpace::kUniform:
             case core::AddressSpace::kWorkgroup:
@@ -932,12 +983,16 @@ bool Validator::Parameter(const sem::Variable* var) const {
         }
     }
 
+    auto* ba = var->Type()->As<core::type::BindingArray>();
+    bool is_runtime_binding_array = ba && ba->Count()->Is<core::type::RuntimeArrayCount>();
+
     if (IsPlain(var->Type())) {
         if (!var->Type()->IsConstructible()) {
             AddError(decl->type->source) << "type of function parameter must be constructible";
             return false;
         }
-    } else if (!var->Type()->Is<core::type::Pointer>() && !var->Type()->IsHandle()) {
+    } else if (is_runtime_binding_array ||
+               (!var->Type()->Is<core::type::Pointer>() && !var->Type()->IsHandle())) {
         AddError(decl->source) << "type of function parameter cannot be "
                                << sem_.TypeNameOf(var->Type());
         return false;
@@ -949,12 +1004,12 @@ bool Validator::Parameter(const sem::Variable* var) const {
 bool Validator::BuiltinAttribute(const ast::BuiltinAttribute* attr,
                                  const core::type::Type* storage_ty,
                                  ast::PipelineStage stage,
-                                 const bool is_input,
-                                 const bool ignore_clip_distances_type_validation) const {
+                                 const bool is_input) const {
     auto* type = storage_ty->UnwrapRef();
     bool is_stage_mismatch = false;
     bool is_output = !is_input;
     auto builtin = attr->builtin;
+    auto depth_mode = attr->depth_mode;
 
     auto err_builtin_type = [&](std::string_view required) {
         AddError(attr->source) << "store type of " << style::Attribute("@builtin")
@@ -994,6 +1049,15 @@ bool Validator::BuiltinAttribute(const ast::BuiltinAttribute* attr,
             if (stage != ast::PipelineStage::kNone &&
                 !(stage == ast::PipelineStage::kFragment && !is_input)) {
                 is_stage_mismatch = true;
+            }
+            if (!allowed_features_.features.contains(wgsl::LanguageFeature::kFragmentDepth) &&
+                depth_mode != core::BuiltinDepthMode::kUndefined) {
+                AddError(attr->source)
+                    << "use of " << style::Attribute("@builtin")
+                    << style::Code("(", style::Enum(builtin), ", ", style::Enum(depth_mode), ")")
+                    << " attribute requires the " << style::Code("fragment_depth")
+                    << " language feature";
+                return false;
             }
             if (!type->Is<core::type::F32>()) {
                 err_builtin_type("f32");
@@ -1051,13 +1115,47 @@ bool Validator::BuiltinAttribute(const ast::BuiltinAttribute* attr,
             }
             break;
         case core::BuiltinValue::kSubgroupId:
-            // TODO(crbug.com/416555787): Move this to the `subgroups` extension.
-            if (!enabled_extensions_.Contains(
-                    wgsl::Extension::kChromiumExperimentalSubgroupMatrix)) {
-                AddError(attr->source) << "use of " << style::Attribute("@builtin")
-                                       << style::Code("(", style::Enum(builtin), ")")
-                                       << " attribute requires enabling extension "
-                                       << style::Code("chromium_experimental_subgroup_matrix");
+            if (!enabled_extensions_.Contains(wgsl::Extension::kSubgroups)) {
+                AddError(attr->source)
+                    << "use of " << style::Attribute("@builtin")
+                    << style::Code("(", style::Enum(builtin), ")")
+                    << " attribute requires enabling extension " << style::Code("subgroups");
+                return false;
+            }
+            // TODO(crbug.com/454654105): Remove this check.
+            if (!allowed_features_.features.contains(wgsl::LanguageFeature::kSubgroupId)) {
+                AddError(attr->source)
+                    << "use of " << style::Attribute("@builtin")
+                    << style::Code("(", style::Enum(builtin), ")") << " attribute requires the "
+                    << style::Code("subgroup_id") << " language feature";
+                return false;
+            }
+            if (!type->Is<core::type::U32>()) {
+                err_builtin_type("u32");
+                return false;
+            }
+            if (stage != ast::PipelineStage::kNone &&
+                !(stage == ast::PipelineStage::kCompute && is_input)) {
+                AddError(attr->source)
+                    << style::Attribute("@builtin") << style::Code("(", style::Enum(builtin), ")")
+                    << " is only valid as a compute shader input";
+                return false;
+            }
+            break;
+        case core::BuiltinValue::kNumSubgroups:
+            if (!enabled_extensions_.Contains(wgsl::Extension::kSubgroups)) {
+                AddError(attr->source)
+                    << "use of " << style::Attribute("@builtin")
+                    << style::Code("(", style::Enum(builtin), ")")
+                    << " attribute requires enabling extension " << style::Code("subgroups");
+                return false;
+            }
+            // TODO(crbug.com/454654105): Remove this check.
+            if (!allowed_features_.features.contains(wgsl::LanguageFeature::kSubgroupId)) {
+                AddError(attr->source)
+                    << "use of " << style::Attribute("@builtin")
+                    << style::Code("(", style::Enum(builtin), ")") << " attribute requires the "
+                    << style::Code("subgroup_id") << " language feature";
                 return false;
             }
             if (!type->Is<core::type::U32>()) {
@@ -1103,8 +1201,7 @@ bool Validator::BuiltinAttribute(const ast::BuiltinAttribute* attr,
                 return false;
             }
             auto* arr = type->As<sem::Array>();
-            if (!ignore_clip_distances_type_validation &&
-                !((arr != nullptr) && arr->ElemType()->Is<core::type::F32>() &&
+            if (!((arr != nullptr) && arr->ElemType()->Is<core::type::F32>() &&
                   arr->ConstantCount().has_value() &&
                   *arr->ConstantCount() <= kMaxClipDistancesSize)) {
                 AddError(attr->source)
@@ -1119,6 +1216,43 @@ bool Validator::BuiltinAttribute(const ast::BuiltinAttribute* attr,
             }
             break;
         }
+        case core::BuiltinValue::kPrimitiveIndex: {
+            if (!enabled_extensions_.Contains(wgsl::Extension::kPrimitiveIndex)) {
+                AddError(attr->source)
+                    << "use of " << style::Attribute("@builtin")
+                    << style::Code("(", style::Enum(builtin), ")")
+                    << " requires enabling extension " << style::Code("primitive_index");
+                return false;
+            }
+            if (!type->Is<core::type::U32>()) {
+                err_builtin_type("u32");
+                return false;
+            }
+            if (stage != ast::PipelineStage::kNone &&
+                !(stage == ast::PipelineStage::kFragment && is_input)) {
+                is_stage_mismatch = true;
+            }
+            break;
+        }
+        case core::BuiltinValue::kBarycentricCoord: {
+            if (!enabled_extensions_.Contains(
+                    wgsl::Extension::kChromiumExperimentalBarycentricCoord)) {
+                AddError(attr->source) << "use of " << style::Attribute("@builtin")
+                                       << style::Code("(", style::Enum(builtin), ")")
+                                       << " requires enabling extension "
+                                       << style::Code("chromium_experimental_barycentric_coord");
+                return false;
+            }
+            if (!(type->IsFloatVector() && type->As<core::type::Vector>()->Width() == 3)) {
+                err_builtin_type("vec3<f32>");
+                return false;
+            }
+            if (stage != ast::PipelineStage::kNone &&
+                !(stage == ast::PipelineStage::kFragment && is_input)) {
+                is_stage_mismatch = true;
+            }
+            break;
+        }
         default:
             break;
     }
@@ -1128,6 +1262,15 @@ bool Validator::BuiltinAttribute(const ast::BuiltinAttribute* attr,
                                << style::Code("(", style::Enum(builtin), ")")
                                << " cannot be used for " << stage << " shader "
                                << (is_input ? "input" : "output");
+        return false;
+    }
+
+    if (allowed_features_.features.contains(wgsl::LanguageFeature::kFragmentDepth) &&
+        depth_mode != core::BuiltinDepthMode::kUndefined &&
+        builtin != core::BuiltinValue::kFragDepth) {
+        AddError(attr->source) << "Builtin depth mode " << style::Code(style::Enum(depth_mode))
+                               << " cannot be used for " << style::Attribute("@builtin")
+                               << style::Code("(", style::Enum(builtin), ")");
         return false;
     }
 
@@ -1212,6 +1355,22 @@ bool Validator::Function(const sem::Function* func, ast::PipelineStage stage) co
                 }
                 return true;
             },
+            [&](const ast::SubgroupSizeAttribute*) {
+                if (!enabled_extensions_.Contains(
+                        wgsl::Extension::kChromiumExperimentalSubgroupSizeControl)) {
+                    AddError(attr->source)
+                        << "use of " << style::Attribute("@subgroup_size")
+                        << " requires enabling extension "
+                        << style::Code("chromium_experimental_subgroup_size_control");
+                    return false;
+                }
+                if (decl->PipelineStage() != ast::PipelineStage::kCompute) {
+                    AddError(attr->source) << style::Attribute("@subgroup_size")
+                                           << " is only valid for compute stages";
+                    return false;
+                }
+                return true;
+            },
             [&](Default) { return true; });
         if (!ok) {
             return false;
@@ -1231,17 +1390,14 @@ bool Validator::Function(const sem::Function* func, ast::PipelineStage stage) co
             return false;
         }
 
-        if (decl->body) {
-            auto behaviors = sem_.Get(decl->body)->Behaviors();
-            if (behaviors.Contains(sem::Behavior::kNext)) {
-                auto end_source = decl->body->source.End();
-                end_source.range.begin.column--;
-                AddError(end_source) << "missing return at end of function";
-                return false;
-            }
-        } else if (DAWN_UNLIKELY(IsValidationEnabled(
-                       decl->attributes, ast::DisabledValidation::kFunctionHasNoBody))) {
-            TINT_ICE() << "function " << decl->name->symbol.NameView() << " has no body";
+        TINT_ASSERT(decl->body) << "function " << decl->name->symbol.NameView() << " has no body";
+
+        auto behaviors = sem_.Get(decl->body)->Behaviors();
+        if (behaviors.Contains(sem::Behavior::kNext)) {
+            auto end_source = decl->body->source.End();
+            end_source.range.begin.column--;
+            AddError(end_source) << "missing return at end of function";
+            return false;
         }
     }
 
@@ -1294,8 +1450,6 @@ bool Validator::EntryPoint(const sem::Function* func, ast::PipelineStage stage) 
         const ast::BlendSrcAttribute* blend_src_attribute = nullptr;
         const ast::InterpolateAttribute* interpolate_attribute = nullptr;
         const ast::InvariantAttribute* invariant_attribute = nullptr;
-        bool ignore_clip_distances_type =
-            IsValidationDisabled(attrs, ast::DisabledValidation::kIgnoreClipDistancesType);
         for (auto* attr : attrs) {
             bool ok = Switch(
                 attr,  //
@@ -1320,9 +1474,9 @@ bool Validator::EntryPoint(const sem::Function* func, ast::PipelineStage stage) 
                         return false;
                     }
 
-                    if (!BuiltinAttribute(builtin_attr, ty, stage,
-                                          /* is_input */ param_or_ret == ParamOrRetType::kParameter,
-                                          ignore_clip_distances_type)) {
+                    if (!BuiltinAttribute(
+                            builtin_attr, ty, stage,
+                            /* is_input */ param_or_ret == ParamOrRetType::kParameter)) {
                         return false;
                     }
                     builtins.Add(builtin);
@@ -1339,18 +1493,14 @@ bool Validator::EntryPoint(const sem::Function* func, ast::PipelineStage stage) 
                     }
                     pipeline_io_attribute = attr;
 
-                    if (DAWN_UNLIKELY(!location.has_value())) {
-                        TINT_ICE() << "@location has no value";
-                    }
+                    TINT_ASSERT(location.has_value()) << "@location has no value";
 
                     return LocationAttribute(loc_attr, ty, stage, source);
                 },
                 [&](const ast::BlendSrcAttribute* blend_src_attr) {
                     blend_src_attribute = blend_src_attr;
 
-                    if (DAWN_UNLIKELY(!blend_src.has_value())) {
-                        TINT_ICE() << "@blend_src has no value";
-                    }
+                    TINT_ASSERT(blend_src.has_value()) << "@blend_src has no value";
 
                     bool is_input = param_or_ret == ParamOrRetType::kParameter;
                     return BlendSrcAttribute(blend_src_attr, stage, is_input);
@@ -1368,9 +1518,7 @@ bool Validator::EntryPoint(const sem::Function* func, ast::PipelineStage stage) 
 
                     bool is_input = param_or_ret == ParamOrRetType::kParameter;
 
-                    if (DAWN_UNLIKELY(!color.has_value())) {
-                        TINT_ICE() << "@color has no value";
-                    }
+                    TINT_ASSERT(color.has_value()) << "@color has no value";
 
                     return ColorAttribute(col_attr, ty, stage, source, is_input);
                 },
@@ -1381,10 +1529,6 @@ bool Validator::EntryPoint(const sem::Function* func, ast::PipelineStage stage) 
                 [&](const ast::InvariantAttribute* invariant) {
                     invariant_attribute = invariant;
                     return InvariantAttribute(invariant, stage);
-                },
-                [&](const ast::InternalAttribute* internal) {
-                    pipeline_io_attribute = internal;
-                    return true;
                 },
                 [&](Default) { return true; });
 
@@ -1524,7 +1668,7 @@ bool Validator::EntryPoint(const sem::Function* func, ast::PipelineStage stage) 
     if (!func->ReturnType()->Is<core::type::Void>()) {
         if (!validate_entry_point_attributes(decl->return_type_attributes, func->ReturnType(),
                                              decl->source, ParamOrRetType::kReturnType,
-                                             func->ReturnLocation(), func->ReturnIndex(),
+                                             func->ReturnLocation(), /* blend_src */ std::nullopt,
                                              /* color */ std::nullopt)) {
             return false;
         }
@@ -1556,12 +1700,8 @@ bool Validator::EntryPoint(const sem::Function* func, ast::PipelineStage stage) 
         if (!bp) {
             continue;
         }
-        if (auto added = binding_points.Add(*bp, var_decl);
-            !added &&
-            IsValidationEnabled(decl->attributes,
-                                ast::DisabledValidation::kBindingPointCollision) &&
-            IsValidationEnabled(added.value->attributes,
-                                ast::DisabledValidation::kBindingPointCollision)) {
+        auto added = binding_points.Add(*bp, var_decl);
+        if (!added) {
             // https://gpuweb.github.io/gpuweb/wgsl/#resource-interface
             // Bindings must not alias within a shader stage: two different variables in the
             // resource interface of a given shader must not have the same group and binding values,
@@ -1859,6 +1999,17 @@ bool Validator::BuiltinCall(const sem::Call* call) const {
         }
     }
 
+    // The `print()` builtin requires the chromium_print language feature to be available.
+    if (auto* fn = call->Target()->As<sem::BuiltinFn>()) {
+        if (fn->Fn() == wgsl::BuiltinFn::kPrint) {
+            if (!allowed_features_.features.count(wgsl::LanguageFeature::kChromiumPrint)) {
+                AddError(call->Declaration()->source) << "the 'chromium_print' language feature is "
+                                                         "not allowed in the current environment";
+                return false;
+            }
+        }
+    }
+
     return true;
 }
 
@@ -2060,6 +2211,16 @@ bool Validator::RequiredFeaturesForBuiltinFn(const sem::Call* call) const {
                 << "cannot call built-in function " << style::Function(builtin->Fn())
                 << " without extension "
                 << style::Code(wgsl::ToString(wgsl::Extension::kSubgroups));
+            return false;
+        }
+    }
+
+    if (builtin->IsResourceTable()) {
+        if (!enabled_extensions_.Contains(wgsl::Extension::kChromiumExperimentalResourceTable)) {
+            AddError(call->Declaration()->source)
+                << "cannot call built-in function " << style::Function(builtin->Fn())
+                << " without extension "
+                << style::Code(wgsl::ToString(wgsl::Extension::kChromiumExperimentalResourceTable));
             return false;
         }
     }
@@ -2267,9 +2428,7 @@ bool Validator::ArrayConstructor(const ast::CallExpression* ctor,
         return false;
     }
 
-    if (DAWN_UNLIKELY(!c->Is<core::type::ConstantArrayCount>())) {
-        TINT_ICE() << "Invalid ArrayCount found";
-    }
+    TINT_ASSERT(c->Is<core::type::ConstantArrayCount>()) << "Invalid ArrayCount found";
 
     const auto count = c->As<core::type::ConstantArrayCount>()->value;
     if (!values.IsEmpty() && (values.Length() != count)) {
@@ -2281,14 +2440,15 @@ bool Validator::ArrayConstructor(const ast::CallExpression* ctor,
     return true;
 }
 
-bool Validator::SubgroupMatrixConstructor(
-    const ast::CallExpression* ctor,
-    const core::type::SubgroupMatrix* subgroup_matrix_type) const {
+bool Validator::SubgroupMatrixConstructor(const ast::CallExpression* ctor,
+                                          const core::type::SubgroupMatrix* subgroup_matrix_type,
+                                          const sem::CallTarget* signature) const {
     auto& values = ctor->args;
     if (values.Length() == 1) {
         auto* elem_ty = subgroup_matrix_type->Type();
         auto* value_ty = sem_.TypeOf(values[0])->UnwrapRef();
-        if (core::type::Type::ConversionRank(value_ty, elem_ty) ==
+        auto* expected_ty = signature->Parameters()[0]->Type();
+        if (core::type::Type::ConversionRank(value_ty, expected_ty) ==
             core::type::Type::kNoConversion) {
             AddError(values[0]->source) << style::Type(sem_.TypeNameOf(value_ty))
                                         << " cannot be used to construct a subgroup matrix of "
@@ -2495,24 +2655,6 @@ bool Validator::Array(const sem::Array* arr, const Source& el_source) const {
     return true;
 }
 
-bool Validator::ArrayStrideAttribute(const ast::StrideAttribute* attr,
-                                     uint32_t el_size,
-                                     uint32_t el_align) const {
-    auto stride = attr->stride;
-    bool is_valid_stride = (stride >= el_size) && (stride >= el_align) && (stride % el_align == 0);
-    if (!is_valid_stride) {
-        // https://gpuweb.github.io/gpuweb/wgsl/#array-layout-rules
-        // Arrays decorated with the stride attribute must have a stride that is
-        // at least the size of the element type, and be a multiple of the
-        // element type's alignment value.
-        AddError(attr->source)
-            << "arrays decorated with the stride attribute must have a stride that is at least the "
-               "size of the element type, and be a multiple of the element type's alignment value";
-        return false;
-    }
-    return true;
-}
-
 bool Validator::Alias(const ast::Alias*) const {
     return true;
 }
@@ -2555,8 +2697,6 @@ bool Validator::Structure(const sem::Struct* str, ast::PipelineStage stage) cons
         const ast::ColorAttribute* color_attribute = nullptr;
         const ast::InvariantAttribute* invariant_attribute = nullptr;
         const ast::InterpolateAttribute* interpolate_attribute = nullptr;
-        bool ignore_clip_distances_type = IsValidationDisabled(
-            member->Declaration()->attributes, ast::DisabledValidation::kIgnoreClipDistancesType);
         for (auto* attr : member->Declaration()->attributes) {
             bool ok = Switch(
                 attr,  //
@@ -2581,7 +2721,7 @@ bool Validator::Structure(const sem::Struct* str, ast::PipelineStage stage) cons
                 },
                 [&](const ast::BuiltinAttribute* builtin_attr) {
                     if (!BuiltinAttribute(builtin_attr, member->Type(), stage,
-                                          /* is_input */ false, ignore_clip_distances_type)) {
+                                          /* is_input */ false)) {
                         return false;
                     }
                     if (builtin_attr->builtin == core::BuiltinValue::kPosition) {
@@ -3025,7 +3165,7 @@ bool Validator::NoDuplicateAttributes(VectorRef<const ast::Attribute*> attribute
             diagnostic_controls.Push(&diag->control);
         } else {
             auto added = seen.Add(&d->TypeInfo(), d->source);
-            if (!added && !d->Is<ast::InternalAttribute>()) {
+            if (!added) {
                 AddError(d->source) << "duplicate " << d->Name() << " attribute";
                 AddNote(added.value) << "first attribute declared here";
                 return false;
@@ -3061,23 +3201,6 @@ bool Validator::DiagnosticControls(VectorRef<const ast::DiagnosticControl*> cont
         }
     }
     return true;
-}
-
-bool Validator::IsValidationDisabled(VectorRef<const ast::Attribute*> attributes,
-                                     ast::DisabledValidation validation) const {
-    for (auto* attribute : attributes) {
-        if (auto* dv = attribute->As<ast::DisableValidationAttribute>()) {
-            if (dv->validation == validation) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-bool Validator::IsValidationEnabled(VectorRef<const ast::Attribute*> attributes,
-                                    ast::DisabledValidation validation) const {
-    return !IsValidationDisabled(attributes, validation);
 }
 
 bool Validator::IsArrayWithOverrideCount(const core::type::Type* ty) const {
@@ -3132,11 +3255,11 @@ bool Validator::CheckTypeAccessAddressSpace(const core::type::Type* store_ty,
             }
             break;
         case core::AddressSpace::kImmediate:
-            if (DAWN_UNLIKELY(!enabled_extensions_.Contains(
-                    wgsl::Extension::kChromiumExperimentalImmediate))) {
+            if (DAWN_UNLIKELY(allowed_features_.features.count(
+                                  wgsl::LanguageFeature::kImmediateAddressSpace) == 0u)) {
                 AddError(source) << "use of variable address space " << style::Enum("immediate")
-                                 << " requires enabling extension "
-                                 << style::Code("chromium_experimental_immediate");
+                                 << " requires the immediate_address_space language feature, which "
+                                    "is not allowed in the current environment";
                 return false;
             }
             break;

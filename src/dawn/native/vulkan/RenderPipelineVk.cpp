@@ -363,7 +363,9 @@ MaybeError RenderPipeline::InitializeImpl() {
     }
 
     // Gather list of internal immediate constants used by this pipeline
-    if (UsesFragDepth() && !HasUnclippedDepth()) {
+    bool isSampled = (GetSampleCount() > 1u) && UsesFragPosition() &&
+                     (IsFragMultiSampled() || UsesSampleIndex());
+    if ((isSampled || UsesFragDepth()) && !HasUnclippedDepth()) {
         mImmediateMask |= GetImmediateConstantBlockBits(
             offsetof(RenderImmediateConstants, clampFragDepth), sizeof(ClampFragDepthArgs));
     }
@@ -372,13 +374,13 @@ MaybeError RenderPipeline::InitializeImpl() {
     std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
     uint32_t stageCount = 0;
 
-    auto AddShaderStage = [&](SingleShaderStage stage, VkShaderStageFlagBits vkStage,
-                              bool emitPointSize) -> MaybeError {
+    auto AddShaderStage = [&](SingleShaderStage stage, bool emitPointSize) -> MaybeError {
         const ProgrammableStage& programmableStage = GetStage(stage);
         ShaderModule::ModuleAndSpirv moduleAndSpirv;
-        DAWN_TRY_ASSIGN(moduleAndSpirv, ToBackend(programmableStage.module)
-                                            ->GetHandleAndSpirv(stage, programmableStage, layout,
-                                                                emitPointSize, GetImmediateMask()));
+        DAWN_TRY_ASSIGN(moduleAndSpirv,
+                        ToBackend(programmableStage.module)
+                            ->GetHandleAndSpirv(stage, programmableStage, layout, emitPointSize,
+                                                isSampled, GetImmediateMask()));
         mHasInputAttachment = mHasInputAttachment || moduleAndSpirv.hasInputAttachment;
         if (buildCacheKey) {
             // Record cache key for each shader since it will become inaccessible later on.
@@ -391,7 +393,7 @@ MaybeError RenderPipeline::InitializeImpl() {
         shaderStage->pNext = nullptr;
         shaderStage->flags = 0;
         shaderStage->pSpecializationInfo = nullptr;
-        shaderStage->stage = vkStage;
+        shaderStage->stage = VulkanShaderStage(stage);
         // string_view returned by GetIsolatedEntryPointName() points to a null-terminated string.
         shaderStage->pName = device->GetIsolatedEntryPointName().data();
 
@@ -400,12 +402,12 @@ MaybeError RenderPipeline::InitializeImpl() {
     };
 
     // Add the vertex stage that's always present.
-    DAWN_TRY(AddShaderStage(SingleShaderStage::Vertex, VK_SHADER_STAGE_VERTEX_BIT,
+    DAWN_TRY(AddShaderStage(SingleShaderStage::Vertex,
                             GetPrimitiveTopology() == wgpu::PrimitiveTopology::PointList));
 
     // Add the fragment stage if present.
     if (GetStageMask() & wgpu::ShaderStage::Fragment) {
-        DAWN_TRY(AddShaderStage(SingleShaderStage::Fragment, VK_SHADER_STAGE_FRAGMENT_BIT,
+        DAWN_TRY(AddShaderStage(SingleShaderStage::Fragment,
                                 /*emitPointSize*/ false));
     }
 
@@ -421,7 +423,7 @@ MaybeError RenderPipeline::InitializeImpl() {
     inputAssembly.primitiveRestartEnable =
         ShouldEnablePrimitiveRestart(GetPrimitiveTopology()) ? VK_TRUE : VK_FALSE;
 
-    // A placeholder viewport/scissor info. The validation layers force use to provide at least
+    // A placeholder viewport/scissor info. The validation layers force us to provide at least
     // one scissor and one viewport here, even if we choose to make them dynamic.
     VkViewport viewportDesc;
     viewportDesc.x = 0.0f;
@@ -532,14 +534,86 @@ MaybeError RenderPipeline::InitializeImpl() {
     dynamic.dynamicStateCount = sizeof(dynamicStates) / sizeof(dynamicStates[0]);
     dynamic.pDynamicStates = dynamicStates;
 
-    // Get a VkRenderPass that matches the attachment formats for this pipeline.
-    // VkRenderPass compatibility rules let us provide placeholder data for a bunch of arguments.
-    // Load and store ops are all equivalent, though we still specify ExpandResolveTexture as that
-    // controls the use of input attachments. Single subpass VkRenderPasses are compatible
-    // irrespective of resolve attachments being used, but for ExpandResolveTexture that uses two
-    // subpasses we need to specify which attachments will be resolved.
+    DAWN_TRY(PipelineVk::InitializeBase(layout, mImmediateMask));
+
+    // The create info chains in a bunch of things created on the stack here or inside state
+    // objects.
+    VkGraphicsPipelineCreateInfo createInfo;
+    createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    createInfo.pNext = nullptr;
+    createInfo.flags = 0;
+    createInfo.stageCount = stageCount;
+    createInfo.pStages = shaderStages.data();
+    createInfo.pVertexInputState = &vertexInputCreateInfo;
+    createInfo.pInputAssemblyState = &inputAssembly;
+    createInfo.pTessellationState = nullptr;
+    createInfo.pViewportState = &viewport;
+    createInfo.pRasterizationState = &rasterization;
+    createInfo.pMultisampleState = &multisample;
+    createInfo.pDepthStencilState = &depthStencilState;
+    createInfo.pColorBlendState =
+        (GetStageMask() & wgpu::ShaderStage::Fragment) ? &colorBlend : nullptr;
+    createInfo.pDynamicState = &dynamic;
+    createInfo.layout = GetVkLayout();
+    createInfo.basePipelineHandle = VkPipeline{};
+    createInfo.basePipelineIndex = -1;
+    PNextChainBuilder createInfoChain(&createInfo);
+
     RenderPassCache::RenderPassInfo renderPassInfo;
-    {
+    VkPipelineRenderingCreateInfoKHR pipelineRenderingCreateInfo;
+    PerColorAttachment<VkFormat> colorAttachmentFormats;
+
+    if (device->IsToggleEnabled(Toggle::VulkanUseDynamicRendering)) {
+        // Dynamic rendering doesn't need a VkRenderPass object, just a description of the
+        // attachments formats that will be used with this pipeline.
+        VkRenderPass nullRenderPass = VK_NULL_HANDLE;
+        createInfo.renderPass = nullRenderPass;
+
+        createInfoChain.Add(&pipelineRenderingCreateInfo,
+                            VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR);
+
+        pipelineRenderingCreateInfo.viewMask = 0;
+        pipelineRenderingCreateInfo.colorAttachmentCount = 0;
+        pipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+        pipelineRenderingCreateInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+
+        // Initialize all potential color attachment formats to undefined, which allows the
+        // attachments to be sparse.
+        colorAttachmentFormats.fill(VK_FORMAT_UNDEFINED);
+
+        // Set the formats of the color attachments in use.
+        ColorAttachmentMask attachmentMask = GetColorAttachmentsMask();
+        for (auto i : attachmentMask) {
+            colorAttachmentFormats[i] = VulkanImageFormat(device, GetColorAttachmentFormat(i));
+        }
+
+        pipelineRenderingCreateInfo.colorAttachmentCount =
+            static_cast<uint32_t>(GetHighestBitIndexPlusOne(attachmentMask));
+        pipelineRenderingCreateInfo.pColorAttachmentFormats = colorAttachmentFormats.data();
+
+        // Set the formats of the depth/stencil attachment.
+        if (HasDepthStencilAttachment()) {
+            wgpu::TextureFormat dsFormat = GetDepthStencilFormat();
+            const Format& internalFormat = device->GetValidInternalFormat(dsFormat);
+            VkFormat vkDsFormat = VulkanImageFormat(device, dsFormat);
+
+            if (internalFormat.HasDepth()) {
+                pipelineRenderingCreateInfo.depthAttachmentFormat = vkDsFormat;
+            }
+            if (internalFormat.HasStencil()) {
+                pipelineRenderingCreateInfo.stencilAttachmentFormat = vkDsFormat;
+            }
+        }
+
+        // TODO(crbug.com/463893794): Handle ExpandResolveTexture.
+    } else {
+        // Get a VkRenderPass that matches the attachment formats for this pipeline.
+        // VkRenderPass compatibility rules let us provide placeholder data for a bunch of
+        // arguments. Load and store ops are all equivalent, though we still specify
+        // ExpandResolveTexture as that controls the use of input attachments. Single subpass
+        // VkRenderPasses are compatible irrespective of resolve attachments being used, but for
+        // ExpandResolveTexture that uses two subpasses we need to specify which attachments will
+        // be resolved.
         RenderPassCacheQuery query;
         ColorAttachmentMask resolveMask =
             GetAttachmentState()->GetExpandResolveInfo().resolveTargetsMask;
@@ -570,31 +644,9 @@ MaybeError RenderPipeline::InitializeImpl() {
             StreamIn(&mCacheKey, query);
         }
         DAWN_TRY_ASSIGN(renderPassInfo, device->GetRenderPassCache()->GetRenderPass(query));
-    }
-    DAWN_TRY(PipelineVk::InitializeBase(layout, mImmediateMask));
 
-    // The create info chains in a bunch of things created on the stack here or inside state
-    // objects.
-    VkGraphicsPipelineCreateInfo createInfo;
-    createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    createInfo.pNext = nullptr;
-    createInfo.flags = 0;
-    createInfo.stageCount = stageCount;
-    createInfo.pStages = shaderStages.data();
-    createInfo.pVertexInputState = &vertexInputCreateInfo;
-    createInfo.pInputAssemblyState = &inputAssembly;
-    createInfo.pTessellationState = nullptr;
-    createInfo.pViewportState = &viewport;
-    createInfo.pRasterizationState = &rasterization;
-    createInfo.pMultisampleState = &multisample;
-    createInfo.pDepthStencilState = &depthStencilState;
-    createInfo.pColorBlendState =
-        (GetStageMask() & wgpu::ShaderStage::Fragment) ? &colorBlend : nullptr;
-    createInfo.pDynamicState = &dynamic;
-    createInfo.layout = GetVkLayout();
-    createInfo.renderPass = renderPassInfo.renderPass;
-    createInfo.basePipelineHandle = VkPipeline{};
-    createInfo.basePipelineIndex = -1;
+        createInfo.renderPass = renderPassInfo.renderPass;
+    }
 
     // - If the pipeline uses input attachments in shader, currently this is only used by
     //   ExpandResolveTexture subpass, hence we need to set the subpass to 0.
@@ -603,6 +655,32 @@ MaybeError RenderPipeline::InitializeImpl() {
     // mHasInputAttachment.
     //   That also means mHasInputAttachment would be removed in future.
     createInfo.subpass = mHasInputAttachment ? 0 : renderPassInfo.mainSubpass;
+
+    // If possible, specify where exactly robustness should be added in the pipeline. This is
+    // necessary because when bindless is enabled and robustBufferAccessUpdateAfterBind is false, we
+    // must only set robust buffer access on vertexInputs.
+    VkPipelineRobustnessCreateInfo robustnessCreateInfo;
+    if (device->GetDeviceInfo().HasExt(DeviceExt::PipelineRobustness)) {
+        createInfoChain.Add(&robustnessCreateInfo,
+                            VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO);
+
+        // Without any specific toggle only vertex inputs can be made robust enough for WebGPU.
+        robustnessCreateInfo.vertexInputs =
+            VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_ROBUST_BUFFER_ACCESS;
+        robustnessCreateInfo.uniformBuffers = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_DISABLED;
+        robustnessCreateInfo.storageBuffers = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_DISABLED;
+        robustnessCreateInfo.images = VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_DISABLED;
+
+        if (device->IsToggleEnabled(Toggle::VulkanUseBufferRobustAccess2)) {
+            // Uniform buffers are checked with WebGPU validation and don't need robustness.
+            robustnessCreateInfo.storageBuffers =
+                VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_ROBUST_BUFFER_ACCESS_2;
+        }
+        if (device->IsToggleEnabled(Toggle::VulkanUseImageRobustAccess2)) {
+            robustnessCreateInfo.images =
+                VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_ROBUST_IMAGE_ACCESS_2;
+        }
+    }
 
     if (buildCacheKey) {
         // Record cache key information now since createInfo is not stored.
@@ -724,9 +802,9 @@ VkPipelineDepthStencilStateCreateInfo RenderPipeline::ComputeDepthStencilDesc() 
 
 RenderPipeline::~RenderPipeline() = default;
 
-void RenderPipeline::DestroyImpl() {
-    RenderPipelineBase::DestroyImpl();
-    PipelineVk::DestroyImpl();
+void RenderPipeline::DestroyImpl(DestroyReason reason) {
+    RenderPipelineBase::DestroyImpl(reason);
+    PipelineVk::DestroyImpl(reason);
     if (mHandle != VK_NULL_HANDLE) {
         ToBackend(GetDevice())->GetFencedDeleter()->DeleteWhenUnused(mHandle);
         mHandle = VK_NULL_HANDLE;

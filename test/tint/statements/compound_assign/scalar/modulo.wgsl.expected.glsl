@@ -14,11 +14,12 @@ int tint_mod_i32(int lhs, int rhs) {
   bool v_3 = bool((v_2 & uint((rhs == -1))));
   uint v_4 = uint((rhs == 0));
   int v_5 = mix(rhs, 1, bool((v_4 | uint(v_3))));
-  return (lhs - ((lhs / v_5) * v_5));
-}
-void foo() {
-  v_1.inner.a = tint_mod_i32(v_1.inner.a, 2);
+  uint v_6 = uint((lhs / v_5));
+  int v_7 = int((v_6 * uint(v_5)));
+  uint v_8 = uint(lhs);
+  return int((v_8 - uint(v_7)));
 }
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
+  v_1.inner.a = tint_mod_i32(v_1.inner.a, 2);
 }

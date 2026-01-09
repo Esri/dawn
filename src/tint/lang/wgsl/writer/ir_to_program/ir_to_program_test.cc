@@ -27,13 +27,13 @@
 
 // GEN_BUILD:CONDITION(tint_build_wgsl_writer)
 
+#include <limits>
 #include <sstream>
 #include <string>
 
-#include "src/tint/lang/core/access.h"
-#include "src/tint/lang/core/address_space.h"
-#include "src/tint/lang/core/ir/disassembler.h"
-#include "src/tint/lang/core/texel_format.h"
+#include "src/tint/lang/core/enums.h"
+#include "src/tint/lang/core/type/binding_array.h"
+#include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/lang/core/type/texture_dimension.h"
 #include "src/tint/lang/wgsl/ir/builtin_call.h"
@@ -50,10 +50,8 @@ using namespace tint::core::fluent_types;     // NOLINT
 IRToProgramTest::Result IRToProgramTest::Run() {
     Result result;
 
-    result.ir = tint::core::ir::Disassembler(mod).Plain();
+    result.ir = str();
 
-    ProgramOptions options;
-    options.allowed_features = AllowedFeatures::Everything();
     auto output_program = IRToProgram(mod, options);
     if (!output_program.IsValid()) {
         result.err = output_program.Diagnostics().Str();
@@ -61,7 +59,7 @@ IRToProgramTest::Result IRToProgramTest::Run() {
         return result;
     }
 
-    auto output = wgsl::writer::Generate(output_program, {});
+    auto output = wgsl::writer::Generate(output_program);
     if (output != Success) {
         std::stringstream ss;
         ss << "wgsl::Generate() errored: " << output.Failure();
@@ -94,6 +92,18 @@ fn f() {
 )");
 }
 
+TEST_F(IRToProgramTest, SingleFunction_Unreachable) {
+    auto* fn = b.Function("f", ty.u32());
+
+    fn->Block()->Append(b.Unreachable());
+
+    EXPECT_WGSL(R"(
+fn f() -> u32 {
+  return u32();
+}
+)");
+}
+
 TEST_F(IRToProgramTest, SingleFunction_Return_i32) {
     auto* fn = b.Function("f", ty.i32());
 
@@ -102,6 +112,18 @@ TEST_F(IRToProgramTest, SingleFunction_Return_i32) {
     EXPECT_WGSL(R"(
 fn f() -> i32 {
   return 42i;
+}
+)");
+}
+
+TEST_F(IRToProgramTest, SingleFunction_Return_min_i32) {
+    auto* fn = b.Function("f", ty.i32());
+
+    fn->Block()->Append(b.Return(fn, i32(std::numeric_limits<int32_t>::min())));
+
+    EXPECT_WGSL(R"(
+fn f() -> i32 {
+  return i32(-2147483648);
 }
 )");
 }
@@ -146,7 +168,7 @@ fn f() {
 }
 
 TEST_F(IRToProgramTest, EntryPoint_Vertex) {
-    auto* fn = b.Function("f", ty.vec4<f32>(), core::ir::Function::PipelineStage::kVertex);
+    auto* fn = b.Function("f", ty.vec4f(), core::ir::Function::PipelineStage::kVertex);
     fn->SetReturnBuiltin(core::BuiltinValue::kPosition);
 
     fn->Block()->Append(b.Return(fn, b.Splat<vec4<f32>>(0_f)));
@@ -161,7 +183,7 @@ fn f() -> @builtin(position) vec4<f32> {
 
 TEST_F(IRToProgramTest, EntryPoint_Parameter_BuiltinAndInvariant) {
     auto* fn = b.Function("f", ty.void_(), core::ir::Function::PipelineStage::kFragment);
-    auto* param = b.FunctionParam("input", ty.vec4<f32>());
+    auto* param = b.FunctionParam("input", ty.vec4f());
     param->SetBuiltin(core::BuiltinValue::kPosition);
     param->SetInvariant(true);
     fn->SetParams({param});
@@ -238,7 +260,7 @@ fn f() -> @builtin(sample_mask) u32 {
 }
 
 TEST_F(IRToProgramTest, EntryPoint_ReturnAttribute_Invariant) {
-    auto* fn = b.Function("f", ty.vec4<f32>(), core::ir::Function::PipelineStage::kVertex);
+    auto* fn = b.Function("f", ty.vec4f(), core::ir::Function::PipelineStage::kVertex);
     fn->SetReturnBuiltin(core::BuiltinValue::kPosition);
     fn->SetReturnInvariant(true);
 
@@ -253,7 +275,7 @@ fn f() -> @builtin(position) @invariant vec4<f32> {
 }
 
 TEST_F(IRToProgramTest, EntryPoint_ReturnAttribute_Location) {
-    auto* fn = b.Function("f", ty.vec4<f32>(), core::ir::Function::PipelineStage::kFragment);
+    auto* fn = b.Function("f", ty.vec4f(), core::ir::Function::PipelineStage::kFragment);
     fn->SetReturnLocation(1);
 
     fn->Block()->Append(b.Return(fn, b.Splat<vec4<f32>>(0_f)));
@@ -279,11 +301,11 @@ core::ir::FunctionParam* MakeBuiltinParam(core::ir::Builder& b,
 TEST_F(IRToProgramTest, EntryPoint_ParameterAttribute_Compute) {
     auto* fn = b.ComputeFunction("f", 3_u, 4_u, 5_u);
     fn->SetParams({
-        MakeBuiltinParam(b, ty.vec3<u32>(), core::BuiltinValue::kLocalInvocationId),
+        MakeBuiltinParam(b, ty.vec3u(), core::BuiltinValue::kLocalInvocationId),
         MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kLocalInvocationIndex),
-        MakeBuiltinParam(b, ty.vec3<u32>(), core::BuiltinValue::kGlobalInvocationId),
-        MakeBuiltinParam(b, ty.vec3<u32>(), core::BuiltinValue::kWorkgroupId),
-        MakeBuiltinParam(b, ty.vec3<u32>(), core::BuiltinValue::kNumWorkgroups),
+        MakeBuiltinParam(b, ty.vec3u(), core::BuiltinValue::kGlobalInvocationId),
+        MakeBuiltinParam(b, ty.vec3u(), core::BuiltinValue::kWorkgroupId),
+        MakeBuiltinParam(b, ty.vec3u(), core::BuiltinValue::kNumWorkgroups),
         MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kSubgroupInvocationId),
         MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kSubgroupSize),
     });
@@ -306,15 +328,17 @@ TEST_F(IRToProgramTest, EntryPoint_ParameterAttribute_Fragment) {
         MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kSampleIndex),
         MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kSampleMask),
         MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kSubgroupSize),
+        MakeBuiltinParam(b, ty.u32(), core::BuiltinValue::kPrimitiveIndex),
     });
 
     fn->Block()->Append(b.Return(fn));
 
     EXPECT_WGSL(R"(
 enable subgroups;
+enable primitive_index;
 
 @fragment
-fn f(@builtin(front_facing) v : bool, @builtin(sample_index) v_1 : u32, @builtin(sample_mask) v_2 : u32, @builtin(subgroup_size) v_3 : u32) {
+fn f(@builtin(front_facing) v : bool, @builtin(sample_index) v_1 : u32, @builtin(sample_mask) v_2 : u32, @builtin(subgroup_size) v_3 : u32, @builtin(primitive_index) v_4 : u32) {
 }
 )");
 }
@@ -393,7 +417,6 @@ TEST_F(IRToProgramTest, TypeWords) {
         Var("u32", true);
         Var("f32", true);
         Var("f16", true);
-        Var("vec", true);
         Var("vec2", true);
         Var("vec3", true);
         Var("vec4", true);
@@ -534,7 +557,6 @@ fn f() {
   var v_67 : bool = true;
   var v_68 : bool = true;
   var v_69 : bool = true;
-  var v_70 : bool = true;
 }
 )");
 }
@@ -911,6 +933,91 @@ fn f() {
 )");
 }
 
+TEST_F(IRToProgramTest, InvalidCharacters) {
+    auto* fn = b.Function("f", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+
+    b.Append(fn->Block(), [&] {
+        // Invalid
+        Var("_", true);
+        Var("__", true);
+        Var(" ", true);
+        Var("1", true);
+        Var("struct-a", true);
+        Var("struct a", true);
+
+        // Valid
+        Var("a", true);
+        Var("A", true);
+        Var("a_", true);
+        Var("_a", true);
+        Var("a1", true);
+        Var("struct_a", true);
+        b.Return(fn);
+    });
+
+    EXPECT_WGSL(R"(
+@fragment
+fn f() {
+  var v : bool = true;
+  var v_1 : bool = true;
+  var v_2 : bool = true;
+  var v_3 : bool = true;
+  var v_4 : bool = true;
+  var v_5 : bool = true;
+  var a : bool = true;
+  var A : bool = true;
+  var a_ : bool = true;
+  var _a : bool = true;
+  var a1 : bool = true;
+  var struct_a : bool = true;
+}
+)");
+}
+
+TEST_F(IRToProgramTest, RenameStructAndStructMembers) {
+    auto* s0 = ty.Struct(mod.symbols.New("MyStruct"), {
+                                                          {mod.symbols.New("safe"), ty.i32()},
+                                                          {mod.symbols.New("2"), ty.u32()},
+                                                          {mod.symbols.New("__member"), ty.u32()},
+                                                      });
+    auto* s1 = ty.Struct(mod.symbols.New("__BadStructName"), {
+                                                                 {mod.symbols.New("a"), ty.i32()},
+                                                             });
+
+    auto* fn = b.Function("f", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    b.Append(fn->Block(), [&] {
+        auto* s0_var = b.Var("s0", ty.ref<function>(s0));
+        auto* s1_var = b.Var("s1", ty.ref<function>(s1));
+        b.Let("s0_0", b.Load(b.Access(ty.ref<function, i32>(), s0_var, 0_u)));
+        b.Let("s0_1", b.Load(b.Access(ty.ref<function, u32>(), s0_var, 1_u)));
+        b.Let("s0_2", b.Load(b.Access(ty.ref<function, u32>(), s0_var, 2_u)));
+        b.Let("s1_0", b.Load(b.Access(ty.ref<function, i32>(), s1_var, 0_u)));
+        b.Return(fn);
+    });
+
+    EXPECT_WGSL(R"(
+struct MyStruct {
+  safe : i32,
+  m : u32,
+  m_1 : u32,
+}
+
+struct S {
+  a : i32,
+}
+
+@fragment
+fn f() {
+  var s0 : MyStruct;
+  var s1 : S;
+  let s0_0 = s0.safe;
+  let s0_1 = s0.m;
+  let s0_2 = s0.m_1;
+  let s1_0 = s1.a;
+}
+)");
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Unary ops
 ////////////////////////////////////////////////////////////////////////////////
@@ -919,7 +1026,7 @@ TEST_F(IRToProgramTest, UnaryOp_Negate) {
     auto* i = b.FunctionParam("i", ty.i32());
     fn->SetParams({i});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Negation(ty.i32(), i)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Negation(i)); });
 
     EXPECT_WGSL(R"(
 fn f(i : i32) -> i32 {
@@ -933,7 +1040,7 @@ TEST_F(IRToProgramTest, UnaryOp_Complement) {
     auto* i = b.FunctionParam("i", ty.u32());
     fn->SetParams({i});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Complement(ty.u32(), i)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Complement(i)); });
 
     EXPECT_WGSL(R"(
 fn f(i : u32) -> u32 {
@@ -947,7 +1054,7 @@ TEST_F(IRToProgramTest, UnaryOp_Not) {
     auto* i = b.FunctionParam("b", ty.bool_());
     fn->SetParams({i});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Not(ty.bool_(), i)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Not(i)); });
 
     EXPECT_WGSL(R"(
 fn f(b : bool) -> bool {
@@ -965,7 +1072,7 @@ TEST_F(IRToProgramTest, BinaryOp_Add) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Add(ty.i32(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Add(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> i32 {
@@ -980,7 +1087,7 @@ TEST_F(IRToProgramTest, BinaryOp_Subtract) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Subtract(ty.i32(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Subtract(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> i32 {
@@ -995,7 +1102,7 @@ TEST_F(IRToProgramTest, BinaryOp_Multiply) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Multiply(ty.i32(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Multiply(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> i32 {
@@ -1010,7 +1117,7 @@ TEST_F(IRToProgramTest, BinaryOp_Divide) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Divide(ty.i32(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Divide(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> i32 {
@@ -1025,7 +1132,7 @@ TEST_F(IRToProgramTest, BinaryOp_Modulo) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Modulo(ty.i32(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Modulo(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> i32 {
@@ -1040,7 +1147,7 @@ TEST_F(IRToProgramTest, BinaryOp_And) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.And(ty.i32(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.And(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> i32 {
@@ -1055,7 +1162,7 @@ TEST_F(IRToProgramTest, BinaryOp_Or) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Or(ty.i32(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Or(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> i32 {
@@ -1070,7 +1177,7 @@ TEST_F(IRToProgramTest, BinaryOp_Xor) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Xor(ty.i32(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Xor(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> i32 {
@@ -1085,7 +1192,7 @@ TEST_F(IRToProgramTest, BinaryOp_Equal) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Equal(ty.bool_(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Equal(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> bool {
@@ -1100,7 +1207,7 @@ TEST_F(IRToProgramTest, BinaryOp_NotEqual) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.NotEqual(ty.bool_(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.NotEqual(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> bool {
@@ -1115,7 +1222,7 @@ TEST_F(IRToProgramTest, BinaryOp_LessThan) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.LessThan(ty.bool_(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.LessThan(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> bool {
@@ -1130,7 +1237,7 @@ TEST_F(IRToProgramTest, BinaryOp_GreaterThan) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.GreaterThan(ty.bool_(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.GreaterThan(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> bool {
@@ -1145,7 +1252,7 @@ TEST_F(IRToProgramTest, BinaryOp_LessThanEqual) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.LessThanEqual(ty.bool_(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.LessThanEqual(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> bool {
@@ -1160,7 +1267,7 @@ TEST_F(IRToProgramTest, BinaryOp_GreaterThanEqual) {
     auto* pb = b.FunctionParam("b", ty.i32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.GreaterThanEqual(ty.bool_(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.GreaterThanEqual(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : i32) -> bool {
@@ -1175,7 +1282,7 @@ TEST_F(IRToProgramTest, BinaryOp_ShiftLeft) {
     auto* pb = b.FunctionParam("b", ty.u32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.ShiftLeft(ty.i32(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.ShiftLeft(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : u32) -> i32 {
@@ -1190,7 +1297,7 @@ TEST_F(IRToProgramTest, BinaryOp_ShiftRight) {
     auto* pb = b.FunctionParam("b", ty.u32());
     fn->SetParams({pa, pb});
 
-    b.Append(fn->Block(), [&] { b.Return(fn, b.ShiftRight(ty.i32(), pa, pb)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.ShiftRight(pa, pb)); });
 
     EXPECT_WGSL(R"(
 fn f(a : i32, b : u32) -> i32 {
@@ -1221,7 +1328,7 @@ fn f(i : i32) {
 
 TEST_F(IRToProgramTest, TypeConstruct_u32) {
     auto* fn = b.Function("f", ty.void_());
-    auto* i = b.FunctionParam("i", ty.i32());
+    auto* i = b.FunctionParam("i", ty.u32());
     fn->SetParams({i});
 
     b.Append(fn->Block(), [&] {
@@ -1230,7 +1337,7 @@ TEST_F(IRToProgramTest, TypeConstruct_u32) {
     });
 
     EXPECT_WGSL(R"(
-fn f(i : i32) {
+fn f(i : u32) {
   var v : u32 = u32(i);
 }
 )");
@@ -1238,7 +1345,7 @@ fn f(i : i32) {
 
 TEST_F(IRToProgramTest, TypeConstruct_f32) {
     auto* fn = b.Function("f", ty.void_());
-    auto* i = b.FunctionParam("i", ty.i32());
+    auto* i = b.FunctionParam("i", ty.f32());
     fn->SetParams({i});
 
     b.Append(fn->Block(), [&] {
@@ -1247,7 +1354,7 @@ TEST_F(IRToProgramTest, TypeConstruct_f32) {
     });
 
     EXPECT_WGSL(R"(
-fn f(i : i32) {
+fn f(i : f32) {
   var v : f32 = f32(i);
 }
 )");
@@ -1255,7 +1362,7 @@ fn f(i : i32) {
 
 TEST_F(IRToProgramTest, TypeConstruct_bool) {
     auto* fn = b.Function("f", ty.void_());
-    auto* i = b.FunctionParam("i", ty.i32());
+    auto* i = b.FunctionParam("i", ty.bool_());
     fn->SetParams({i});
 
     b.Append(fn->Block(), [&] {
@@ -1264,7 +1371,7 @@ TEST_F(IRToProgramTest, TypeConstruct_bool) {
     });
 
     EXPECT_WGSL(R"(
-fn f(i : i32) {
+fn f(i : bool) {
   var v : bool = bool(i);
 }
 )");
@@ -1314,6 +1421,27 @@ TEST_F(IRToProgramTest, TypeConstruct_array) {
     EXPECT_WGSL(R"(
 fn f(i : i32) {
   var v : array<i32, 3u> = array<i32, 3u>(i, i, i);
+}
+)");
+}
+
+TEST_F(IRToProgramTest, TypeConstruct_binding_array) {
+    auto* el_ty = ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32());
+    auto* var = Var(ty.ref(handle, ty.binding_array(el_ty, 3u)));
+    var->SetBindingPoint(0, 0);
+
+    mod.root_block->Append(var);
+
+    auto* fn = b.Function("f", ty.void_());
+    auto* i = b.FunctionParam("i", ty.i32());
+    fn->SetParams({i});
+
+    b.Append(fn->Block(), [&] { b.Return(fn); });
+
+    EXPECT_WGSL(R"(
+@group(0u) @binding(0u) var v : binding_array<texture_2d<f32>, 3u>;
+
+fn f(i : i32) {
 }
 )");
 }
@@ -1390,12 +1518,12 @@ fn f(i : f32) {
 
 TEST_F(IRToProgramTest, TypeConstruct_Inlining) {
     auto* fn = b.Function("f", ty.void_());
-    auto* i0 = b.FunctionParam("i0", ty.i32());
-    auto* i1 = b.FunctionParam("i1", ty.i32());
-    auto* i2 = b.FunctionParam("i2", ty.i32());
-    auto* i3 = b.FunctionParam("i3", ty.i32());
-    auto* i4 = b.FunctionParam("i4", ty.i32());
-    auto* i5 = b.FunctionParam("i5", ty.i32());
+    auto* i0 = b.FunctionParam("i0", ty.f32());
+    auto* i1 = b.FunctionParam("i1", ty.f32());
+    auto* i2 = b.FunctionParam("i2", ty.f32());
+    auto* i3 = b.FunctionParam("i3", ty.f32());
+    auto* i4 = b.FunctionParam("i4", ty.f32());
+    auto* i5 = b.FunctionParam("i5", ty.f32());
     fn->SetParams({i0, i1, i2, i3, i4, i5});
 
     b.Append(fn->Block(), [&] {
@@ -1410,7 +1538,7 @@ TEST_F(IRToProgramTest, TypeConstruct_Inlining) {
     });
 
     EXPECT_WGSL(R"(
-fn f(i0 : i32, i1 : i32, i2 : i32, i3 : i32, i4 : i32, i5 : i32) {
+fn f(i0 : f32, i1 : f32, i2 : f32, i3 : f32, i4 : f32, i5 : f32) {
   var v : mat2x3<f32> = mat2x3<f32>(f32(i0), f32(i1), f32(i2), f32(i3), f32(i4), f32(i5));
 }
 )");
@@ -1489,7 +1617,7 @@ fn f(i : bool) {
 
 TEST_F(IRToProgramTest, TypeConvert_vec3i_to_vec3u) {
     auto* fn = b.Function("f", ty.void_());
-    auto* i = b.FunctionParam("i", ty.vec3<i32>());
+    auto* i = b.FunctionParam("i", ty.vec3i());
     fn->SetParams({i});
 
     b.Append(fn->Block(), [&] {
@@ -1506,7 +1634,7 @@ fn f(i : vec3<i32>) {
 
 TEST_F(IRToProgramTest, TypeConvert_vec3u_to_vec3f) {
     auto* fn = b.Function("f", ty.void_());
-    auto* i = b.FunctionParam("i", ty.vec3<u32>());
+    auto* i = b.FunctionParam("i", ty.vec3u());
     fn->SetParams({i});
 
     b.Append(fn->Block(), [&] {
@@ -1791,7 +1919,7 @@ TEST_F(IRToProgramTest, CompoundAssign_Increment) {
 
     b.Append(fn->Block(), [&] {
         auto* v = Var<function, i32>("v");
-        b.Store(v, b.Add(ty.i32(), b.Load(v), 1_i));
+        b.Store(v, b.Add(b.Load(v), 1_i));
 
         b.Return(fn);
     });
@@ -1809,7 +1937,7 @@ TEST_F(IRToProgramTest, CompoundAssign_Decrement) {
 
     b.Append(fn->Block(), [&] {
         auto* v = Var<function, i32>("v");
-        b.Store(v, b.Subtract(ty.i32(), b.Load(v), 1_i));
+        b.Store(v, b.Subtract(b.Load(v), 1_i));
 
         b.Return(fn);
     });
@@ -1827,7 +1955,7 @@ TEST_F(IRToProgramTest, CompoundAssign_Add) {
 
     b.Append(fn->Block(), [&] {
         auto* v = Var<function, i32>("v");
-        b.Store(v, b.Add(ty.i32(), b.Load(v), 8_i));
+        b.Store(v, b.Add(b.Load(v), 8_i));
 
         b.Return(fn);
     });
@@ -1845,7 +1973,7 @@ TEST_F(IRToProgramTest, CompoundAssign_Subtract) {
 
     b.Append(fn->Block(), [&] {
         auto* v = Var<function, i32>("v");
-        b.Store(v, b.Subtract(ty.i32(), b.Load(v), 8_i));
+        b.Store(v, b.Subtract(b.Load(v), 8_i));
 
         b.Return(fn);
     });
@@ -1863,7 +1991,7 @@ TEST_F(IRToProgramTest, CompoundAssign_Multiply) {
 
     b.Append(fn->Block(), [&] {
         auto* v = Var<function, i32>("v");
-        b.Store(v, b.Multiply(ty.i32(), b.Load(v), 8_i));
+        b.Store(v, b.Multiply(b.Load(v), 8_i));
 
         b.Return(fn);
     });
@@ -1881,7 +2009,7 @@ TEST_F(IRToProgramTest, CompoundAssign_Divide) {
 
     b.Append(fn->Block(), [&] {
         auto* v = Var<function, i32>("v");
-        b.Store(v, b.Divide(ty.i32(), b.Load(v), 8_i));
+        b.Store(v, b.Divide(b.Load(v), 8_i));
 
         b.Return(fn);
     });
@@ -1899,7 +2027,7 @@ TEST_F(IRToProgramTest, CompoundAssign_Xor) {
 
     b.Append(fn->Block(), [&] {
         auto* v = Var<function, i32>("v");
-        b.Store(v, b.Xor(ty.i32(), b.Load(v), 8_i));
+        b.Store(v, b.Xor(b.Load(v), 8_i));
 
         b.Return(fn);
     });
@@ -1921,7 +2049,7 @@ TEST_F(IRToProgramTest, LetUsedOnce) {
     fn->SetParams({i});
 
     b.Append(fn->Block(), [&] {
-        auto* v = b.Let("v", b.Complement(ty.u32(), i));
+        auto* v = b.Let("v", b.Complement(i));
         b.Return(fn, v);
     });
 
@@ -1939,14 +2067,52 @@ TEST_F(IRToProgramTest, LetUsedTwice) {
     fn->SetParams({i});
 
     b.Append(fn->Block(), [&] {
-        auto* v = b.Let("v", b.Multiply(ty.i32(), i, 2_i));
-        b.Return(fn, b.Add(ty.i32(), v, v));
+        auto* v = b.Let("v", b.Multiply(i, 2_i));
+        b.Return(fn, b.Add(v, v));
     });
 
     EXPECT_WGSL(R"(
 fn f(i : i32) -> i32 {
   let v = (i * 2i);
   return (v + v);
+}
+)");
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Load
+////////////////////////////////////////////////////////////////////////////////
+TEST_F(IRToProgramTest, Load_Reused) {
+    auto im = b.Var(
+        "im",
+        ty.ref(handle, ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32()), read));
+    im->SetBindingPoint(0, 0);
+    auto sampler = b.Var("sampler", ty.ref(handle, ty.sampler(), read));
+    sampler->SetBindingPoint(0, 1);
+
+    b.ir.root_block->Append(im);
+    b.ir.root_block->Append(sampler);
+
+    auto* fn = b.Function("f", ty.void_());
+    b.Append(fn->Block(), [&] {  //
+        auto* tl = b.Load(im);
+        auto* sl = b.Load(sampler);
+
+        b.Phony(b.Call<wgsl::ir::BuiltinCall>(ty.vec4f(), wgsl::BuiltinFn::kTextureSample, tl, sl,
+                                              b.Splat(ty.vec2f(), 0_f)));
+        b.Phony(b.Call<wgsl::ir::BuiltinCall>(ty.vec4f(), wgsl::BuiltinFn::kTextureSample, tl, sl,
+                                              b.Splat(ty.vec2f(), 0_f)));
+        b.Return(fn);
+    });
+
+    EXPECT_WGSL(R"(
+@group(0u) @binding(0u) var im : texture_2d<f32>;
+
+@group(0u) @binding(1u) var v : sampler;
+
+fn f() {
+  _ = textureSample(im, v, vec2<f32>());
+  _ = textureSample(im, v, vec2<f32>());
 }
 )");
 }
@@ -2146,6 +2312,7 @@ fn f() -> f32 {
   } else {
     return 2.0f;
   }
+  return f32();
 }
 )");
 }
@@ -2261,23 +2428,23 @@ TEST_F(IRToProgramTest, If_Else_Chain) {
     b.Append(fn->Block(), [&] {
         auto if1 = b.If(pa);
         b.Append(if1->True(), [&] {
-            b.Call(ty.void_(), x, 0_i);
+            b.Call(ty.bool_(), x, 0_i);
             b.ExitIf(if1);
         });
         b.Append(if1->False(), [&] {
             auto* if2 = b.If(pb);
             b.Append(if2->True(), [&] {
-                b.Call(ty.void_(), x, 1_i);
+                b.Call(ty.bool_(), x, 1_i);
                 b.ExitIf(if2);
             });
             b.Append(if2->False(), [&] {
                 auto* if3 = b.If(pc);
                 b.Append(if3->True(), [&] {
-                    b.Call(ty.void_(), x, 2_i);
+                    b.Call(ty.bool_(), x, 2_i);
                     b.ExitIf(if3);
                 });
                 b.Append(if3->False(), [&] {
-                    b.Call(ty.void_(), x, 3_i);
+                    b.Call(ty.bool_(), x, 3_i);
                     b.ExitIf(if3);
                 });
                 b.ExitIf(if2);
@@ -2524,14 +2691,14 @@ TEST_F(IRToProgramTest, For_Empty) {
             b.NextIteration(loop);
 
             b.Append(loop->Body(), [&] {
-                auto* if_ = b.If(b.LessThan(ty.bool_(), b.Load(i), 5_i));
+                auto* if_ = b.If(b.LessThan(b.Load(i), 5_i));
                 b.Append(if_->True(), [&] { b.ExitIf(if_); });
                 b.Append(if_->False(), [&] { b.ExitLoop(loop); });
                 b.Continue(loop);
             });
 
             b.Append(loop->Continuing(), [&] {
-                b.Store(i, b.Add(ty.i32(), b.Load(i), 1_i));
+                b.Store(i, b.Add(b.Load(i), 1_i));
                 b.NextIteration(loop);
             });
         });
@@ -2556,14 +2723,14 @@ TEST_F(IRToProgramTest, For_Empty_NoInit) {
         auto* loop = b.Loop();
 
         b.Append(loop->Body(), [&] {
-            auto* if_ = b.If(b.LessThan(ty.bool_(), b.Load(i), 5_i));
+            auto* if_ = b.If(b.LessThan(b.Load(i), 5_i));
             b.Append(if_->True(), [&] { b.ExitIf(if_); });
             b.Append(if_->False(), [&] { b.ExitLoop(loop); });
             b.Continue(loop);
         });
 
         b.Append(loop->Continuing(), [&] {
-            b.Store(i, b.Add(ty.i32(), b.Load(i), 1_i));
+            b.Store(i, b.Add(b.Load(i), 1_i));
             b.NextIteration(loop);
         });
 
@@ -2590,7 +2757,7 @@ TEST_F(IRToProgramTest, For_Empty_NoCont) {
             b.NextIteration(loop);
 
             b.Append(loop->Body(), [&] {
-                auto* if_ = b.If(b.LessThan(ty.bool_(), b.Load(i), 5_i));
+                auto* if_ = b.If(b.LessThan(b.Load(i), 5_i));
                 b.Append(if_->True(), [&] { b.ExitIf(if_); });
                 b.Append(if_->False(), [&] { b.ExitLoop(loop); });
                 b.Continue(loop);
@@ -2612,7 +2779,7 @@ TEST_F(IRToProgramTest, For_ComplexBody) {
     auto* a = b.Function("a", ty.bool_());
     auto* v = b.FunctionParam("v", ty.i32());
     a->SetParams({v});
-    b.Append(a->Block(), [&] { b.Return(a, b.Equal(ty.bool_(), v, 1_i)); });
+    b.Append(a->Block(), [&] { b.Return(a, b.Equal(v, 1_i)); });
 
     auto* fn = b.Function("f", ty.i32());
 
@@ -2624,7 +2791,7 @@ TEST_F(IRToProgramTest, For_ComplexBody) {
             b.NextIteration(loop);
 
             b.Append(loop->Body(), [&] {
-                auto* if1 = b.If(b.LessThan(ty.bool_(), b.Load(i), 5_i));
+                auto* if1 = b.If(b.LessThan(b.Load(i), 5_i));
                 b.Append(if1->True(), [&] { b.ExitIf(if1); });
                 b.Append(if1->False(), [&] { b.ExitLoop(loop); });
 
@@ -2635,7 +2802,7 @@ TEST_F(IRToProgramTest, For_ComplexBody) {
             });
 
             b.Append(loop->Continuing(), [&] {
-                b.Store(i, b.Add(ty.i32(), b.Load(i), 1_i));
+                b.Store(i, b.Add(b.Load(i), 1_i));
                 b.NextIteration(loop);
             });
         });
@@ -2665,7 +2832,7 @@ TEST_F(IRToProgramTest, For_ComplexBody_NoInit) {
     auto* a = b.Function("a", ty.bool_());
     auto* v = b.FunctionParam("v", ty.i32());
     a->SetParams({v});
-    b.Append(a->Block(), [&] { b.Return(a, b.Equal(ty.bool_(), v, 1_i)); });
+    b.Append(a->Block(), [&] { b.Return(a, b.Equal(v, 1_i)); });
 
     auto* fn = b.Function("f", ty.i32());
 
@@ -2675,7 +2842,7 @@ TEST_F(IRToProgramTest, For_ComplexBody_NoInit) {
         auto* loop = b.Loop();
 
         b.Append(loop->Body(), [&] {
-            auto* if1 = b.If(b.LessThan(ty.bool_(), b.Load(i), 5_i));
+            auto* if1 = b.If(b.LessThan(b.Load(i), 5_i));
             b.Append(if1->True(), [&] { b.ExitIf(if1); });
             b.Append(if1->False(), [&] { b.ExitLoop(loop); });
 
@@ -2687,7 +2854,7 @@ TEST_F(IRToProgramTest, For_ComplexBody_NoInit) {
         });
 
         b.Append(loop->Continuing(), [&] {
-            b.Store(i, b.Add(ty.i32(), b.Load(i), 1_i));
+            b.Store(i, b.Add(b.Load(i), 1_i));
             b.NextIteration(loop);
         });
 
@@ -2717,7 +2884,7 @@ TEST_F(IRToProgramTest, For_ComplexBody_NoCont) {
     auto* a = b.Function("a", ty.bool_());
     auto* v = b.FunctionParam("v", ty.i32());
     a->SetParams({v});
-    b.Append(a->Block(), [&] { b.Return(a, b.Equal(ty.bool_(), v, 1_i)); });
+    b.Append(a->Block(), [&] { b.Return(a, b.Equal(v, 1_i)); });
 
     auto* fn = b.Function("f", ty.i32());
 
@@ -2729,7 +2896,7 @@ TEST_F(IRToProgramTest, For_ComplexBody_NoCont) {
             b.NextIteration(loop);
 
             b.Append(loop->Body(), [&] {
-                auto* if1 = b.If(b.LessThan(ty.bool_(), b.Load(i), 5_i));
+                auto* if1 = b.If(b.LessThan(b.Load(i), 5_i));
                 b.Append(if1->True(), [&] { b.ExitIf(if1); });
                 b.Append(if1->False(), [&] { b.ExitLoop(loop); });
 
@@ -2766,7 +2933,7 @@ TEST_F(IRToProgramTest, For_CallInInitCondCont) {
     auto* fn_n = b.Function("n", ty.i32());
     auto* v = b.FunctionParam("v", ty.i32());
     fn_n->SetParams({v});
-    b.Append(fn_n->Block(), [&] { b.Return(fn_n, b.Add(ty.i32(), v, 1_i)); });
+    b.Append(fn_n->Block(), [&] { b.Return(fn_n, b.Add(v, 1_i)); });
 
     auto* fn_f = b.Function("f", ty.void_());
 
@@ -2780,7 +2947,7 @@ TEST_F(IRToProgramTest, For_CallInInitCondCont) {
             b.Append(loop->Body(), [&] {
                 auto* load = b.Load(i);
                 auto* call = b.Call(ty.i32(), fn_n, 1_i);
-                auto* if_ = b.If(b.LessThan(ty.bool_(), load, call));
+                auto* if_ = b.If(b.LessThan(load, call));
                 b.Append(if_->True(), [&] { b.ExitIf(if_); });
                 b.Append(if_->False(), [&] { b.ExitLoop(loop); });
 
@@ -2851,14 +3018,14 @@ TEST_F(IRToProgramTest, For_IncInInit_Cmp) {
 
             b.Append(loop->Initializer(), [&] {
                 auto* load_i = b.Load(i);
-                auto* inc_i = b.Add(ty.u32(), load_i, 1_u);
+                auto* inc_i = b.Add(load_i, 1_u);
                 b.Store(i, inc_i);
                 b.NextIteration(loop);
             });
 
             b.Append(loop->Body(), [&] {
                 auto* load_i = b.Load(i);
-                auto* cmp = b.LessThan(ty.bool_(), load_i, 10_u);
+                auto* cmp = b.LessThan(load_i, 10_u);
                 auto* if_ = b.If(cmp);
                 b.Append(if_->True(), [&] { b.ExitIf(if_); });
                 b.Append(if_->False(), [&] { b.ExitLoop(loop); });
@@ -3223,7 +3390,7 @@ TEST_F(IRToProgramTest, Loop_VarsDeclaredOutsideAndInside) {
 
             auto* body_load_a = b.Load(var_a);
             auto* body_load_b = b.Load(var_b);
-            auto* if_ = b.If(b.Equal(ty.bool_(), body_load_a, body_load_b));
+            auto* if_ = b.If(b.Equal(body_load_a, body_load_b));
             b.Append(if_->True(), [&] { b.Return(fn); });
             b.Append(if_->False(), [&] { b.ExitIf(if_); });
             b.Continue(loop);
@@ -3231,7 +3398,7 @@ TEST_F(IRToProgramTest, Loop_VarsDeclaredOutsideAndInside) {
             b.Append(loop->Continuing(), [&] {
                 auto* cont_load_a = b.Load(var_a);
                 auto* cont_load_b = b.Load(var_b);
-                b.Store(var_b, b.Add(ty.i32(), cont_load_a, cont_load_b));
+                b.Store(var_b, b.Add(cont_load_a, cont_load_b));
                 b.NextIteration(loop);
             });
         });
@@ -3334,6 +3501,29 @@ fn f() -> i32 {
 )");
 }
 
+TEST_F(IRToProgramTest, Override_UnaryInitializer) {
+    core::ir::Override* o;
+    b.Append(b.ir.root_block, [&] {
+        auto* lhs = b.Override("cond", true);
+        lhs->SetOverrideId(OverrideId{10});
+
+        o = b.Override("o", b.Not(lhs));
+    });
+
+    auto* fn = b.Function("f", ty.bool_());
+    b.Append(fn->Block(), [&] { b.Return(fn, o); });
+
+    EXPECT_WGSL(R"(
+@id(10) override cond : bool = true;
+
+override o : bool = !(cond);
+
+fn f() -> bool {
+  return o;
+}
+)");
+}
+
 TEST_F(IRToProgramTest, Override_BinaryInitializer) {
     core::ir::Override* o;
     b.Append(b.ir.root_block, [&] {
@@ -3343,7 +3533,7 @@ TEST_F(IRToProgramTest, Override_BinaryInitializer) {
         auto* rhs = b.Override("rhs", ty.u32());
         rhs->SetOverrideId(OverrideId{20});
 
-        o = b.Override("o", b.Add<u32>(lhs, rhs));
+        o = b.Override("o", b.Add(lhs, rhs));
     });
 
     auto* fn = b.Function("f", ty.u32());
@@ -3358,6 +3548,158 @@ override o : u32 = (lhs + rhs);
 
 fn f() -> u32 {
   return o;
+}
+)");
+}
+
+TEST_F(IRToProgramTest, Override_BitcastInitializer) {
+    core::ir::Override* o;
+    b.Append(b.ir.root_block, [&] {
+        auto* from = b.Override("from", 42_u);
+        from->SetOverrideId(OverrideId{10});
+
+        o = b.Override("o", b.Bitcast(ty.i32(), from));
+    });
+
+    auto* fn = b.Function("f", ty.i32());
+    b.Append(fn->Block(), [&] { b.Return(fn, o); });
+
+    EXPECT_WGSL(R"(
+@id(10) override v : u32 = 42u;
+
+override o : i32 = bitcast<i32>(v);
+
+fn f() -> i32 {
+  return o;
+}
+)");
+}
+
+TEST_F(IRToProgramTest, StructMemberOffset) {
+    auto* S = ty.Struct(mod.symbols.New("S"),
+                        Vector{
+                            ty.Get<core::type::StructMember>(mod.symbols.New("a"), ty.i32(), 0u, 0u,
+                                                             4u, 4u, core::IOAttributes{}),
+                            ty.Get<core::type::StructMember>(mod.symbols.New("b"), ty.u32(), 1u,
+                                                             64u, 4u, 4u, core::IOAttributes{}),
+                            ty.Get<core::type::StructMember>(mod.symbols.New("c"), ty.f32(), 2u,
+                                                             76u, 4u, 4u, core::IOAttributes{}),
+                        });
+
+    auto* fn = b.Function("f", ty.void_());
+    auto* x = b.FunctionParam("x", S);
+    fn->SetParams({x});
+    b.Append(fn->Block(), [&] { b.Return(fn); });
+
+    EXPECT_WGSL(R"(
+struct S {
+  @size(64u)
+  a : i32,
+  @size(12u)
+  b : u32,
+  c : f32,
+}
+
+fn f(x : S) {
+}
+)");
+}
+
+TEST_F(IRToProgramTest, StructMemberOffset_FirstMember) {
+    auto* S = ty.Struct(mod.symbols.New("S"),
+                        Vector{
+                            ty.Get<core::type::StructMember>(mod.symbols.New("a"), ty.i32(), 0u,
+                                                             12u, 4u, 4u, core::IOAttributes{}),
+                        });
+
+    auto* fn = b.Function("f", ty.void_());
+    auto* x = b.FunctionParam("x", S);
+    fn->SetParams({x});
+    b.Append(fn->Block(), [&] { b.Return(fn); });
+
+    EXPECT_WGSL(R"(
+struct S {
+  tint_pad_0 : u32,
+  tint_pad_4 : u32,
+  tint_pad_8 : u32,
+  a : i32,
+}
+
+fn f(x : S) {
+}
+)");
+}
+
+TEST_F(IRToProgramTest, AllowNonUniformDerivatives) {
+    auto im = b.Var(
+        "im",
+        ty.ref(handle, ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32()), read));
+    im->SetBindingPoint(0, 0);
+    auto sampler = b.Var("sampler", ty.ref(handle, ty.sampler(), read));
+    sampler->SetBindingPoint(0, 1);
+    auto non_uniform = Var<private_, bool>();
+
+    b.ir.root_block->Append(im);
+    b.ir.root_block->Append(sampler);
+    b.ir.root_block->Append(non_uniform);
+
+    auto* fn = b.Function("f", ty.void_());
+    b.Append(fn->Block(), [&] {  //
+        auto* if_ = b.If(b.Load(non_uniform));
+        b.Append(if_->True(), [&] {
+            auto* tl = b.Load(im);
+            auto* sl = b.Load(sampler);
+            b.Phony(b.Call<wgsl::ir::BuiltinCall>(ty.vec4f(), wgsl::BuiltinFn::kTextureSample, tl,
+                                                  sl, b.Splat(ty.vec2f(), 0_f)));
+            b.ExitIf(if_);
+        });
+        b.Return(fn);
+    });
+
+    options.allow_non_uniform_derivatives = true;
+    EXPECT_WGSL(R"(
+diagnostic(off, derivative_uniformity);
+
+@group(0u) @binding(0u) var im : texture_2d<f32>;
+
+@group(0u) @binding(1u) var v : sampler;
+
+var<private> v_1 : bool;
+
+fn f() {
+  if (v_1) {
+    _ = textureSample(im, v, vec2<f32>());
+  }
+}
+)");
+}
+
+TEST_F(IRToProgramTest, AllowNonUniformSubgroups) {
+    auto non_uniform = Var<private_, bool>();
+    b.ir.root_block->Append(non_uniform);
+
+    auto* fn = b.Function("f", ty.void_());
+    b.Append(fn->Block(), [&] {  //
+        auto* if_ = b.If(b.Load(non_uniform));
+        b.Append(if_->True(), [&] {
+            b.Phony(
+                b.Call<wgsl::ir::BuiltinCall>(ty.vec4u(), wgsl::BuiltinFn::kSubgroupBallot, true));
+            b.ExitIf(if_);
+        });
+        b.Return(fn);
+    });
+
+    options.allow_non_uniform_subgroup_operations = true;
+    EXPECT_WGSL(R"(
+enable subgroups;
+diagnostic(off, subgroup_uniformity);
+
+var<private> v : bool;
+
+fn f() {
+  if (v) {
+    _ = subgroupBallot(true);
+  }
 }
 )");
 }

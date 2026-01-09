@@ -49,7 +49,7 @@ if (tint_build_spv_reader) {
       "parser.h",
     ]
     deps = [
-      "${dawn_root}/src/utils:utils",
+      "${dawn_root}/src/utils",
       "${tint_src_dir}/api/common",
       "${tint_src_dir}/lang/core",
       "${tint_src_dir}/lang/core/constant",
@@ -79,10 +79,10 @@ if (tint_build_spv_reader) {
 
     if (tint_build_spv_reader || tint_build_spv_writer) {
       deps += [
+        "${tint_spirv_headers_dir}:spv_headers",
         "${tint_spirv_tools_dir}:spvtools",
         "${tint_spirv_tools_dir}:spvtools_headers",
         "${tint_spirv_tools_dir}:spvtools_opt",
-        "${tint_spirv_tools_dir}:spvtools_val",
         "${tint_spirv_tools_dir}:spvtools_val",
         "${tint_src_dir}/lang/spirv/validate",
       ]
@@ -103,6 +103,7 @@ if (tint_build_unittests) {
         "composite_test.cc",
         "constant_test.cc",
         "convert_test.cc",
+        "execution_mode_test.cc",
         "function_test.cc",
         "helper_test.h",
         "image_sampler_test.cc",
@@ -112,12 +113,13 @@ if (tint_build_unittests) {
         "memory_test.cc",
         "misc_test.cc",
         "name_test.cc",
+        "phi_test.cc",
         "struct_test.cc",
         "unary_test.cc",
         "var_test.cc",
       ]
       deps = [
-        "${dawn_root}/src/utils:utils",
+        "${dawn_root}/src/utils",
         "${tint_src_dir}:gmock_and_gtest",
         "${tint_src_dir}/api/common",
         "${tint_src_dir}/lang/core",

@@ -29,12 +29,16 @@
 #define SRC_DAWN_NATIVE_EXECUTIONQUEUE_H_
 
 #include <atomic>
+#include <condition_variable>
 #include <functional>
+#include <mutex>
 
 #include "dawn/common/MutexProtected.h"
 #include "dawn/common/SerialMap.h"
+#include "dawn/common/Time.h"
 #include "dawn/native/Error.h"
 #include "dawn/native/IntegerTypes.h"
+#include "dawn/native/ObjectBase.h"
 #include "partition_alloc/pointers/raw_ptr.h"
 
 namespace dawn::native {
@@ -43,7 +47,7 @@ namespace dawn::native {
 // update of the various ExecutionSerials related to that work.
 // TODO(dawn:831, dawn:1413): Make usage of the ExecutionQueue thread-safe. Right now it is
 // only partially safe - where observation of the last-submitted and pending serials is atomic.
-class ExecutionQueueBase {
+class ExecutionQueueBase : public ApiObjectBase {
   public:
     using Task = std::function<void()>;
 
@@ -58,8 +62,13 @@ class ExecutionQueueBase {
     // Whether the execution queue has scheduled commands to be submitted or executing.
     bool HasScheduledCommands() const;
 
-    // Check for passed fences and set the new completed serial.
+    // Check for passed fences and set the new completed serial. Note that the two functions below
+    // effectively do the same thing initially, however, |UpdateCompletedSerials| may additionally
+    // trigger user callbacks. Note that for the purpose of going forwards, |CheckPassedSerials|
+    // should not be used anymore.
+    // TODO(crbug.com/42240396): Remove |CheckPassedSerials| in favor of |UpdateCompletedSerial|.
     MaybeError CheckPassedSerials();
+    MaybeError UpdateCompletedSerial();
 
     // For the commands being internally recorded in backend, that were not urgent to submit, this
     // method makes them to be submitted as soon as possible in next ticks.
@@ -67,6 +76,9 @@ class ExecutionQueueBase {
 
     // Ensures that all commands which were recorded are flushed upto the given serial.
     MaybeError EnsureCommandsFlushed(ExecutionSerial serial);
+
+    // Submit any pending commands that are enqueued.
+    MaybeError SubmitPendingCommands();
 
     // During shut down of device, some operations might have been started since the last submit
     // and waiting on a serial that doesn't have a corresponding fence enqueued. Fake serials to
@@ -76,17 +88,15 @@ class ExecutionQueueBase {
     // Increment mLastSubmittedSerial when we submit the next serial
     void IncrementLastSubmittedCommandSerial();
 
-    // WaitForIdleForDestruction waits for GPU to finish, checks errors and gets ready for
-    // destruction. This is only used when properly destructing the device. For a real
-    // device loss, this function doesn't need to be called since the driver already closed all
-    // resources.
-    virtual MaybeError WaitForIdleForDestruction() = 0;
+    // Waits for GPU to finish, checks errors and gets ready for destruction. This is only used when
+    // properly destructing the device. For a real device loss, this function doesn't need to be
+    // called since the driver already closed all resources.
+    MaybeError WaitForIdleForDestruction();
 
-    // Wait at most `timeout` synchronously for the ExecutionSerial to pass. Returns true
-    // if the serial passed.
-    virtual ResultOrError<bool> WaitForQueueSerial(ExecutionSerial serial, Nanoseconds timeout) = 0;
+    // Wait at most `timeout` synchronously for the ExecutionSerial to pass.
+    MaybeError WaitForQueueSerial(ExecutionSerial serial, Nanoseconds timeout);
 
-    // Tracks a new task to complete when |serial| is reached.
+    // Tracks new tasks to complete when |serial| is reached.
     void TrackSerialTask(ExecutionSerial serial, Task&& task);
 
     // In the 'Normal' mode, currently recorded commands in the backend submitted in the next Tick.
@@ -94,31 +104,68 @@ class ExecutionQueueBase {
     // example, until the client has explictly issued a submission.
     enum class SubmitMode { Normal, Passive };
 
+    // Tracks whether we are in a submit to avoid submit reentrancy. Reentrancy could otherwise
+    // happen when allocating resources or staging memory during submission (for workarounds, or
+    // emulation) and the heuristics ask for an early submit to happen (which would cause a
+    // submit-in-submit and many issues).
+    // TODO(crbug.com/42240396): Move all handling of Submit(command buffers) in this class as well,
+    // at which point this member can be private.
+    bool mInSubmit = false;
+
+  protected:
+    using ApiObjectBase::ApiObjectBase;
+
+    ~ExecutionQueueBase() override;
+
+    static constexpr ExecutionSerial kWaitSerialTimeout = kBeginningOfGPUTime;
+
     // Currently, the queue has two paths for serial updating, one is via DeviceBase::Tick which
     // calls into the backend specific polling mechanisms implemented in
     // CheckAndUpdateCompletedSerials. Alternatively, the backend can actively call
-    // UpdateCompletedSerial when a new serial is complete to make forward progress proactively.
-    // TODO(crbug.com/421945313): This shouldn't need to be public once we fix lock ordering.
-    void UpdateCompletedSerial(ExecutionSerial completedSerial);
+    // UpdateCompletedSerialTo when a new serial is complete to make forward progress proactively.
+    void UpdateCompletedSerialTo(ExecutionSerial completedSerial);
 
   private:
     // Each backend should implement to check their passed fences if there are any and return a
     // completed serial. Return 0 should indicate no fences to check.
     virtual ResultOrError<ExecutionSerial> CheckAndUpdateCompletedSerials() = 0;
-    // mCompletedSerial tracks the last completed command serial that the fence has returned.
-    // mLastSubmittedSerial tracks the last submitted command serial.
-    // During device removal, the serials could be artificially incremented
-    // to make it appear as if commands have been compeleted.
-    std::atomic<uint64_t> mCompletedSerial = static_cast<uint64_t>(kBeginningOfGPUTime);
-    std::atomic<uint64_t> mLastSubmittedSerial = static_cast<uint64_t>(kBeginningOfGPUTime);
 
-    MutexProtected<SerialMap<ExecutionSerial, Task>> mWaitingTasks;
+    // Backend specific wait function, returns kWaitSerialTimeout if we did not successfully wait
+    // for |waitSerial|.
+    virtual ResultOrError<ExecutionSerial> WaitForQueueSerialImpl(ExecutionSerial waitSerial,
+                                                                  Nanoseconds timeout) = 0;
+
+    // Backend specific wait for idle function.
+    virtual MaybeError WaitForIdleForDestructionImpl() = 0;
 
     // Indicates whether the backend has pending commands to be submitted as soon as possible.
     virtual bool HasPendingCommands() const = 0;
 
     // Submit any pending commands that are enqueued.
-    virtual MaybeError SubmitPendingCommands() = 0;
+    virtual MaybeError SubmitPendingCommandsImpl() = 0;
+
+    void UpdateCompletedSerialToInternal(ExecutionSerial completedSerial, bool forceTasks = false);
+
+    // |mCompletedSerial| tracks the last completed command serial that the fence has returned. This
+    // is currently implicitly guarded by the lock for |mWaitingTasks| since we only update this
+    // value when holding that lock.
+    // |mLastSubmittedSerial| tracks the last submitted command serial.
+    // During device removal, the serials could be artificially incremented to make it appear as if
+    // commands have been completed.
+    std::atomic<uint64_t> mCompletedSerial = static_cast<uint64_t>(kBeginningOfGPUTime);
+    std::atomic<uint64_t> mLastSubmittedSerial = static_cast<uint64_t>(kBeginningOfGPUTime);
+
+    // Mutex, condition variable, and boolean statuses are used by the class to synchronize task
+    // completion to ensure that:
+    //   1) Callback ordering is guaranteed.
+    //   2) Re-entrant callbacks do not cause lock-inversion issues w.r.t this lock and the
+    //      device lock.
+    std::mutex mMutex;
+    std::condition_variable mCv;
+    bool mCallingCallbacks = false;
+    bool mWaitingForIdle = false;
+    bool mAssumeCompleted = false;
+    SerialMap<ExecutionSerial, Task> mWaitingTasks;
 };
 
 }  // namespace dawn::native

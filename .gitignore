@@ -42,7 +42,6 @@
 /third_party/partition_alloc
 /third_party/protobuf
 /third_party/siso/cipd/
-/third_party/spirv-cross/src/
 /third_party/spirv-headers/src/
 /third_party/spirv-tools/src/
 /third_party/swiftshader
@@ -161,16 +160,5 @@ tint.dot
 ### The 'compile_commands' file can be generated at root
 compile_commands.json
 
-# RTC ignores
-
-# Premake generated files #
-###########################
-*.vcxproj*
-*.sln
-*.make
-Makefile
-*.xcworkspace
-*.xcodeproj
-compile_commands.json
-*_single_file_build.cpp
-*_unity_build.cpp
+### Root user file for gemini cli
+GEMINI.md

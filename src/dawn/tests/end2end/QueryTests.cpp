@@ -99,7 +99,7 @@ class OcclusionExpectation : public detail::Expectation {
 class OcclusionQueryTests : public QueryTests {
   protected:
     void SetUp() override {
-        DawnTest::SetUp();
+        QueryTests::SetUp();
 
         // Create basic render pipeline
         vsModule = utils::CreateShaderModule(device, R"(
@@ -390,9 +390,6 @@ TEST_P(OcclusionQueryTests, RewriteNoDrawToZero) {
     // TODO(dawn:1870): D3D11_QUERY_OCCLUSION_PREDICATE doesn't work on Intel Gen12.
     DAWN_SUPPRESS_TEST_IF(IsD3D11() && IsIntelGen12());
 
-    // TODO(dawn:2247): Failing on ANGLE/D3D11
-    DAWN_SUPPRESS_TEST_IF(IsANGLED3D11());
-
     // TODO(42242119): hang/crash on Qualcomm Adreno X1.
     DAWN_SUPPRESS_TEST_IF(IsD3D11() && IsQualcomm());
 
@@ -482,9 +479,6 @@ TEST_P(OcclusionQueryTests, RewriteNoDrawToZeroSeparateSubmit) {
 TEST_P(OcclusionQueryTests, RewriteToZeroWithDraw) {
     // TODO(dawn:1870): D3D11_QUERY_OCCLUSION_PREDICATE doesn't work on Intel Gen12.
     DAWN_SUPPRESS_TEST_IF(IsD3D11() && IsIntelGen12());
-
-    // TODO(dawn:2247): Failing on ANGLE/D3D11
-    DAWN_SUPPRESS_TEST_IF(IsANGLED3D11());
 
     constexpr uint32_t kQueryCount = 1;
 
@@ -627,10 +621,27 @@ class TimestampExpectation : public detail::Expectation {
     }
 };
 
-class TimestampQueryTests : public QueryTests {
+class TimestampQueryTestsBase : public QueryTests {
   protected:
     void SetUp() override {
-        DawnTest::SetUp();
+        QueryTests::SetUp();
+
+        // TODO(crbug.com/458607667): Timestamp tests are flaky on WARP.
+        DAWN_SUPPRESS_TEST_IF(IsWARP());
+    }
+
+    wgpu::QuerySet CreateQuerySetForTimestamp(uint32_t queryCount) {
+        wgpu::QuerySetDescriptor descriptor;
+        descriptor.count = queryCount;
+        descriptor.type = wgpu::QueryType::Timestamp;
+        return device.CreateQuerySet(&descriptor);
+    }
+};
+
+class TimestampQueryTests : public TimestampQueryTestsBase {
+  protected:
+    void SetUp() override {
+        TimestampQueryTestsBase::SetUp();
 
         // Skip all tests if timestamp feature is not supported
         DAWN_TEST_UNSUPPORTED_IF(!SupportsFeatures({wgpu::FeatureName::TimestampQuery}));
@@ -652,13 +663,6 @@ class TimestampQueryTests : public QueryTests {
             requiredFeatures.push_back(wgpu::FeatureName::TimestampQuery);
         }
         return requiredFeatures;
-    }
-
-    wgpu::QuerySet CreateQuerySetForTimestamp(uint32_t queryCount) {
-        wgpu::QuerySetDescriptor descriptor;
-        descriptor.count = queryCount;
-        descriptor.type = wgpu::QueryType::Timestamp;
-        return device.CreateQuerySet(&descriptor);
     }
 
     wgpu::RenderPipeline CreateRenderPipeline(bool hasFragmentStage = true) {
@@ -1079,8 +1083,6 @@ TEST_P(TimestampQueryTests, ResolveWithoutWritten) {
 
 // Test resolving timestamp query to one slot in the buffer
 TEST_P(TimestampQueryTests, ResolveToBufferWithOffset) {
-    DAWN_SUPPRESS_TEST_IF(IsWARP());  // Flaky on WARP
-
     constexpr uint32_t kQueryCount = 2;
     constexpr uint64_t kBufferSize = kQueryCount * sizeof(uint64_t) + kMinDestinationOffset;
     constexpr uint64_t kCount = kQueryCount + kMinCount;
@@ -1166,10 +1168,10 @@ TEST_P(TimestampQueryTests, ManyWriteTimestampDistinctQuerySets) {
     }
 }
 
-class TimestampQueryInsidePassesTests : public TimestampQueryTests {
+class TimestampQueryInsidePassesTests : public TimestampQueryTestsBase {
   protected:
     void SetUp() override {
-        DawnTest::SetUp();
+        TimestampQueryTestsBase::SetUp();
 
         // Skip all tests if timestamp feature is not supported
         DAWN_TEST_UNSUPPORTED_IF(
@@ -1192,8 +1194,6 @@ class TimestampQueryInsidePassesTests : public TimestampQueryTests {
 
 // Test calling timestamp query from render pass encoder
 TEST_P(TimestampQueryInsidePassesTests, FromOnRenderPass) {
-    DAWN_SUPPRESS_TEST_IF(IsWARP());  // Flaky on WARP
-
     constexpr uint32_t kQueryCount = 2;
 
     // Write timestamp with different query indexes
@@ -1241,7 +1241,6 @@ TEST_P(TimestampQueryInsidePassesTests, FromOnRenderPass) {
 TEST_P(TimestampQueryInsidePassesTests, FromComputePass) {
     // TODO(crbug.com/dawn/1852): Flaky negative timestamps on Mac AMD and Windows WARP.
     DAWN_SUPPRESS_TEST_IF(IsMacOS() && IsMetal() && IsAMD());
-    DAWN_SUPPRESS_TEST_IF(IsWARP());
 
     constexpr uint32_t kQueryCount = 2;
 
@@ -1311,21 +1310,24 @@ DAWN_INSTANTIATE_TEST(OcclusionQueryTests,
                       MetalBackend({"metal_fill_empty_occlusion_queries_with_zero"}),
                       OpenGLBackend(),
                       OpenGLESBackend(),
-                      VulkanBackend());
+                      VulkanBackend(),
+                      WebGPUBackend());
 DAWN_INSTANTIATE_TEST(TimestampQueryTests,
                       D3D11Backend(),
                       D3D12Backend(),
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
-                      VulkanBackend());
+                      VulkanBackend(),
+                      WebGPUBackend());
 DAWN_INSTANTIATE_TEST(TimestampQueryInsidePassesTests,
                       D3D11Backend(),
                       D3D12Backend(),
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
-                      VulkanBackend());
+                      VulkanBackend(),
+                      WebGPUBackend());
 
 }  // anonymous namespace
 }  // namespace dawn

@@ -194,15 +194,6 @@ class Validator {
     /// @returns true on success, false otherwise.
     bool Array(const sem::Array* arr, const Source& el_source) const;
 
-    /// Validates an array stride attribute
-    /// @param attr the stride attribute to validate
-    /// @param el_size the element size
-    /// @param el_align the element alignment
-    /// @returns true on success, false otherwise
-    bool ArrayStrideAttribute(const ast::StrideAttribute* attr,
-                              uint32_t el_size,
-                              uint32_t el_align) const;
-
     /// Validates an atomic type
     /// @param a the atomic ast node
     /// @param s the atomic sem node
@@ -243,13 +234,11 @@ class Validator {
     /// @param storage_type the attribute storage type
     /// @param stage the current pipeline stage
     /// @param is_input true if this is an input attribute
-    /// @param ignore_clip_distances_type_validation true if ignore type check on clip_distances
     /// @returns true on success, false otherwise.
     bool BuiltinAttribute(const ast::BuiltinAttribute* attr,
                           const core::type::Type* storage_type,
                           ast::PipelineStage stage,
-                          const bool is_input,
-                          const bool ignore_clip_distances_type_validation = false) const;
+                          const bool is_input) const;
 
     /// Validates a continue statement
     /// @param stmt the continue statement to validate
@@ -432,6 +421,12 @@ class Validator {
     /// @returns true on success, false otherwise
     bool StorageTexture(const core::type::StorageTexture* t, const Source& source) const;
 
+    /// Validates a texel buffer
+    /// @param t the texel buffer to validate
+    /// @param source the source of the texel buffer
+    /// @returns true on success, false otherwise
+    bool TexelBuffer(const core::type::TexelBuffer* t, const Source& source) const;
+
     /// Validates a sampled texture
     /// @param t the texture to validate
     /// @param source the source of the texture
@@ -535,9 +530,11 @@ class Validator {
     /// Validates a subgroup matrix constructor
     /// @param ctor the call expression to validate
     /// @param subgroup_matrix_type the type of the subgroup matrix
+    /// @param signature the construct signature to validate against
     /// @returns true on success, false otherwise
     bool SubgroupMatrixConstructor(const ast::CallExpression* ctor,
-                                   const core::type::SubgroupMatrix* subgroup_matrix_type) const;
+                                   const core::type::SubgroupMatrix* subgroup_matrix_type,
+                                   const sem::CallTarget* signature) const;
 
     /// Validates a subgroupShuffle builtin functions including Up,Down, and Xor.
     /// @param fn the builtin call type
@@ -604,22 +601,6 @@ class Validator {
     bool AddressSpaceLayout(const core::type::Type* type,
                             core::AddressSpace sc,
                             Source source) const;
-
-    /// @returns true if the attribute list contains a
-    /// ast::DisableValidationAttribute with the validation mode equal to
-    /// `validation`
-    /// @param attributes the attribute list to check
-    /// @param validation the validation mode to check
-    bool IsValidationDisabled(VectorRef<const ast::Attribute*> attributes,
-                              ast::DisabledValidation validation) const;
-
-    /// @returns true if the attribute list does not contains a
-    /// ast::DisableValidationAttribute with the validation mode equal to
-    /// `validation`
-    /// @param attributes the attribute list to check
-    /// @param validation the validation mode to check
-    bool IsValidationEnabled(VectorRef<const ast::Attribute*> attributes,
-                             ast::DisabledValidation validation) const;
 
   private:
     /// @param ty the type to check

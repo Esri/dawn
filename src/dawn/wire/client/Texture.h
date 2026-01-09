@@ -38,22 +38,26 @@ class Device;
 
 class Texture final : public ObjectBase {
   public:
+    static WGPUTexture Create(Device* device, const WGPUTextureDescriptor* descriptor);
     static WGPUTexture CreateError(Device* device, const WGPUTextureDescriptor* descriptor);
 
-    Texture(const ObjectBaseParams& params, const WGPUTextureDescriptor* descriptor);
+    Texture(const ObjectBaseParams& params,
+            const Device* device,
+            const WGPUTextureDescriptor* descriptor);
     ~Texture() override;
 
     ObjectType GetObjectType() const override;
 
     // Note that these values can be arbitrary since they aren't validated in the wire client.
-    uint32_t GetWidth() const;
-    uint32_t GetHeight() const;
-    uint32_t GetDepthOrArrayLayers() const;
-    uint32_t GetMipLevelCount() const;
-    uint32_t GetSampleCount() const;
-    WGPUTextureDimension GetDimension() const;
-    WGPUTextureFormat GetFormat() const;
-    WGPUTextureUsage GetUsage() const;
+    uint32_t APIGetWidth() const;
+    uint32_t APIGetHeight() const;
+    uint32_t APIGetDepthOrArrayLayers() const;
+    uint32_t APIGetMipLevelCount() const;
+    uint32_t APIGetSampleCount() const;
+    WGPUTextureDimension APIGetDimension() const;
+    WGPUTextureFormat APIGetFormat() const;
+    WGPUTextureUsage APIGetUsage() const;
+    WGPUTextureViewDimension APIGetTextureBindingViewDimension() const;
 
   private:
     WGPUExtent3D mSize;
@@ -62,6 +66,7 @@ class Texture final : public ObjectBase {
     WGPUTextureDimension mDimension;
     WGPUTextureFormat mFormat;
     WGPUTextureUsage mUsage;
+    WGPUTextureViewDimension mTextureBindingViewDimension;
 };
 
 }  // namespace dawn::wire::client

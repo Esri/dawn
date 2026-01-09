@@ -1,10 +1,11 @@
 #version 310 es
 
-layout(binding = 2, std430)
+layout(binding = 0, std430)
 buffer _storage_block_1_ssbo {
   ivec2 inner;
 } v;
-void v_1() {
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+void main() {
   ivec2 vec = ivec2(0);
   {
     uvec2 tint_loop_idx = uvec2(4294967295u);
@@ -27,7 +28,4 @@ void v_1() {
       continue;
     }
   }
-}
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-void main() {
 }

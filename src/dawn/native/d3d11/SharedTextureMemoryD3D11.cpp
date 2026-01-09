@@ -134,8 +134,8 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
     DAWN_TRY_ASSIGN(properties, PropertiesFromD3D11Texture(device, d3d11Texture,
                                                            /*isSharedWithHandle=*/true));
 
-    auto result = AcquireRef(new SharedTextureMemory(
-        device, label, properties, std::move(d3d11Resource), /*requiresFenceSignal=*/true));
+    auto result =
+        AcquireRef(new SharedTextureMemory(device, label, properties, std::move(d3d11Resource)));
     result->Initialize();
     return result;
 }
@@ -161,9 +161,8 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
     DAWN_TRY_ASSIGN(properties, PropertiesFromD3D11Texture(device, descriptor->texture,
                                                            /*isSharedWithHandle=*/false));
 
-    auto result = AcquireRef(
-        new SharedTextureMemory(device, label, properties, std::move(d3d11Resource),
-                                /*requiresFenceSignal=*/descriptor->requiresEndAccessFence));
+    auto result =
+        AcquireRef(new SharedTextureMemory(device, label, properties, std::move(d3d11Resource)));
     result->Initialize();
     return result;
 }
@@ -171,11 +170,8 @@ ResultOrError<Ref<SharedTextureMemory>> SharedTextureMemory::Create(
 SharedTextureMemory::SharedTextureMemory(Device* device,
                                          StringView label,
                                          SharedTextureMemoryProperties properties,
-                                         ComPtr<ID3D11Resource> resource,
-                                         bool requiresFenceSignal)
-    : d3d::SharedTextureMemory(device, label, properties),
-      mResource(std::move(resource)),
-      mRequiresFenceSignal(requiresFenceSignal) {
+                                         ComPtr<ID3D11Resource> resource)
+    : d3d::SharedTextureMemory(device, label, properties), mResource(std::move(resource)) {
     ComPtr<IDXGIKeyedMutex> dxgiKeyedMutex;
     mResource.As(&dxgiKeyedMutex);
     if (dxgiKeyedMutex) {
@@ -183,7 +179,7 @@ SharedTextureMemory::SharedTextureMemory(Device* device,
     }
 }
 
-void SharedTextureMemory::DestroyImpl() {
+void SharedTextureMemory::DestroyImpl(DestroyReason reason) {
     mKeyedMutex = nullptr;
     mResource = nullptr;
 }
@@ -198,7 +194,46 @@ d3d::KeyedMutex* SharedTextureMemory::GetKeyedMutex() const {
 
 ResultOrError<Ref<TextureBase>> SharedTextureMemory::CreateTextureImpl(
     const UnpackedPtr<TextureDescriptor>& descriptor) {
-    return Texture::CreateFromSharedTextureMemory(this, descriptor, mRequiresFenceSignal);
+    return Texture::CreateFromSharedTextureMemory(this, descriptor);
+}
+
+Ref<SharedResourceMemoryContents> SharedTextureMemory::CreateContents() {
+    return AcquireRef(new SharedTextureMemoryContentsD3D11(GetWeakRef(this)));
+}
+
+MaybeError SharedTextureMemory::BeginAccessImpl(
+    TextureBase* texture,
+    const UnpackedPtr<SharedTextureMemoryBeginAccessDescriptor>& descriptor) {
+    DAWN_TRY(d3d::SharedTextureMemory::BeginAccessImpl(texture, descriptor));
+
+    auto* contents = static_cast<SharedTextureMemoryContentsD3D11*>(GetContents());
+
+    if (auto* d3d11beginState = descriptor.Get<SharedTextureMemoryD3D11BeginState>()) {
+        contents->mRequiresFenceSignal |= d3d11beginState->requiresEndAccessFence;
+    } else {
+        // If there is no SharedTextureMemoryD3D11BeginState, default to true
+        contents->mRequiresFenceSignal = true;
+    }
+
+    return {};
+}
+
+ResultOrError<FenceAndSignalValue> SharedTextureMemory::EndAccessImpl(
+    TextureBase* texture,
+    ExecutionSerial lastUsageSerial,
+    UnpackedPtr<SharedTextureMemoryEndAccessState>& descriptor) {
+    FenceAndSignalValue fenceAndSignalValue;
+
+    DAWN_TRY_ASSIGN(fenceAndSignalValue,
+                    d3d::SharedTextureMemory::EndAccessImpl(texture, lastUsageSerial, descriptor));
+
+    auto* contents = static_cast<SharedTextureMemoryContentsD3D11*>(GetContents());
+    if (!contents->HasAccess()) {
+        // Reset fence requirement flag.
+        contents->mRequiresFenceSignal = false;
+    }
+
+    return fenceAndSignalValue;
 }
 
 }  // namespace dawn::native::d3d11

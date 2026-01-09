@@ -8,7 +8,8 @@ int f() {
       if (all(equal(tint_loop_idx, uvec2(0u)))) {
         break;
       }
-      i = (i + 1);
+      uint v = uint(i);
+      i = int((v + uint(1)));
       if ((i > 4)) {
         return i;
       }
@@ -26,4 +27,5 @@ int f() {
 }
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
+  f();
 }

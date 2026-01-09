@@ -255,6 +255,7 @@ MTLPixelFormat MetalPixelFormat(const DeviceBase* device, wgpu::TextureFormat fo
             return MTLPixelFormatDepth32Float;
         case wgpu::TextureFormat::Depth24PlusStencil8:
         case wgpu::TextureFormat::Depth32FloatStencil8:
+            // Note we never use MTLPixelFormatDepth24Unorm_Stencil8 (doesn't exist on Apple GPUs).
             return MTLPixelFormatDepth32Float_Stencil8;
         case wgpu::TextureFormat::Depth16Unorm:
             return MTLPixelFormatDepth16Unorm;
@@ -308,6 +309,7 @@ MTLPixelFormat MetalPixelFormat(const DeviceBase* device, wgpu::TextureFormat fo
         case wgpu::TextureFormat::BC6HRGBUfloat:
         case wgpu::TextureFormat::BC7RGBAUnorm:
         case wgpu::TextureFormat::BC7RGBAUnormSrgb:
+            DAWN_UNREACHABLE();
 #endif
 
         case wgpu::TextureFormat::ETC2RGB8Unorm:
@@ -441,16 +443,13 @@ MTLPixelFormat MetalPixelFormat(const DeviceBase* device, wgpu::TextureFormat fo
     }
 }
 
-NSRef<NSString> MakeDebugName(DeviceBase* device, const char* prefix, std::string label) {
-    std::ostringstream objectNameStream;
-    objectNameStream << prefix;
-
+NSRef<NSString> MakeDebugName(DeviceBase* device, const char* prefix, std::string_view label) {
+    std::string objectName = prefix;
     if (!label.empty() && device->IsToggleEnabled(Toggle::UseUserDefinedLabelsInBackend)) {
-        objectNameStream << "_" << label;
+        objectName = absl::StrFormat("%s_%s", objectName, label);
     }
-    const std::string debugName = objectNameStream.str();
     NSRef<NSString> nsDebugName =
-        AcquireNSRef([[NSString alloc] initWithUTF8String:debugName.c_str()]);
+        AcquireNSRef([[NSString alloc] initWithUTF8String:objectName.c_str()]);
     return nsDebugName;
 }
 
@@ -460,9 +459,6 @@ Aspect GetDepthStencilAspects(MTLPixelFormat format) {
         case MTLPixelFormatDepth32Float:
             return Aspect::Depth;
 
-#if DAWN_PLATFORM_IS(MACOS)
-        case MTLPixelFormatDepth24Unorm_Stencil8:
-#endif
         case MTLPixelFormatDepth32Float_Stencil8:
             return Aspect::Depth | Aspect::Stencil;
 
@@ -470,6 +466,7 @@ Aspect GetDepthStencilAspects(MTLPixelFormat format) {
             return Aspect::Stencil;
 
         default:
+            // Note we never use MTLPixelFormatDepth24Unorm_Stencil8 (doesn't exist on Apple GPUs).
             DAWN_UNREACHABLE();
     }
 }
@@ -833,6 +830,10 @@ id<MTLTexture> CreateTextureMtlForPlane(MTLTextureUsage mtlUsage,
     return [device->GetMTLDevice() newTextureWithDescriptor:mtlDesc
                                                   iosurface:ioSurface
                                                       plane:plane];
+}
+
+bool SupportTextureComponentSwizzle(id<MTLDevice> device) {
+    return [device supportsFamily:MTLGPUFamilyMac2] || [device supportsFamily:MTLGPUFamilyApple2];
 }
 
 }  // namespace dawn::native::metal

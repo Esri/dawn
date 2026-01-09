@@ -56,6 +56,8 @@ class PhysicalDevice : public d3d::PhysicalDevice {
     Backend* GetBackend() const;
     ComPtr<ID3D12Device> GetDevice() const;
 
+    bool SupportsBufferMapExtendedUsages() const;
+
   private:
     using Base = d3d::PhysicalDevice;
 
@@ -82,10 +84,13 @@ class PhysicalDevice : public d3d::PhysicalDevice {
         wgpu::FeatureName feature,
         const TogglesState& toggles) const override;
 
+    MaybeError ValidateUseOfD3D12() const;
+
     MaybeError InitializeDebugLayerFilters();
     void CleanUpDebugLayerFilters();
 
-    void PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info) const override;
+    void PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
+                                   const TogglesState& adapterToggles) const override;
 
     ComPtr<ID3D12Device> mD3d12Device;
 

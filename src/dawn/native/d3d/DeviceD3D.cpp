@@ -33,6 +33,7 @@
 #include "dawn/native/d3d/Forward.h"
 #include "dawn/native/d3d/PhysicalDeviceD3D.h"
 #include "dawn/native/d3d/SharedFenceD3D.h"
+#include "dawn/platform/metrics/HistogramMacros.h"
 
 namespace dawn::native::d3d {
 
@@ -43,10 +44,10 @@ Device::Device(AdapterBase* adapter,
     : DeviceBase(adapter, descriptor, deviceToggles, std::move(lostEvent)) {}
 
 Device::~Device() {
-    Destroy();
+    Destroy(DestroyReason::CppDestructor);
 }
 
-void Device::DestroyImpl() {}
+void Device::DestroyImpl(DestroyReason reason) {}
 
 const PlatformFunctions* Device::GetFunctions() const {
     return ToBackend(GetPhysicalDevice())->GetBackend()->GetFunctions();
@@ -54,6 +55,10 @@ const PlatformFunctions* Device::GetFunctions() const {
 
 ComPtr<IDXGIFactory4> Device::GetFactory() const {
     return ToBackend(GetPhysicalDevice())->GetBackend()->GetFactory();
+}
+
+void Device::RecordDeviceRemovedReason(HRESULT result) {
+    DAWN_HISTOGRAM_SPARSE(GetPlatform(), "D3DDeviceRemovedReason", static_cast<int>(result));
 }
 
 }  // namespace dawn::native::d3d

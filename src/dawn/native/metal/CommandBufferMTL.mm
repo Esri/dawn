@@ -35,8 +35,10 @@
 #include "dawn/native/Commands.h"
 #include "dawn/native/DynamicUploader.h"
 #include "dawn/native/ExternalTexture.h"
+#include "dawn/native/ImmediateConstantsTracker.h"
 #include "dawn/native/Queue.h"
 #include "dawn/native/RenderBundle.h"
+#include "dawn/native/metal/BindGroupLayoutMTL.h"
 #include "dawn/native/metal/BindGroupMTL.h"
 #include "dawn/native/metal/BufferMTL.h"
 #include "dawn/native/metal/ComputePipelineMTL.h"
@@ -137,19 +139,19 @@ void SetSampleBufferAttachments(PassDescriptor* descriptor, BeginPass* cmd) {
     if (querySet == nullptr) {
         return;
     }
-        SampleBufferAttachment<PassDescriptor> sampleBufferAttachment;
-        sampleBufferAttachment.SetSampleBuffer(descriptor,
-                                               ToBackend(querySet)->GetCounterSampleBuffer());
-        uint32_t beginningOfPassWriteIndex = cmd->timestampWrites.beginningOfPassWriteIndex;
-        sampleBufferAttachment.SetStartSampleIndex(
-            descriptor, beginningOfPassWriteIndex != wgpu::kQuerySetIndexUndefined
-                            ? NSUInteger(beginningOfPassWriteIndex)
-                            : MTLCounterDontSample);
-        uint32_t endOfPassWriteIndex = cmd->timestampWrites.endOfPassWriteIndex;
-        sampleBufferAttachment.SetEndSampleIndex(
-            descriptor, endOfPassWriteIndex != wgpu::kQuerySetIndexUndefined
-                            ? NSUInteger(endOfPassWriteIndex)
-                            : MTLCounterDontSample);
+    SampleBufferAttachment<PassDescriptor> sampleBufferAttachment;
+    sampleBufferAttachment.SetSampleBuffer(descriptor,
+                                           ToBackend(querySet)->GetCounterSampleBuffer());
+    uint32_t beginningOfPassWriteIndex = cmd->timestampWrites.beginningOfPassWriteIndex;
+    sampleBufferAttachment.SetStartSampleIndex(
+        descriptor, beginningOfPassWriteIndex != wgpu::kQuerySetIndexUndefined
+                        ? NSUInteger(beginningOfPassWriteIndex)
+                        : MTLCounterDontSample);
+    uint32_t endOfPassWriteIndex = cmd->timestampWrites.endOfPassWriteIndex;
+    sampleBufferAttachment.SetEndSampleIndex(descriptor,
+                                             endOfPassWriteIndex != wgpu::kQuerySetIndexUndefined
+                                                 ? NSUInteger(endOfPassWriteIndex)
+                                                 : MTLCounterDontSample);
 }
 
 NSRef<MTLComputePassDescriptor> CreateMTLComputePassDescriptor(BeginComputePassCmd* computePass) {
@@ -159,7 +161,7 @@ NSRef<MTLComputePassDescriptor> CreateMTLComputePassDescriptor(BeginComputePassC
     MTLComputePassDescriptor* descriptor = descriptorRef.Get();
     // MTLDispatchTypeSerial is the same dispatch type as the deafult MTLComputeCommandEncoder.
     // MTLDispatchTypeConcurrent requires memory barriers to ensure multiple commands synchronize
-    // access to the same resources, which we may support it later.
+    // access to the same resources, which we may support it later. See crbug.com/425987598
     descriptor.dispatchType = MTLDispatchTypeSerial;
 
     SetSampleBufferAttachments(descriptor, computePass);
@@ -435,10 +437,10 @@ void EncodeEmptyBlitEncoderForWriteTimestamp(Device* device,
 
 // Metal uses a physical addressing mode which means buffers in the shading language are
 // just pointers to the virtual address of their start. This means there is no way to know
-// the length of a buffer to compute the length() of unsized arrays at the end of storage
-// buffers. Tint implements the length() of unsized arrays by requiring an extra
-// buffer that contains the length of other buffers. This structure that keeps track of the
-// length of storage buffers and can apply them to the reserved "buffer length buffer" when
+// the length of a buffer to compute the arrayLength() of unsized arrays at the end of storage
+// buffers. Tint implements the arrayLength() of unsized arrays by requiring immediate constants
+// that stores the length of other buffers. This structure that keeps track of the
+// length of storage buffers and apply them to the reserved "immediate blocks" when
 // needed for a draw or a dispatch.
 struct StorageBufferLengthTracker {
     wgpu::ShaderStage dirtyStages = wgpu::ShaderStage::None;
@@ -448,18 +450,34 @@ struct StorageBufferLengthTracker {
     // UBOs require we align the max buffer count to 4 elements (16 bytes).
     static constexpr size_t MaxBufferCount = ((kGenericMetalBufferSlots + 3) / 4) * 4;
     PerStage<std::array<uint32_t, MaxBufferCount>> data;
+    // The actual size in bytes of the buffer length data to upload for each shader stage.
+    // This is calculated as sizeof(uint32_t) * aligned_buffer_count and represents the
+    // number of bytes that need to be uploaded to the GPU buffer containing buffer lengths.
+    // This size accounts for the 4-element (16-byte) alignment requirement for UBOs.
+    PerStage<uint32_t> dataSize;
 
-    void Apply(id<MTLRenderCommandEncoder> render,
-               RenderPipeline* pipeline,
-               bool enableVertexPulling) {
-        wgpu::ShaderStage stagesToApply =
-            dirtyStages & pipeline->GetStagesRequiringStorageBufferLength();
-
-        if (stagesToApply == wgpu::ShaderStage::None) {
-            return;
+    // TODO(crbug.com/366291600): Remove this logic when merging
+    // StorageBufferLengthTracker in ImmediateConstantTracker.
+    void OnSetPipeline(RenderPipelineBase* pipeline) {
+        uint32_t immediateCount = pipeline->GetImmediateMask().count();
+        if (immediateCount != mLastImmediateCounts) {
+            mLastImmediateCounts = immediateCount;
+            dirtyStages |= (wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment);
         }
+    }
 
-        if (stagesToApply & wgpu::ShaderStage::Vertex) {
+    void OnSetPipeline(ComputePipelineBase* pipeline) {
+        uint32_t immediateCount = pipeline->GetImmediateMask().count();
+        if (immediateCount != mLastImmediateCounts) {
+            mLastImmediateCounts = immediateCount;
+            dirtyStages |= wgpu::ShaderStage::Compute;
+        }
+    }
+
+    // TODO(crbug.com/366291600): Remove unused storage buffer size in immediate block
+    // to avoid uploading unused data.
+    void Apply(RenderPipeline* pipeline, bool enableVertexPulling) {
+        if (dirtyStages & wgpu::ShaderStage::Vertex) {
             uint32_t bufferCount =
                 ToBackend(pipeline->GetLayout())->GetBufferBindingCount(SingleShaderStage::Vertex);
 
@@ -469,47 +487,166 @@ struct StorageBufferLengthTracker {
 
             bufferCount = Align(bufferCount, 4);
             DAWN_ASSERT(bufferCount <= data[SingleShaderStage::Vertex].size());
-
-            [render setVertexBytes:data[SingleShaderStage::Vertex].data()
-                            length:sizeof(uint32_t) * bufferCount
-                           atIndex:kBufferLengthBufferSlot];
+            dataSize[SingleShaderStage::Vertex] = sizeof(uint32_t) * bufferCount;
         }
 
-        if (stagesToApply & wgpu::ShaderStage::Fragment) {
-            uint32_t bufferCount = ToBackend(pipeline->GetLayout())
-                                       ->GetBufferBindingCount(SingleShaderStage::Fragment);
-            bufferCount = Align(bufferCount, 4);
+        if (dirtyStages & wgpu::ShaderStage::Fragment) {
+            uint32_t bufferCount = Align(ToBackend(pipeline->GetLayout())
+                                             ->GetBufferBindingCount(SingleShaderStage::Fragment),
+                                         4);
             DAWN_ASSERT(bufferCount <= data[SingleShaderStage::Fragment].size());
-
-            [render setFragmentBytes:data[SingleShaderStage::Fragment].data()
-                              length:sizeof(uint32_t) * bufferCount
-                             atIndex:kBufferLengthBufferSlot];
+            dataSize[SingleShaderStage::Fragment] = sizeof(uint32_t) * bufferCount;
         }
-
-        // Only mark clean stages that were actually applied.
-        dirtyStages ^= stagesToApply;
     }
 
-    void Apply(id<MTLComputeCommandEncoder> compute, ComputePipeline* pipeline) {
+    // TODO(crbug.com/366291600): Remove unused storage buffer size in immediate block
+    // to avoid uploading unused data.
+    void Apply(ComputePipeline* pipeline) {
         if (!(dirtyStages & wgpu::ShaderStage::Compute)) {
             return;
         }
 
-        if (!pipeline->RequiresStorageBufferLength()) {
+        uint32_t bufferCount = Align(
+            ToBackend(pipeline->GetLayout())->GetBufferBindingCount(SingleShaderStage::Compute), 4);
+        DAWN_ASSERT(bufferCount <= data[SingleShaderStage::Compute].size());
+        dataSize[SingleShaderStage::Compute] = sizeof(uint32_t) * bufferCount;
+    }
+
+    uint32_t mLastImmediateCounts;
+};
+
+// Template class that manages immediate constants for Metal backend.
+// This tracker combines immediate constant data with buffer length information,
+// uploading both to a single buffer that can be accessed by shaders.
+// Template parameter T should be either RenderImmediateConstantsTrackerBase
+// or ComputeImmediateConstantsTrackerBase.
+// TODO(crbug.com/366291600): Merge StorageBufferLength in ImmediateConstantTracker
+template <typename T, typename EncoderType>
+class ImmediateConstantTracker : public T {
+  public:
+    ImmediateConstantTracker() = default;
+
+    // Applies immediate constants and buffer length data to the Metal command encoder.
+    // This method uploads both immediate constant values and storage buffer lengths
+    // to a single buffer, with buffer lengths appended after immediate constants.
+    // The data is uploaded using setVertexBytes/setFragmentBytes for render passes
+    // or setBytes for compute passes.
+    void Apply(EncoderType encoder, StorageBufferLengthTracker* lengthTracker) {
+        DAWN_ASSERT(this->mLastPipeline != nullptr);
+
+        // Update the stored immediate constants that have changed
+        ImmediateConstantMask pipelineMask = this->mLastPipeline->GetImmediateMask();
+        ImmediateConstantMask uploadBits = this->mDirty & pipelineMask;
+        constexpr wgpu::ShaderStage stages =
+            kIsRenderImmediateConstants ? wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment
+                                        : wgpu::ShaderStage::Compute;
+        for (auto [offset, size] : IterateRanges(uploadBits)) {
+            uint32_t immediateContentStartOffset =
+                static_cast<uint32_t>(offset) * kImmediateConstantElementByteSize;
+            uint32_t immediateRangeStartOffset =
+                GetImmediateIndexInPipeline(static_cast<uint32_t>(offset), pipelineMask);
+            WriteImmediateBlocks(stages, immediateRangeStartOffset,
+                                 this->mContent.template Get<uint32_t>(immediateContentStartOffset),
+                                 size * kImmediateConstantElementByteSize);
+        }
+
+        // Calculate buffer sizes start offset based on ImmediateBlock layouts
+        // describes in PipelineLayoutMTL.h
+        // - must be 16-byte aligned for UBO requirements
+        uint32_t bufferSizeOffset =
+            RoundUp(pipelineMask.count() * kImmediateConstantElementByteSize, 16);
+
+        // Update storage buffer length data that are needed and changed.
+        for (auto stage : IterateStages(lengthTracker->dirtyStages)) {
+            WriteImmediateBlocks(StageBit(stage),
+                                 bufferSizeOffset / kImmediateConstantElementByteSize,
+                                 lengthTracker->data[stage].data(), lengthTracker->dataSize[stage]);
+        }
+
+        // Update per stage dirty size. lengthTracker always keeps last valid length of buffer
+        // sizes.
+        for (auto stage : IterateStages(stages)) {
+            dirtySize[stage] = bufferSizeOffset + lengthTracker->dataSize[stage];
+        }
+
+        // Reset StorageBufferLengthTracker dirty stages
+        lengthTracker->dirtyStages = wgpu::ShaderStage::None;
+
+        UploadImmediates(encoder);
+
+        // Reset all dirty bits after uploading.
+        this->mDirty.reset();
+    }
+
+  private:
+    static constexpr bool kIsRenderImmediateConstants =
+        std::is_same_v<T, RenderImmediateConstantsTrackerBase>;
+    static constexpr bool kIsComputeImmediateConstants =
+        std::is_same_v<T, ComputeImmediateConstantsTrackerBase>;
+
+    // The lengths of buffers are stored as 32bit integers because that is the width the
+    // MSL code generated by Tint expects.
+    // UBOs require we align the max buffer count to 4 elements (16 bytes).
+    static constexpr size_t MaxBufferCount = StorageBufferLengthTracker::MaxBufferCount;
+    static constexpr size_t kMaxImmediateBlockSize =
+        kMaxImmediateConstantsPerPipeline + MaxBufferCount;
+
+    // Writes data to the immediate block content for the specified shader stages.
+    // This is used for both immediate constants and storage buffer length data.
+    void WriteImmediateBlocks(wgpu::ShaderStage stages,
+                              uint32_t offset,
+                              const void* data,
+                              size_t size) {
+        DAWN_ASSERT(offset < kMaxImmediateBlockSize);
+        DAWN_ASSERT(size <= sizeof(uint32_t) * (kMaxImmediateBlockSize - offset));
+        // Copy data to all affected shader stages
+        for (auto stage : IterateStages(stages)) {
+            std::memcpy(&mImmediateBlockContent[stage][offset], data, size);
+        }
+        dirtyStages |= stages;
+    }
+
+    // Uploads the immediate block content to the Metal render encoder.
+    void UploadImmediates(id<MTLRenderCommandEncoder> renderEncoder) {
+        if (dirtyStages & wgpu::ShaderStage::Vertex) {
+            [renderEncoder setVertexBytes:mImmediateBlockContent[SingleShaderStage::Vertex].data()
+                                   length:dirtySize[SingleShaderStage::Vertex]
+                                  atIndex:kImmediateBlockBufferSlot];
+        }
+
+        if (dirtyStages & wgpu::ShaderStage::Fragment) {
+            [renderEncoder
+                setFragmentBytes:mImmediateBlockContent[SingleShaderStage::Fragment].data()
+                          length:dirtySize[SingleShaderStage::Fragment]
+                         atIndex:kImmediateBlockBufferSlot];
+        }
+
+        // Reset dirty stage.
+        dirtyStages = wgpu::ShaderStage::None;
+    }
+
+    // Uploads the immediate block content to the Metal compute encoder.
+    void UploadImmediates(id<MTLComputeCommandEncoder> computeEncoder) {
+        if (dirtyStages == wgpu::ShaderStage::None) {
             return;
         }
 
-        uint32_t bufferCount =
-            ToBackend(pipeline->GetLayout())->GetBufferBindingCount(SingleShaderStage::Compute);
-        bufferCount = Align(bufferCount, 4);
-        DAWN_ASSERT(bufferCount <= data[SingleShaderStage::Compute].size());
+        [computeEncoder setBytes:mImmediateBlockContent[SingleShaderStage::Compute].data()
+                          length:dirtySize[SingleShaderStage::Compute]
+                         atIndex:kImmediateBlockBufferSlot];
 
-        [compute setBytes:data[SingleShaderStage::Compute].data()
-                   length:sizeof(uint32_t) * bufferCount
-                  atIndex:kBufferLengthBufferSlot];
-
-        dirtyStages ^= wgpu::ShaderStage::Compute;
+        // Reset dirty stage.
+        dirtyStages = wgpu::ShaderStage::None;
     }
+
+    // Per-stage storage for the immediate block content.
+    // Each stage maintains its own copy of the data combining immediate constants
+    // and buffer length information in a single contiguous block.
+    PerStage<std::array<uint32_t, kMaxImmediateBlockSize>> mImmediateBlockContent;
+    // Size of data to upload for each shader stage (in bytes)
+    PerStage<size_t> dirtySize;
+    // Tracks which shader stages have dirty data that needs to be uploaded
+    wgpu::ShaderStage dirtyStages = wgpu::ShaderStage::None;
 };
 
 // Keeps track of the dirty bind groups so they can be lazily applied when we know the
@@ -518,16 +655,39 @@ struct StorageBufferLengthTracker {
 // texture tables in contiguous order.
 class BindGroupTracker : public BindGroupTrackerBase<true, uint64_t> {
   public:
-    explicit BindGroupTracker(StorageBufferLengthTracker* lengthTracker)
-        : BindGroupTrackerBase(), mLengthTracker(lengthTracker) {}
+    BindGroupTracker(StorageBufferLengthTracker* lengthTracker, bool useArgumentBuffers)
+        : BindGroupTrackerBase(),
+          mLengthTracker(lengthTracker),
+          mUseArgumentBuffers(useArgumentBuffers) {}
 
     template <typename Encoder>
     void Apply(Encoder encoder) {
         BeforeApply();
+
+        uint32_t curBufferIdx = kArgumentBufferSlotMax;
         for (BindGroupIndex index : mDirtyBindGroupsObjectChangedOrIsDynamic) {
-            ApplyBindGroup(encoder, index, ToBackend(mBindGroups[index]), mDynamicOffsets[index],
-                           ToBackend(mPipelineLayout));
+            BindGroup* group = ToBackend(mBindGroups[index]);
+            auto* layout = ToBackend(mPipelineLayout->GetBindGroupLayout(index));
+
+            if (mUseArgumentBuffers) {
+                // Note, this argument buffer index must match to the ShaderModuleMTL
+                // #argument-buffer-index
+                uint32_t argumentBufferIdx = curBufferIdx--;
+                std::optional<uint32_t> dynamicBufferIdx = std::nullopt;
+
+                // TODO(crbug.com/363031535): The dynamic offsets should all be in a single grouping
+                // which is in the immediates buffer.
+                if (uint32_t(layout->GetDynamicBufferCount()) > 0u) {
+                    dynamicBufferIdx = curBufferIdx--;
+                }
+                ApplyBindGroupWithArgumentBuffers(encoder, group, argumentBufferIdx,
+                                                  dynamicBufferIdx, GetDynamicOffsets(index));
+            } else {
+                ApplyBindGroup(encoder, index, group, GetDynamicOffsets(index),
+                               ToBackend(mPipelineLayout));
+            }
         }
+
         AfterApply();
     }
 
@@ -540,7 +700,7 @@ class BindGroupTracker : public BindGroupTrackerBase<true, uint64_t> {
                             id<MTLComputeCommandEncoder> compute,
                             BindGroupIndex index,
                             BindGroup* group,
-                            const ityp::vector<BindingIndex, uint64_t>& dynamicOffsets,
+                            const ityp::span<BindingIndex, uint64_t>& dynamicOffsets,
                             PipelineLayout* pipelineLayout) {
         // TODO(crbug.com/dawn/854): Maintain buffers and offsets arrays in BindGroup
         // so that we only have to do one setVertexBuffers and one setFragmentBuffers
@@ -578,16 +738,19 @@ class BindGroupTracker : public BindGroupTrackerBase<true, uint64_t> {
                 if (hasVertStage &&
                     mBoundTextures[SingleShaderStage::Vertex][vertIndex] != texture) {
                     mBoundTextures[SingleShaderStage::Vertex][vertIndex] = texture;
+
                     [render setVertexTexture:texture atIndex:vertIndex];
                 }
                 if (hasFragStage &&
                     mBoundTextures[SingleShaderStage::Fragment][fragIndex] != texture) {
                     mBoundTextures[SingleShaderStage::Fragment][fragIndex] = texture;
+
                     [render setFragmentTexture:texture atIndex:fragIndex];
                 }
                 if (hasComputeStage &&
                     mBoundTextures[SingleShaderStage::Compute][computeIndex] != texture) {
                     mBoundTextures[SingleShaderStage::Compute][computeIndex] = texture;
+
                     [compute setTexture:texture atIndex:computeIndex];
                 }
             };
@@ -602,6 +765,9 @@ class BindGroupTracker : public BindGroupTrackerBase<true, uint64_t> {
 
                     // TODO(crbug.com/dawn/854): Record bound buffer status to use
                     // setBufferOffset to achieve better performance.
+
+                    // TODO(crbug.com/363031535): The dynamic offsets should come from the immediate
+                    // buffer.
                     if (layout.hasDynamicOffset) {
                         // Dynamic buffers are packed at the front of BindingIndices.
                         offset += dynamicOffsets[bindingIndex];
@@ -658,15 +824,97 @@ class BindGroupTracker : public BindGroupTrackerBase<true, uint64_t> {
                 },
                 [&](const TextureBindingInfo&) { HandleTextureBinding(); },
                 [&](const StorageTextureBindingInfo&) { HandleTextureBinding(); },
-                [](const InputAttachmentBindingInfo&) { DAWN_UNREACHABLE(); });
+                [&](const TexelBufferBindingInfo&) {
+                    // Metal does not support texel buffers.
+                    // TODO(crbug/382544164): Prototype texel buffer feature
+                    DAWN_UNREACHABLE();
+                },
+                [](const InputAttachmentBindingInfo&) { DAWN_UNREACHABLE(); },
+                [](const ExternalTextureBindingInfo&) { DAWN_UNREACHABLE(); });
         }
     }
 
+    void ApplyBindGroupWithArgumentBuffersImpl(
+        id<MTLRenderCommandEncoder> render,
+        id<MTLComputeCommandEncoder> compute,
+        BindGroup* group,
+        uint32_t argumentBufferIdx,
+        std::optional<uint32_t> dynamicBufferIdx,
+        const ityp::span<BindingIndex, uint64_t>& dynamicOffsets) {
+        for (BindingIndex bindingIndex : Range(group->GetLayout()->GetBindingCount())) {
+            const BindingInfo& bindingInfo = group->GetLayout()->GetBindingInfo(bindingIndex);
+
+            MatchVariant(
+                bindingInfo.bindingLayout,
+                [&](const BufferBindingInfo& layout) {
+                    const BufferBinding& binding = group->GetBindingAsBufferBinding(bindingIndex);
+                    ToBackend(binding.buffer)->TrackUsage();
+                },
+                [&](const SamplerBindingInfo&) {},
+                [&](const StaticSamplerBindingInfo&) {
+                    // Static samplers are handled in the frontend.
+                    // TODO(crbug.com/dawn/2482): Implement static samplers in the
+                    // Metal backend.
+                    DAWN_CHECK(false);
+                },
+                [&](const TextureBindingInfo&) {},  //
+                [&](const StorageTextureBindingInfo&) {},
+                [&](const TexelBufferBindingInfo&) {
+                    // Metal does not support texel buffers.
+                    // TODO(crbug/382544164): Prototype texel buffer feature
+                    DAWN_CHECK(false);
+                },
+                [](const InputAttachmentBindingInfo&) { DAWN_CHECK(false); },
+                [](const ExternalTextureBindingInfo&) { DAWN_CHECK(false); });
+        }
+
+        uint32_t offset_size = uint32_t(dynamicOffsets.size());
+        if (render) {
+            [render setVertexBuffer:*(group->GetArgumentBuffer())
+                             offset:0
+                            atIndex:argumentBufferIdx];
+
+            [render setFragmentBuffer:*(group->GetArgumentBuffer())
+                               offset:0
+                              atIndex:argumentBufferIdx];
+
+            if (offset_size > 0) {
+                DAWN_ASSERT(dynamicBufferIdx.has_value());
+                [render setVertexBytes:dynamicOffsets.data()
+                                length:offset_size * sizeof(uint32_t)
+                               atIndex:dynamicBufferIdx.value()];
+
+                [render setFragmentBytes:dynamicOffsets.data()
+                                  length:offset_size * sizeof(uint32_t)
+                                 atIndex:dynamicBufferIdx.value()];
+            }
+        } else {
+            DAWN_ASSERT(compute != nullptr);
+
+            [compute setBuffer:*(group->GetArgumentBuffer()) offset:0 atIndex:argumentBufferIdx];
+
+            if (offset_size > 0) {
+                DAWN_ASSERT(dynamicBufferIdx.has_value());
+                [compute setBytes:dynamicOffsets.data()
+                           length:offset_size * sizeof(uint32_t)
+                          atIndex:dynamicBufferIdx.value()];
+            }
+        }
+    }
+
+    template <typename... Args>
+    void ApplyBindGroupWithArgumentBuffers(id<MTLRenderCommandEncoder> encoder, Args&&... args) {
+        ApplyBindGroupWithArgumentBuffersImpl(encoder, nullptr, std::forward<Args&&>(args)...);
+    }
     template <typename... Args>
     void ApplyBindGroup(id<MTLRenderCommandEncoder> encoder, Args&&... args) {
         ApplyBindGroupImpl(encoder, nullptr, std::forward<Args&&>(args)...);
     }
 
+    template <typename... Args>
+    void ApplyBindGroupWithArgumentBuffers(id<MTLComputeCommandEncoder> encoder, Args&&... args) {
+        ApplyBindGroupWithArgumentBuffersImpl(nullptr, encoder, std::forward<Args&&>(args)...);
+    }
     template <typename... Args>
     void ApplyBindGroup(id<MTLComputeCommandEncoder> encoder, Args&&... args) {
         ApplyBindGroupImpl(nullptr, encoder, std::forward<Args&&>(args)...);
@@ -679,6 +927,8 @@ class BindGroupTracker : public BindGroupTrackerBase<true, uint64_t> {
     // texture/sampler is bound in Metal and the Metal runtime will keep them alive.
     PerStage<absl::flat_hash_map<uint32_t, id<MTLTexture>>> mBoundTextures;
     PerStage<absl::flat_hash_map<uint32_t, id<MTLSamplerState>>> mBoundSamplers;
+
+    bool mUseArgumentBuffers = false;
 };
 
 // Keeps track of the dirty vertex buffer values so they can be lazily applied when we know
@@ -923,7 +1173,8 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
                     commandContext->EndCompute();
                 }
 
-                LazyClearRenderPassAttachments(cmd);
+                Device* device = ToBackend(GetDevice());
+                LazyClearRenderPassAttachments(device, cmd);
                 if (cmd->attachmentState->HasDepthStencilAttachment() &&
                     ToBackend(cmd->depthStencilAttachment.view->GetTexture())
                         ->ShouldKeepInitialized()) {
@@ -933,7 +1184,6 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
                     cmd->depthStencilAttachment.depthStoreOp = wgpu::StoreOp::Store;
                     cmd->depthStencilAttachment.stencilStoreOp = wgpu::StoreOp::Store;
                 }
-                Device* device = ToBackend(GetDevice());
                 NSRef<MTLRenderPassDescriptor> descriptor = CreateMTLRenderPassDescriptor(
                     device, cmd, device->UseCounterSamplingAtStageBoundary());
 
@@ -986,8 +1236,7 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
 
             case Command::CopyBufferToTexture: {
                 CopyBufferToTextureCmd* copy = mCommands.NextCommand<CopyBufferToTextureCmd>();
-                if (copy->copySize.width == 0 || copy->copySize.height == 0 ||
-                    copy->copySize.depthOrArrayLayers == 0) {
+                if (copy->copySize.IsEmpty()) {
                     // Skip no-op copies.
                     continue;
                 }
@@ -996,23 +1245,25 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
                 auto& copySize = copy->copySize;
                 Buffer* buffer = ToBackend(src.buffer.Get());
                 Texture* texture = ToBackend(dst.texture.Get());
+                const TypedTexelBlockInfo& blockInfo = GetBlockInfo(dst);
 
                 buffer->EnsureDataInitialized(commandContext);
-                DAWN_TRY(
-                    EnsureDestinationTextureInitialized(commandContext, texture, dst, copySize));
+                DAWN_TRY(EnsureDestinationTextureInitialized(commandContext, texture, dst,
+                                                             copySize.ToExtent3D()));
 
                 buffer->TrackUsage();
                 texture->SynchronizeTextureBeforeUse(commandContext);
                 RecordCopyBufferToTexture(commandContext, buffer->GetMTLBuffer(), buffer->GetSize(),
-                                          src.offset, src.bytesPerRow, src.rowsPerImage, texture,
-                                          dst.mipLevel, dst.origin, dst.aspect, copySize);
+                                          src.offset, blockInfo.ToBytes(src.blocksPerRow),
+                                          static_cast<uint32_t>(src.rowsPerImage), texture,
+                                          dst.mipLevel, dst.origin.ToOrigin3D(), dst.aspect,
+                                          copySize.ToExtent3D());
                 break;
             }
 
             case Command::CopyTextureToBuffer: {
                 CopyTextureToBufferCmd* copy = mCommands.NextCommand<CopyTextureToBufferCmd>();
-                if (copy->copySize.width == 0 || copy->copySize.height == 0 ||
-                    copy->copySize.depthOrArrayLayers == 0) {
+                if (copy->copySize.IsEmpty()) {
                     // Skip no-op copies.
                     continue;
                 }
@@ -1021,6 +1272,7 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
                 auto& copySize = copy->copySize;
                 Texture* texture = ToBackend(src.texture.Get());
                 Buffer* buffer = ToBackend(dst.buffer.Get());
+                const TypedTexelBlockInfo& blockInfo = GetBlockInfo(src);
 
                 buffer->EnsureDataInitializedAsDestination(commandContext, copy);
 
@@ -1030,8 +1282,9 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
                 buffer->TrackUsage();
 
                 TextureBufferCopySplit splitCopies = ComputeTextureBufferCopySplit(
-                    texture, src.mipLevel, src.origin, copySize, buffer->GetSize(), dst.offset,
-                    dst.bytesPerRow, dst.rowsPerImage, src.aspect);
+                    texture, src.mipLevel, src.origin.ToOrigin3D(), copySize.ToExtent3D(),
+                    buffer->GetSize(), dst.offset, blockInfo.ToBytes(dst.blocksPerRow),
+                    static_cast<uint32_t>(dst.rowsPerImage), src.aspect);
 
                 for (const auto& copyInfo : splitCopies) {
                     MTLBlitOption blitOption = texture->ComputeMTLBlitOption(src.aspect);
@@ -1108,8 +1361,7 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
 
             case Command::CopyTextureToTexture: {
                 CopyTextureToTextureCmd* copy = mCommands.NextCommand<CopyTextureToTextureCmd>();
-                if (copy->copySize.width == 0 || copy->copySize.height == 0 ||
-                    copy->copySize.depthOrArrayLayers == 0) {
+                if (copy->copySize.IsEmpty()) {
                     // Skip no-op copies.
                     continue;
                 }
@@ -1120,11 +1372,12 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
                 dstTexture->SynchronizeTextureBeforeUse(commandContext);
                 DAWN_TRY(srcTexture->EnsureSubresourceContentInitialized(
                     commandContext, GetSubresourcesAffectedByCopy(copy->source, copy->copySize)));
-                DAWN_TRY(EnsureDestinationTextureInitialized(commandContext, dstTexture,
-                                                             copy->destination, copy->copySize));
+                DAWN_TRY(EnsureDestinationTextureInitialized(
+                    commandContext, dstTexture, copy->destination, copy->copySize.ToExtent3D()));
 
                 const MTLSize sizeOneSlice =
-                    MTLSizeMake(copy->copySize.width, copy->copySize.height, 1);
+                    MTLSizeMake(static_cast<uint32_t>(copy->copySize.width),
+                                static_cast<uint32_t>(copy->copySize.height), 1);
 
                 uint32_t sourceLayer = 0;
                 uint32_t sourceOriginZ = 0;
@@ -1147,9 +1400,9 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
                 }
 
                 // TODO(crbug.com/dawn/782): Do a single T2T copy if both are 1D or 3D.
-                for (uint32_t z = 0; z < copy->copySize.depthOrArrayLayers; ++z) {
-                    *sourceZPtr = copy->source.origin.z + z;
-                    *destinationZPtr = copy->destination.origin.z + z;
+                for (TexelCount z{0}; z < copy->copySize.depthOrArrayLayers; ++z) {
+                    *sourceZPtr = static_cast<uint32_t>(copy->source.origin.z + z);
+                    *destinationZPtr = static_cast<uint32_t>(copy->destination.origin.z + z);
 
                     // Hold the ref until out of scope
                     NSPRef<id<MTLTexture>> dstTextureView =
@@ -1159,15 +1412,18 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
                           copyFromTexture:srcTexture->GetMTLTexture(copy->source.aspect)
                               sourceSlice:sourceLayer
                               sourceLevel:copy->source.mipLevel
-                             sourceOrigin:MTLOriginMake(copy->source.origin.x,
-                                                        copy->source.origin.y, sourceOriginZ)
+                             sourceOrigin:MTLOriginMake(
+                                              static_cast<uint32_t>(copy->source.origin.x),
+                                              static_cast<uint32_t>(copy->source.origin.y),
+                                              sourceOriginZ)
                                sourceSize:sizeOneSlice
                                 toTexture:dstTextureView.Get()
                          destinationSlice:destinationLayer
                          destinationLevel:copy->destination.mipLevel
-                        destinationOrigin:MTLOriginMake(copy->destination.origin.x,
-                                                        copy->destination.origin.y,
-                                                        destinationOriginZ)];
+                        destinationOrigin:MTLOriginMake(
+                                              static_cast<uint32_t>(copy->destination.origin.x),
+                                              static_cast<uint32_t>(copy->destination.origin.y),
+                                              destinationOriginZ)];
                 }
                 break;
             }
@@ -1234,12 +1490,12 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
                                                             cmd);
 
                 } else {
-                        DAWN_ASSERT(ToBackend(GetDevice())->UseCounterSamplingAtCommandBoundary());
-                        [commandContext->EnsureBlit()
-                            sampleCountersInBuffer:ToBackend(cmd->querySet.Get())
-                                                       ->GetCounterSampleBuffer()
-                                     atSampleIndex:NSUInteger(cmd->queryIndex)
-                                       withBarrier:YES];
+                    DAWN_ASSERT(ToBackend(GetDevice())->UseCounterSamplingAtCommandBoundary());
+                    [commandContext->EnsureBlit()
+                        sampleCountersInBuffer:ToBackend(cmd->querySet.Get())
+                                                   ->GetCounterSampleBuffer()
+                                 atSampleIndex:NSUInteger(cmd->queryIndex)
+                                   withBarrier:YES];
                 }
 
                 break;
@@ -1296,6 +1552,11 @@ MaybeError CommandBuffer::FillCommands(CommandRecordingContext* commandContext) 
                 break;
             }
 
+            case Command::SetResourceTable: {
+                // TODO(https://issues.chromium.org/473444514): Add support for resource tables.
+                return DAWN_UNIMPLEMENTED_ERROR("SetResourceTable unimplemented.");
+            }
+
             default:
                 DAWN_UNREACHABLE();
         }
@@ -1310,7 +1571,8 @@ MaybeError CommandBuffer::EncodeComputePass(CommandRecordingContext* commandCont
                                             BeginComputePassCmd* computePassCmd) {
     ComputePipeline* lastPipeline = nullptr;
     StorageBufferLengthTracker storageBufferLengths = {};
-    BindGroupTracker bindGroups(&storageBufferLengths);
+    BindGroupTracker bindGroups(&storageBufferLengths,
+                                GetDevice()->IsToggleEnabled(Toggle::MetalUseArgumentBuffers));
 
     id<MTLComputeCommandEncoder> encoder;
     // When counter sampling is supported at stage boundary, begin a configurable compute pass
@@ -1324,21 +1586,23 @@ MaybeError CommandBuffer::EncodeComputePass(CommandRecordingContext* commandCont
     } else {
         encoder = commandContext->BeginCompute();
 
-            if (computePassCmd->timestampWrites.beginningOfPassWriteIndex !=
-                wgpu::kQuerySetIndexUndefined) {
-                DAWN_ASSERT(ToBackend(GetDevice())->UseCounterSamplingAtCommandBoundary());
+        if (computePassCmd->timestampWrites.beginningOfPassWriteIndex !=
+            wgpu::kQuerySetIndexUndefined) {
+            DAWN_ASSERT(ToBackend(GetDevice())->UseCounterSamplingAtCommandBoundary());
 
-                [encoder
-                    sampleCountersInBuffer:ToBackend(computePassCmd->timestampWrites.querySet.Get())
-                                               ->GetCounterSampleBuffer()
-                             atSampleIndex:NSUInteger(computePassCmd->timestampWrites
-                                                          .beginningOfPassWriteIndex)
-                               withBarrier:YES];
-            }
+            [encoder
+                sampleCountersInBuffer:ToBackend(computePassCmd->timestampWrites.querySet.Get())
+                                           ->GetCounterSampleBuffer()
+                         atSampleIndex:NSUInteger(computePassCmd->timestampWrites
+                                                      .beginningOfPassWriteIndex)
+                           withBarrier:YES];
+        }
     }
     SetDebugName(GetDevice(), encoder, "Dawn_ComputePassEncoder", computePassCmd->label);
 
     Command type;
+    ImmediateConstantTracker<ComputeImmediateConstantsTrackerBase, id<MTLComputeCommandEncoder>>
+        immediates = {};
     while (mCommands.NextCommandId(&type)) {
         switch (type) {
             case Command::EndComputePass: {
@@ -1373,7 +1637,8 @@ MaybeError CommandBuffer::EncodeComputePass(CommandRecordingContext* commandCont
                 }
 
                 bindGroups.Apply(encoder);
-                storageBufferLengths.Apply(encoder, lastPipeline);
+                storageBufferLengths.Apply(lastPipeline);
+                immediates.Apply(encoder, &storageBufferLengths);
 
                 [encoder dispatchThreadgroups:MTLSizeMake(dispatch->x, dispatch->y, dispatch->z)
                         threadsPerThreadgroup:lastPipeline->GetLocalWorkGroupSize()];
@@ -1384,7 +1649,8 @@ MaybeError CommandBuffer::EncodeComputePass(CommandRecordingContext* commandCont
                 DispatchIndirectCmd* dispatch = mCommands.NextCommand<DispatchIndirectCmd>();
 
                 bindGroups.Apply(encoder);
-                storageBufferLengths.Apply(encoder, lastPipeline);
+                storageBufferLengths.Apply(lastPipeline);
+                immediates.Apply(encoder, &storageBufferLengths);
 
                 Buffer* buffer = ToBackend(dispatch->indirectBuffer.Get());
                 buffer->TrackUsage();
@@ -1401,6 +1667,8 @@ MaybeError CommandBuffer::EncodeComputePass(CommandRecordingContext* commandCont
                 lastPipeline = ToBackend(cmd->pipeline).Get();
 
                 bindGroups.OnSetPipeline(lastPipeline);
+                immediates.OnSetPipeline(lastPipeline);
+                storageBufferLengths.OnSetPipeline(lastPipeline);
 
                 lastPipeline->Encode(encoder);
                 break;
@@ -1415,6 +1683,13 @@ MaybeError CommandBuffer::EncodeComputePass(CommandRecordingContext* commandCont
 
                 bindGroups.OnSetBindGroup(cmd->index, ToBackend(cmd->group.Get()),
                                           cmd->dynamicOffsetCount, dynamicOffsets);
+                break;
+            }
+
+            case Command::SetImmediates: {
+                SetImmediatesCmd* cmd = mCommands.NextCommand<SetImmediatesCmd>();
+                uint8_t* value = mCommands.NextData<uint8_t>(cmd->size);
+                immediates.SetImmediates(cmd->offset, value, cmd->size);
                 break;
             }
 
@@ -1454,9 +1729,6 @@ MaybeError CommandBuffer::EncodeComputePass(CommandRecordingContext* commandCont
                 break;
             }
 
-            case Command::SetImmediateData:
-                return DAWN_UNIMPLEMENTED_ERROR("SetImmediateData unimplemented");
-
             default: {
                 DAWN_UNREACHABLE();
                 break;
@@ -1485,7 +1757,8 @@ MaybeError CommandBuffer::EncodeRenderPass(
 
     StorageBufferLengthTracker storageBufferLengths = {};
     VertexBufferTracker vertexBuffers(&storageBufferLengths);
-    BindGroupTracker bindGroups(&storageBufferLengths);
+    BindGroupTracker bindGroups(&storageBufferLengths,
+                                GetDevice()->IsToggleEnabled(Toggle::MetalUseArgumentBuffers));
 
     // Simulate timestamp write at the beginning of render pass by
     // sampleCountersInBuffer if it does not support counter sampling at stage boundary.
@@ -1503,6 +1776,12 @@ MaybeError CommandBuffer::EncodeRenderPass(
 
     SetDebugName(GetDevice(), encoder, "Dawn_RenderPassEncoder", renderPassCmd->label);
 
+    ImmediateConstantTracker<RenderImmediateConstantsTrackerBase, id<MTLRenderCommandEncoder>>
+        immediates = {};
+
+    // Apply default frag depth
+    immediates.SetClampFragDepth(0.0, 1.0);
+
     auto EncodeRenderBundleCommand = [&](CommandIterator* iter, Command type) {
         switch (type) {
             case Command::Draw: {
@@ -1510,7 +1789,8 @@ MaybeError CommandBuffer::EncodeRenderPass(
 
                 vertexBuffers.Apply(encoder, lastPipeline, enableVertexPulling);
                 bindGroups.Apply(encoder);
-                storageBufferLengths.Apply(encoder, lastPipeline, enableVertexPulling);
+                storageBufferLengths.Apply(lastPipeline, enableVertexPulling);
+                immediates.Apply(encoder, &storageBufferLengths);
 
                 // The instance count must be non-zero, otherwise no-op
                 if (draw->instanceCount != 0) {
@@ -1538,7 +1818,8 @@ MaybeError CommandBuffer::EncodeRenderPass(
 
                 vertexBuffers.Apply(encoder, lastPipeline, enableVertexPulling);
                 bindGroups.Apply(encoder);
-                storageBufferLengths.Apply(encoder, lastPipeline, enableVertexPulling);
+                storageBufferLengths.Apply(lastPipeline, enableVertexPulling);
+                immediates.Apply(encoder, &storageBufferLengths);
 
                 // The index and instance count must be non-zero, otherwise no-op
                 if (draw->indexCount != 0 && draw->instanceCount != 0) {
@@ -1574,7 +1855,8 @@ MaybeError CommandBuffer::EncodeRenderPass(
 
                 vertexBuffers.Apply(encoder, lastPipeline, enableVertexPulling);
                 bindGroups.Apply(encoder);
-                storageBufferLengths.Apply(encoder, lastPipeline, enableVertexPulling);
+                storageBufferLengths.Apply(lastPipeline, enableVertexPulling);
+                immediates.Apply(encoder, &storageBufferLengths);
 
                 Buffer* buffer = ToBackend(draw->indirectBuffer.Get());
                 buffer->TrackUsage();
@@ -1591,7 +1873,8 @@ MaybeError CommandBuffer::EncodeRenderPass(
 
                 vertexBuffers.Apply(encoder, lastPipeline, enableVertexPulling);
                 bindGroups.Apply(encoder);
-                storageBufferLengths.Apply(encoder, lastPipeline, enableVertexPulling);
+                storageBufferLengths.Apply(lastPipeline, enableVertexPulling);
+                immediates.Apply(encoder, &storageBufferLengths);
 
                 Buffer* buffer = ToBackend(draw->indirectBuffer.Get());
                 DAWN_ASSERT(buffer != nullptr);
@@ -1613,7 +1896,8 @@ MaybeError CommandBuffer::EncodeRenderPass(
 
                 vertexBuffers.Apply(encoder, lastPipeline, enableVertexPulling);
                 bindGroups.Apply(encoder);
-                storageBufferLengths.Apply(encoder, lastPipeline, enableVertexPulling);
+                storageBufferLengths.Apply(lastPipeline, enableVertexPulling);
+                immediates.Apply(encoder, &storageBufferLengths);
 
                 ExecuteMultiDraw(multiDrawExecutions[multiDrawIndex], encoder);
                 multiDrawIndex++;
@@ -1624,7 +1908,8 @@ MaybeError CommandBuffer::EncodeRenderPass(
 
                 vertexBuffers.Apply(encoder, lastPipeline, enableVertexPulling);
                 bindGroups.Apply(encoder);
-                storageBufferLengths.Apply(encoder, lastPipeline, enableVertexPulling);
+                storageBufferLengths.Apply(lastPipeline, enableVertexPulling);
+                immediates.Apply(encoder, &storageBufferLengths);
 
                 ExecuteMultiDraw(multiDrawExecutions[multiDrawIndex], encoder);
                 multiDrawIndex++;
@@ -1665,6 +1950,8 @@ MaybeError CommandBuffer::EncodeRenderPass(
 
                 vertexBuffers.OnSetPipeline(lastPipeline, newPipeline);
                 bindGroups.OnSetPipeline(newPipeline);
+                immediates.OnSetPipeline(newPipeline);
+                storageBufferLengths.OnSetPipeline(newPipeline);
 
                 [encoder setDepthStencilState:newPipeline->GetMTLDepthStencilState()];
                 [encoder setFrontFacingWinding:newPipeline->GetMTLFrontFace()];
@@ -1673,13 +1960,11 @@ MaybeError CommandBuffer::EncodeRenderPass(
                            slopeScale:newPipeline->GetDepthBiasSlopeScale()
                                 clamp:newPipeline->GetDepthBiasClamp()];
 
-                // When using @builtin(frag_depth) we need to clamp to the viewport, otherwise
+                // When using and unclipped depth we need to clamp to the viewport, otherwise
                 // Metal writes the raw value to the depth buffer, which doesn't match other
                 // APIs.
                 MTLDepthClipMode clipMode =
-                    (newPipeline->UsesFragDepth() || newPipeline->HasUnclippedDepth())
-                        ? MTLDepthClipModeClamp
-                        : MTLDepthClipModeClip;
+                    newPipeline->HasUnclippedDepth() ? MTLDepthClipModeClamp : MTLDepthClipModeClip;
                 [encoder setDepthClipMode:clipMode];
 
                 newPipeline->Encode(encoder);
@@ -1697,6 +1982,13 @@ MaybeError CommandBuffer::EncodeRenderPass(
 
                 bindGroups.OnSetBindGroup(cmd->index, ToBackend(cmd->group.Get()),
                                           cmd->dynamicOffsetCount, dynamicOffsets);
+                break;
+            }
+
+            case Command::SetImmediates: {
+                SetImmediatesCmd* cmd = mCommands.NextCommand<SetImmediatesCmd>();
+                uint8_t* value = mCommands.NextData<uint8_t>(cmd->size);
+                immediates.SetImmediates(cmd->offset, value, cmd->size);
                 break;
             }
 
@@ -1765,6 +2057,10 @@ MaybeError CommandBuffer::EncodeRenderPass(
                 viewport.height = cmd->height;
                 viewport.znear = cmd->minDepth;
                 viewport.zfar = cmd->maxDepth;
+
+                // Try applying the immediate data that contain min/maxDepth immediately. This can
+                // be deferred if no pipeline is currently bound.
+                immediates.SetClampFragDepth(cmd->minDepth, cmd->maxDepth);
 
                 [encoder setViewport:viewport];
                 break;
@@ -1846,9 +2142,6 @@ MaybeError CommandBuffer::EncodeRenderPass(
 
                 break;
             }
-
-            case Command::SetImmediateData:
-                return DAWN_UNIMPLEMENTED_ERROR("SetImmediateData unimplemented");
 
             default: {
                 EncodeRenderBundleCommand(&mCommands, type);

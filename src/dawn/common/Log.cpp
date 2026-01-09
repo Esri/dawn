@@ -25,6 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/439062058): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "dawn/common/Log.h"
 
 #include <cstdio>
@@ -62,7 +67,7 @@ const char* SeverityName(LogSeverity severity) {
 }
 #endif
 
-#if DAWN_PLATFORM_IS(ANDROID)
+#if DAWN_PLATFORM_IS(ANDROID) && !defined(DAWN_DISABLE_LOGGING)
 android_LogPriority AndroidLogPriority(LogSeverity severity) {
     switch (severity) {
         case LogSeverity::Debug:
@@ -78,7 +83,7 @@ android_LogPriority AndroidLogPriority(LogSeverity severity) {
             return ANDROID_LOG_ERROR;
     }
 }
-#endif  // DAWN_PLATFORM_IS(ANDROID)
+#endif  // DAWN_PLATFORM_IS(ANDROID) && !defined(DAWN_DISABLE_LOGGING)
 
 }  // anonymous namespace
 

@@ -34,17 +34,19 @@ int idx6() {
   v = (v - 1u);
   return 2;
 }
-void v_2() {
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+void main() {
   {
     uvec2 tint_loop_idx = uvec2(4294967295u);
-    int v_3 = idx1();
-    int v_4 = idx2();
-    uint v_5 = (uint(v_1.inner.length()) - 1u);
-    uint v_6 = min(uint(v_3), v_5);
-    uint v_7 = min(uint(v_4), 3u);
-    int v_8 = idx3();
-    int v_9 = (v_1.inner[v_6].a[v_7][min(uint(v_8), 3u)] - 1);
-    v_1.inner[v_6].a[v_7][min(uint(v_8), 3u)] = v_9;
+    int v_2 = idx1();
+    int v_3 = idx2();
+    uint v_4 = (uint(v_1.inner.length()) - 1u);
+    uint v_5 = min(uint(v_2), v_4);
+    uint v_6 = min(uint(v_3), 3u);
+    int v_7 = idx3();
+    uint v_8 = uint(v_1.inner[v_5].a[v_6][min(uint(v_7), 3u)]);
+    int v_9 = int((v_8 - uint(1)));
+    v_1.inner[v_5].a[v_6][min(uint(v_7), 3u)] = v_9;
     while(true) {
       if (all(equal(tint_loop_idx, uvec2(0u)))) {
         break;
@@ -64,13 +66,11 @@ void v_2() {
         uint v_13 = min(uint(v_10), v_12);
         uint v_14 = min(uint(v_11), 3u);
         int v_15 = idx6();
-        int v_16 = (v_1.inner[v_13].a[v_14][min(uint(v_15), 3u)] - 1);
-        v_1.inner[v_13].a[v_14][min(uint(v_15), 3u)] = v_16;
+        uint v_16 = uint(v_1.inner[v_13].a[v_14][min(uint(v_15), 3u)]);
+        int v_17 = int((v_16 - uint(1)));
+        v_1.inner[v_13].a[v_14][min(uint(v_15), 3u)] = v_17;
       }
       continue;
     }
   }
-}
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-void main() {
 }

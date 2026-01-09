@@ -416,14 +416,20 @@ class CopyTests_WithFormatParam : public CopyTests,
         return requiredFeatures;
     }
 
+    void GetRequiredLimits(const dawn::utils::ComboLimits& supported,
+                           dawn::utils::ComboLimits& required) override {
+        // Some backends use compute shaders to implement copies. Adjust storage buffers' alignment
+        // to make sure the copies still work with non-default alignments.
+        required.minStorageBufferOffsetAlignment = supported.minStorageBufferOffsetAlignment;
+    }
+
     uint32_t GetTextureBytesPerRowAlignment() const {
         if (!device.HasFeature(wgpu::FeatureName::DawnTexelCopyBufferRowAlignment)) {
             return kTextureBytesPerRowAlignment;
         }
-        wgpu::Limits limits{};
+        dawn::utils::ComboLimits limits;
         wgpu::DawnTexelCopyBufferRowAlignmentLimits alignmentLimits{};
-        limits.nextInChain = &alignmentLimits;
-        device.GetLimits(&limits);
+        device.GetLimits(limits.GetLinked(&alignmentLimits));
         return alignmentLimits.minTexelCopyBufferRowAlignment;
     }
     BufferSpec MinimumBufferSpec(uint32_t width, uint32_t height, uint32_t depth = 1) {
@@ -457,10 +463,6 @@ class CopyTests_T2B : public CopyTests_WithFormatParam {
 
         auto format = GetParam().mTextureFormat;
 
-        // TODO(dawn:2129): Fail for Win ANGLE D3D11
-        DAWN_SUPPRESS_TEST_IF((format == wgpu::TextureFormat::RGB9E5Ufloat) && IsANGLED3D11() &&
-                              IsWindows());
-
         // TODO(crbug.com/dawn/2294): diagnose BGRA T2B failures on Pixel 4 OpenGLES
         DAWN_SUPPRESS_TEST_IF(format == wgpu::TextureFormat::BGRA8Unorm && IsOpenGLES() &&
                               IsAndroid() && IsQualcomm());
@@ -472,6 +474,12 @@ class CopyTests_T2B : public CopyTests_WithFormatParam {
                                format == wgpu::TextureFormat::RGBA16Float ||
                                format == wgpu::TextureFormat::RG11B10Ufloat) &&
                               IsMacOS() && IsIntel() && IsMetal());
+        DAWN_SUPPRESS_TEST_IF((format == wgpu::TextureFormat::R32Float ||
+                               format == wgpu::TextureFormat::RG32Float ||
+                               format == wgpu::TextureFormat::RGBA32Float ||
+                               format == wgpu::TextureFormat::RGBA16Float ||
+                               format == wgpu::TextureFormat::RG11B10Ufloat) &&
+                              IsMacOS() && IsIntel() && IsWebGPUOn(wgpu::BackendType::Metal));
 
         // TODO(dawn:1935): Many 16 float formats tests failing for D3D11 and OpenGLES backends on
         // Intel Gen12.
@@ -479,6 +487,9 @@ class CopyTests_T2B : public CopyTests_WithFormatParam {
                                format == wgpu::TextureFormat::RGBA16Float ||
                                format == wgpu::TextureFormat::RG11B10Ufloat) &&
                               (IsD3D11() || IsOpenGLES()) && IsIntelGen12());
+
+        // TODO(crbug.com/463661449): Flaky on Snapdragon X Elite SoCs w/ D3D11.
+        DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm() && IsD3D11());
     }
 
     void DoTest(
@@ -958,10 +969,6 @@ class CopyTests_T2T : public CopyTests_T2TBase<DawnTestWithParams<CopyTextureFor
 
     void SetUp() override {
         DawnTestWithParams<CopyTextureFormatParams>::SetUp();
-
-        // TODO(dawn:2129): Fail for Win ANGLE D3D11
-        DAWN_SUPPRESS_TEST_IF((GetParam().mTextureFormat == wgpu::TextureFormat::RGB9E5Ufloat) &&
-                              IsANGLED3D11() && IsWindows());
     }
 };
 
@@ -1998,7 +2005,8 @@ DAWN_INSTANTIATE_TEST_P(CopyTests_T2B,
                         {D3D11Backend(), D3D12Backend(), MetalBackend(), OpenGLBackend(),
                          OpenGLESBackend(), VulkanBackend(),
                          VulkanBackend({"use_blit_for_snorm_texture_to_buffer_copy",
-                                        "use_blit_for_bgra8unorm_texture_to_buffer_copy"})},
+                                        "use_blit_for_bgra8unorm_texture_to_buffer_copy"}),
+                         WebGPUBackend()},
                         {
                             wgpu::TextureFormat::R8Unorm,
                             wgpu::TextureFormat::RG8Unorm,
@@ -2105,7 +2113,8 @@ DAWN_INSTANTIATE_TEST(CopyTests_T2B_No_Format_Param,
                       OpenGLBackend(),
                       OpenGLESBackend(),
                       VulkanBackend(),
-                      VulkanBackend({"use_blit_for_depth32float_texture_to_buffer_copy"}));
+                      VulkanBackend({"use_blit_for_depth32float_texture_to_buffer_copy"}),
+                      WebGPUBackend());
 
 class CopyTests_T2B_Compat : public CopyTests_T2B {
   protected:
@@ -2423,6 +2432,10 @@ TEST_P(CopyTests_B2T, OffsetBufferAligned) {
 
 // Test that copying without a 512-byte aligned buffer offset works
 TEST_P(CopyTests_B2T, OffsetBufferUnaligned) {
+    // TODO(crbug.com/459848482): Flaky on Win/Snapdragon X Elite w/ D3D11 and
+    // backend validation.
+    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm() && IsD3D11() && IsBackendValidationEnabled());
+
     constexpr uint32_t kWidth = 256;
     constexpr uint32_t kHeight = 128;
 
@@ -2443,6 +2456,10 @@ TEST_P(CopyTests_B2T, OffsetBufferUnaligned) {
 // Test that copying without a 512-byte aligned buffer offset that is greater than the bytes per row
 // works
 TEST_P(CopyTests_B2T, OffsetBufferUnalignedSmallBytesPerRow) {
+    // TODO(crbug.com/459848482): Flaky on Win/Snapdragon X Elite w/ D3D11 and
+    // backend validation.
+    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm() && IsD3D11() && IsBackendValidationEnabled());
+
     constexpr uint32_t kWidth = 32;
     constexpr uint32_t kHeight = 128;
 
@@ -2822,7 +2839,7 @@ TEST_P(CopyTests_B2T, Texture1DFull) {
 DAWN_INSTANTIATE_TEST_P(CopyTests_B2T,
                         {D3D11Backend(), D3D11Backend({"d3d11_disable_cpu_buffers"}),
                          D3D12Backend(), MetalBackend(), OpenGLBackend(), OpenGLESBackend(),
-                         VulkanBackend()},
+                         VulkanBackend(), WebGPUBackend()},
                         {
                             wgpu::TextureFormat::R8Unorm,
                             wgpu::TextureFormat::RG8Unorm,
@@ -3367,7 +3384,7 @@ DAWN_INSTANTIATE_TEST_P(
                    "mip_level"}),
      D3D12Backend(
          {"d3d12_use_temp_buffer_in_texture_to_texture_copy_between_different_dimensions"}),
-     MetalBackend(), OpenGLBackend(), OpenGLESBackend(), VulkanBackend()},
+     MetalBackend(), OpenGLBackend(), OpenGLESBackend(), VulkanBackend(), WebGPUBackend()},
     {wgpu::TextureFormat::RGBA8Unorm, wgpu::TextureFormat::RGB9E5Ufloat});
 
 // Test copying between textures that have srgb compatible texture formats;
@@ -3382,7 +3399,7 @@ TEST_P(CopyTests_T2T_Srgb, FullCopy) {
 
 DAWN_INSTANTIATE_TEST_P(CopyTests_T2T_Srgb,
                         {D3D11Backend(), D3D12Backend(), MetalBackend(), OpenGLBackend(),
-                         OpenGLESBackend(), VulkanBackend()},
+                         OpenGLESBackend(), VulkanBackend(), WebGPUBackend()},
                         {wgpu::TextureFormat::RGBA8Unorm, wgpu::TextureFormat::RGBA8UnormSrgb,
                          wgpu::TextureFormat::BGRA8Unorm, wgpu::TextureFormat::BGRA8UnormSrgb});
 
@@ -3418,7 +3435,8 @@ DAWN_INSTANTIATE_TEST(CopyTests_B2B,
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
-                      VulkanBackend());
+                      VulkanBackend(),
+                      WebGPUBackend());
 
 // Test clearing full buffers
 TEST_P(ClearBufferTests, FullClear) {
@@ -3447,7 +3465,8 @@ DAWN_INSTANTIATE_TEST(ClearBufferTests,
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
-                      VulkanBackend());
+                      VulkanBackend(),
+                      WebGPUBackend());
 
 // Regression tests to reproduce a flaky failure when running whole WebGPU CTS on Intel GPUs.
 // See crbug.com/dawn/1487 for more details.
@@ -3495,6 +3514,10 @@ TEST_P(CopyToDepthStencilTextureAfterDestroyingBigBufferTests, DoTest) {
     // Copies to stencil textures are unsupported on the OpenGL backend.
     DAWN_TEST_UNSUPPORTED_IF(GetParam().mTextureFormat == wgpu::TextureFormat::Stencil8 &&
                              (IsOpenGL() || IsOpenGLES()));
+
+    // TODO(crbug.com/468035609): Fails on Win11/NVIDIA GTX 1660.
+    DAWN_SUPPRESS_TEST_IF(GetParam().mTextureFormat == wgpu::TextureFormat::Stencil8 &&
+                          IsWindows11() && IsNvidia() && IsD3D12() && IsBackendValidationEnabled());
 
     wgpu::TextureFormat format = GetParam().mTextureFormat;
 
@@ -3627,7 +3650,7 @@ DAWN_INSTANTIATE_TEST_P(
     CopyToDepthStencilTextureAfterDestroyingBigBufferTests,
     {D3D11Backend(), D3D12Backend(),
      D3D12Backend({"d3d12_force_clear_copyable_depth_stencil_texture_on_creation"}), MetalBackend(),
-     OpenGLBackend(), OpenGLESBackend(), VulkanBackend()},
+     OpenGLBackend(), OpenGLESBackend(), VulkanBackend(), WebGPUBackend()},
     {wgpu::TextureFormat::Depth16Unorm, wgpu::TextureFormat::Stencil8},
     {InitializationMethod::CopyBufferToTexture, InitializationMethod::WriteTexture,
      InitializationMethod::CopyTextureToTexture},
@@ -3826,7 +3849,8 @@ DAWN_INSTANTIATE_TEST(T2TCopyFromDirtyHeapTests,
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
-                      VulkanBackend());
+                      VulkanBackend(),
+                      WebGPUBackend());
 
 }  // anonymous namespace
 }  // namespace dawn

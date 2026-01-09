@@ -40,8 +40,8 @@ Ref<ComputePipeline> ComputePipeline::CreateUninitialized(
 
 ComputePipeline::~ComputePipeline() = default;
 
-void ComputePipeline::DestroyImpl() {
-    ComputePipelineBase::DestroyImpl();
+void ComputePipeline::DestroyImpl(DestroyReason reason) {
+    ComputePipelineBase::DestroyImpl(reason);
     DeleteProgram(ToBackend(GetDevice())->GetGL());
 }
 
@@ -51,8 +51,8 @@ MaybeError ComputePipeline::InitializeImpl() {
                           /* usesFragDepth */ false, /* bgraSwizzleAttributes */ {});
 }
 
-MaybeError ComputePipeline::ApplyNow() {
-    DAWN_TRY(PipelineGL::ApplyNow(ToBackend(GetDevice())->GetGL(), ToBackend(GetLayout())));
+MaybeError ComputePipeline::ApplyNow(const OpenGLFunctions& gl) {
+    DAWN_TRY(PipelineGL::ApplyNow(gl, ToBackend(GetLayout())));
     return {};
 }
 

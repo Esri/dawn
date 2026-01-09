@@ -56,6 +56,7 @@ bool IsFeatureSupported(WGPUFeatureName feature) {
         case WGPUFeatureName_SharedTextureMemoryZirconHandle:
         case WGPUFeatureName_SharedTextureMemoryDXGISharedHandle:
         case WGPUFeatureName_SharedTextureMemoryD3D11Texture2D:
+        case WGPUFeatureName_SharedTextureMemoryD3D12Resource:
         case WGPUFeatureName_SharedTextureMemoryIOSurface:
         case WGPUFeatureName_SharedTextureMemoryEGLImage:
         case WGPUFeatureName_SharedFenceVkSemaphoreOpaqueFD:
@@ -65,6 +66,7 @@ bool IsFeatureSupported(WGPUFeatureName feature) {
         case WGPUFeatureName_SharedFenceDXGISharedHandle:
         case WGPUFeatureName_SharedFenceMTLSharedEvent:
         case WGPUFeatureName_SharedBufferMemoryD3D12Resource:
+        case WGPUFeatureName_SharedBufferMemoryD3D12SharedMemoryFileMappingHandle:
 
         case WGPUFeatureName_Depth32FloatStencil8:
         case WGPUFeatureName_TimestampQuery:
@@ -98,14 +100,11 @@ bool IsFeatureSupported(WGPUFeatureName feature) {
         case WGPUFeatureName_ANGLETextureSharing:
         case WGPUFeatureName_PixelLocalStorageCoherent:
         case WGPUFeatureName_PixelLocalStorageNonCoherent:
-        case WGPUFeatureName_Norm16TextureFormats:
         case WGPUFeatureName_Unorm16TextureFormats:
-        case WGPUFeatureName_Snorm16TextureFormats:
         case WGPUFeatureName_FramebufferFetch:
         case WGPUFeatureName_AdapterPropertiesMemoryHeaps:
         case WGPUFeatureName_AdapterPropertiesD3D:
         case WGPUFeatureName_AdapterPropertiesVk:
-        case WGPUFeatureName_R8UnormStorage:
         case WGPUFeatureName_StaticSamplers:
         case WGPUFeatureName_YCbCrVulkanSamplers:
         case WGPUFeatureName_ShaderModuleCompilationOptions:
@@ -118,6 +117,12 @@ bool IsFeatureSupported(WGPUFeatureName feature) {
         case WGPUFeatureName_ChromiumExperimentalSubgroupMatrix:
         case WGPUFeatureName_CoreFeaturesAndLimits:
         case WGPUFeatureName_DawnDeviceAllocatorControl:
+        case WGPUFeatureName_TextureFormatsTier1:
+        case WGPUFeatureName_TextureFormatsTier2:
+        case WGPUFeatureName_TextureComponentSwizzle:
+        case WGPUFeatureName_PrimitiveIndex:
+        case WGPUFeatureName_AdapterPropertiesWGPU:
+        case WGPUFeatureName_ChromiumExperimentalSamplingResourceTable:
             return true;
     }
 

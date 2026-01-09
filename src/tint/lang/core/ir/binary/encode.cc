@@ -31,12 +31,10 @@
 #include <string>
 #include <utility>
 
-#include "src/tint/lang/core/builtin_fn.h"
-#include "src/tint/lang/core/builtin_type.h"
-#include "src/tint/lang/core/builtin_value.h"
 #include "src/tint/lang/core/constant/composite.h"
 #include "src/tint/lang/core/constant/scalar.h"
 #include "src/tint/lang/core/constant/splat.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/ir/access.h"
 #include "src/tint/lang/core/ir/bitcast.h"
 #include "src/tint/lang/core/ir/break_if.h"
@@ -67,7 +65,6 @@
 #include "src/tint/lang/core/ir/unreachable.h"
 #include "src/tint/lang/core/ir/user_call.h"
 #include "src/tint/lang/core/ir/var.h"
-#include "src/tint/lang/core/texel_format.h"
 #include "src/tint/lang/core/type/array.h"
 #include "src/tint/lang/core/type/binding_array.h"
 #include "src/tint/lang/core/type/bool.h"
@@ -152,6 +149,9 @@ struct Encoder {
             wg_size_out.set_x(Value((*wg_size_in)[0]));
             wg_size_out.set_y(Value((*wg_size_in)[1]));
             wg_size_out.set_z(Value((*wg_size_in)[2]));
+        }
+        if (auto subgroup_size_in = fn_in->SubgroupSize()) {
+            fn_out->set_subgroup_size(Value(*subgroup_size_in));
         }
         for (auto* param_in : fn_in->Params()) {
             fn_out->add_parameters(Value(param_in));
@@ -273,7 +273,7 @@ struct Encoder {
     void InstructionBitcast(pb::InstructionBitcast&, const ir::Bitcast*) {}
 
     void InstructionBreakIf(pb::InstructionBreakIf& breakif_out, const ir::BreakIf* breakif_in) {
-        auto num_next_iter_values = static_cast<uint32_t>(breakif_in->NextIterValues().Length());
+        auto num_next_iter_values = static_cast<uint32_t>(breakif_in->NextIterValues().size());
         breakif_out.set_num_next_iter_values(num_next_iter_values);
     }
 
@@ -413,6 +413,9 @@ struct Encoder {
                 [&](const core::type::StorageTexture* t) {
                     TypeStorageTexture(*type_out.mutable_storage_texture(), t);
                 },
+                [&](const core::type::TexelBuffer* t) {
+                    TypeTexelBuffer(*type_out.mutable_texel_buffer(), t);
+                },
                 [&](const core::type::ExternalTexture* t) {
                     TypeExternalTexture(*type_out.mutable_external_texture(), t);
                 },
@@ -497,7 +500,6 @@ struct Encoder {
 
     void TypeArray(pb::TypeArray& array_out, const core::type::Array* array_in) {
         array_out.set_element(Type(array_in->ElemType()));
-        array_out.set_stride(array_in->Stride());
         tint::Switch(
             array_in->Count(),  //
             [&](const core::type::ConstantArrayCount* c) {
@@ -555,7 +557,14 @@ struct Encoder {
         texture_out.set_access(AccessControl(texture_in->Access()));
     }
 
+    void TypeTexelBuffer(pb::TypeTexelBuffer& buffer_out,
+                         const core::type::TexelBuffer* buffer_in) {
+        buffer_out.set_texel_format(TexelFormat(buffer_in->TexelFormat()));
+        buffer_out.set_access(AccessControl(buffer_in->Access()));
+    }
+
     void TypeExternalTexture(pb::TypeExternalTexture&, const core::type::ExternalTexture*) {}
+
     void TypeInputAttachment(pb::TypeInputAttachment& input_attachment_out,
                              const core::type::InputAttachment* input_attachment_in) {
         input_attachment_out.set_sub_type(Type(input_attachment_in->Type()));
@@ -943,6 +952,50 @@ struct Encoder {
                 return pb::TexelFormat::rgba8_uint;
             case core::TexelFormat::kRgba8Unorm:
                 return pb::TexelFormat::rgba8_unorm;
+            case core::TexelFormat::kR8Snorm:
+                return pb::TexelFormat::r8_snorm;
+            case core::TexelFormat::kR8Uint:
+                return pb::TexelFormat::r8_uint;
+            case core::TexelFormat::kR8Sint:
+                return pb::TexelFormat::r8_sint;
+            case core::TexelFormat::kRg8Unorm:
+                return pb::TexelFormat::rg8_unorm;
+            case core::TexelFormat::kRg8Snorm:
+                return pb::TexelFormat::rg8_snorm;
+            case core::TexelFormat::kRg8Uint:
+                return pb::TexelFormat::rg8_uint;
+            case core::TexelFormat::kRg8Sint:
+                return pb::TexelFormat::rg8_sint;
+            case core::TexelFormat::kR16Uint:
+                return pb::TexelFormat::r16_uint;
+            case core::TexelFormat::kR16Sint:
+                return pb::TexelFormat::r16_sint;
+            case core::TexelFormat::kR16Float:
+                return pb::TexelFormat::r16_float;
+            case core::TexelFormat::kRg16Uint:
+                return pb::TexelFormat::rg16_uint;
+            case core::TexelFormat::kRg16Sint:
+                return pb::TexelFormat::rg16_sint;
+            case core::TexelFormat::kRg16Float:
+                return pb::TexelFormat::rg16_float;
+            case core::TexelFormat::kRgb10A2Uint:
+                return pb::TexelFormat::rgb10a2_uint;
+            case core::TexelFormat::kRgb10A2Unorm:
+                return pb::TexelFormat::rgb10a2_unorm;
+            case core::TexelFormat::kRg11B10Ufloat:
+                return pb::TexelFormat::rg11b10_ufloat;
+            case core::TexelFormat::kR16Unorm:
+                return pb::TexelFormat::r16_unorm;
+            case core::TexelFormat::kR16Snorm:
+                return pb::TexelFormat::r16_snorm;
+            case core::TexelFormat::kRg16Unorm:
+                return pb::TexelFormat::rg16_unorm;
+            case core::TexelFormat::kRg16Snorm:
+                return pb::TexelFormat::rg16_snorm;
+            case core::TexelFormat::kRgba16Unorm:
+                return pb::TexelFormat::rgba16_unorm;
+            case core::TexelFormat::kRgba16Snorm:
+                return pb::TexelFormat::rgba16_snorm;
             case core::TexelFormat::kUndefined:
                 break;
         }
@@ -1025,12 +1078,18 @@ struct Encoder {
                 return pb::BuiltinValue::subgroup_invocation_id;
             case core::BuiltinValue::kSubgroupSize:
                 return pb::BuiltinValue::subgroup_size;
+            case core::BuiltinValue::kNumSubgroups:
+                return pb::BuiltinValue::num_subgroups;
             case core::BuiltinValue::kVertexIndex:
                 return pb::BuiltinValue::vertex_index;
             case core::BuiltinValue::kWorkgroupId:
                 return pb::BuiltinValue::workgroup_id;
             case core::BuiltinValue::kClipDistances:
                 return pb::BuiltinValue::clip_distances;
+            case core::BuiltinValue::kPrimitiveIndex:
+                return pb::BuiltinValue::primitive_index;
+            case core::BuiltinValue::kBarycentricCoord:
+                return pb::BuiltinValue::barycentric_coord;
             case core::BuiltinValue::kUndefined:
                 break;
         }
@@ -1337,6 +1396,18 @@ struct Encoder {
                 return pb::BuiltinFn::subgroup_matrix_multiply;
             case core::BuiltinFn::kSubgroupMatrixMultiplyAccumulate:
                 return pb::BuiltinFn::subgroup_matrix_multiply_accumulate;
+            case core::BuiltinFn::kSubgroupMatrixScalarAdd:
+                return pb::BuiltinFn::subgroup_matrix_scalar_add;
+            case core::BuiltinFn::kSubgroupMatrixScalarSubtract:
+                return pb::BuiltinFn::subgroup_matrix_scalar_subtract;
+            case core::BuiltinFn::kSubgroupMatrixScalarMultiply:
+                return pb::BuiltinFn::subgroup_matrix_scalar_multiply;
+            case core::BuiltinFn::kPrint:
+                return pb::BuiltinFn::print;
+            case core::BuiltinFn::kHasResource:
+                return pb::BuiltinFn::has_resource;
+            case core::BuiltinFn::kGetResource:
+                return pb::BuiltinFn::get_resource;
             case core::BuiltinFn::kNone:
                 break;
         }
@@ -1350,25 +1421,19 @@ Result<std::unique_ptr<pb::Module>> EncodeToProto(const Module& mod_in) {
     GOOGLE_PROTOBUF_VERIFY_VERSION;
 
     pb::Module mod_out;
-    auto res = Encoder{mod_in, mod_out}.Encode();
-    if (res != Success) {
-        return res.Failure();
-    }
+    TINT_CHECK_RESULT((Encoder{mod_in, mod_out}.Encode()));
 
     return std::make_unique<pb::Module>(mod_out);
 }
 
 Result<Vector<std::byte, 0>> EncodeToBinary(const Module& mod_in) {
-    auto mod_out = EncodeToProto(mod_in);
-    if (mod_out != Success) {
-        return mod_out.Failure();
-    }
+    TINT_CHECK_RESULT_UNWRAP(mod_out, EncodeToProto(mod_in));
 
     Vector<std::byte, 0> buffer;
-    size_t len = mod_out.Get()->ByteSizeLong();
+    size_t len = mod_out->ByteSizeLong();
     buffer.Resize(len);
     if (len > 0) {
-        if (!mod_out.Get()->SerializeToArray(&buffer[0], static_cast<int>(len))) {
+        if (!mod_out->SerializeToArray(&buffer[0], static_cast<int>(len))) {
             return Failure{"failed to serialize protobuf"};
         }
     }

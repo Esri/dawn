@@ -1645,14 +1645,14 @@ $B1: {  # root
 %main = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
     %5:ptr<storage, atomic<i32>, read_write> = access %sb, 0u
-    %6:__atomic_compare_exchange_result_i32 = atomicCompareExchangeWeak %5, 2i, 3i
+    %6:__atomic_compare_exchange_result_i32 = atomicCompareExchangeWeak %5, 3i, 2i
     %7:i32 = access %6, 0u
     %8:ptr<storage, atomic<u32>, read_write> = access %sb, 1u
-    %9:__atomic_compare_exchange_result_u32 = atomicCompareExchangeWeak %8, 4u, 5u
+    %9:__atomic_compare_exchange_result_u32 = atomicCompareExchangeWeak %8, 5u, 4u
     %10:u32 = access %9, 0u
-    %11:__atomic_compare_exchange_result_i32 = atomicCompareExchangeWeak %wg_i32, 6i, 7i
+    %11:__atomic_compare_exchange_result_i32 = atomicCompareExchangeWeak %wg_i32, 7i, 6i
     %12:i32 = access %11, 0u
-    %13:__atomic_compare_exchange_result_u32 = atomicCompareExchangeWeak %wg_u32, 8u, 9u
+    %13:__atomic_compare_exchange_result_u32 = atomicCompareExchangeWeak %wg_u32, 9u, 8u
     %14:u32 = access %13, 0u
     ret
   }
@@ -3083,7 +3083,7 @@ TEST_F(SpirvReader_AtomicsTest, FunctionParam_MixedCalls) {
 
         auto* one = b.Load(p1);
         auto* two = b.Load(p2);
-        b.Return(f_nonatomic, b.Add(ty.u32(), one, two));
+        b.Return(f_nonatomic, b.Add(one, two));
     });
 
     auto* main = b.ComputeFunction("main");
@@ -3197,6 +3197,133 @@ $B1: {  # root
     %38:u32 = atomicLoad %param2_3
     %39:u32 = add %37, %38
     ret %39
+  }
+}
+)";
+    ASSERT_EQ(expect, str());
+}
+
+TEST_F(SpirvReader_AtomicsTest, ArrayLength) {
+    auto* f = b.ComputeFunction("main");
+
+    core::ir::Var* buffer = nullptr;
+    b.Append(mod.root_block,
+             [&] {  //
+                 buffer = b.Var("buffer", ty.ptr<storage, array<u32>, read_write>());
+                 buffer->SetBindingPoint(0u, 0u);
+             });
+
+    b.Append(f->Block(), [&] {  //
+        auto* a = b.Access(ty.ptr<storage, u32, read_write>(), buffer, 1_i);
+        b.Call<spirv::ir::BuiltinCall>(ty.void_(), spirv::BuiltinFn::kAtomicStore, a, 1_u, 0_u,
+                                       1_u);
+        b.Call<core::ir::CoreBuiltinCall>(ty.u32(), core::BuiltinFn::kArrayLength, buffer);
+        b.Return(f);
+    });
+
+    auto* src = R"(
+$B1: {  # root
+  %buffer:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+}
+
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    %3:ptr<storage, u32, read_write> = access %buffer, 1i
+    %4:void = spirv.atomic_store %3, 1u, 0u, 1u
+    %5:u32 = arrayLength %buffer
+    ret
+  }
+}
+)";
+    ASSERT_EQ(src, str());
+    Run(Atomics);
+
+    auto* expect = R"(
+$B1: {  # root
+  %buffer:ptr<storage, array<atomic<u32>>, read_write> = var undef @binding_point(0, 0)
+}
+
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    %3:ptr<storage, atomic<u32>, read_write> = access %buffer, 1i
+    %4:void = atomicStore %3, 1u
+    %5:u32 = arrayLength %buffer
+    ret
+  }
+}
+)";
+    ASSERT_EQ(expect, str());
+}
+
+TEST_F(SpirvReader_AtomicsTest, RewriteLoad_SameAccessChain) {
+    auto* f = b.ComputeFunction("main");
+    core::ir::Var* buffer = nullptr;
+    b.Append(mod.root_block,
+             [&] {  //
+                 buffer = b.Var("buffer", ty.ptr<storage, array<u32>, read_write>());
+                 buffer->SetBindingPoint(0u, 0u);
+             });
+
+    b.Append(f->Block(), [&] {  //
+        auto* a = b.Access(ty.ptr<storage, u32, read_write>(), buffer, 1_i);
+        b.Let("x", b.Load(a));
+
+        auto* if_ = b.If(true);
+        b.Append(if_->True(), [&] {
+            b.Call<spirv::ir::BuiltinCall>(ty.u32(), spirv::BuiltinFn::kAtomicCompareExchange, a,
+                                           1_u, 0_u, 0_u, 0_u, 0_u);
+            b.ExitIf(if_);
+        });
+
+        b.Return(f);
+    });
+
+    auto* src = R"(
+$B1: {  # root
+  %buffer:ptr<storage, array<u32>, read_write> = var undef @binding_point(0, 0)
+}
+
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    %3:ptr<storage, u32, read_write> = access %buffer, 1i
+    %4:u32 = load %3
+    %x:u32 = let %4
+    if true [t: $B3] {  # if_1
+      $B3: {  # true
+        %6:u32 = spirv.atomic_compare_exchange %3, 1u, 0u, 0u, 0u, 0u
+        exit_if  # if_1
+      }
+    }
+    ret
+  }
+}
+)";
+    ASSERT_EQ(src, str());
+    Run(Atomics);
+
+    auto* expect = R"(
+__atomic_compare_exchange_result_u32 = struct @align(4) {
+  old_value:u32 @offset(0)
+  exchanged:bool @offset(4)
+}
+
+$B1: {  # root
+  %buffer:ptr<storage, array<atomic<u32>>, read_write> = var undef @binding_point(0, 0)
+}
+
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    %3:ptr<storage, atomic<u32>, read_write> = access %buffer, 1i
+    %4:u32 = atomicLoad %3
+    %x:u32 = let %4
+    if true [t: $B3] {  # if_1
+      $B3: {  # true
+        %6:__atomic_compare_exchange_result_u32 = atomicCompareExchangeWeak %3, 0u, 0u
+        %7:u32 = access %6, 0u
+        exit_if  # if_1
+      }
+    }
+    ret
   }
 }
 )";

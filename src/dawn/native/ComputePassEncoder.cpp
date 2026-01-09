@@ -130,6 +130,9 @@ ComputePassEncoder::ComputePassEncoder(DeviceBase* device,
     : ProgrammableEncoder(device, descriptor->label, encodingContext),
       mCommandEncoder(commandEncoder) {
     GetObjectTrackingList()->Track(this);
+    if (auto* resourceTable = mCommandEncoder->GetResourceTable()) {
+        mCommandBufferState.SetResourceTable(resourceTable);
+    }
 }
 
 ComputePassEncoder::~ComputePassEncoder() {
@@ -161,7 +164,7 @@ Ref<ComputePassEncoder> ComputePassEncoder::MakeError(DeviceBase* device,
         new ComputePassEncoder(device, commandEncoder, encodingContext, ObjectBase::kError, label));
 }
 
-void ComputePassEncoder::DestroyImpl() {
+void ComputePassEncoder::DestroyImpl(DestroyReason reason) {
     mCommandBufferState.End();
 
     // Ensure that the pass has exited. This is done for passes only since validation requires
@@ -175,7 +178,7 @@ ObjectType ComputePassEncoder::GetType() const {
 
 void ComputePassEncoder::APIEnd() {
     if (mEnded && IsValidationEnabled()) {
-        GetDevice()->HandleError(DAWN_VALIDATION_ERROR("%s was already ended.", this));
+        GetDevice()->HandleEncoderError(DAWN_VALIDATION_ERROR("%s was already ended.", this));
         return;
     }
 
@@ -267,7 +270,7 @@ ComputePassEncoder::TransformIndirectDispatchBuffer(Ref<BufferBase> indirectBuff
     // This function creates new resources, need to lock the Device.
     // TODO(crbug.com/dawn/1618): In future, all temp resources should be created at Command Submit
     // time, so the locking would be removed from here at that point.
-    auto deviceLock(GetDevice()->GetScopedLock());
+    auto deviceGuard = GetDevice()->GetGuard();
 
     const bool shouldDuplicateNumWorkgroups =
         device->ShouldDuplicateNumWorkgroupsForDispatchIndirect(
@@ -381,40 +384,44 @@ void ComputePassEncoder::APIDispatchWorkgroupsIndirect(BufferBase* indirectBuffe
 
             SyncScopeUsageTracker scope;
             mUsageTracker.AddReferencedBuffer(indirectBuffer);
-
             Ref<BufferBase> indirectBufferRef = indirectBuffer;
 
-            // Get applied indirect buffer with necessary changes on the original indirect
-            // buffer. For example,
-            // - Validate each indirect dispatch with a single dispatch to copy the indirect
-            //   buffer params into a scratch buffer if they're valid, and otherwise zero them
-            //   out.
-            // - Duplicate all the indirect dispatch parameters to support @num_workgroups on
-            //   D3D12.
-            // - Directly return the original indirect dispatch buffer if we don't need any
-            //   transformations on it.
-            // We could consider moving the validation earlier in the pass after the last
-            // last point the indirect buffer was used with writable usage, as well as batch
-            // validation for multiple dispatches into one, but inserting commands at
-            // arbitrary points in the past is not possible right now.
-            DAWN_TRY_ASSIGN(std::tie(indirectBufferRef, indirectOffset),
-                            TransformIndirectDispatchBuffer(indirectBufferRef, indirectOffset));
+            if (NeedsIndirectGPUValidation()) {
+                // Get applied indirect buffer with necessary changes on the original indirect
+                // buffer. For example,
+                // - Validate each indirect dispatch with a single dispatch to copy the indirect
+                //   buffer params into a scratch buffer if they're valid, and otherwise zero them
+                //   out.
+                // - Duplicate all the indirect dispatch parameters to support @num_workgroups on
+                //   D3D12.
+                // - Directly return the original indirect dispatch buffer if we don't need any
+                //   transformations on it.
+                // We could consider moving the validation earlier in the pass after the last
+                // last point the indirect buffer was used with writable usage, as well as batch
+                // validation for multiple dispatches into one, but inserting commands at
+                // arbitrary points in the past is not possible right now.
+                DAWN_TRY_ASSIGN(std::tie(indirectBufferRef, indirectOffset),
+                                TransformIndirectDispatchBuffer(indirectBufferRef, indirectOffset));
 
-            // If we have created a new scratch dispatch indirect buffer in
-            // TransformIndirectDispatchBuffer(), we need to track it in mUsageTracker.
-            if (indirectBufferRef.Get() != indirectBuffer) {
-                // |indirectBufferRef| was replaced with a scratch buffer, so we just need to track
-                // it for backend resource tracking and not for frontend validation.
-                scope.BufferUsedAs(indirectBufferRef.Get(),
-                                   kIndirectBufferForBackendResourceTracking);
-                mUsageTracker.AddReferencedBuffer(indirectBufferRef.Get());
+                // If we have created a new scratch dispatch indirect buffer in
+                // TransformIndirectDispatchBuffer(), we need to track it in mUsageTracker.
+                if (indirectBufferRef.Get() != indirectBuffer) {
+                    // |indirectBufferRef| was replaced with a scratch buffer, so we just need to
+                    // track it for backend resource tracking and not for frontend validation.
+                    scope.BufferUsedAs(indirectBufferRef.Get(),
+                                       kIndirectBufferForBackendResourceTracking);
+                    mUsageTracker.AddReferencedBuffer(indirectBufferRef.Get());
 
-                // Then we can just track indirectBuffer for frontend validation and ignore its
-                // indirect buffer usage in backend resource tracking.
-                scope.BufferUsedAs(indirectBuffer, kIndirectBufferForFrontendValidation);
+                    // Then we can just track indirectBuffer for frontend validation and ignore its
+                    // indirect buffer usage in backend resource tracking.
+                    scope.BufferUsedAs(indirectBuffer, kIndirectBufferForFrontendValidation);
+                } else {
+                    scope.BufferUsedAs(
+                        indirectBuffer,
+                        wgpu::BufferUsage::Indirect | kIndirectBufferForBackendResourceTracking);
+                }
             } else {
-                scope.BufferUsedAs(indirectBuffer, wgpu::BufferUsage::Indirect |
-                                                       kIndirectBufferForBackendResourceTracking);
+                scope.BufferUsedAs(indirectBuffer, wgpu::BufferUsage::Indirect);
             }
 
             AddDispatchSyncScope(std::move(scope));
@@ -519,7 +526,8 @@ void ComputePassEncoder::RestoreCommandBufferState(CommandBufferStateTracker sta
             if (offsets.empty()) {
                 APISetBindGroup(static_cast<uint32_t>(i), bg);
             } else {
-                APISetBindGroup(static_cast<uint32_t>(i), bg, offsets.size(), offsets.data());
+                APISetBindGroup(static_cast<uint32_t>(i), bg, static_cast<uint32_t>(offsets.size()),
+                                offsets.data());
             }
         }
     }

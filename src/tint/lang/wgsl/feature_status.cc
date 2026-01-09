@@ -27,7 +27,7 @@
 
 #include "src/tint/lang/wgsl/feature_status.h"
 
-#include "src/tint/lang/wgsl/language_feature.h"
+#include "src/tint/lang/wgsl/enums.h"
 
 namespace tint::wgsl {
 
@@ -37,6 +37,16 @@ FeatureStatus GetLanguageFeatureStatus(LanguageFeature f) {
             // Experimental features
             ///////////////////////////////////////////////////////////////////
         case LanguageFeature::kSizedBindingArray:
+        case LanguageFeature::kTexelBuffers:
+        case LanguageFeature::kFragmentDepth:
+        case LanguageFeature::kImmediateAddressSpace:
+        case LanguageFeature::kTextureAndSamplerLet:
+            return FeatureStatus::kUnsafeExperimental;
+
+            ////////////////////////////////////////////////////////////////////
+            // Chromium developer features
+            ///////////////////////////////////////////////////////////////////
+        case LanguageFeature::kChromiumPrint:
             return FeatureStatus::kUnsafeExperimental;
 
             ////////////////////////////////////////////////////////////////////
@@ -46,6 +56,9 @@ FeatureStatus GetLanguageFeatureStatus(LanguageFeature f) {
         case LanguageFeature::kPointerCompositeAccess:
         case LanguageFeature::kUnrestrictedPointerParameters:
         case LanguageFeature::kReadonlyAndReadwriteStorageTextures:
+        case LanguageFeature::kUniformBufferStandardLayout:
+        case LanguageFeature::kSubgroupId:
+        case LanguageFeature::kSubgroupUniformity:
             return FeatureStatus::kShippedWithKillswitch;
 
             ////////////////////////////////////////////////////////////////////

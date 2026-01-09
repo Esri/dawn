@@ -103,6 +103,25 @@ TEST_F(LabelTest, BindGroupLayout) {
         std::string readbackLabel = native::GetObjectLabelForTesting(bindGroupLayout.Get());
         ASSERT_EQ(label, readbackLabel);
     }
+
+    // Test setting a label on a bad BindGroupLayout
+    {
+        wgpu::BindGroupLayoutEntry entry;
+        entry.binding = -1;
+        entry.visibility = wgpu::ShaderStage(0xFFFF);
+
+        descriptor.entryCount = 1;
+        descriptor.entries = &entry;
+
+        device.PushErrorScope(wgpu::ErrorFilter::Validation);
+        wgpu::BindGroupLayout bindGroupLayout = device.CreateBindGroupLayout(&descriptor);
+
+        device.PopErrorScope(wgpu::CallbackMode::AllowProcessEvents,
+                             [](wgpu::PopErrorScopeStatus, wgpu::ErrorType, wgpu::StringView) {});
+        bindGroupLayout.SetLabel(label.c_str());
+        std::string readbackLabel = native::GetObjectLabelForTesting(bindGroupLayout.Get());
+        ASSERT_EQ(label, readbackLabel);
+    }
 }
 
 TEST_F(LabelTest, Buffer) {
@@ -519,11 +538,11 @@ TEST_F(LabelTest, TextureView) {
 
     wgpu::Texture texture = device.CreateTexture(&descriptor);
 
-    // The label should be empty if one was not set.
+    // The label should be generated if no one was not set.
     {
         wgpu::TextureView textureView = texture.CreateView();
         std::string readbackLabel = native::GetObjectLabelForTesting(textureView.Get());
-        ASSERT_TRUE(readbackLabel.empty());
+        ASSERT_EQ(readbackLabel.rfind("defaulted from [Texture (unlabeled", 0), 0U);
     }
 
     // Test setting a label through API

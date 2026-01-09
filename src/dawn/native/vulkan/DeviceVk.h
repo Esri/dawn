@@ -53,6 +53,7 @@ namespace dawn::native::vulkan {
 
 class BufferUploader;
 class FencedDeleter;
+class FramebufferCache;
 class RenderPassCache;
 class ResourceMemoryAllocator;
 
@@ -74,8 +75,10 @@ class Device final : public DeviceBase {
     const VulkanGlobalInfo& GetGlobalInfo() const;
     VkDevice GetVkDevice() const;
     uint32_t GetGraphicsQueueFamily() const;
+    const VkDescriptorSetLayout& GetResourceTableLayout() const;
 
     MutexProtected<FencedDeleter>& GetFencedDeleter() const;
+    FramebufferCache* GetFramebufferCache() const;
     RenderPassCache* GetRenderPassCache() const;
     MutexProtected<ResourceMemoryAllocator>& GetResourceMemoryAllocator() const;
     external_semaphore::Service* GetExternalSemaphoreService() const;
@@ -99,12 +102,12 @@ class Device final : public DeviceBase {
 
     MaybeError TickImpl() override;
 
-    MaybeError CopyFromStagingToBufferImpl(BufferBase* source,
-                                           uint64_t sourceOffset,
-                                           BufferBase* destination,
-                                           uint64_t destinationOffset,
-                                           uint64_t size) override;
-    MaybeError CopyFromStagingToTextureImpl(const BufferBase* source,
+    MaybeError CopyFromStagingToBuffer(BufferBase* source,
+                                       uint64_t sourceOffset,
+                                       BufferBase* destination,
+                                       uint64_t destinationOffset,
+                                       uint64_t size) override;
+    MaybeError CopyFromStagingToTextureImpl(BufferBase* source,
                                             const TexelCopyBufferLayout& src,
                                             const TextureCopy& dst,
                                             const Extent3D& copySizePixels) override;
@@ -142,21 +145,21 @@ class Device final : public DeviceBase {
            Ref<DeviceBase::DeviceLostEvent>&& lostEvent);
 
     ResultOrError<Ref<BindGroupBase>> CreateBindGroupImpl(
-        const BindGroupDescriptor* descriptor) override;
+        const UnpackedPtr<BindGroupDescriptor>& descriptor) override;
     ResultOrError<Ref<BindGroupLayoutInternalBase>> CreateBindGroupLayoutImpl(
-        const BindGroupLayoutDescriptor* descriptor) override;
+        const UnpackedPtr<BindGroupLayoutDescriptor>& descriptor) override;
     ResultOrError<Ref<BufferBase>> CreateBufferImpl(
         const UnpackedPtr<BufferDescriptor>& descriptor) override;
     ResultOrError<Ref<PipelineLayoutBase>> CreatePipelineLayoutImpl(
         const UnpackedPtr<PipelineLayoutDescriptor>& descriptor) override;
     ResultOrError<Ref<QuerySetBase>> CreateQuerySetImpl(
         const QuerySetDescriptor* descriptor) override;
+    ResultOrError<Ref<ResourceTableBase>> CreateResourceTableImpl(
+        const ResourceTableDescriptor* descriptor) override;
     ResultOrError<Ref<SamplerBase>> CreateSamplerImpl(const SamplerDescriptor* descriptor) override;
     ResultOrError<Ref<ShaderModuleBase>> CreateShaderModuleImpl(
         const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
-        const std::vector<tint::wgsl::Extension>& internalExtensions,
-        ShaderModuleParseResult* parseResult,
-        std::unique_ptr<OwnedCompilationMessages>* compilationMessages) override;
+        const std::vector<tint::wgsl::Extension>& internalExtensions) override;
     ResultOrError<Ref<SwapChainBase>> CreateSwapChainImpl(
         Surface* surface,
         SwapChainBase* previousSwapChain,
@@ -185,7 +188,7 @@ class Device final : public DeviceBase {
     void AppendDebugLayerMessages(ErrorData* error) override;
     void CheckDebugMessagesAfterDestruction() const;
 
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
     MaybeError GetAHardwareBufferPropertiesImpl(void* handle, AHardwareBufferProperties* properties)
         const override;
 
@@ -197,11 +200,14 @@ class Device final : public DeviceBase {
     VkDevice mVkDevice = VK_NULL_HANDLE;
     uint32_t mMainQueueFamily = 0;
 
+    VkDescriptorSetLayout mResourceTableLayout = VK_NULL_HANDLE;
+
     // Entries can be appended without holding the device mutex.
     MutexProtected<SerialQueue<ExecutionSerial, Ref<DescriptorSetAllocator>>>
         mDescriptorAllocatorsPendingDeallocation;
     std::unique_ptr<MutexProtected<FencedDeleter>> mDeleter;
     std::unique_ptr<MutexProtected<ResourceMemoryAllocator>> mResourceMemoryAllocator;
+    std::unique_ptr<FramebufferCache> mFramebufferCache;
     std::unique_ptr<RenderPassCache> mRenderPassCache;
 
     std::unique_ptr<external_memory::Service> mExternalMemoryService;
@@ -215,8 +221,7 @@ class Device final : public DeviceBase {
     Ref<PipelineCache> mMonolithicPipelineCache;
 
     Ref<QuerySetBase> mEmptyPassQuerySet;
-
-    bool mSupportsMappableStorageBuffer = false;
+    std::atomic<uint64_t> mNextTextureViewId = 1;
 
     MaybeError ImportExternalImage(const ExternalImageDescriptorVk* descriptor,
                                    ExternalMemoryHandle memoryHandle,

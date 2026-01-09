@@ -378,26 +378,32 @@ MaybeError RenderPipeline::InitializeImpl() {
     }
     descriptorMTL.vertexDescriptor = vertexDesc.Get();
 
+    if (UsesFragDepth() && !HasUnclippedDepth()) {
+        mImmediateMask |= GetImmediateConstantBlockBits(
+            offsetof(RenderImmediateConstants, clampFragDepth), sizeof(ClampFragDepthArgs));
+    }
+
     const PerStage<ProgrammableStage>& allStages = GetAllStages();
     const ProgrammableStage& vertexStage = allStages[wgpu::ShaderStage::Vertex];
     ShaderModule::MetalFunctionData vertexData;
-    DAWN_TRY_CONTEXT(ToBackend(vertexStage.module.Get())
-                         ->CreateFunction(SingleShaderStage::Vertex, vertexStage,
-                                          ToBackend(GetLayout()), &vertexData, 0xFFFFFFFF, this),
-                     " getting vertex MTLFunction for %s", this);
+    DAWN_TRY_CONTEXT(
+        ToBackend(vertexStage.module.Get())
+            ->CreateFunction(SingleShaderStage::Vertex, vertexStage, ToBackend(GetLayout()),
+                             GetImmediateMask(), &vertexData, 0xFFFFFFFF, this),
+        " getting vertex MTLFunction for %s", this);
 
     descriptorMTL.vertexFunction = vertexData.function.Get();
     if (vertexData.needsStorageBufferLength) {
         mStagesRequiringStorageBufferLength |= wgpu::ShaderStage::Vertex;
     }
 
+    ShaderModule::MetalFunctionData fragmentData;
     if (GetStageMask() & wgpu::ShaderStage::Fragment) {
         const ProgrammableStage& fragmentStage = allStages[wgpu::ShaderStage::Fragment];
-        ShaderModule::MetalFunctionData fragmentData;
         DAWN_TRY_CONTEXT(
             ToBackend(fragmentStage.module.Get())
                 ->CreateFunction(SingleShaderStage::Fragment, fragmentStage, ToBackend(GetLayout()),
-                                 &fragmentData, GetSampleMask(), this),
+                                 GetImmediateMask(), &fragmentData, GetSampleMask(), this),
             " getting fragment MTLFunction for %s", this);
 
         descriptorMTL.fragmentFunction = fragmentData.function.Get();
@@ -466,8 +472,13 @@ MaybeError RenderPipeline::InitializeImpl() {
     mMtlRenderPipelineState =
         AcquireNSPRef([mtlDevice newRenderPipelineStateWithDescriptor:descriptorMTL error:&error]);
     if (error != nullptr) {
-        return DAWN_INTERNAL_ERROR(std::string("Error creating pipeline state ") +
-                                   [error.localizedDescription UTF8String]);
+        std::string errorMessage = absl::StrFormat(
+            "RenderPipelineMTL: error creating pipeline state: %s from vertex MSL:\n\n%s",
+            [error.localizedDescription UTF8String], vertexData.msl);
+        if (GetStageMask() & wgpu::ShaderStage::Fragment) {
+            absl::StrAppendFormat(&errorMessage, "\n\nand fragment MSL:\n\n%s", fragmentData.msl);
+        }
+        return DAWN_INTERNAL_ERROR(errorMessage);
     }
     DAWN_ASSERT(mMtlRenderPipelineState != nil);
     timer.RecordMicroseconds("Metal.newRenderPipelineStateWithDescriptor.CacheMiss");

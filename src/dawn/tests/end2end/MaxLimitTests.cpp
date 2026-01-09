@@ -123,6 +123,7 @@ TEST_P(MaxLimitTests, MaxBufferBindingSize) {
     // TODO(crbug.com/dawn/1217): Remove this suppression.
     DAWN_SUPPRESS_TEST_IF(IsWindows() && IsVulkan() && IsNvidia());
     DAWN_SUPPRESS_TEST_IF(IsLinux() && IsVulkan() && IsNvidia());
+    DAWN_SUPPRESS_TEST_IF(IsVulkan() && IsWebGPUOnWebGPU());
 
     // TODO(crbug.com/dawn/1705): Use a zero buffer to clear buffers. Otherwise, the test
     // OOMs.
@@ -175,7 +176,7 @@ TEST_P(MaxLimitTests, MaxBufferBindingSize) {
                   }
               )";
                 break;
-            case wgpu::BufferUsage::Uniform:
+            case wgpu::BufferUsage::Uniform: {
                 maxBufferBindingSize = GetSupportedLimits().maxUniformBufferBindingSize;
 
                 // Clamp to not exceed the maximum i32 value for the WGSL @size(x) annotation.
@@ -183,12 +184,26 @@ TEST_P(MaxLimitTests, MaxBufferBindingSize) {
                                                 uint64_t(std::numeric_limits<int32_t>::max()) + 8);
                 maxBufferBindingSize = Align(maxBufferBindingSize - 3u, 4);
 
+                const uint64_t kMaxStructMemberU32ArraySize = 65535 * 4;
+                uint64_t paddingNeeded = maxBufferBindingSize - 8;
+                uint64_t numPaddingMembers = (paddingNeeded + kMaxStructMemberU32ArraySize - 1) /
+                                             kMaxStructMemberU32ArraySize;
+                std::string paddingMembers;
+
+                for (uint64_t i = 0; i < numPaddingMembers; ++i) {
+                    uint64_t offset = i * kMaxStructMemberU32ArraySize;
+                    uint64_t remainingSize = paddingNeeded - offset;
+                    uint64_t memberSize = std::min(kMaxStructMemberU32ArraySize, remainingSize);
+                    paddingMembers +=
+                        absl::StrFormat("    padding%v: array<u32, %v>,\n", i, memberSize / 4);
+                }
+
                 shader = R"(
                   struct Buf {
                       value0 : u32,
                       // padding such that value0 and value1 are the first and last bytes of the memory.
-                      @size()" +
-                         std::to_string(maxBufferBindingSize - 8) + R"() padding : u32,
+                      )" +
+                         paddingMembers + R"(
                       value1 : u32,
                   }
 
@@ -207,6 +222,7 @@ TEST_P(MaxLimitTests, MaxBufferBindingSize) {
                   }
               )";
                 break;
+            }
             default:
                 DAWN_UNREACHABLE();
         }
@@ -548,9 +564,6 @@ TEST_P(MaxLimitTests, MaxStorageBuffersPerShaderStage) {
 // used correctly. The test loads a different value from each binding, and writes 1 to a storage
 // buffer if all values are correct.
 TEST_P(MaxLimitTests, ReallyLargeBindGroup) {
-    // TODO(crbug.com/dawn/590): Crashing on ANGLE/D3D11.
-    DAWN_SUPPRESS_TEST_IF(IsANGLED3D11());
-
     // TODO(crbug.com/dawn/590): Failing on Pixel4
     DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsAndroid() && IsQualcomm());
 
@@ -863,7 +876,8 @@ DAWN_INSTANTIATE_TEST(MaxLimitTests,
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
-                      VulkanBackend());
+                      VulkanBackend(),
+                      WebGPUBackend());
 
 // Verifies the limits maxInterStageShaderVariables work correctly
 class MaxInterStageShaderVariablesLimitTests : public MaxLimitTests {
@@ -1186,12 +1200,13 @@ TEST_P(MaxInterStageShaderVariablesLimitTests, MaxLocation_ClipDistances) {
 
 DAWN_INSTANTIATE_TEST(MaxInterStageShaderVariablesLimitTests,
                       D3D11Backend(),
+                      D3D12Backend(),
                       D3D12Backend({}, {"use_dxc"}),
-                      D3D12Backend({"use_dxc"}),
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
-                      VulkanBackend());
+                      VulkanBackend(),
+                      WebGPUBackend());
 
 // Verifies the limit maxVertexAttributes work correctly on the creation of render pipelines.
 class MaxVertexAttributesPipelineCreationTests : public MaxLimitTests {
@@ -1334,12 +1349,13 @@ TEST_P(MaxVertexAttributesPipelineCreationTests, VertexIndex_InstanceIndex) {
 
 DAWN_INSTANTIATE_TEST(MaxVertexAttributesPipelineCreationTests,
                       D3D11Backend(),
+                      D3D12Backend(),
                       D3D12Backend({}, {"use_dxc"}),
-                      D3D12Backend({"use_dxc"}),
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
-                      VulkanBackend());
+                      VulkanBackend(),
+                      WebGPUBackend());
 
 }  // anonymous namespace
 }  // namespace dawn

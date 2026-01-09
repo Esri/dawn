@@ -54,7 +54,7 @@ class IRBinaryRoundtripTestBase : public IRTestParamHelper<T> {
         if (encoded != Success) {
             return {pre, encoded.Failure().reason};
         }
-        auto decoded = Decode(encoded->Slice());
+        auto decoded = Decode(encoded->AsSpan());
         if (decoded != Success) {
             return {pre, decoded.Failure().reason};
         }
@@ -333,6 +333,12 @@ TEST_F(IRBinaryRoundtripTest, storage_texture) {
     RUN_TEST();
 }
 
+TEST_F(IRBinaryRoundtripTest, texel_buffer) {
+    auto* buf = ty.texel_buffer(core::TexelFormat::kRgba32Float, core::Access::kReadWrite);
+    b.Append(b.ir.root_block, [&] { b.Var(ty.ptr(handle, buf, read)); });
+    RUN_TEST();
+}
+
 TEST_F(IRBinaryRoundtripTest, external_texture) {
     auto* tex = ty.external_texture();
     b.Append(b.ir.root_block, [&] { b.Var(ty.ptr(handle, tex, read)); });
@@ -391,13 +397,13 @@ TEST_F(IRBinaryRoundtripTest, Return_f16) {
 }
 
 TEST_F(IRBinaryRoundtripTest, Return_vec3f_Composite) {
-    auto* fn = b.Function("Function", ty.vec3<f32>());
+    auto* fn = b.Function("Function", ty.vec3f());
     b.Append(fn->Block(), [&] { b.Return(fn, b.Composite<vec3<f32>>(1_f, 2_f, 3_f)); });
     RUN_TEST();
 }
 
 TEST_F(IRBinaryRoundtripTest, Return_vec3f_Splat) {
-    auto* fn = b.Function("Function", ty.vec3<f32>());
+    auto* fn = b.Function("Function", ty.vec3f());
     b.Append(fn->Block(), [&] { b.Return(fn, b.Splat<vec3<f32>>(1_f)); });
     RUN_TEST();
 }
@@ -482,7 +488,7 @@ TEST_F(IRBinaryRoundtripTest, UserCall) {
 
 TEST_F(IRBinaryRoundtripTest, BuiltinCall) {
     auto* fn = b.Function("Function", ty.f32());
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Call<i32>(core::BuiltinFn::kMax, 1_i, 2_i)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Max(1_i, 2_i)); });
     RUN_TEST();
 }
 
@@ -528,7 +534,7 @@ TEST_F(IRBinaryRoundtripTest, UnaryOp) {
     auto* x = b.FunctionParam<bool>("x");
     auto* fn = b.Function("Function", ty.bool_());
     fn->SetParams({x});
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Not<bool>(x)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Not(x)); });
     RUN_TEST();
 }
 
@@ -537,23 +543,22 @@ TEST_F(IRBinaryRoundtripTest, BinaryOp) {
     auto* y = b.FunctionParam<f32>("y");
     auto* fn = b.Function("Function", ty.f32());
     fn->SetParams({x, y});
-    b.Append(fn->Block(), [&] { b.Return(fn, b.Add<f32>(x, y)); });
+    b.Append(fn->Block(), [&] { b.Return(fn, b.Add(x, y)); });
     RUN_TEST();
 }
 
 TEST_F(IRBinaryRoundtripTest, Swizzle) {
     auto* x = b.FunctionParam<vec4<f32>>("x");
-    auto* fn = b.Function("Function", ty.vec3<f32>());
+    auto* fn = b.Function("Function", ty.vec3f());
     fn->SetParams({x});
-    b.Append(fn->Block(), [&] {
-        b.Return(fn, b.Swizzle<vec3<f32>>(x, Vector<uint32_t, 3>{1, 0, 2}));
-    });
+    b.Append(fn->Block(),
+             [&] { b.Return(fn, b.Swizzle<vec3<f32>>(x, Vector<uint32_t, 3>{1, 0, 2})); });
     RUN_TEST();
 }
 
 TEST_F(IRBinaryRoundtripTest, Bitcast) {
     auto* x = b.FunctionParam<vec4<f32>>("x");
-    auto* fn = b.Function("Function", ty.vec4<u32>());
+    auto* fn = b.Function("Function", ty.vec4u());
     fn->SetParams({x});
     b.Append(fn->Block(), [&] { b.Return(fn, b.Bitcast<vec4<u32>>(x)); });
     RUN_TEST();
@@ -561,7 +566,7 @@ TEST_F(IRBinaryRoundtripTest, Bitcast) {
 
 TEST_F(IRBinaryRoundtripTest, Convert) {
     auto* x = b.FunctionParam<vec4<f32>>("x");
-    auto* fn = b.Function("Function", ty.vec4<u32>());
+    auto* fn = b.Function("Function", ty.vec4u());
     fn->SetParams({x});
     b.Append(fn->Block(), [&] { b.Return(fn, b.Convert<vec4<u32>>(x)); });
     RUN_TEST();
@@ -741,7 +746,7 @@ TEST_F(IRBinaryRoundtripTest, InputAttachment) {
         v->SetBindingPoint(10, 20);
         v->SetInputAttachmentIndex(11);
 
-        auto* fn = b.Function("Function", ty.vec4<i32>());
+        auto* fn = b.Function("Function", ty.vec4i());
         b.Append(fn->Block(),
                  [&] { b.Return(fn, b.Call<i32>(core::BuiltinFn::kInputAttachmentLoad, v)); });
     });

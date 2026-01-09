@@ -29,7 +29,6 @@
 
 #include "dawn/common/CoreFoundationRef.h"
 #include "dawn/common/GPUInfo.h"
-#include "dawn/common/GPUInfo_autogen.h"
 #include "dawn/common/Log.h"
 #include "dawn/common/NSRef.h"
 #include "dawn/common/Platform.h"
@@ -134,17 +133,10 @@ MaybeError GetDeviceIORegistryPCIInfo(id<MTLDevice> device, PCIIDs* ids) {
         return DAWN_INTERNAL_ERROR("Failed to create the matching dict for the device");
     }
 
-    // Work around a breaking deprecation of kIOMasterPortDefault to kIOMainPortDefault. Both values
-    // are equivalent with NULL (given mach_port_t is an unsigned int they probably mean 0) as noted
-    // by the IOKitLib.h comments so use that directly.
-    // TODO(chromium:1400252): Use kIOMainPortDefault once the minimum supported version includes
-    // macOS 12.0
-    constexpr mach_port_t kIOMainPort = 0;
-
     // IOServiceGetMatchingService will consume the reference on the matching dictionary,
     // so we don't need to release the dictionary.
     IORef<io_registry_entry_t> acceleratorEntry =
-        AcquireIORef(IOServiceGetMatchingService(kIOMainPort, matchingDict.Detach()));
+        AcquireIORef(IOServiceGetMatchingService(kIOMainPortDefault, matchingDict.Detach()));
 
     if (acceleratorEntry == IO_OBJECT_NULL) {
         return DAWN_INTERNAL_ERROR("Failed to get the IO registry entry for the accelerator");
@@ -236,6 +228,7 @@ bool IsGPUCounterSupported(id<MTLDevice> device,
     return true;
 }
 
+// https://developer.apple.com/documentation/metal/mtlgpufamily/apple9?language=objc
 enum class MTLGPUFamily {
     Apple1,
     Apple2,
@@ -243,7 +236,9 @@ enum class MTLGPUFamily {
     Apple4,
     Apple5,
     Apple6,
-    Apple7,
+    Apple7,  // A14 and M1
+    Apple8,  // A15, A16 and M2
+    Apple9,  // A17, M3 and M4
     Mac1,
     Mac2,
 };
@@ -256,6 +251,12 @@ ResultOrError<MTLGPUFamily> GetMTLGPUFamily(id<MTLDevice> device) {
         return MTLGPUFamily::Mac2;
     }
 #endif
+    if ([device supportsFamily:MTLGPUFamilyApple9]) {
+        return MTLGPUFamily::Apple9;
+    }
+    if ([device supportsFamily:MTLGPUFamilyApple8]) {
+        return MTLGPUFamily::Apple8;
+    }
     if ([device supportsFamily:MTLGPUFamilyApple7]) {
         return MTLGPUFamily::Apple7;
     }
@@ -316,8 +317,15 @@ PhysicalDevice::PhysicalDevice(InstanceBase* instance,
     NSString* osVersion = [[NSProcessInfo processInfo] operatingSystemVersionString];
     mDriverDescription = "Metal driver on " + std::string(systemName) + [osVersion UTF8String];
 
-    mSubgroupMinSize = 4;   // The 4 comes from the minimum derivative group.
-    mSubgroupMaxSize = 64;  // In MSL, a ballot is a uint64, so the max subgroup size is 64.
+    if (gpu_info::IsApple(mVendorId)) {
+        // Apple M1 tech talk: https://developer.apple.com/videos/play/wwdc2022/10159/
+        // "on all Apple GPUs, it is equal to 32"
+        mSubgroupMinSize = 32;
+        mSubgroupMaxSize = 32;
+    } else {
+        mSubgroupMinSize = 4;   // The 4 comes from the minimum derivative group.
+        mSubgroupMaxSize = 64;  // In MSL, a ballot is a uint64, so the max subgroup size is 64.
+    }
 }
 
 bool PhysicalDevice::IsMetalValidationEnabled() const {
@@ -402,6 +410,9 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         // TODO(crbug.com/dawn/342): Investigate emulation -- possibly expensive.
         deviceToggles->Default(Toggle::MetalDisableSamplerCompare, !haveSamplerCompare);
 
+        // TODO(crbug.com/363031535): Enable by default when possible
+        deviceToggles->Default(Toggle::MetalUseArgumentBuffers, false);
+
         bool haveBaseVertexBaseInstance = true;
 #if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) && \
     (!defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0)
@@ -412,11 +423,9 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         deviceToggles->Default(Toggle::DisableBaseInstance, !haveBaseVertexBaseInstance);
     }
 
-    // Vertex buffer robustness is implemented by using programmable vertex pulling. Enable
-    // that code path if it isn't explicitly disabled.
-    if (!deviceToggles->IsEnabled(Toggle::DisableRobustness)) {
-        deviceToggles->Default(Toggle::MetalEnableVertexPulling, true);
-    }
+    // Vertex buffer robustness is implemented by using programmable vertex pulling. The
+    // VertexPulling transform also handles non-4-byte aligned vertex buffer accesses.
+    deviceToggles->Default(Toggle::MetalEnableVertexPulling, true);
 
     // Shader `discard_fragment` changed semantics to be uniform in Metal 2.3+. See section 6.10.1.3
     // of the Metal Spec (v3.2).
@@ -442,11 +451,26 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         deviceToggles->Default(Toggle::MetalRenderR8RG8UnormSmallMipToTempTexture, true);
     }
 
-    // chromium:419804339: Module constant hoisting is broadly available as a msl transform but
-    // there are execution correction issues with f16 for non apple silicon (Intel/AMD). Therefore
-    // we only enable for apple silicon for now.
-    if (gpu_info::IsApple(vendorId)) {
-        deviceToggles->Default(Toggle::MetalEnableModuleConstant, true);
+    // chromium:419804339: Module constant hoisting is not supported for values containing f16
+    // types on Intel.
+    if (gpu_info::IsIntel(vendorId)) {
+        deviceToggles->Default(Toggle::MetalDisableModuleConstantF16, true);
+    }
+
+    // chromium:407109055: Signed unpacking is inaccurate on AMD.
+    if (gpu_info::IsAMD(vendorId)) {
+        deviceToggles->Default(Toggle::MetalPolyfillUnpack2x16snorm, true);
+    }
+    // chromium:449576833: Signed and unsigned packing is incorrect on M3+ for non-4-byte aligned
+    // offsets.
+    if ([*mDevice supportsFamily:MTLGPUFamilyApple9]) {
+        deviceToggles->Default(Toggle::MetalPolyfillUnpack2x16snorm, true);
+        deviceToggles->Default(Toggle::MetalPolyfillUnpack2x16unorm, true);
+    }
+
+    // chromium:407109056: Floating point clamp is slightly inaccurate for subnormal values.
+    if (gpu_info::IsAMD(vendorId)) {
+        deviceToggles->Default(Toggle::MetalPolyfillClampFloat, true);
     }
 
     // On some Intel GPUs vertex only render pipeline get wrong depth result if no fragment
@@ -472,18 +496,18 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
     // encoders on macOS 11.0+, we need to add mock blit command to blit encoder when encoding
     // writeTimestamp as workaround by enabling the toggle
     // "metal_use_mock_blit_encoder_for_write_timestamp".
-        deviceToggles->Default(Toggle::MetalUseMockBlitEncoderForWriteTimestamp, true);
+    deviceToggles->Default(Toggle::MetalUseMockBlitEncoderForWriteTimestamp, true);
 
     // On macOS 15.0+, we can use sampleTimestamps:gpuTimestamp: from MTLDevice to capture CPU and
     // GPU timestamps to estimate GPU timestamp period at device creation, but this API call will
     // cause GPU overheating on Intel GPUs due to a driver bug keeping the GPU running at the
     // maximum clock. Disable timestamp sampling to avoid overheating user's devices.
     // See https://crbug.com/342701242 for more details.
-        if (@available(macos 15.0, *)) {
-            if (gpu_info::IsIntel(deviceId)) {
-                deviceToggles->Default(Toggle::MetalDisableTimestampPeriodEstimation, true);
-            }
+    if (@available(macos 15.0, *)) {
+        if (gpu_info::IsIntel(deviceId)) {
+            deviceToggles->Default(Toggle::MetalDisableTimestampPeriodEstimation, true);
         }
+    }
 
 #if DAWN_PLATFORM_IS(MACOS)
     if (gpu_info::IsIntel(vendorId)) {
@@ -540,6 +564,15 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
             Toggle::MetalUseBothDepthAndStencilAttachmentsForCombinedDepthStencilFormats, true);
     }
 #endif
+
+    // Enable the integer range analysis for shader robustness by default if the corresponding
+    // platform feature is enabled.
+    deviceToggles->Default(
+        Toggle::EnableIntegerRangeAnalysisInRobustness,
+        platform->IsFeatureEnabled(platform::Features::kWebGPUEnableRangeAnalysisForRobustness));
+
+    // Metal waiting is already thread safe.
+    deviceToggles->Default(Toggle::WaitIsThreadSafe, true);
 }
 
 MaybeError PhysicalDevice::InitializeImpl() {
@@ -642,7 +675,8 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     // family of GPUs on.
     if ([*mDevice supportsFamily:MTLGPUFamilyApple2]) {
         // Programmable blending doesn't seem to work as expected on the iOS simulator.
-#if !defined(TARGET_OS_SIMULATOR)
+        // NOTE: TARGET_OS_SIMULATOR can be defined but set to false for MacOS builds.
+#if !defined(TARGET_OS_SIMULATOR) || !TARGET_OS_SIMULATOR
         EnableFeature(Feature::FramebufferFetch);
 #endif
         EnableFeature(Feature::TransientAttachments);
@@ -663,16 +697,12 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     EnableFeature(Feature::RG11B10UfloatRenderable);
     EnableFeature(Feature::BGRA8UnormStorage);
     EnableFeature(Feature::DualSourceBlending);
-    EnableFeature(Feature::R8UnormStorage);
     EnableFeature(Feature::ShaderModuleCompilationOptions);
     EnableFeature(Feature::DawnLoadResolveTexture);
     EnableFeature(Feature::ClipDistances);
     EnableFeature(Feature::Float32Blendable);
     EnableFeature(Feature::FlexibleTextureViews);
-
-    // The function subgroupBroadcast(f16) fails for some edge cases on intel gen-9 devices.
-    // See crbug.com/391680973
-    const bool kForceDisableSubgroups = gpu_info::IsIntelGen9(GetVendorId(), GetDeviceId());
+    EnableFeature(Feature::TextureFormatsTier1);
 
     // SIMD-scoped permute operations is supported by GPU family Metal3, Apple6, Apple7, Apple8,
     // and Mac2.
@@ -684,13 +714,16 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     // Note that supportsFamily: method requires macOS 10.15+ or iOS 13.0+
     // TODO(380326541): Check that reduction operations are supported in Apple6. The support
     // table says Apple7.
-    if (!kForceDisableSubgroups && ([*mDevice supportsFamily:MTLGPUFamilyApple6] ||
-                                    [*mDevice supportsFamily:MTLGPUFamilyMac2])) {
+    if (([*mDevice supportsFamily:MTLGPUFamilyApple6] ||
+         [*mDevice supportsFamily:MTLGPUFamilyMac2])) {
         EnableFeature(Feature::Subgroups);
     }
 
     if ([*mDevice supportsFamily:MTLGPUFamilyApple7]) {
         EnableFeature(Feature::ChromiumExperimentalSubgroupMatrix);
+        // TODO(342172182): This may be available in more places?
+        // (mwyrzykowski says "Apple7 and all Macs")
+        EnableFeature(Feature::PrimitiveIndex);
     }
 
     EnableFeature(Feature::SharedTextureMemoryIOSurface);
@@ -698,8 +731,6 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     EnableFeature(Feature::SharedFenceMTLSharedEvent);
 
     EnableFeature(Feature::Unorm16TextureFormats);
-    EnableFeature(Feature::Snorm16TextureFormats);
-    EnableFeature(Feature::Norm16TextureFormats);
 
     EnableFeature(Feature::HostMappedPointer);
 
@@ -710,6 +741,14 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
         EnableFeature(Feature::BufferMapExtendedUsages);
     }
 #endif
+
+    if (SupportTextureComponentSwizzle(*mDevice)) {
+        EnableFeature(Feature::TextureComponentSwizzle);
+    }
+
+    if ([*mDevice readWriteTextureSupport] == MTLReadWriteTextureTier2) {
+        EnableFeature(Feature::TextureFormatsTier2);
+    }
 }
 
 void PhysicalDevice::InitializeVendorArchitectureImpl() {
@@ -763,32 +802,32 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits)
     };
 
     struct LimitsForFamily {
-        uint32_t MTLDeviceLimits::*limit;
-        ityp::array<MTLGPUFamily, uint32_t, 9> values;
+        uint32_t MTLDeviceLimits::* limit;
+        ityp::array<MTLGPUFamily, uint32_t, 11> values;
     };
 
     // clang-format off
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
-            //                                                               Apple                                                      Mac
-            //                                                                   1,      2,      3,      4,      5,      6,      7,       1,      2
+            //                                                               Apple                                                                     Mac
+            //                                                                   1,      2,      3,      4,      5,      6,      7,      8,      9,      1,      2
             constexpr LimitsForFamily kMTLLimits[15] = {
-                {&MTLDeviceLimits::maxVertexAttribsPerDescriptor,         {    31u,    31u,    31u,    31u,    31u,    31u,    31u,     31u,    31u }},
-                {&MTLDeviceLimits::maxBufferArgumentEntriesPerFunc,       {    31u,    31u,    31u,    31u,    31u,    31u,    31u,     31u,    31u }},
-                {&MTLDeviceLimits::maxTextureArgumentEntriesPerFunc,      {    31u,    31u,    31u,    96u,    96u,   128u,   128u,    128u,   128u }},
-                {&MTLDeviceLimits::maxSamplerStateArgumentEntriesPerFunc, {    16u,    16u,    16u,    16u,    16u,    16u,    16u,     16u,    16u }},
-                {&MTLDeviceLimits::maxThreadsPerThreadgroup,              {   512u,   512u,   512u,  1024u,  1024u,  1024u,  1024u,   1024u,  1024u }},
-                {&MTLDeviceLimits::maxTotalThreadgroupMemory,             { 16352u, 16352u, 16384u, 32768u, 32768u, 32768u, 32768u,  32768u, 32768u }},
-                {&MTLDeviceLimits::maxFragmentInputs,                     {    60u,    60u,    60u,   124u,   124u,   124u,   124u,     32u,    32u }},
-                {&MTLDeviceLimits::maxFragmentInputComponents,            {    60u,    60u,    60u,   124u,   124u,   124u,   124u,    124u,   124u }},
-                {&MTLDeviceLimits::max1DTextureSize,                      {  8192u,  8192u, 16384u, 16384u, 16384u, 16384u, 16384u,  16384u, 16384u }},
-                {&MTLDeviceLimits::max2DTextureSize,                      {  8192u,  8192u, 16384u, 16384u, 16384u, 16384u, 16384u,  16384u, 16384u }},
-                {&MTLDeviceLimits::max3DTextureSize,                      {  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,   2048u,  2048u }},
-                {&MTLDeviceLimits::maxTextureArrayLayers,                 {  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,   2048u,  2048u }},
-                {&MTLDeviceLimits::minBufferOffsetAlignment,              {     4u,     4u,     4u,     4u,     4u,     4u,     4u,    256u,   256u }},
-                {&MTLDeviceLimits::maxColorRenderTargets,                 {     4u,     8u,     8u,     8u,     8u,     8u,     8u,      8u,     8u }},
+                {&MTLDeviceLimits::maxVertexAttribsPerDescriptor,         {    31u,    31u,    31u,    31u,    31u,    31u,    31u,    31u,    31u,    31u,    31u }},
+                {&MTLDeviceLimits::maxBufferArgumentEntriesPerFunc,       {    31u,    31u,    31u,    31u,    31u,    31u,    31u,    31u,    31u,    31u,    31u }},
+                {&MTLDeviceLimits::maxTextureArgumentEntriesPerFunc,      {    31u,    31u,    31u,    96u,    96u,   128u,   128u,   128u,   128u,   128u,   128u }},
+                {&MTLDeviceLimits::maxSamplerStateArgumentEntriesPerFunc, {    16u,    16u,    16u,    16u,    16u,    16u,    16u,    16u,    16u,    16u,    16u }},
+                {&MTLDeviceLimits::maxThreadsPerThreadgroup,              {   512u,   512u,   512u,  1024u,  1024u,  1024u,  1024u,  1024u,  1024u,  1024u,  1024u }},
+                {&MTLDeviceLimits::maxTotalThreadgroupMemory,             { 16352u, 16352u, 16384u, 32768u, 32768u, 32768u, 32768u, 32768u, 32768u, 32768u, 32768u }},
+                {&MTLDeviceLimits::maxFragmentInputs,                     {    60u,    60u,    60u,   124u,   124u,   124u,   124u,   124u,   124u,    32u,    32u }},
+                {&MTLDeviceLimits::maxFragmentInputComponents,            {    60u,    60u,    60u,   124u,   124u,   124u,   124u,   124u,   124u,   124u,   124u }},
+                {&MTLDeviceLimits::max1DTextureSize,                      {  8192u,  8192u, 16384u, 16384u, 16384u, 16384u, 16384u, 16384u, 16384u, 16384u, 16384u }},
+                {&MTLDeviceLimits::max2DTextureSize,                      {  8192u,  8192u, 16384u, 16384u, 16384u, 16384u, 16384u, 16384u, 16384u, 16384u, 16384u }},
+                {&MTLDeviceLimits::max3DTextureSize,                      {  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u }},
+                {&MTLDeviceLimits::maxTextureArrayLayers,                 {  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u,  2048u }},
+                {&MTLDeviceLimits::minBufferOffsetAlignment,              {     4u,     4u,     4u,     4u,     4u,     4u,     4u,     4u,     4u,   256u,   256u }},
+                {&MTLDeviceLimits::maxColorRenderTargets,                 {     4u,     8u,     8u,     8u,     8u,     8u,     8u,     8u,     8u,     8u,     8u }},
                 // Note: the feature set tables list No Limit for Mac 1 and Mac 2.
                 // For these, we use maxColorRenderTargets * 16. 16 is the largest cost of any color format.
-                {&MTLDeviceLimits::maxTotalRenderTargetSize,              {    16u,    32u,    32u,    64u,    64u,    64u,    64u,    128u,   128u }},
+                {&MTLDeviceLimits::maxTotalRenderTargetSize,              {    16u,    32u,    32u,    64u,    64u,    64u,    64u,    64u,    64u,   128u,   128u }},
             };
     // clang-format on
 
@@ -881,15 +920,19 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits)
     limits->v1.maxUniformBufferBindingSize = maxBufferSize;
     limits->v1.maxStorageBufferBindingSize = maxBufferSize;
 
+    // Metal doesn't have limits for SetBytes, only suggested less than 4096 bytes.
+    // The size is large enough to support 64 bytes customer immediate data.
+    limits->v1.maxImmediateSize = kMaxImmediateDataBytes;
+
     // Using base limits for:
     // TODO(crbug.com/dawn/685):
     // - maxBindGroups
     // - maxVertexBufferArrayStride
 
-    limits->v1.maxStorageBuffersInFragmentStage = limits->v1.maxStorageBuffersPerShaderStage;
-    limits->v1.maxStorageTexturesInFragmentStage = limits->v1.maxStorageTexturesPerShaderStage;
-    limits->v1.maxStorageBuffersInVertexStage = limits->v1.maxStorageBuffersPerShaderStage;
-    limits->v1.maxStorageTexturesInVertexStage = limits->v1.maxStorageTexturesPerShaderStage;
+    limits->compat.maxStorageBuffersInFragmentStage = limits->v1.maxStorageBuffersPerShaderStage;
+    limits->compat.maxStorageTexturesInFragmentStage = limits->v1.maxStorageTexturesPerShaderStage;
+    limits->compat.maxStorageBuffersInVertexStage = limits->v1.maxStorageBuffersPerShaderStage;
+    limits->compat.maxStorageTexturesInVertexStage = limits->v1.maxStorageTexturesPerShaderStage;
 
     // The memory allocation must be in a single virtual memory (VM) region.
     limits->hostMappedPointerLimits.hostMappedPointerAlignment = 4096;
@@ -900,10 +943,27 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits)
 FeatureValidationResult PhysicalDevice::ValidateFeatureSupportedWithTogglesImpl(
     wgpu::FeatureName feature,
     const TogglesState& toggles) const {
+    switch (feature) {
+        // The function subgroupBroadcast(f16) fails for some edge cases on Intel Gen-9 devices.
+        // See crbug.com/391680973. We disable subgroups on this device unless the user has
+        // explicitly enabled the 'EnableSubgroupsIntelGen9' toggle.
+        case wgpu::FeatureName::Subgroups:
+            if (gpu_info::IsIntelGen9(GetVendorId(), GetDeviceId()) &&
+                !toggles.IsEnabled(Toggle::EnableSubgroupsIntelGen9)) {
+                return FeatureValidationResult(
+                    absl::StrFormat("Intel Gen-9 devices require `enable_subgroups_intel_gen9`"
+                                    " to enable %s.",
+                                    feature));
+            }
+            break;
+        default:
+            break;
+    }
     return {};
 }
 
-void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info) const {
+void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
+                                               const TogglesState& toggles) const {
     if (auto* memoryHeapProperties = info.Get<AdapterPropertiesMemoryHeaps>()) {
         if ([*mDevice hasUnifiedMemory]) {
             auto* heapInfo = new MemoryHeapInfo[1];

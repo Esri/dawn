@@ -33,6 +33,8 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/validator.h"
 #include "src/tint/lang/core/type/binding_array.h"
+#include "src/tint/lang/msl/builtin_fn.h"
+#include "src/tint/lang/msl/ir/builtin_call.h"
 
 namespace tint::msl::writer::raise {
 namespace {
@@ -41,6 +43,9 @@ using namespace tint::core::fluent_types;  // NOLINT
 
 /// PIMPL state for the transform.
 struct State {
+    /// The argument buffer configuration.
+    const ArgumentBuffersConfig& config;
+
     /// The IR module.
     core::ir::Module& ir;
 
@@ -58,7 +63,7 @@ struct State {
     Vector<core::ir::Var*, 8> module_vars{};
 
     /// Maps a binding argument buffer index to the function param
-    Hashmap<uint32_t, core::ir::Value*, 8> id_to_arg_buffer{};
+    std::unordered_map<uint32_t, core::ir::Value*> id_to_arg_buffer{};
 
     /// Maps from variable to the argument buffer index
     Hashmap<core::ir::Var*, uint32_t, 4> var_to_struct_idx{};
@@ -70,9 +75,13 @@ struct State {
     /// A map from block to its containing function.
     Hashmap<core::ir::Block*, core::ir::Function*, 64> block_to_function{};
 
+    /// Maps from a group number to the dynamic offset buffer
+    Hashmap<uint32_t, core::ir::Value*, 8> group_to_dynamic_offset_buffer{};
+
     // The name of the argument buffer structures.
     static constexpr const char* kArgBufferName = "tint_arg_buffer_struct";
     static constexpr const char* kArgBufferParamName = "tint_arg_buffer";
+    static constexpr const char* kDynamicOffsetParamName = "tint_dynamic_offset_buffer";
 
     /// Process the module.
     void Process() {
@@ -97,6 +106,12 @@ struct State {
                 continue;
             }
 
+            // If we aren't replacing the group, there is nothing to do.
+            auto iter = config.group_to_argument_buffer_info.find(var->BindingPoint()->group);
+            if (iter == config.group_to_argument_buffer_info.end()) {
+                continue;
+            }
+
             Vector<core::ir::Instruction*, 16> to_destroy;
             auto* ptr = var->Result()->Type()->As<core::type::Pointer>();
             var->Result()->ForEachUseUnsorted([&](core::ir::Usage use) {  //
@@ -118,7 +133,7 @@ struct State {
                     // Accesses are replaced with accesses of the extracted variable.
                     [&](core::ir::Access* access) {
                         auto* ba = ptr->StoreType()->As<core::type::BindingArray>();
-                        TINT_ASSERT(ba != nullptr);
+                        TINT_IR_ASSERT(ir, ba != nullptr);
                         auto* elem_type = ba->ElemType();
 
                         access->SetOperand(core::ir::Access::kObjectOperandOffset,
@@ -129,7 +144,7 @@ struct State {
                         // but the new access returns a T. We need to modify all the previous load
                         // through the ptr<T> to direct accesses.
                         access->Result()->ForEachUseUnsorted([&](core::ir::Usage access_use) {
-                            TINT_ASSERT(access_use.instruction->Is<core::ir::Load>());
+                            TINT_IR_ASSERT(ir, access_use.instruction->Is<core::ir::Load>());
                             access_use.instruction->Result()->ReplaceAllUsesWith(access->Result());
                             to_destroy.Push(access_use.instruction);
                         });
@@ -160,10 +175,14 @@ struct State {
                 continue;
             }
 
+            if (config.skip_bindings.contains(*bp)) {
+                continue;
+            }
+
             vars.Push(var);
         }
 
-        // Metal requires the argument buffer `id` entries to be in increasing order. SOrt the Vars
+        // Metal requires the argument buffer `id` entries to be in increasing order. Sort the Vars
         // such that when we create the struct we will create it in ascending order.
         vars.Sort([&](const auto* va, const auto* vb) {
             return va->BindingPoint() < vb->BindingPoint();
@@ -193,7 +212,7 @@ struct State {
             struct_members.Push(core::type::Manager::StructMemberDesc{
                 name, type,
                 core::IOAttributes{
-                    .binding_point = BindingPoint{0, bp->binding},
+                    .binding_point = BindingPoint{bp->group, bp->binding},
                 }});
         }
 
@@ -219,15 +238,36 @@ struct State {
         auto keys = arg_buffers.Keys().Sort();
 
         for (auto& buffer_id : keys) {
+            auto iter = config.group_to_argument_buffer_info.find(buffer_id);
+            if (iter == config.group_to_argument_buffer_info.end()) {
+                continue;
+            }
+
             auto name = std::string(kArgBufferParamName) + "_" + std::to_string(buffer_id);
             auto* param = b.FunctionParam(name, *arg_buffers.Get(buffer_id));
-            param->SetBindingPoint(BindingPoint{buffer_id, 0});
+
+            param->SetBindingPoint(BindingPoint{0, iter->second.id});
             func->AppendParam(param);
 
             auto* ld = b.Load(param);
             func->Block()->Prepend(ld);
 
-            id_to_arg_buffer.Add(buffer_id, ld->Result());
+            id_to_arg_buffer.insert({buffer_id, ld->Result()});
+
+            // If this buffer requires a dynamic offset buffer attached, create the function
+            // parameter
+            if (iter->second.dynamic_buffer_id.has_value()) {
+                auto dynamic_buffer_name =
+                    std::string(kDynamicOffsetParamName) + "_" + std::to_string(buffer_id);
+                auto* dynamic_buffer_param =
+                    b.FunctionParam(dynamic_buffer_name, ty.ptr(storage, ty.array<u32>(), read));
+
+                dynamic_buffer_param->SetBindingPoint(
+                    BindingPoint{0, iter->second.dynamic_buffer_id.value()});
+                func->AppendParam(dynamic_buffer_param);
+
+                group_to_dynamic_offset_buffer.Add(buffer_id, dynamic_buffer_param);
+            }
         }
     }
 
@@ -284,12 +324,43 @@ struct State {
         }
 
         if (func->IsEntryPoint()) {
-            auto* arg_buffer = *id_to_arg_buffer.Get(var->BindingPoint()->group);
+            auto group = var->BindingPoint()->group;
+            auto binding = var->BindingPoint()->binding;
+
+            auto arg_buffer = id_to_arg_buffer.find(group);
+            TINT_IR_ASSERT(ir, arg_buffer != id_to_arg_buffer.end());
+
             auto idx = *var_to_struct_idx.Get(var);
 
-            auto* access = b.Access(type, arg_buffer, u32(idx));
+            auto* access = b.Access(type, arg_buffer->second, u32(idx));
             access->InsertBefore(inst);
-            return access->Result();
+
+            auto grp_iter = config.group_to_argument_buffer_info.find(group);
+            if (grp_iter == config.group_to_argument_buffer_info.end()) {
+                return access->Result();
+            }
+
+            auto binding_iter = grp_iter->second.binding_info_to_offset_index.find(binding);
+            if (binding_iter == grp_iter->second.binding_info_to_offset_index.end()) {
+                return access->Result();
+            }
+
+            core::ir::Value* offset_buffer = group_to_dynamic_offset_buffer.GetOr(group, nullptr);
+            if (!offset_buffer) {
+                return access->Result();
+            }
+
+            core::ir::Value* result = nullptr;
+            b.InsertAfter(access, [&] {
+                auto* offset = b.Access(ty.ptr<storage, u32, read>(), offset_buffer,
+                                        b.Constant(u32(binding_iter->second)));
+
+                result = b.Call<msl::ir::BuiltinCall>(type, msl::BuiltinFn::kPointerOffset, access,
+                                                      b.Load(offset))
+                             ->Result();
+            });
+
+            return result;
         }
 
         return AddModuleVarsToFunction(func, var);
@@ -307,15 +378,15 @@ struct State {
 
 }  // namespace
 
-Result<SuccessType> ArgumentBuffers(core::ir::Module& ir) {
-    auto result = ValidateAndDumpIfNeeded(
-        ir, "msl.ArgumentBuffers",
-        tint::core::ir::Capabilities{tint::core::ir::Capability::kAllowDuplicateBindings});
-    if (result != Success) {
-        return result.Failure();
-    }
+Result<SuccessType> ArgumentBuffers(core::ir::Module& ir, const ArgumentBuffersConfig& config) {
+    TINT_CHECK_RESULT(
+        ValidateAndDumpIfNeeded(ir, "msl.ArgumentBuffers",
+                                tint::core::ir::Capabilities{
+                                    tint::core::ir::Capability::kAllowPointSizeBuiltin,
+                                    tint::core::ir::Capability::kAllowDuplicateBindings,
+                                }));
 
-    State{ir}.Process();
+    State{config, ir}.Process();
 
     return Success;
 }

@@ -1,7 +1,8 @@
+
 [numthreads(1, 1, 1)]
 void f() {
-  int a = 1;
-  int b = 2;
-  int r = (a - b);
-  return;
+  int a = int(1);
+  int b = int(2);
+  int r = asint((asuint(a) - asuint(b)));
 }
+
