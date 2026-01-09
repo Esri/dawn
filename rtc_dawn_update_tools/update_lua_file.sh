@@ -69,6 +69,7 @@ command_options=(\
     "-DDAWN_ENABLE_OPENGLES=OFF" \ 
     "-DDAWN_ENABLE_DESKTOP_GL=OFF" \
     "-DDAWN_ENABLE_D3D11=OFF" \
+    "-DDAWN_BUILD_PROTOBUF=OFF" \
   )
 if [ "${os}" == "linux" ]; then
   command_options+=( "-DX11_X11_INCLUDE_PATH=/usr/local/rtc/sysroot/redhat8.4/x86_64/usr/include" )
