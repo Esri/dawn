@@ -932,7 +932,8 @@ if (_PLATFORM_WINDOWS) then
   configuration { "Test" }
 
   buildoptions {
-    "/Ob2"
+    "/Ob2",
+    "/Zc:preprocessor"
   }
 
 end
