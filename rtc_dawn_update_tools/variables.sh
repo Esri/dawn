@@ -1,7 +1,7 @@
 #!/bin/bash
 
 python_version="3.12"
-cmake_version="3.29.2"
+cmake_version="4.0.2"
 llvm_version="19.1.2"
 windows_target_sdk="10.0.19041.0"
 
