@@ -56,3 +56,4 @@ Hashmap<const core::type::Type*, core::ir::Var*, 4> ResourceTableHelper::Generat
 }
 
 }  // namespace tint::spirv::writer::raise
+
