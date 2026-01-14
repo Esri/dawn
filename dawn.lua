@@ -743,7 +743,7 @@ if (enable_hlsl) then
     "src/tint/lang/hlsl/builtin_fn_rtc_shim_3.cc",
     "src/tint/lang/hlsl/intrinsic/data_rtc_shim_3.cc",
     "src/tint/lang/hlsl/ir/builtin_call_rtc_shim_3.cc",
-    "src/tint/lang/hlsl/ir/member_builtin_call_rtc_shim_2.cc",
+    "src/tint/lang/hlsl/ir/member_builtin_call_rtc_shim_3.cc",
     "src/tint/lang/hlsl/ir/ternary.cc",
     "src/tint/lang/hlsl/type/byte_address_buffer.cc",
     "src/tint/lang/hlsl/type/int8_t4_packed.cc",
