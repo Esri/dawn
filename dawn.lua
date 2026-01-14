@@ -755,6 +755,8 @@ if (enable_hlsl) then
     "src/tint/lang/hlsl/writer/common/options_rtc_shim_1.cc",
     "src/tint/lang/hlsl/writer/common/output_rtc_shim_1.cc",
     "src/tint/lang/hlsl/writer/printer/printer.cc",
+    "src/tint/lang/hlsl/writer/raise/array_offset_from_uniform.cc",
+    "src/tint/lang/hlsl/writer/raise/array_offset_from_immediate.cc",
     "src/tint/lang/hlsl/writer/raise/binary_polyfill_rtc_shim_1.cc",
     "src/tint/lang/hlsl/writer/raise/builtin_polyfill_rtc_shim_2.cc",
     "src/tint/lang/hlsl/writer/raise/decompose_storage_access.cc",
