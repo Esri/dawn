@@ -1,4 +1,4 @@
-// Copyright 2024 The Dawn & Tint Authors
+// Copyright 2023 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -25,37 +25,16 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/hlsl/ir/builtin_call.h"
+#include "src/tint/lang/hlsl/writer/common/output.h"
 
-#include <utility>
+namespace tint::hlsl::writer {
 
-#include "src/tint/lang/core/ir/clone_context.h"
-#include "src/tint/lang/core/ir/module.h"
-#include "src/tint/utils/ice/ice.h"
+Output::Output() = default;
 
-TINT_INSTANTIATE_TYPEINFO(tint::hlsl::ir::BuiltinCall);
+Output::~Output() = default;
 
-namespace tint::hlsl::ir {
+Output::Output(const Output&) = default;
 
-BuiltinCall::BuiltinCall(Id id,
-                         core::ir::InstructionResult* result,
-                         BuiltinFn func,
-                         VectorRef<core::ir::Value*> arguments)
-    : Base(id, result, arguments), func_(func) {
-    flags_.Add(Flag::kSequenced);
-    TINT_ASSERT(func != BuiltinFn::kNone);
-}
+Output& Output::operator=(const Output&) = default;
 
-BuiltinCall::~BuiltinCall() = default;
-
-BuiltinCall* BuiltinCall::Clone(core::ir::CloneContext& ctx) {
-    auto* new_result = ctx.Clone(Result());
-    auto new_args = ctx.Clone<BuiltinCall::kDefaultNumOperands>(Args());
-    return ctx.ir.CreateInstruction<BuiltinCall>(new_result, func_, new_args);
-}
-
-tint::core::ir::Instruction::Accesses BuiltinCall::GetSideEffects() const {
-    return tint::hlsl::GetSideEffects(func_);
-}
-
-}  // namespace tint::hlsl::ir
+}  // namespace tint::hlsl::writer
