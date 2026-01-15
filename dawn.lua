@@ -126,6 +126,7 @@ includedirs {
   DAWN_GEN_OUTPUT_DIR.."/src",
   "src",
   "src/dawn/partition_alloc",
+  "src/dawn/utils",
 
   _3RDPARTY_DIR .. "/abseil-cpp",
 }
