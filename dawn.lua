@@ -712,6 +712,7 @@ if (enable_win) then
     "DAWN_USE_WINDOWS_UI",
     "TINT_BUILD_IS_WIN=1",
     "ENABLE_PCH=1",
+    "WIN32=1"
   }
 
   files {
@@ -1108,7 +1109,8 @@ if (_PLATFORM_WINDOWS) then
   }
 
   links {
-    "onecore"
+    "onecore",
+    "onecore_apiset"
   }
 
 end
