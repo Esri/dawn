@@ -1107,4 +1107,8 @@ if (_PLATFORM_WINDOWS) then
     "/Zc:preprocessor"
   }
 
+  links {
+    "onecore"
+  }
+
 end
