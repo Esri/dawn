@@ -170,7 +170,8 @@ includedirs {
 
 files {
     "src/dawn/utils/SystemHandle.cpp", -- update_lua_file.sh won't pick this up / might remove this if placed below, but it is necessary
-    "src/tint/utils/rtti/castable.cc"
+    "src/tint/utils/rtti/castable.cc",
+    "src/dawn/native/utils/RenderDoc.cpp"
 }
 
 files {
