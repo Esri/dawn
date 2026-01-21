@@ -612,7 +612,7 @@ files {
   "src/tint/lang/wgsl/sem/variable_rtc_shim_1.cc",
   "src/tint/lang/wgsl/sem/while_statement_rtc_shim_1.cc",
   "src/tint/lang/wgsl/writer/ast_printer/ast_printer.cc",
-  "src/tint/lang/wgsl/writer/common/common.cc",
+  "src/tint/lang/wgsl/writer/common/common_rtc_shim_1.cc",
   "src/tint/lang/wgsl/writer/ir_to_program/ir_to_program.cc",
   "src/tint/lang/wgsl/writer/output_rtc_shim_4.cc",
   "src/tint/lang/wgsl/writer/raise/ptr_to_ref.cc",
@@ -712,7 +712,6 @@ if (enable_win) then
     "DAWN_USE_WINDOWS_UI",
     "TINT_BUILD_IS_WIN=1",
     "ENABLE_PCH=1",
-    "WIN32=1"
   }
 
   files {
@@ -1098,6 +1097,10 @@ end
 
 if (_PLATFORM_WINDOWS) then
 
+  buildoptions {
+    "/Zc:preprocessor",
+  }
+
   -- Use the same build options for Test as for Release to overcome D8040
   -- error in Test builds.
 
@@ -1105,12 +1108,6 @@ if (_PLATFORM_WINDOWS) then
 
   buildoptions {
     "/Ob2",
-    "/Zc:preprocessor"
-  }
-
-  links {
-    "onecore",
-    "onecore_apiset"
   }
 
 end
