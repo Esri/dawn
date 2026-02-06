@@ -875,7 +875,7 @@ if (enable_spirv) then
     "src/tint/lang/spirv/writer/raise/merge_return.cc",
     "src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.cc",
     "src/tint/lang/spirv/writer/raise/raise_rtc_shim_4.cc",
-    "src/tint/lang/spirv/writer/raise/resource_table_helper_rtc_shim_2.cc"
+    "src/tint/lang/spirv/writer/raise/resource_table_helper_rtc_shim_2.cc",
     "src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.cc",
     "src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_4.cc",
     "src/tint/lang/spirv/writer/raise/unary_polyfill.cc",
