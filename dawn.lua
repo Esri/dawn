@@ -407,7 +407,7 @@ files {
   "src/tint/lang/core/ir/transform/remove_uniform_vector_component_loads.cc",
   "src/tint/lang/core/ir/transform/rename_conflicts.cc",
   "src/tint/lang/core/ir/transform/resource_table.cc",
-  "src/tint/lang/core/ir/transform/resource_table_helper.cc",
+  "src/tint/lang/core/ir/transform/resource_table_helper_rtc_shim_1.cc",
   "src/tint/lang/core/ir/transform/robustness.cc",
   "src/tint/lang/core/ir/transform/shader_io.cc",
   "src/tint/lang/core/ir/transform/signed_integer_polyfill.cc",
@@ -875,6 +875,7 @@ if (enable_spirv) then
     "src/tint/lang/spirv/writer/raise/merge_return.cc",
     "src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.cc",
     "src/tint/lang/spirv/writer/raise/raise_rtc_shim_4.cc",
+    "src/tint/lang/spirv/writer/raise/resource_table_helper_rtc_shim_2.cc"
     "src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.cc",
     "src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_4.cc",
     "src/tint/lang/spirv/writer/raise/unary_polyfill.cc",
