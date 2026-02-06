@@ -69,7 +69,9 @@
 
 namespace dawn::native::vulkan {
 
-#define COMPILED_SPIRV_MEMBERS(X) X(std::vector<uint32_t>, spirv)
+#define COMPILED_SPIRV_MEMBERS(X)   \
+    X(std::vector<uint32_t>, spirv) \
+    X(std::optional<uint32_t>, explicitSubgroupSize)
 
 // Represents the result and metadata for a SPIR-V compilation.
 // clang-format off
@@ -110,6 +112,9 @@ ShaderModule::~ShaderModule() = default;
     X(LimitsForCompilationRequest, limits)                                           \
     X(UnsafeUnserializedValue<LimitsForCompilationRequest>, adapterSupportedLimits)  \
     X(uint32_t, maxSubgroupSize)                                                     \
+    X(uint32_t, minExplicitComputeSubgroupSize)                                      \
+    X(uint32_t, maxExplicitComputeSubgroupSize)                                      \
+    X(uint32_t, maxComputeWorkgroupSubgroups)                                        \
     X(bool, usesSubgroupMatrix)                                                      \
     X(std::vector<SubgroupMatrixConfig>, subgroupMatrixConfig)                       \
     X(tint::spirv::writer::Options, tintOptions)                                     \
@@ -250,6 +255,10 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
         GetDevice()->IsToggleEnabled(Toggle::VulkanPolyfillSwitchWithIf);
     req.tintOptions.workarounds.scalarize_max_min_clamp =
         GetDevice()->IsToggleEnabled(Toggle::ScalarizeMaxMinClamp);
+
+    req.tintOptions.workarounds.polyfill_saturate_as_min_max_f16 =
+        GetDevice()->IsToggleEnabled(Toggle::SaturateAsMinMaxF16);
+
     req.tintOptions.workarounds.dva_transform_handle =
         GetDevice()->IsToggleEnabled(Toggle::VulkanDirectVariableAccessTransformHandle);
     req.tintOptions.workarounds.polyfill_subgroup_broadcast_f16 =
@@ -273,6 +282,14 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
     req.adapterSupportedLimits = UnsafeUnserializedValue(
         LimitsForCompilationRequest::Create(GetDevice()->GetAdapter()->GetLimits().v1));
     req.maxSubgroupSize = GetDevice()->GetAdapter()->GetPhysicalDevice()->GetSubgroupMaxSize();
+    if (GetDevice()->HasFeature(Feature::ChromiumExperimentalSubgroupSizeControl)) {
+        req.minExplicitComputeSubgroupSize =
+            GetDevice()->GetAdapter()->GetPhysicalDevice()->GetMinExplicitComputeSubgroupSize();
+        req.maxExplicitComputeSubgroupSize =
+            GetDevice()->GetAdapter()->GetPhysicalDevice()->GetMaxExplicitComputeSubgroupSize();
+        req.maxComputeWorkgroupSubgroups =
+            GetDevice()->GetAdapter()->GetPhysicalDevice()->GetMaxComputeWorkgroupSubgroups();
+    }
 
     CacheResult<CompiledSpirv> compilation;
     DAWN_TRY_LOAD_OR_RUN(
@@ -312,33 +329,35 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
                 Extent3D _;
                 DAWN_TRY_ASSIGN(
                     _, ValidateComputeStageWorkgroupSize(
-                           tintResult->workgroup_info.x, tintResult->workgroup_info.y,
-                           tintResult->workgroup_info.z, tintResult->workgroup_info.storage_size,
-                           r.usesSubgroupMatrix, r.maxSubgroupSize, r.limits,
-                           r.adapterSupportedLimits.UnsafeGetValue()));
+                           tintResult->workgroup_info, r.usesSubgroupMatrix, r.maxSubgroupSize,
+                           r.limits, r.adapterSupportedLimits.UnsafeGetValue()));
+                DAWN_TRY(ValidateExplicitComputeSubgroupSize(
+                    tintResult->workgroup_info, r.minExplicitComputeSubgroupSize,
+                    r.maxExplicitComputeSubgroupSize, r.maxComputeWorkgroupSubgroups));
             }
 
             DAWN_TRY(ValidateSubgroupMatrixConfiguration(tintResult->subgroup_matrix_info,
                                                          r.subgroupMatrixConfig));
 
             CompiledSpirv result;
+            result.explicitSubgroupSize = tintResult->workgroup_info.subgroup_size;
             result.spirv = std::move(tintResult.Get().spirv);
             return result;
         },
         "Vulkan.CompileShaderToSPIRV");
 
 #ifdef DAWN_ENABLE_SPIRV_VALIDATION
-    {
+    if (GetDevice()->IsToggleEnabled(Toggle::DumpShaders)) {
+        DumpSpirv(GetDevice(), compilation->spirv.data(), compilation->spirv.size());
+    }
+
+    if (GetDevice()->IsToggleEnabled(Toggle::EnableSpirvValidation)) {
         SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetDevice()->GetPlatform(), "Vulkan.ValidateSpirv");
 
         // Validate and if required dump the compiled SPIR-V code.
         const bool spv14 = GetDevice()->IsToggleEnabled(Toggle::UseSpirv14);
         DAWN_TRY(ValidateSpirv(GetDevice(), compilation->spirv.data(), compilation->spirv.size(),
                                spv14));
-    }
-
-    if (GetDevice()->IsToggleEnabled(Toggle::DumpShaders)) {
-        DumpSpirv(GetDevice(), compilation->spirv.data(), compilation->spirv.size());
     }
 #endif
 
@@ -366,7 +385,8 @@ ResultOrError<ShaderModule::ModuleAndSpirv> ShaderModule::GetHandleAndSpirv(
 
     return ModuleAndSpirv{.module = newHandle,
                           .spirv = std::move(compilation->spirv),
-                          .hasInputAttachment = hasInputAttachment};
+                          .hasInputAttachment = hasInputAttachment,
+                          .explicitSubgroupSize = compilation->explicitSubgroupSize};
 #else
     return DAWN_INTERNAL_ERROR("TINT_BUILD_SPV_WRITER is not defined.");
 #endif

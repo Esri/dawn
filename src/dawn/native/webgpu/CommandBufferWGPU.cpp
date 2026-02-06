@@ -738,6 +738,7 @@ MaybeError CommandBuffer::AddReferenced(CaptureContext& captureContext) {
             case Command::CopyBufferToTexture:
             case Command::CopyTextureToBuffer:
             case Command::CopyTextureToTexture:
+            case Command::ResolveQuerySet:
             case Command::WriteTimestamp:
             case Command::PushDebugGroup:
             case Command::InsertDebugMarker:
@@ -918,6 +919,17 @@ MaybeError CommandBuffer::CaptureCreationParameters(CaptureContext& captureConte
                     colorAttachments[size_t(slot)] =
                         ToSchema(captureContext, cmd.colorAttachments[slot]);
                 }
+
+                schema::ResolveRect resolveRect = {};
+                if (cmd.resolveRect.HasValue()) {
+                    resolveRect.colorOffsetX = cmd.resolveRect.colorOffsetX;
+                    resolveRect.colorOffsetY = cmd.resolveRect.colorOffsetY;
+                    resolveRect.resolveOffsetX = cmd.resolveRect.resolveOffsetX;
+                    resolveRect.resolveOffsetY = cmd.resolveRect.resolveOffsetY;
+                    resolveRect.width = cmd.resolveRect.updateWidth;
+                    resolveRect.height = cmd.resolveRect.updateHeight;
+                }
+
                 schema::CommandBufferCommandBeginRenderPassCmd data{{
                     .data = {{
                         .label = cmd.label,
@@ -926,6 +938,7 @@ MaybeError CommandBuffer::CaptureCreationParameters(CaptureContext& captureConte
                             ToSchema(captureContext, cmd.depthStencilAttachment),
                         .occlusionQuerySetId = captureContext.GetId(cmd.occlusionQuerySet.Get()),
                         .timestampWrites = ToSchema(captureContext, cmd.timestampWrites),
+                        .resolveRect = resolveRect,
                     }},
                 }};
                 Serialize(captureContext, data);

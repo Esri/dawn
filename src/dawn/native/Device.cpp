@@ -321,14 +321,31 @@ DeviceBase::DeviceBase(AdapterBase* adapter,
             }
         },
         nullptr, nullptr};
+    static constexpr WGPULoggingCallbackInfo kDefaultLoggingCallbackInfo = {
+        nullptr,
+        [](WGPULoggingType, WGPUStringView, void*, void*) {
+            static bool calledOnce = false;
+            if (!calledOnce) {
+                calledOnce = true;
+                dawn::WarningLog() << "No Dawn device logging callback callback was set. This is "
+                                      "probably not intended. If you really want to ignore logs "
+                                      "and suppress this message, set the callback explicitly.";
+            }
+        },
+        nullptr, nullptr};
 #else
     static constexpr WGPUUncapturedErrorCallbackInfo kDefaultUncapturedErrorCallbackInfo =
         kEmptyUncapturedErrorCallbackInfo;
+    static constexpr WGPULoggingCallbackInfo kDefaultLoggingCallbackInfo =
+        kEmptyLoggingCallbackInfo;
 #endif  // DAWN_ENABLE_ASSERTS
+
     mUncapturedErrorCallbackInfo = kDefaultUncapturedErrorCallbackInfo;
     if (descriptor->uncapturedErrorCallbackInfo.callback != nullptr) {
         mUncapturedErrorCallbackInfo = descriptor->uncapturedErrorCallbackInfo;
     }
+
+    mLoggingCallbackInfo = kDefaultLoggingCallbackInfo;
 
     AdapterInfo adapterInfo;
     adapter->APIGetInfo(&adapterInfo);
@@ -624,6 +641,9 @@ void DeviceBase::Destroy(DestroyReason reason) {
         return;
     }
 
+    // Move away from the Alive state now so that the application cannot use this device anymore.
+    auto state = mState.exchange(State::BeingDisconnected);
+
     // This function may be called re-entrantly inside APITick(). Tick triggers callbacks
     // inside which the application may destroy the device. Thus, we should be careful not
     // to delete objects that are needed inside Tick after callbacks have been called.
@@ -634,7 +654,7 @@ void DeviceBase::Destroy(DestroyReason reason) {
     // from Tick() whether or not there is any more pending work.
 
     // Skip handling device facilities if they haven't even been created (or failed doing so)
-    if (mState != State::BeingCreated) {
+    if (state != State::BeingCreated) {
         // The device is being destroyed so it will be lost, call the application callback.
         HandleDeviceLost(wgpu::DeviceLostReason::Destroyed, "Device was destroyed.");
 
@@ -650,7 +670,7 @@ void DeviceBase::Destroy(DestroyReason reason) {
     }
 
     // Disconnect the device, depending on which state we are currently in.
-    switch (mState) {
+    switch (state) {
         case State::BeingCreated:
             // The GPU timeline was never started so we don't have to wait.
             break;
@@ -682,7 +702,7 @@ void DeviceBase::Destroy(DestroyReason reason) {
             break;
     }
 
-    if (mState != State::BeingCreated) {
+    if (state != State::BeingCreated) {
         // The GPU timeline is finished.
         mQueue->AssumeCommandsComplete();
         DAWN_ASSERT(mQueue->GetCompletedCommandSerial() >= mQueue->GetLastSubmittedCommandSerial());
@@ -991,9 +1011,7 @@ MaybeError DeviceBase::ValidateObject(const ApiObjectBase* object) const {
     DAWN_INVALID_IF(object->GetDevice() != this,
                     "%s is associated with %s, and cannot be used with %s.", object,
                     object->GetDevice(), this);
-
-    // TODO(dawn:563): Preserve labels for error objects.
-    DAWN_INVALID_IF(object->IsError(), "%s is invalid.", object);
+    DAWN_INVALID_IF(object->IsError(), "%s is invalid due to a previous error.", object);
 
     return {};
 }
@@ -1001,7 +1019,7 @@ MaybeError DeviceBase::ValidateObject(const ApiObjectBase* object) const {
 MaybeError DeviceBase::IsNotErrorObject(const ApiObjectBase* object) const {
     DAWN_ASSERT(!IsValidationEnabled());
     DAWN_ASSERT(object != nullptr);
-    DAWN_INVALID_IF(object->IsError(), "%s is invalid.", object);
+    DAWN_INVALID_IF(object->IsError(), "%s is invalid due to a previous error.", object);
 
     return {};
 }
@@ -1275,6 +1293,7 @@ Ref<PipelineCacheBase> DeviceBase::GetOrCreatePipelineCache(const CacheKey& key)
 // Object creation API methods
 
 BindGroupBase* DeviceBase::APICreateBindGroup(const BindGroupDescriptor* descriptor) {
+    auto deviceGuard = UseGuardForCreateBindGroup();
     Ref<BindGroupBase> result;
     if (ConsumedError(CreateBindGroup(descriptor), &result, "calling %s.CreateBindGroup(%s).", this,
                       descriptor)) {
@@ -1284,6 +1303,7 @@ BindGroupBase* DeviceBase::APICreateBindGroup(const BindGroupDescriptor* descrip
 }
 BindGroupLayoutBase* DeviceBase::APICreateBindGroupLayout(
     const BindGroupLayoutDescriptor* descriptor) {
+    auto deviceGuard = UseGuardForCreateBindGroupLayout();
     Ref<BindGroupLayoutBase> result;
     if (ConsumedError(CreateBindGroupLayout(descriptor), &result,
                       "calling %s.CreateBindGroupLayout(%s).", this, descriptor)) {
@@ -1318,7 +1338,7 @@ BufferBase* DeviceBase::APICreateBuffer(const BufferDescriptor* rawDescriptor) {
             // Creating a buffer from a host-mapped pointer doesn't require the lock.
             return CreateBufferImpl(descriptor);
         } else {
-            auto deviceGuard = GetGuard();
+            auto deviceGuard = UseGuardForCreateBuffer();
             return CreateBufferImpl(descriptor);
         }
     })();
@@ -1340,7 +1360,7 @@ BufferBase* DeviceBase::APICreateBuffer(const BufferDescriptor* rawDescriptor) {
     // 3. Mapping at creation. The buffer may be either valid or ErrorBuffer.
     if (rawDescriptor->mappedAtCreation) {
         // MapAtCreation requires the device lock in case it allocates staging memory.
-        auto deviceGuard = GetGuard();
+        auto deviceGuard = UseGuardForCreateBuffer();
 
         MaybeError mapResult =
             fakeOOMAtNativeMap
@@ -1452,13 +1472,14 @@ QuerySetBase* DeviceBase::APICreateQuerySet(const QuerySetDescriptor* descriptor
 }
 ResourceTableBase* DeviceBase::APICreateResourceTable(const ResourceTableDescriptor* descriptor) {
     Ref<ResourceTableBase> result;
-    if (ConsumedError(CreateResourceTable(descriptor), &result,
+    if (ConsumedError(CreateResourceTable(descriptor), &result, InternalErrorType::OutOfMemory,
                       "calling %s.CreateResourceTable(%s).", this, descriptor)) {
         result = ResourceTableBase::MakeError(this, descriptor);
     }
     return ReturnToAPI(std::move(result));
 }
 SamplerBase* DeviceBase::APICreateSampler(const SamplerDescriptor* descriptor) {
+    auto deviceGuard = UseGuardForCreateSampler();
     Ref<SamplerBase> result;
     if (ConsumedError(CreateSampler(descriptor), &result, "calling %s.CreateSampler(%s).", this,
                       descriptor)) {
@@ -1592,6 +1613,7 @@ ShaderModuleBase* DeviceBase::APICreateErrorShaderModule(const ShaderModuleDescr
     return ReturnToAPI(std::move(result));
 }
 TextureBase* DeviceBase::APICreateTexture(const TextureDescriptor* descriptor) {
+    auto deviceGuard = UseGuardForCreateTexture();
     Ref<TextureBase> result;
     if (ConsumedError(CreateTexture(descriptor), &result, InternalErrorType::OutOfMemory,
                       "calling %s.CreateTexture(%s).", this, descriptor)) {
@@ -1791,6 +1813,9 @@ void DeviceBase::ApplyFeatures(const UnpackedPtr<DeviceDescriptor>& deviceDescri
     if (mEnabledFeatures.IsEnabled(Feature::TextureFormatsTier1)) {
         mEnabledFeatures.EnableFeature(Feature::RG11B10UfloatRenderable);
     }
+    if (mEnabledFeatures.IsEnabled(Feature::ChromiumExperimentalSubgroupSizeControl)) {
+        mEnabledFeatures.EnableFeature(Feature::Subgroups);
+    }
 
     if (level == wgpu::FeatureLevel::Core) {
         // Core-defaulting adapters always support the "core-features-and-limits" feature.
@@ -1817,7 +1842,6 @@ void DeviceBase::SetWGSLExtensionAllowList() {
     if (IsToggleEnabled(Toggle::AllowUnsafeAPIs)) {
         mWGSLAllowedFeatures.extensions.insert(
             tint::wgsl::Extension::kChromiumDisableUniformityAnalysis);
-        mWGSLAllowedFeatures.extensions.insert(tint::wgsl::Extension::kChromiumInternalGraphite);
     }
     if (mEnabledFeatures.IsEnabled(Feature::DualSourceBlending)) {
         mWGSLAllowedFeatures.extensions.insert(tint::wgsl::Extension::kDualSourceBlending);
@@ -1844,6 +1868,10 @@ void DeviceBase::SetWGSLExtensionAllowList() {
     if (mEnabledFeatures.IsEnabled(Feature::ChromiumExperimentalSamplingResourceTable)) {
         mWGSLAllowedFeatures.extensions.insert(
             tint::wgsl::Extension::kChromiumExperimentalResourceTable);
+    }
+    if (mEnabledFeatures.IsEnabled(Feature::ChromiumExperimentalSubgroupSizeControl)) {
+        mWGSLAllowedFeatures.extensions.insert(
+            tint::wgsl::Extension::kChromiumExperimentalSubgroupSizeControl);
     }
 
     // Language features are enabled instance-wide.
@@ -2099,12 +2127,19 @@ ResultOrError<Ref<ComputePipelineBase>> DeviceBase::CreateComputePipeline(
     }
 
     MaybeError maybeError;
+    bool errorIsValidation = false;
     {
         SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetPlatform(), "CreateComputePipelineUS");
         maybeError = uninitializedComputePipeline->Initialize();
+        auto error = maybeError.AcquireError();
+        if (error != nullptr) {
+            errorIsValidation = error->GetType() == dawn::native::InternalErrorType::Validation;
+        }
+        maybeError = MaybeError(std::move(error));
     }
-    DAWN_HISTOGRAM_BOOLEAN(GetPlatform(), "CreateComputePipelineSuccess", maybeError.IsSuccess());
 
+    DAWN_HISTOGRAM_BOOLEAN(GetPlatform(), "CreateComputePipelineSuccess",
+                           maybeError.IsSuccess() || errorIsValidation);
     DAWN_TRY(std::move(maybeError));
     return useCache ? AddOrGetCachedComputePipeline(std::move(uninitializedComputePipeline))
                     : std::move(uninitializedComputePipeline);
@@ -2241,11 +2276,19 @@ ResultOrError<Ref<RenderPipelineBase>> DeviceBase::CreateRenderPipeline(
     }
 
     MaybeError maybeError;
+    bool errorIsValidation = false;
     {
         SCOPED_DAWN_HISTOGRAM_TIMER_MICROS(GetPlatform(), "CreateRenderPipelineUS");
         maybeError = uninitializedRenderPipeline->Initialize();
+        auto error = maybeError.AcquireError();
+        if (error != nullptr) {
+            errorIsValidation = error->GetType() == dawn::native::InternalErrorType::Validation;
+        }
+        maybeError = MaybeError(std::move(error));
     }
-    DAWN_HISTOGRAM_BOOLEAN(GetPlatform(), "CreateRenderPipelineSuccess", maybeError.IsSuccess());
+
+    DAWN_HISTOGRAM_BOOLEAN(GetPlatform(), "CreateRenderPipelineSuccess",
+                           maybeError.IsSuccess() || errorIsValidation);
 
     DAWN_TRY(std::move(maybeError));
     return useCache ? AddOrGetCachedRenderPipeline(std::move(uninitializedRenderPipeline))
@@ -2536,6 +2579,30 @@ bool DeviceBase::ReduceMemoryUsageImpl() {
 }
 
 void DeviceBase::PerformIdleTasksImpl() {}
+
+std::optional<DeviceGuard> DeviceBase::UseGuardForCreateBindGroup() {
+    // Backends with thread-safe Create*Impl() methods can override these to return nullopt.
+    // TODO(crbug.com/475530346): Even with thread-safe Create*Impl() methods, there's still a
+    // potential race between Device::Destroy() and APICreate*() calls without the device lock. We
+    // assume callers are responsible for synchronizing Destroy() calls with object creation.
+    return GetGuard();
+}
+
+std::optional<DeviceGuard> DeviceBase::UseGuardForCreateBindGroupLayout() {
+    return GetGuard();
+}
+
+std::optional<DeviceGuard> DeviceBase::UseGuardForCreateBuffer() {
+    return GetGuard();
+}
+
+std::optional<DeviceGuard> DeviceBase::UseGuardForCreateSampler() {
+    return GetGuard();
+}
+
+std::optional<DeviceGuard> DeviceBase::UseGuardForCreateTexture() {
+    return GetGuard();
+}
 
 bool DeviceBase::ShouldDuplicateNumWorkgroupsForDispatchIndirect(
     ComputePipelineBase* computePipeline) const {

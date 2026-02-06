@@ -475,7 +475,7 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
         }
 
         // robustBufferAccess requires robustBufferAccessUpdateAfterBind to be used with descriptor
-        // indexing enabled. If it is not available, we manual implement robustness for shader
+        // indexing enabled. If it is not available, we manually implement robustness for shader
         // buffers and rely on pipelineRobustness for vertex buffer robustness.
         if ((HasFeature(Feature::ChromiumExperimentalSamplingResourceTable)) &&
             !mDeviceInfo.descriptorIndexingProperties.robustBufferAccessUpdateAfterBind) {
@@ -640,6 +640,12 @@ ResultOrError<VulkanDeviceKnobs> Device::CreateDevice(VkPhysicalDevice vkPhysica
         DAWN_ASSERT(usedKnobs.HasExt(DeviceExt::DynamicRendering));
         usedKnobs.dynamicRenderingFeatures = mDeviceInfo.dynamicRenderingFeatures;
         featuresChain.Add(&usedKnobs.dynamicRenderingFeatures);
+    }
+
+    if (HasFeature(Feature::MSAARenderToSingleSampled)) {
+        usedKnobs.multisampledRenderToSingleSampledFeatures =
+            mDeviceInfo.multisampledRenderToSingleSampledFeatures;
+        featuresChain.Add(&usedKnobs.multisampledRenderToSingleSampledFeatures);
     }
 
     // Find a universal queue family
@@ -907,7 +913,7 @@ Ref<TextureBase> Device::CreateTextureWrappingVulkanImage(
     return result;
 }
 
-uint32_t Device::GetComputeSubgroupSize() const {
+std::optional<uint32_t> Device::GetComputeSubgroupSize() const {
     return ToBackend(GetPhysicalDevice())->GetDefaultComputeSubgroupSize();
 }
 
@@ -1152,6 +1158,14 @@ void Device::PerformIdleTasksImpl() {
             return;
         }
     }
+}
+
+std::optional<DeviceGuard> Device::UseGuardForCreateBindGroup() {
+    return std::nullopt;
+}
+
+std::optional<DeviceGuard> Device::UseGuardForCreateBindGroupLayout() {
+    return std::nullopt;
 }
 
 bool Device::CanAddStorageUsageToBufferWithoutSideEffects(wgpu::BufferUsage storageUsage,

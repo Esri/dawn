@@ -31,6 +31,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <utility>
 
 #include "dawn/common/FutureUtils.h"
 #include "dawn/common/NonCopyable.h"
@@ -82,16 +83,38 @@ ResultOrError<UnpackedPtr<TexelBufferViewDescriptor>> ValidateTexelBufferViewDes
 
 class BufferBase : public SharedResource, public WeakRefSupport<BufferBase> {
   public:
+    // Calls FinishUse() on buffer when it goes out of scope. Caller is responsible for ensuring
+    // buffer lifetime is longer than ScopedUseBuffer.
+    class ScopedUseBuffer {
+      public:
+        ScopedUseBuffer();
+        ~ScopedUseBuffer();
+
+        ScopedUseBuffer(ScopedUseBuffer&& other);
+        ScopedUseBuffer& operator=(ScopedUseBuffer&& other);
+
+        // Caller will handle calling FinishUse() on buffer. Can't be called on an empty
+        // ScopedUseBuffer.
+        void Release();
+
+      private:
+        friend class BufferBase;
+
+        explicit ScopedUseBuffer(BufferBase* buffer);
+
+        BufferBase* mBuffer = nullptr;
+    };
+
+    // TODO(crbug.com/467247254): See if ConcurrentAccessGuard<T> can be used be implemented and
+    // used instead of having an InUse state.
     enum class BufferState {
-        // MapAsync() or Unmap() is in progress.
-        // TODO(crbug.com/467247254): See if ConcurrentAccessGuard<T> can be used be implemented and
-        // used instead of having an InsideOperation state.
-        InsideOperation,
+        // The buffer is being used exclusively, for example by MapAsync(), Unmap() or by the queue.
+        // Any concurrent use is an error.
+        InUse,
         Unmapped,
         PendingMap,
         Mapped,
         MappedAtCreation,
-        HostMappedPersistent,
         SharedMemoryNoAccess,
         Destroyed,
     };
@@ -113,11 +136,24 @@ class BufferBase : public SharedResource, public WeakRefSupport<BufferBase> {
 
     MaybeError MapAtCreation();
 
-    MaybeError ValidateCanUseOnQueueNow() const;
+    // Changes buffer state to denote it's being used. The buffer must be unmapped so this isn't
+    // suitable for buffers that could be used by external API calls. `ScopedUseBuffer` will resets
+    // state when it goes out of scope.
+    [[nodiscard]] ScopedUseBuffer UseInternal();
+
+    // Checks that the buffer is ready for use on queue. If successful, changes state to InUse and
+    // returns `ScopedUseBuffer` which resets the state when it goes out of scope. Returns a
+    // validation error on failure.
+    ResultOrError<ScopedUseBuffer> ValidateCanUseOnQueueNow();
+
+    // Called when buffer is done being used, on queue or internally. This should only be called
+    // from ScopedUseBuffer or if ScopedUseBuffer was released from calling this.
+    void FinishUse();
 
     bool IsFullBufferRange(uint64_t offset, uint64_t size) const;
     bool NeedsInitialization() const;
     void MarkUsedInPendingCommands();
+    void MarkUsedInPendingCommands(ExecutionSerial pendingSerial);
     virtual MaybeError UploadData(uint64_t bufferOffset, const void* data, size_t size);
 
     // SharedResource impl.
@@ -178,14 +214,16 @@ class BufferBase : public SharedResource, public WeakRefSupport<BufferBase> {
 
     uint64_t mAllocatedSize = 0;
 
-    ExecutionSerial mLastUsageSerial = ExecutionSerial(0);
-
   private:
     class MapAsyncEvent;
 
     virtual MaybeError MapAtCreationImpl() = 0;
+
+    // Performs backend specific work to start mapping. The device mutex is not locked when this is
+    // called so the implementation should lock if required.
     virtual MaybeError MapAsyncImpl(wgpu::MapMode mode, size_t offset, size_t size) = 0;
-    // `newState` is the state the buffer will be in after this returns.
+    // Performs backend specific work to finalize mapping. `newState` is the state the buffer will
+    // be in after this returns.
     virtual MaybeError FinalizeMapImpl(BufferState newState) = 0;
     virtual void* GetMappedPointerImpl() = 0;
     // Performs backend specific work to unmap. `oldState` is the state of the buffer before unmap
@@ -212,7 +250,10 @@ class BufferBase : public SharedResource, public WeakRefSupport<BufferBase> {
     const uint64_t mSize = 0;
     const wgpu::BufferUsage mUsage = wgpu::BufferUsage::None;
     const wgpu::BufferUsage mInternalUsage = wgpu::BufferUsage::None;
+    const bool mIsHostMapped = false;
     bool mIsDataInitialized = false;
+
+    Atomic<ExecutionSerial, std::memory_order_relaxed> mLastUsageSerial{ExecutionSerial(0)};
 
     // Once MapAsync() returns a future there is a possible race between MapAsyncEvent completing
     // and the buffer being unmapped as they can happen on different threads. `mPendingMapMutex`
@@ -234,17 +275,22 @@ class BufferBase : public SharedResource, public WeakRefSupport<BufferBase> {
     // guard against concurrent access to the buffer.
     //
     // The follow semantics are used:
-    // 1. On MapAsync() set state to InsideOperation before modifying any other members. If there is
-    //    a race modifying the state compare_exchange() will fail and a validation error is thrown.
-    //    After modifying all member variables set state to PendingMap.
+    // 1. On MapAsync() set state to InUse before modifying any other members. If there is a race
+    //    modifying the state compare_exchange() will fail and a validation error is thrown. After
+    //    modifying all member variables set state to PendingMap.
     // 2. When MapAsyncEvent completes set state to Mapped after all other work is finished.
     // 3. For *MappedRange() functions check that state is Mapped before checking other members for
     //    validation.
-    // 4. For Unmap() set state to InsideOperation before modifying any other member variables. If
-    //    there is a race modifying state compare_exchange() will fail and a validation error is
-    //    thrown. After the buffer is unmapped set state to Unmapped.
-    // 5. For Destroy() check if the state is InsideOperation and if so spin loop until the
-    //    concurrent operation is finished. This prevents destruction in the middle of an operation.
+    // 4. For Unmap() set state to InUse before modifying any other member variables. If there is a
+    //    race modifying state compare_exchange() will fail and a validation error is thrown. After
+    //    the buffer is unmapped set state to Unmapped.
+    // 5. When the buffer is used by the queue ValidateCanUseOnQueueNow() will be called before
+    //    using the buffer which sets state to InUse. If the state is not unmapped or there is a
+    //    race changing the state, the compare_exchange() will fail and a validation error is
+    //    thrown. When the queue is done using the buffer the state is transitioned back to
+    //    Unmapped.
+    // 6. For Destroy() check if the state is InUse and if so spin loop until the concurrent
+    //    operation is finished. This prevents destruction in the middle of an operation.
     //
     // With those `mState` changes in place, we can guarantee that if GetMappedRange() is
     // successful, that MapAsync() must have succeeded. We cannot guarantee, however, that Unmap()

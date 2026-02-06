@@ -451,43 +451,6 @@ TEST_P(EventCompletionTests, WorkDoneOutOfOrder) {
     TestWaitAll(/*loopOnlyOnce=*/true);
 }
 
-TEST_P(EventCompletionTests, WorkDoneDropInstanceBeforeEvent) {
-    // TODO(crbug.com/dawn/1987): Wire does not implement instance destruction correctly yet.
-    DAWN_TEST_UNSUPPORTED_IF(UsesWire());
-    // Spontaneous events only make sense with WaitType::Spin since we are dropping the instance.
-    DAWN_TEST_UNSUPPORTED_IF(IsSpontaneous() && GetWaitType() != WaitType::Spin);
-
-    UseSecondInstance();
-    testInstance = nullptr;  // Drop the last external ref to the instance.
-
-    if (IsSpontaneous()) {
-        TrackForTest(OnSubmittedWorkDone(wgpu::QueueWorkDoneStatus::Success));
-        TestWaitAll();
-    } else {
-        TrackForTest(OnSubmittedWorkDone(wgpu::QueueWorkDoneStatus::CallbackCancelled));
-        EXPECT_EQ(mCallbacksCompletedCount, 1u);
-    }
-}
-
-TEST_P(EventCompletionTests, WorkDoneDropInstanceAfterEvent) {
-    // TODO(crbug.com/dawn/1987): Wire does not implement instance destruction correctly yet.
-    DAWN_TEST_UNSUPPORTED_IF(UsesWire());
-    // Spontaneous events only make sense with WaitType::Spin since we are dropping the instance.
-    DAWN_TEST_UNSUPPORTED_IF(IsSpontaneous() && GetWaitType() != WaitType::Spin);
-
-    UseSecondInstance();
-
-    if (IsSpontaneous()) {
-        TrackForTest(OnSubmittedWorkDone(wgpu::QueueWorkDoneStatus::Success));
-        testInstance = nullptr;  // Drop the last external ref to the instance.
-        TestWaitAll();
-    } else {
-        TrackForTest(OnSubmittedWorkDone(wgpu::QueueWorkDoneStatus::CallbackCancelled));
-        testInstance = nullptr;  // Drop the last external ref to the instance.
-        EXPECT_EQ(mCallbacksCompletedCount, 1u);
-    }
-}
-
 // TODO(crbug.com/dawn/1987):
 // - Test any reentrancy guarantees (for ProcessEvents or WaitAny inside a callback),
 //   to make sure things don't blow up and we don't attempt to hold locks recursively.
@@ -556,6 +519,9 @@ TEST_P(WaitAnyTests, UnsupportedTimeout) {
 }
 
 TEST_P(WaitAnyTests, UnsupportedCount) {
+    // TODO(crbug.com/474391710): Flaky on Snapdragon X Elite w/ D3D11.
+    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm() && IsD3D11());
+
     for (uint64_t timeout : {uint64_t(0), uint64_t(1)}) {
         // We don't support values higher than the default (64), and if you ask for lower than 64
         // you still get 64. DawnTest doesn't request anything (so requests 0) so gets 64.

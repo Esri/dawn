@@ -313,7 +313,6 @@ EntryPoint Inspector::GetEntryPoint(const tint::ast::Function* func) {
     switch (func->PipelineStage()) {
         case ast::PipelineStage::kCompute: {
             entry_point.stage = PipelineStage::kCompute;
-            entry_point.workgroup_storage_size = ComputeWorkgroupStorageSize(func);
 
             auto wgsize = sem->WorkgroupSize();
             if (wgsize[0].has_value() && wgsize[1].has_value() && wgsize[2].has_value()) {
@@ -360,6 +359,13 @@ EntryPoint Inspector::GetEntryPoint(const tint::ast::Function* func) {
             core::BuiltinValue::kVertexIndex, param->Type(), param->Declaration()->attributes);
         entry_point.instance_index_used |= ContainsBuiltin(
             core::BuiltinValue::kInstanceIndex, param->Type(), param->Declaration()->attributes);
+        entry_point.primitive_index_used |= ContainsBuiltin(
+            core::BuiltinValue::kPrimitiveIndex, param->Type(), param->Declaration()->attributes);
+        entry_point.subgroup_invocation_id_used |=
+            ContainsBuiltin(core::BuiltinValue::kSubgroupInvocationId, param->Type(),
+                            param->Declaration()->attributes);
+        entry_point.subgroup_size_used |= ContainsBuiltin(
+            core::BuiltinValue::kSubgroupSize, param->Type(), param->Declaration()->attributes);
 
         if (entry_point.stage == PipelineStage::kFragment) {
             entry_point.frag_position_used = ContainsBuiltin(
@@ -707,8 +713,8 @@ const Inspector::EntryPointTextureMetadata& Inspector::ComputeTextureMetadata(
                         return;
                     }
 
-                    // A texture of `sem::Call` means we're dealing with a `getBinding` or
-                    // `hasBinding` call. Skip it.
+                    // A texture of `sem::Call` means we're dealing with a `getResource` or
+                    // `hasResource` call. Skip it.
                     if (call->Arguments()[size_t(texture_index)]->Is<sem::Call>()) {
                         return;
                     }
@@ -958,26 +964,6 @@ std::tuple<InterpolationType, InterpolationSampling> Inspector::CalculateInterpo
     }
 
     return {interpolation_type, sampling_type};
-}
-
-uint32_t Inspector::ComputeWorkgroupStorageSize(const ast::Function* func) const {
-    uint32_t total_size = 0;
-    auto* func_sem = program_.Sem().Get(func);
-    for (const sem::Variable* var : func_sem->TransitivelyReferencedGlobals()) {
-        if (var->AddressSpace() == core::AddressSpace::kWorkgroup) {
-            auto* ty = var->Type()->UnwrapRef();
-            uint32_t align = ty->Align();
-            uint32_t size = ty->Size();
-
-            // This essentially matches std430 layout rules from GLSL, which are in
-            // turn specified as an upper bound for Vulkan layout sizing. Since D3D
-            // and Metal are even less specific, we assume Vulkan behavior as a
-            // good-enough approximation everywhere.
-            total_size += tint::RoundUp(16u, tint::RoundUp(align, size));
-        }
-    }
-
-    return total_size;
 }
 
 uint32_t Inspector::ComputeImmediateDataSize(const ast::Function* func) const {

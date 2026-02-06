@@ -45,7 +45,6 @@
 #include "dawn/native/ValidationUtils_autogen.h"
 #include "dawn/platform/DawnPlatform.h"
 #include "partition_alloc/pointers/raw_ptr.h"
-#include "tint/lang/wgsl/feature_status.h"
 
 // For SwiftShader fallback
 #if defined(DAWN_ENABLE_BACKEND_VULKAN)
@@ -224,6 +223,8 @@ InstanceBase::InstanceBase(const TogglesState& instanceToggles)
 InstanceBase::~InstanceBase() = default;
 
 void InstanceBase::DeleteThis() {
+    mLoggingCallbackInfo = kEmptyLoggingCallbackInfo;
+
     // Flush all remaining callback tasks on all devices and on the instance.
     absl::flat_hash_set<DeviceBase*> devices;
     do {
@@ -242,17 +243,11 @@ void InstanceBase::DeleteThis() {
         mCallbackTaskManager->Flush();
     } while (!mCallbackTaskManager->IsEmpty());
 
-    RefCountedWithExternalCount::DeleteThis();
+    RefCounted::DeleteThis();
 }
 
 void InstanceBase::DisconnectDawnPlatform() {
     SetPlatform(nullptr);
-}
-
-void InstanceBase::WillDropLastExternalRef() {
-    // Stop tracking events. See comment on ShutDown.
-    mEventManager.ShutDown();
-    mLoggingCallbackInfo = kEmptyLoggingCallbackInfo;
 }
 
 // TODO(crbug.com/dawn/832): make the platform an initialization parameter of the instance.

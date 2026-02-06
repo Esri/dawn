@@ -354,6 +354,24 @@ void Texture::DestroyImpl(DestroyReason reason) {
     mIsExternalSwapChainTexture = false;
 }
 
+MaybeError Texture::PinImpl(wgpu::TextureUsage usage) {
+    // TODO(crbug.com/473354062): Transition usage like for Vulkan
+    DAWN_ASSERT(!HasPinnedUsage());
+
+    // TODO(https://issues.chromium.org/473444516): Investigate what to do for imported textures.
+    // Should we consider a pin/unpin pair similar to an access on a queue such that we need to
+    // wait on fences or export them?
+    return {};
+}
+
+void Texture::UnpinImpl() {
+    DAWN_ASSERT(HasPinnedUsage());
+
+    // TODO(https://issues.chromium.org/473444516): Investigate what to do for imported textures.
+    // Should we consider a pin/unpin pair similar to an access on a queue such that we need to
+    // wait on fences or export them?
+}
+
 DXGI_FORMAT Texture::GetD3D12Format() const {
     return d3d::DXGITextureFormat(GetDevice(), GetFormat().format);
 }
@@ -876,12 +894,12 @@ MaybeError Texture::ClearTexture(CommandRecordingContext* commandContext,
             BlockExtent3D largestMipSize = blockInfo.ToBlock(
                 GetMipLevelSingleSubresourcePhysicalSize(range.baseMipLevel, aspect));
 
-            uint64_t bytesPerRow{
-                Align(blockInfo.ToBytes(largestMipSize.width), kTextureBytesPerRowAlignment)};
-
-            uint64_t uploadSize =
-                bytesPerRow *
-                blockInfo.ToBytes(largestMipSize.height * largestMipSize.depthOrArrayLayers);
+            uint64_t bytesPerRow =
+                Align(blockInfo.ToBytes(largestMipSize.width), kTextureBytesPerRowAlignment);
+            BlockCount blocksPerRow = blockInfo.BytesToBlocks(bytesPerRow);
+            BlockCount uploadBlocks =
+                blocksPerRow * largestMipSize.height * largestMipSize.depthOrArrayLayers;
+            uint64_t uploadSize = blockInfo.ToBytes(uploadBlocks);
 
             DAWN_TRY(device->GetDynamicUploader()->WithUploadReservation(
                 uploadSize, blockInfo.byteSize, [&](UploadReservation reservation) -> MaybeError {

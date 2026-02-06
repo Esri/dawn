@@ -100,6 +100,7 @@ tint_add_target(tint_lang_wgsl_resolver_test test
   lang/wgsl/resolver/barycentric_coord_extension_test.cc
   lang/wgsl/resolver/binding_array_test.cc
   lang/wgsl/resolver/bitcast_validation_test.cc
+  lang/wgsl/resolver/buffer_test.cc
   lang/wgsl/resolver/builtin_enum_test.cc
   lang/wgsl/resolver/builtin_structs_test.cc
   lang/wgsl/resolver/builtin_test.cc
@@ -128,6 +129,7 @@ tint_add_target(tint_lang_wgsl_resolver_test test
   lang/wgsl/resolver/evaluation_stage_test.cc
   lang/wgsl/resolver/expression_kind_test.cc
   lang/wgsl/resolver/f16_extension_test.cc
+  lang/wgsl/resolver/filtering_parameters_extension_test.cc
   lang/wgsl/resolver/framebuffer_fetch_extension_test.cc
   lang/wgsl/resolver/function_validation_test.cc
   lang/wgsl/resolver/host_shareable_validation_test.cc

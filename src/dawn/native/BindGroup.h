@@ -30,6 +30,7 @@
 
 #include <array>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include "dawn/common/Constants.h"
@@ -79,6 +80,13 @@ class BindGroupBase : public ApiObjectBase {
     BufferBinding GetBindingAsBufferBinding(BindingIndex bindingIndex);
     TexelBufferViewBase* GetBindingAsTexelBufferView(BindingIndex bindingIndex);
     const ityp::span<uint32_t, uint64_t>& GetUnverifiedBufferSizes() const;
+
+    // Returns the ExternalTexture bound at `bindingIndex` or nullptr if a Texture was bound in
+    // lieu. `bindingIndex` must be an index for an ExternalTexture in the layout.
+    Ref<ExternalTextureBase> GetBoundExternalTexture(APIBindingIndex bindingIndex) const;
+    // Returns the list of all bounds ExternalTextures, with nullptr when a Texture was bound in
+    // lieu. BindGroupLayoutInternalBase::GetBoundExternalTextureMap provides the index in this list
+    // for a given APIBindingIndex.
     const std::vector<Ref<ExternalTextureBase>>& GetBoundExternalTextures() const;
 
     void ForEachUnverifiedBufferBindingIndex(std::function<void(BindingIndex, uint32_t)> fn) const;
@@ -118,6 +126,12 @@ class BindGroupBase : public ApiObjectBase {
 
     Ref<BindGroupLayoutBase> mLayout;
     BindGroupLayoutInternalBase::BindingDataPointers mBindingData;
+
+    // This vector hosts the bound external textures of the bind group of each external texture
+    // binding entry.
+    // BindGroupLayoutInternalBase::GetBoundExternalTextureMap gives a map from APIBindingIndex to
+    // index in this vector. Note: This vector can have null reference entry because external
+    // texture binding entry can bind a texture view instead of an external texture.
     std::vector<Ref<ExternalTextureBase>> mBoundExternalTextures;
 };
 

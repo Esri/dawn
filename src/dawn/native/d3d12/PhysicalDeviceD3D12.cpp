@@ -125,6 +125,19 @@ MaybeError PhysicalDevice::InitializeImpl() {
     // https://github.com/Microsoft/DirectXShaderCompiler/wiki/Wave-Intrinsics#:~:text=UINT%20WaveLaneCountMax
     mSubgroupMaxSize = 128u;
 
+    mMinExplicitComputeSubgroupSize = mDeviceInfo.waveLaneCountMin;
+    mMaxExplicitComputeSubgroupSize = mDeviceInfo.waveLaneCountMax;
+    if (mDeviceInfo.waveLaneCountMin > 0) {
+        // D3D12 doesn't have limit on the maximum subgroups in one workgroup so we choose a value
+        // to
+        // ensure `computeInvocationsPerWorkgroup <= maxComputeWorkgroupSubgroups *
+        // computeSubgroupSize` is always satisfied.
+        mMaxComputeWorkgroupSubgroups =
+            D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP / mDeviceInfo.waveLaneCountMin;
+    } else {
+        mMaxComputeWorkgroupSubgroups = D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP;
+    }
+
     return {};
 }
 
@@ -196,6 +209,11 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     if (mDeviceInfo.supportsWaveOps) {
         EnableFeature(Feature::Subgroups);
     }
+
+    // SubgroupSizeControl feature requires SM >= 6.6 for HLSL attribute `[WaveSize]`.
+    if (mDeviceInfo.highestSupportedShaderModel >= 66) {
+        EnableFeature(Feature::ChromiumExperimentalSubgroupSizeControl);
+    }
 #endif
 
     D3D12_FEATURE_DATA_FORMAT_SUPPORT bgra8unormFormatInfo = {};
@@ -237,6 +255,12 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
         (r8unormFormatSupport.Support2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD) &&
         (r8unormFormatSupport.Support2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE)) {
         EnableFeature(Feature::TextureFormatsTier2);
+    }
+
+    // Tier 2 hardware supports at least 1 million descriptors in a heap.
+    // Tier 3 hardware supports essentially the full 32-bit range.
+    if (GetDeviceInfo().resourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_2) {
+        EnableFeature(Feature::ChromiumExperimentalSamplingResourceTable);
     }
 }
 
@@ -415,6 +439,8 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits)
                 kShaderBuiltinSlots + kUnusedSlots ==
             kMaxRootSignatureSize);
     }
+
+    limits->resourceTableLimits.maxResourceTableSize = kMaxResourceTableSize;
 
     return {};
 }
@@ -950,6 +976,15 @@ void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
     if (auto* d3dProperties = info.Get<AdapterPropertiesD3D>()) {
         // Report highest supported shader model version, instead of actual applied version.
         d3dProperties->shaderModel = GetDeviceInfo().highestSupportedShaderModel;
+    }
+    if (auto* explicitComputeSubgroupSizeConfigs =
+            info.Get<AdapterPropertiesExplicitComputeSubgroupSizeConfigs>()) {
+        explicitComputeSubgroupSizeConfigs->minExplicitComputeSubgroupSize =
+            GetMinExplicitComputeSubgroupSize();
+        explicitComputeSubgroupSizeConfigs->maxExplicitComputeSubgroupSize =
+            GetMaxExplicitComputeSubgroupSize();
+        explicitComputeSubgroupSizeConfigs->maxComputeWorkgroupSubgroups =
+            GetMaxComputeWorkgroupSubgroups();
     }
 }
 

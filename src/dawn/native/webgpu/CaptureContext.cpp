@@ -129,25 +129,6 @@ MaybeError CaptureContext::CaptureQueueWriteBuffer(Buffer* buffer,
     return {};
 }
 
-MaybeError CaptureContext::CaptureUnmapBuffer(Buffer* buffer,
-                                              uint64_t bufferOffset,
-                                              const void* data,
-                                              size_t size) {
-    schema::ObjectId id;
-    DAWN_TRY_ASSIGN(id, AddResourceAndGetId(buffer));
-    schema::RootCommandUnmapBufferCmd cmd{{
-        .data = {{
-            .bufferId = id,
-            .bufferOffset = bufferOffset,
-            .size = size,
-        }},
-    }};
-
-    Serialize(*this, cmd);
-    WriteContentBytes(data, size);
-    return {};
-}
-
 MaybeError CaptureContext::CaptureQueueWriteTexture(const TexelCopyTextureInfo& destination,
                                                     const void* data,
                                                     size_t dataSize,
@@ -194,11 +175,25 @@ schema::Origin3D ToSchema(const TexelOrigin3D& origin) {
     }};
 }
 
+schema::Origin2D ToSchema(const Origin2D& origin) {
+    return {{
+        .x = origin.x,
+        .y = origin.y,
+    }};
+}
+
 schema::Extent3D ToSchema(const TexelExtent3D& extent) {
     return {{
         .width = static_cast<uint32_t>(extent.width),
         .height = static_cast<uint32_t>(extent.height),
         .depthOrArrayLayers = static_cast<uint32_t>(extent.depthOrArrayLayers),
+    }};
+}
+
+schema::Extent2D ToSchema(const Extent2D& extent) {
+    return {{
+        .width = extent.width,
+        .height = extent.height,
     }};
 }
 

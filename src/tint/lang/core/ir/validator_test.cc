@@ -191,6 +191,44 @@ TEST_F(IR_ValidatorTest, RootBlock_VarBlockMismatch) {
 )")) << res.Failure();
 }
 
+TEST_F(IR_ValidatorTest, RootBlock_ModuleScopeRuntimeExpression) {
+    auto* v = b.Var("v", ty.ptr(workgroup, ty.atomic(ty.u32())));
+    mod.root_block->Append(v);
+
+    auto* load = b.Call(ty.u32(), core::BuiltinFn::kAtomicLoad, v->Result(0));
+    mod.root_block->Append(load);
+
+    auto res = ir::Validate(mod, Capabilities{Capability::kAllowOverrides});
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(
+        res.Failure().reason,
+        testing::HasSubstr(
+            +R"(:3:12 error: atomicLoad: instruction is not evaluatable at pipeline creation time
+  %2:u32 = atomicLoad %v
+           ^^^^^^^^^^)"))
+        << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, RootBlock_VarWithRuntimeInitializer) {
+    auto* v = b.Var("v", ty.ptr(workgroup, ty.atomic(ty.u32())));
+    mod.root_block->Append(v);
+
+    // This will also cause the same error on atomicLoad as above, but this test is interested in
+    // the later error for the var.
+    auto* init = b.Call(ty.u32(), core::BuiltinFn::kAtomicLoad, v);
+    mod.root_block->Append(init);
+    mod.root_block->Append(b.Var("a", init));
+
+    auto res = ir::Validate(mod, Capabilities{Capability::kAllowOverrides});
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(
+                    R"(:4:39 error: var: instruction is not evaluatable at pipeline creation time
+  %a:ptr<function, u32, read_write> = var %2
+                                      ^^^
+)")) << res.Failure();
+}
+
 TEST_F(IR_ValidatorTest, Construct_Scalar_WrongArgType) {
     auto* f = b.Function("f", ty.void_());
     b.Append(f->Block(), [&] {
@@ -301,7 +339,7 @@ TEST_F(IR_ValidatorTest, Construct_Array_WrongArgCount) {
 TEST_F(IR_ValidatorTest, Construct_Vector_1arg_WrongType) {
     auto* f = b.Function("f", ty.void_());
     b.Append(f->Block(), [&] {
-        b.Construct<vec2<u32>>(b.Zero<vec2<f32>>());
+        b.Construct<vec2u>(b.Zero<vec2f>());
         b.Return(f);
     });
 
@@ -318,7 +356,7 @@ TEST_F(IR_ValidatorTest, Construct_Vector_1arg_WrongType) {
 TEST_F(IR_ValidatorTest, Construct_Vector_2arg_WrongType) {
     auto* f = b.Function("f", ty.void_());
     b.Append(f->Block(), [&] {
-        b.Construct<vec2<u32>>(b.Zero<f32>(), b.Zero<f32>());
+        b.Construct<vec2u>(b.Zero<f32>(), b.Zero<f32>());
         b.Return(f);
     });
 

@@ -390,10 +390,8 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
                 // Validate workgroup size and workgroup storage size.
                 DAWN_TRY_ASSIGN(localSize,
                                 ValidateComputeStageWorkgroupSize(
-                                    result->workgroup_info.x, result->workgroup_info.y,
-                                    result->workgroup_info.z, result->workgroup_info.storage_size,
-                                    r.usesSubgroupMatrix, r.maxSubgroupSize, r.limits,
-                                    r.adapterSupportedLimits.UnsafeGetValue()));
+                                    result->workgroup_info, r.usesSubgroupMatrix, r.maxSubgroupSize,
+                                    r.limits, r.adapterSupportedLimits.UnsafeGetValue()));
             }
 
             auto msl = std::move(result->msl);
@@ -424,7 +422,7 @@ ResultOrError<CacheResult<MslCompilation>> TranslateToMSL(
                 r.tintOptions.remapped_entry_point_name,
                 result->needs_storage_buffer_sizes,
                 result->has_invariant_attribute,
-                std::move(result->workgroup_info.allocations),
+                std::move(result->workgroup_allocations),
                 localSize,
             }};
         },

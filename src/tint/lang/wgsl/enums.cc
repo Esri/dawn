@@ -54,9 +54,6 @@ Extension ParseExtension(std::string_view str) {
     if (str == "chromium_experimental_barycentric_coord") {
         return Extension::kChromiumExperimentalBarycentricCoord;
     }
-    if (str == "chromium_experimental_dynamic_binding") {
-        return Extension::kChromiumExperimentalDynamicBinding;
-    }
     if (str == "chromium_experimental_framebuffer_fetch") {
         return Extension::kChromiumExperimentalFramebufferFetch;
     }
@@ -71,9 +68,6 @@ Extension ParseExtension(std::string_view str) {
     }
     if (str == "chromium_experimental_subgroup_size_control") {
         return Extension::kChromiumExperimentalSubgroupSizeControl;
-    }
-    if (str == "chromium_internal_graphite") {
-        return Extension::kChromiumInternalGraphite;
     }
     if (str == "chromium_internal_input_attachments") {
         return Extension::kChromiumInternalInputAttachments;
@@ -103,8 +97,6 @@ std::string_view ToString(Extension value) {
             return "chromium_disable_uniformity_analysis";
         case Extension::kChromiumExperimentalBarycentricCoord:
             return "chromium_experimental_barycentric_coord";
-        case Extension::kChromiumExperimentalDynamicBinding:
-            return "chromium_experimental_dynamic_binding";
         case Extension::kChromiumExperimentalFramebufferFetch:
             return "chromium_experimental_framebuffer_fetch";
         case Extension::kChromiumExperimentalPixelLocal:
@@ -115,8 +107,6 @@ std::string_view ToString(Extension value) {
             return "chromium_experimental_subgroup_matrix";
         case Extension::kChromiumExperimentalSubgroupSizeControl:
             return "chromium_experimental_subgroup_size_control";
-        case Extension::kChromiumInternalGraphite:
-            return "chromium_internal_graphite";
         case Extension::kChromiumInternalInputAttachments:
             return "chromium_internal_input_attachments";
         case Extension::kClipDistances:
@@ -185,6 +175,9 @@ std::string_view ToString(ChromiumDiagnosticRule value) {
 /// @param str the string to parse
 /// @returns the parsed enum, or LanguageFeature::kUndefined if the string could not be parsed.
 LanguageFeature ParseLanguageFeature(std::string_view str) {
+    if (str == "buffer_view") {
+        return LanguageFeature::kBufferView;
+    }
     if (str == "chromium_print") {
         return LanguageFeature::kChromiumPrint;
     }
@@ -202,6 +195,9 @@ LanguageFeature ParseLanguageFeature(std::string_view str) {
     }
     if (str == "chromium_testing_unsafe_experimental") {
         return LanguageFeature::kChromiumTestingUnsafeExperimental;
+    }
+    if (str == "filtering_parameters") {
+        return LanguageFeature::kFilteringParameters;
     }
     if (str == "fragment_depth") {
         return LanguageFeature::kFragmentDepth;
@@ -227,6 +223,9 @@ LanguageFeature ParseLanguageFeature(std::string_view str) {
     if (str == "subgroup_uniformity") {
         return LanguageFeature::kSubgroupUniformity;
     }
+    if (str == "swizzle_assignment") {
+        return LanguageFeature::kSwizzleAssignment;
+    }
     if (str == "texel_buffers") {
         return LanguageFeature::kTexelBuffers;
     }
@@ -245,6 +244,8 @@ std::string_view ToString(LanguageFeature value) {
     switch (value) {
         case LanguageFeature::kUndefined:
             return "undefined";
+        case LanguageFeature::kBufferView:
+            return "buffer_view";
         case LanguageFeature::kChromiumPrint:
             return "chromium_print";
         case LanguageFeature::kChromiumTestingExperimental:
@@ -257,6 +258,8 @@ std::string_view ToString(LanguageFeature value) {
             return "chromium_testing_unimplemented";
         case LanguageFeature::kChromiumTestingUnsafeExperimental:
             return "chromium_testing_unsafe_experimental";
+        case LanguageFeature::kFilteringParameters:
+            return "filtering_parameters";
         case LanguageFeature::kFragmentDepth:
             return "fragment_depth";
         case LanguageFeature::kImmediateAddressSpace:
@@ -273,6 +276,8 @@ std::string_view ToString(LanguageFeature value) {
             return "subgroup_id";
         case LanguageFeature::kSubgroupUniformity:
             return "subgroup_uniformity";
+        case LanguageFeature::kSwizzleAssignment:
+            return "swizzle_assignment";
         case LanguageFeature::kTexelBuffers:
             return "texel_buffers";
         case LanguageFeature::kTextureAndSamplerLet:
@@ -574,9 +579,6 @@ BuiltinFn ParseBuiltinFn(std::string_view name) {
     if (name == "step") {
         return BuiltinFn::kStep;
     }
-    if (name == "storageBarrier") {
-        return BuiltinFn::kStorageBarrier;
-    }
     if (name == "tan") {
         return BuiltinFn::kTan;
     }
@@ -610,11 +612,14 @@ BuiltinFn ParseBuiltinFn(std::string_view name) {
     if (name == "unpack4xU8") {
         return BuiltinFn::kUnpack4XU8;
     }
-    if (name == "workgroupBarrier") {
-        return BuiltinFn::kWorkgroupBarrier;
-    }
     if (name == "workgroupUniformLoad") {
         return BuiltinFn::kWorkgroupUniformLoad;
+    }
+    if (name == "storageBarrier") {
+        return BuiltinFn::kStorageBarrier;
+    }
+    if (name == "workgroupBarrier") {
+        return BuiltinFn::kWorkgroupBarrier;
     }
     if (name == "textureBarrier") {
         return BuiltinFn::kTextureBarrier;
@@ -796,6 +801,12 @@ BuiltinFn ParseBuiltinFn(std::string_view name) {
     if (name == "subgroupMatrixScalarMultiply") {
         return BuiltinFn::kSubgroupMatrixScalarMultiply;
     }
+    if (name == "bufferView") {
+        return BuiltinFn::kBufferView;
+    }
+    if (name == "bufferLength") {
+        return BuiltinFn::kBufferLength;
+    }
     if (name == "print") {
         return BuiltinFn::kPrint;
     }
@@ -975,8 +986,6 @@ const char* str(BuiltinFn i) {
             return "sqrt";
         case BuiltinFn::kStep:
             return "step";
-        case BuiltinFn::kStorageBarrier:
-            return "storageBarrier";
         case BuiltinFn::kTan:
             return "tan";
         case BuiltinFn::kTanh:
@@ -999,10 +1008,12 @@ const char* str(BuiltinFn i) {
             return "unpack4xI8";
         case BuiltinFn::kUnpack4XU8:
             return "unpack4xU8";
-        case BuiltinFn::kWorkgroupBarrier:
-            return "workgroupBarrier";
         case BuiltinFn::kWorkgroupUniformLoad:
             return "workgroupUniformLoad";
+        case BuiltinFn::kStorageBarrier:
+            return "storageBarrier";
+        case BuiltinFn::kWorkgroupBarrier:
+            return "workgroupBarrier";
         case BuiltinFn::kTextureBarrier:
             return "textureBarrier";
         case BuiltinFn::kTextureDimensions:
@@ -1123,6 +1134,10 @@ const char* str(BuiltinFn i) {
             return "subgroupMatrixScalarSubtract";
         case BuiltinFn::kSubgroupMatrixScalarMultiply:
             return "subgroupMatrixScalarMultiply";
+        case BuiltinFn::kBufferView:
+            return "bufferView";
+        case BuiltinFn::kBufferLength:
+            return "bufferLength";
         case BuiltinFn::kPrint:
             return "print";
         case BuiltinFn::kTintMaterialize:

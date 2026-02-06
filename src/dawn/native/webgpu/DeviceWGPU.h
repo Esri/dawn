@@ -83,6 +83,7 @@ class Device final : public DeviceBase, public ObjectWGPU<WGPUDevice> {
            WGPUAdapter innerAdapter,
            const UnpackedPtr<DeviceDescriptor>& descriptor,
            const TogglesState& deviceToggles,
+           const TogglesState& innerDeviceToggles,
            Ref<DeviceBase::DeviceLostEvent>&& lostEvent);
 
     ResultOrError<Ref<BindGroupBase>> CreateBindGroupImpl(
@@ -91,6 +92,8 @@ class Device final : public DeviceBase, public ObjectWGPU<WGPUDevice> {
         const UnpackedPtr<BindGroupLayoutDescriptor>& descriptor) override;
     ResultOrError<Ref<BufferBase>> CreateBufferImpl(
         const UnpackedPtr<BufferDescriptor>& descriptor) override;
+    ResultOrError<Ref<ExternalTextureBase>> CreateExternalTextureImpl(
+        const ExternalTextureDescriptor* descriptor) override;
     ResultOrError<Ref<CommandBufferBase>> CreateCommandBuffer(
         CommandEncoder* encoder,
         const CommandBufferDescriptor* descriptor) override;

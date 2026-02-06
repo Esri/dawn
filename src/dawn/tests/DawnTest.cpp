@@ -288,6 +288,11 @@ void DawnTestEnvironment::SetEnvironment(DawnTestEnvironment* env) {
     gTestEnv = env;
 }
 
+// static
+DawnTestEnvironment* DawnTestEnvironment::GetEnvironment() {
+    return gTestEnv;
+}
+
 DawnTestEnvironment::DawnTestEnvironment(int argc, char** argv) {
     InitializePartitionAllocForTesting();
     InitializeDanglingPointerDetectorForTesting();
@@ -1645,12 +1650,6 @@ void DawnTestBase::SetUp() {
 
     mCheckCaptureReplay = gTestEnv->IsCaptureReplayCheckingEnabled();
 
-    // TODO(crbug.com/462149555): Remove the toggle and related logic once capture and replay
-    // implementation is complete.
-    if (mCheckCaptureReplay) {
-        mCheckCaptureReplay = HasToggleEnabled("enable_for_check_capture_replay");
-    }
-
     if (IsCaptureReplayCheckingEnabled()) {
         mRecorder = Recorder::CreateAndStart(device);
     }
@@ -1658,6 +1657,8 @@ void DawnTestBase::SetUp() {
 
 void DawnTestBase::TearDown() {
     ResolveDeferredExpectationsNow();
+
+    mRecorder.reset();
 
     if (mRequireUseTieredLimits) {
         mBackendAdapter.SetUseTieredLimits(false);
@@ -2319,6 +2320,11 @@ void DawnTestBase::CheckReplayedReadbackBuffers(std::span<ReadbackSlot> existing
 
         replayedBuffer.Unmap();
     }
+
+    // Start a new recorder if we still have device
+    if (device != nullptr) {
+        mRecorder = Recorder::CreateAndStart(device);
+    }
 }
 
 std::unique_ptr<platform::Platform> DawnTestBase::CreateTestPlatform() {
@@ -2345,6 +2351,8 @@ void DawnTestBase::ResolveDeferredExpectationsNow() {
     for (size_t i = 0; i < mReadbackSlots.size(); ++i) {
         mReadbackSlots[i].buffer.Unmap();
     }
+
+    mReadbackSlots.clear();
 }
 
 bool utils::RGBA8::operator<=(const utils::RGBA8& other) const {

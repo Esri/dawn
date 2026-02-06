@@ -122,7 +122,7 @@ MaybeError ResourceTable::Initialize() {
             .pPoolSizes = sizes.data(),
         };
 
-        DAWN_TRY(CheckVkSuccess(
+        DAWN_TRY(CheckVkOOMThenSuccess(
             device->fn.CreateDescriptorPool(device->GetVkDevice(), &createInfo, nullptr, &*mPool),
             "CreateDescriptorPool"));
     }
@@ -143,7 +143,7 @@ MaybeError ResourceTable::Initialize() {
             .pSetLayouts = &device->GetResourceTableLayout().GetHandle(),
         };
 
-        DAWN_TRY(CheckVkSuccess(
+        DAWN_TRY(CheckVkOOMThenSuccess(
             device->fn.AllocateDescriptorSets(device->GetVkDevice(), &allocateInfo, &*mSet),
             "AllocateDescriptorSets"));
     }
@@ -207,6 +207,7 @@ MaybeError ResourceTable::UpdateMetadataBuffer(CommandRecordingContext* recordin
             // The metadata buffer will be copied to.
             Buffer* metadataBuffer = ToBackend(GetMetadataBuffer());
             DAWN_ASSERT(metadataBuffer->IsInitialized());
+            auto scopedUseMetadataBuffer = metadataBuffer->UseInternal();
             metadataBuffer->TransitionUsageNow(recordingContext, wgpu::BufferUsage::CopyDst);
 
             // Prepare the copies.

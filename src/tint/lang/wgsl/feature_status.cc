@@ -40,7 +40,9 @@ FeatureStatus GetLanguageFeatureStatus(LanguageFeature f) {
         case LanguageFeature::kTexelBuffers:
         case LanguageFeature::kFragmentDepth:
         case LanguageFeature::kImmediateAddressSpace:
-        case LanguageFeature::kTextureAndSamplerLet:
+        case LanguageFeature::kBufferView:
+        case LanguageFeature::kFilteringParameters:
+        case LanguageFeature::kSwizzleAssignment:
             return FeatureStatus::kUnsafeExperimental;
 
             ////////////////////////////////////////////////////////////////////
@@ -59,6 +61,7 @@ FeatureStatus GetLanguageFeatureStatus(LanguageFeature f) {
         case LanguageFeature::kUniformBufferStandardLayout:
         case LanguageFeature::kSubgroupId:
         case LanguageFeature::kSubgroupUniformity:
+        case LanguageFeature::kTextureAndSamplerLet:
             return FeatureStatus::kShippedWithKillswitch;
 
             ////////////////////////////////////////////////////////////////////

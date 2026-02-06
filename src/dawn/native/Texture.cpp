@@ -121,14 +121,18 @@ MaybeError ValidateCanViewTextureAs(const DeviceBase* device,
 }
 
 bool IsTextureViewDimensionCompatibleWithTextureDimension(
+    const DeviceBase* device,
     wgpu::TextureViewDimension textureViewDimension,
     wgpu::TextureDimension textureDimension) {
     switch (textureViewDimension) {
         case wgpu::TextureViewDimension::e2D:
         case wgpu::TextureViewDimension::e2DArray:
         case wgpu::TextureViewDimension::Cube:
-        case wgpu::TextureViewDimension::CubeArray:
             return textureDimension == wgpu::TextureDimension::e2D;
+
+        case wgpu::TextureViewDimension::CubeArray:
+            return device->IsCompatibilityMode() ? false
+                                                 : textureDimension == wgpu::TextureDimension::e2D;
 
         case wgpu::TextureViewDimension::e3D:
             return textureDimension == wgpu::TextureDimension::e3D;
@@ -242,7 +246,7 @@ MaybeError ValidateTextureViewDimensionCompatibility(
                     descriptor->dimension, descriptor->arrayLayerCount, texture);
 
     DAWN_INVALID_IF(
-        !IsTextureViewDimensionCompatibleWithTextureDimension(descriptor->dimension,
+        !IsTextureViewDimensionCompatibleWithTextureDimension(device, descriptor->dimension,
                                                               texture->GetDimension()),
         "The dimension (%s) of the texture view is not compatible with the dimension (%s) "
         "of %s.",
@@ -435,10 +439,9 @@ MaybeError ValidateTextureUsageConstraints(
 
     const auto kTransientAttachment = wgpu::TextureUsage::TransientAttachment;
     if (usage & kTransientAttachment) {
-        DAWN_INVALID_IF(
-            !device->IsToggleEnabled(Toggle::AllowUnsafeAPIs),
-            "The texture usage (%s) includes %s, which requires enabling toggle allow_unsafe_apis",
-            usage, kTransientAttachment);
+        DAWN_INVALID_IF(device->IsToggleEnabled(Toggle::DisableTransientAttachment),
+                        "The texture usage (%s) includes %s, which is disabled.", usage,
+                        kTransientAttachment);
 
         DAWN_INVALID_IF(
             usage == kTransientAttachment,
@@ -584,6 +587,10 @@ bool CopySrcNeedsInternalTextureBindingUsage(const DeviceBase* device, const For
         (device->IsToggleEnabled(Toggle::UseBlitForDepthTextureToTextureCopyToNonzeroSubresource) ||
          (format.format == wgpu::TextureFormat::Depth16Unorm &&
           device->IsToggleEnabled(Toggle::UseBlitForDepth16UnormTextureToBufferCopy)) ||
+         (format.format == wgpu::TextureFormat::Depth24Plus &&
+          device->IsToggleEnabled(Toggle::UseBlitForDepth24PlusTextureToBufferCopy)) ||
+         (format.format == wgpu::TextureFormat::Depth24PlusStencil8 &&
+          device->IsToggleEnabled(Toggle::UseBlitForDepth24PlusTextureToBufferCopy)) ||
          (format.format == wgpu::TextureFormat::Depth32Float &&
           device->IsToggleEnabled(Toggle::UseBlitForDepth32FloatTextureToBufferCopy)))) {
         return true;
@@ -706,6 +713,8 @@ wgpu::ComponentSwizzle ComposeSwizzleComponent(wgpu::TextureComponentSwizzle swi
             return swizzle.a;
         case wgpu::ComponentSwizzle::Undefined:
             return wgpu::ComponentSwizzle::Undefined;
+        default:
+            DAWN_UNREACHABLE();
     }
 }
 
@@ -775,8 +784,8 @@ MaybeError ValidateTextureDescriptor(
                          "validating resolved compatibility textureBindingViewDimension");
 
         DAWN_INVALID_IF(
-            !IsTextureViewDimensionCompatibleWithTextureDimension(textureBindingViewDimension,
-                                                                  descriptor->dimension),
+            !IsTextureViewDimensionCompatibleWithTextureDimension(
+                device, textureBindingViewDimension, descriptor->dimension),
             "The textureBindingViewDimension (%s) is not compatible with the dimension (%s)",
             textureBindingViewDimension, descriptor->dimension);
 
@@ -1447,6 +1456,24 @@ Extent3D TextureBase::GetMipLevelSubresourceVirtualSize(uint32_t level, Aspect a
     return extent;
 }
 
+Extent3D TextureBase::GetMipLevelSubresourcePhysicalSize(uint32_t level, Aspect aspect) const {
+    Extent3D extent = GetMipLevelSubresourceVirtualSize(level, aspect);
+
+    // Compressed Textures will have paddings if their width or height is not a multiple of
+    // 4 at non-zero mipmap levels.
+    if (mFormat->isCompressed && level != 0) {
+        // If |level| is non-zero, then each dimension of |extent| is at most half of
+        // the max texture dimension. Computations here which add the block width/height
+        // to the extent cannot overflow.
+        const TexelBlockInfo& blockInfo = mFormat->GetAspectInfo(wgpu::TextureAspect::All).block;
+        extent.width = (extent.width + blockInfo.width - 1) / blockInfo.width * blockInfo.width;
+        extent.height =
+            (extent.height + blockInfo.height - 1) / blockInfo.height * blockInfo.height;
+    }
+
+    return extent;
+}
+
 ResultOrError<Ref<TextureViewBase>> TextureBase::CreateView(
     const TextureViewDescriptor* descriptor) {
     if (descriptor == nullptr) {
@@ -1476,10 +1503,6 @@ TextureViewBase* TextureBase::APICreateView(const TextureViewDescriptor* descrip
 
 TextureViewBase* TextureBase::APICreateErrorView(const TextureViewDescriptor* descriptor) {
     return ReturnToAPI(CreateErrorView(descriptor));
-}
-
-bool TextureBase::IsImplicitMSAARenderTextureViewSupported() const {
-    return GetUsage() & wgpu::TextureUsage::TextureBinding;
 }
 
 void TextureBase::SetSharedResourceMemoryContentsForTesting(

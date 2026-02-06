@@ -31,7 +31,7 @@ from collections import namedtuple, defaultdict
 from copy import deepcopy
 
 from generator_lib import Generator, run_generator, FileRender, GeneratorOutput
-from webgpu_json_utility import build_doc_map, load_json_data
+from webgpu_docs_utility import build_doc_map, load_json_data
 
 ############################################################
 # OBJECT MODEL
@@ -759,11 +759,20 @@ def compute_wire_params(api_params, wire_json):
             command_name = concat_names(api_object.name, method.name)
             command_suffix = Name(command_name).CamelCase()
 
-            # Only object return values or void are supported.
+            # Only object return values, status or void are supported:
+            #
+            #- "void" is not a return value so commands can just be pushed to the server.
+            # - objects use the wire's "promise pipelining" and will be sent associated with the
+            #   WireHandle provided by the client.
+            # - "status" is used to synchronously return validation errors so the server checks that
+            #   they are always a success.
+            #
             # Other methods must be handwritten.
             is_object = method.returns and method.returns.type.category == 'object'
+            is_status = method.returns and method.returns.type.name.canonical_case(
+            ) == 'status'
             is_void = method.returns == None
-            if not (is_object or is_void):
+            if not (is_object or is_status or is_void):
                 assert command_suffix in (
                     wire_json['special items']['client_handwritten_commands']
                 ), command_suffix
@@ -899,7 +908,7 @@ def analyze_converter_usage(params_kotlin):
 
 def compute_kotlin_params(loaded_json,
                           kotlin_json,
-                          webgpu_json_data=None,
+                          webgpu_kt_docs_data=None,
                           doc_warn_log_file_path=None):
     params_kotlin = parse_json(loaded_json, enabled_tags=['art'])
     params_kotlin['kotlin_package'] = kotlin_json['kotlin_package']
@@ -910,6 +919,7 @@ def compute_kotlin_params(loaded_json,
     customize_objects = customize_api["objects"]
     customize_structures = customize_api["structures"]
     customize_enums = customize_api["enums"]
+    customize_callback = customize_api["function pointer"]
 
     def kotlin_record_members(members):
         # Members are sorted in the following order.
@@ -1022,11 +1032,11 @@ def compute_kotlin_params(loaded_json,
             # to insert the bitwise equivalent of a signed number.
             if arg.type.name.get() in ['int', 'int32_t', 'uint32_t'
                                        ] and arg.default_value == '0xFFFFFFFF':
-                return '-0x7FFFFFFF'
+                return '-1'
             if arg.type.name.get() in [
                     'int64_t', 'uint64_t', 'size_t'
             ] and arg.default_value == '0xFFFFFFFFFFFFFFFF':
-                return '-0x7FFFFFFFFFFFFFFF'
+                return '-1'
 
             # In all remaining cases the default as specified in dawn.json will work verbatim in
             # Kotlin.
@@ -1098,6 +1108,11 @@ def compute_kotlin_params(loaded_json,
                                    {}).get('omitted') is not True
 
     def include_callback(function):
+        is_omitted = bool(
+            customize_callback.get(function.name.get(), {}).get('omitted'))
+        if is_omitted:
+            return False
+
         structures = params_kotlin['by_category']['structure']
         function_pointers = params_kotlin['by_category']['function pointer']
         if any(member.name.get() == function.name.get()
@@ -1134,7 +1149,7 @@ def compute_kotlin_params(loaded_json,
         'doc_warn_log_filepath': doc_warn_log_file_path,
     }
     params_kotlin['kdocs'] = build_doc_map(by_category=by_category,
-                                           json_data=webgpu_json_data,
+                                           json_data=webgpu_kt_docs_data,
                                            params=kdocs_params)
     params_kotlin['chain_children'] = chain_children
     params_kotlin['kotlin_default'] = kotlin_default
@@ -1489,10 +1504,10 @@ class MultiGeneratorFromDawnJSON(Generator):
                             default=None,
                             type=str,
                             help='The KOTLIN JSON definition to use.')
-        parser.add_argument('--webgpu-json',
+        parser.add_argument('--webgpu-kt-docs',
                             default=None,
                             type=str,
-                            help='The WebGPU API documentation to use.')
+                            help='The WebGPU Kotlin API documentation to use.')
         parser.add_argument(
             '--targets',
             required=True,
@@ -1525,9 +1540,9 @@ class MultiGeneratorFromDawnJSON(Generator):
             with open(args.kotlin_json) as f:
                 kotlin_json = json.loads(f.read())
 
-        webgpu_json_data = None
-        if args.webgpu_json:
-            webgpu_json_data = load_json_data(args.webgpu_json)
+        webgpu_kt_docs_data = None
+        if args.webgpu_kt_docs:
+            webgpu_kt_docs_data = load_json_data(args.webgpu_kt_docs)
 
         doc_warn_log_file_path = args.doc_warn_log_file
 
@@ -1874,7 +1889,7 @@ class MultiGeneratorFromDawnJSON(Generator):
 
         if 'kotlin' in targets:
             params_kotlin = compute_kotlin_params(loaded_json, kotlin_json,
-                                                  webgpu_json_data,
+                                                  webgpu_kt_docs_data,
                                                   doc_warn_log_file_path)
             kt_file_path = params_kotlin['kotlin_package'].replace('.', '/')
             jni_name = params_kotlin['jni_name']
@@ -1954,7 +1969,7 @@ class MultiGeneratorFromDawnJSON(Generator):
 
         if "jni" in targets:
             params_kotlin = compute_kotlin_params(loaded_json, kotlin_json,
-                                                  webgpu_json_data,
+                                                  webgpu_kt_docs_data,
                                                   doc_warn_log_file_path)
 
             imported_templates += [

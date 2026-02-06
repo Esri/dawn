@@ -52,7 +52,10 @@
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/sampler.h"
 #include "src/tint/lang/core/type/storage_texture.h"
+#include "src/tint/lang/core/type/swizzle_view.h"
+#include "src/tint/lang/core/type/u16.h"
 #include "src/tint/lang/core/type/u8.h"
+#include "src/tint/lang/core/type/vector.h"
 #include "src/tint/lang/wgsl/ast/alias.h"
 #include "src/tint/lang/wgsl/ast/assignment_statement.h"
 #include "src/tint/lang/wgsl/ast/attribute.h"
@@ -113,6 +116,7 @@
 #include "src/tint/utils/text/string.h"
 #include "src/tint/utils/text/styled_text.h"
 #include "src/tint/utils/text/text_style.h"
+#include "src/utils/compiler.h"
 
 using namespace tint::core::fluent_types;  // NOLINT
 
@@ -1518,11 +1522,6 @@ sem::BuiltinEnumExpression<core::AddressSpace>* Resolver::AddressSpaceExpression
     return address_space_expr;
 }
 
-sem::BuiltinEnumExpression<core::TexelFormat>* Resolver::TexelFormatExpression(
-    const ast::Expression* expr) {
-    return sem_.AsTexelFormat(Expression(expr));
-}
-
 sem::BuiltinEnumExpression<core::Access>* Resolver::AccessExpression(const ast::Expression* expr) {
     return sem_.AsAccess(Expression(expr));
 }
@@ -1704,6 +1703,17 @@ const sem::ValueExpression* Resolver::Load(const sem::ValueExpression* expr) {
     if (!expr) {
         // Allow for Load(ValueExpression(blah)), where failures pass through Load()
         return nullptr;
+    }
+
+    // When requested, wrap a swizzle view in an ephemeral Load in order to correctly resolve types
+    // for validation. Because this sem::Load will not become a true load during lowering to IR,
+    // they are not registered.
+    if (auto* swizzle_view = expr->Type()->As<core::type::SwizzleView>()) {
+        auto* load =
+            b.create<sem::Load>(expr, swizzle_view->StoreType(), current_statement_, expr->Stage());
+        b.Sem().Replace(expr->Declaration(), load);
+
+        return load;
     }
 
     if (!expr->Type()->Is<core::type::Reference>()) {
@@ -1889,7 +1899,9 @@ sem::ValueExpression* Resolver::IndexAccessor(const ast::IndexAccessorExpression
     }
 
     // If we're extracting from a memory view, we return a reference.
-    if (memory_view) {
+    // TODO(crbug.com/477280751): The swizzle view exception preserves some existing buggy behavior
+    // in single element swizzle of a swizzle assignment, but this should be fixed in a follow up.
+    if (memory_view && !memory_view->Is<core::type::SwizzleView>()) {
         ty =
             b.create<core::type::Reference>(memory_view->AddressSpace(), ty, memory_view->Access());
     }
@@ -1900,7 +1912,7 @@ sem::ValueExpression* Resolver::IndexAccessor(const ast::IndexAccessorExpression
         stage = core::EvaluationStage::kNotEvaluated;
     } else {
         if (auto* idx_val = idx->ConstantValue()) {
-            auto res = const_eval_.Index(obj->ConstantValue(), obj->Type(), idx_val,
+            auto res = const_eval_.Index(obj->ConstantValue(), storage_ty, idx_val,
                                          idx->Declaration()->source);
             if (res != Success) {
                 return nullptr;
@@ -1941,7 +1953,14 @@ sem::Call* Resolver::Call(const ast::CallExpression* expr) {
     // sem::ValueConversion call for a CtorConvIntrinsic with an optional template argument type.
     auto ctor_or_conv = [&](CtorConvIntrinsic ty,
                             VectorRef<const core::type::Type*> template_args) -> sem::Call* {
-        auto arg_tys = tint::Transform(args, [](auto* arg) { return arg->Type()->UnwrapRef(); });
+        auto arg_tys = tint::Transform(args, [&](auto* arg) -> const core::type::Type* {
+            // Use the swizzle result type as the arg type for intrinsic lookup.
+            if (auto* swizzle_view = arg->Type()->template As<core::type::SwizzleView>()) {
+                return swizzle_view->StoreType();
+            }
+            return arg->Type()->UnwrapRef();
+        });
+
         auto match = intrinsic_table_.Lookup(ty, template_args, arg_tys, args_stage);
         if (match != Success) {
             AddError(expr->source) << match.Failure();
@@ -2259,7 +2278,14 @@ sem::Call* Resolver::BuiltinCall(const ast::CallExpression* expr,
         }
     }
 
-    auto arg_tys = tint::Transform(args, [](auto* arg) { return arg->Type()->UnwrapRef(); });
+    auto arg_tys = tint::Transform(args, [&](auto* arg) -> const core::type::Type* {
+        // Use the swizzle result type as the arg type for intrinsic lookup.
+        if (auto* swizzle_view = arg->Type()->template As<core::type::SwizzleView>()) {
+            return swizzle_view->StoreType();
+        }
+        return arg->Type()->UnwrapRef();
+    });
+
     auto overload = intrinsic_table_.Lookup(fn, tmpl_args, arg_tys, arg_stage);
     if (overload != Success) {
         AddError(expr->source) << overload.Failure();
@@ -2304,6 +2330,17 @@ sem::Call* Resolver::BuiltinCall(const ast::CallExpression* expr,
         AddWarning(expr->source) << "use of deprecated builtin";
     }
 
+    // Check evaluation stage of parameters that are required to be const-expressions.
+    for (uint32_t i = 0; i < overload->parameters.Length(); i++) {
+        const auto& p = overload->parameters[i];
+        if (p.is_const && args[i]->Stage() != core::EvaluationStage::kConstant) {
+            AddError(args[i]->Declaration()->source)
+                << "the " << style::Variable(p.usage) << " argument of "
+                << style::Function(target->str()) << " must be a const-expression";
+            return nullptr;
+        }
+    }
+
     // If the builtin is @const, and all arguments have constant values, evaluate the builtin
     // now.
     const core::constant::Value* value = nullptr;
@@ -2324,8 +2361,13 @@ sem::Call* Resolver::BuiltinCall(const ast::CallExpression* expr,
         value = r.Get();
     }
 
-    auto* call =
-        b.create<sem::Call>(expr, target, stage, std::move(args), current_statement_, value);
+    // If the builtin is bufferView, set the root identifier based on the first argument.
+    const sem::Variable* root_ident = nullptr;
+    if (fn == wgsl::BuiltinFn::kBufferView) {
+        root_ident = args[0]->RootIdentifier();
+    }
+    auto* call = b.create<sem::Call>(expr, target, stage, std::move(args), current_statement_,
+                                     value, root_ident);
 
     if (current_function_) {
         current_function_->AddDirectlyCalledBuiltin(target);
@@ -2394,6 +2436,22 @@ sem::Call* Resolver::BuiltinCall(const ast::CallExpression* expr,
         case wgsl::BuiltinFn::kSubgroupMatrixStore:
             RegisterStore(args[0]);
             break;
+
+        case wgsl::BuiltinFn::kBufferView: {
+            auto address_space =
+                call->Target()->ReturnType()->template As<core::type::Pointer>()->AddressSpace();
+            auto* store_type =
+                call->Target()->ReturnType()->template As<core::type::Pointer>()->StoreType();
+            if (!ApplyAddressSpaceUsageToType(address_space, store_type,
+                                              call->Declaration()->source)) {
+                AddNote(call->Declaration()->source) << " while instantiating bufferView";
+                return nullptr;
+            }
+            if (!validator_.BufferView(call)) {
+                return nullptr;
+            }
+            break;
+        }
 
         default:
             break;
@@ -2485,6 +2543,8 @@ const core::type::Type* Resolver::BuiltinType(core::BuiltinType builtin_ty,
     switch (builtin_ty) {
         case core::BuiltinType::kBool:
             return check_no_tmpl_args(b.create<core::type::Bool>());
+        case core::BuiltinType::kBuffer:
+            return Buffer(ident);
         case core::BuiltinType::kI32:
             return check_no_tmpl_args(I32());
         case core::BuiltinType::kU32:
@@ -2497,6 +2557,8 @@ const core::type::Type* Resolver::BuiltinType(core::BuiltinType builtin_ty,
             return check_no_tmpl_args(I8(ident));
         case core::BuiltinType::kU8:
             return check_no_tmpl_args(U8(ident));
+        case core::BuiltinType::kU16:
+            return check_no_tmpl_args(U16(ident));
         case core::BuiltinType::kVec2:
             return VecT(ident, builtin_ty, 2);
         case core::BuiltinType::kVec3:
@@ -2590,8 +2652,7 @@ const core::type::Type* Resolver::BuiltinType(core::BuiltinType builtin_ty,
         case core::BuiltinType::kPtr:
             return Ptr(ident);
         case core::BuiltinType::kSampler:
-            return check_no_tmpl_args(
-                b.create<core::type::Sampler>(core::type::SamplerKind::kSampler));
+            return Sampler(ident);
         case core::BuiltinType::kSamplerComparison:
             return check_no_tmpl_args(
                 b.create<core::type::Sampler>(core::type::SamplerKind::kComparisonSampler));
@@ -2729,6 +2790,11 @@ const core::type::I8* Resolver::I8(const ast::Identifier* ident) {
 
 const core::type::U8* Resolver::U8(const ast::Identifier* ident) {
     return validator_.CheckU8Enabled(ident->source) ? b.create<core::type::U8>() : nullptr;
+}
+
+const core::type::U16* Resolver::U16(const ast::Identifier* ident) {
+    AddError(ident->source) << "u16 is unsupported in WGSL";
+    return nullptr;
 }
 
 const core::type::Vector* Resolver::Vec(const ast::Identifier* ident,
@@ -2929,9 +2995,42 @@ const core::type::Pointer* Resolver::Ptr(const ast::Identifier* ident) {
     return out;
 }
 
+const core::type::Sampler* Resolver::Sampler(const ast::Identifier* ident) {
+    if (!allowed_features_.features.contains(wgsl::LanguageFeature::kFilteringParameters)) {
+        return DAWN_LIKELY(CheckNotTemplated("type", ident))
+                   ? b.create<core::type::Sampler>(core::type::SamplerKind::kSampler)
+                   : nullptr;
+    }
+
+    core::SamplerFiltering filtering = core::SamplerFiltering::kUndefined;
+    if (auto* tmpl_ident = ident->As<ast::TemplatedIdentifier>()) {
+        // If we are templated, then there must be at least one template item
+        if (!CheckTemplatedIdentifierArgs(tmpl_ident, 1)) {
+            return nullptr;
+        }
+
+        if (auto resolved = dependencies_.resolved_identifiers.Get(ident)) {
+            if (auto* ast_node = resolved->Node()) {
+                sem_.NoteDeclarationSource(ast_node);
+            }
+        }
+
+        filtering = sem_.GetSamplerFiltering(tmpl_ident->arguments[0]);
+        if (DAWN_UNLIKELY(filtering == core::SamplerFiltering::kUndefined)) {
+            return nullptr;
+        }
+    }
+    return b.create<core::type::Sampler>(core::type::SamplerKind::kSampler, filtering);
+}
+
 const core::type::SampledTexture* Resolver::SampledTexture(const ast::Identifier* ident,
                                                            core::type::TextureDimension dim) {
-    auto* tmpl_ident = TemplatedIdentifier(ident, 1);
+    uint32_t allowed_args = 1;
+    if (allowed_features_.features.contains(wgsl::LanguageFeature::kFilteringParameters)) {
+        allowed_args = 2;
+    }
+
+    auto* tmpl_ident = TemplatedIdentifier(ident, 1, allowed_args);
     if (DAWN_UNLIKELY(!tmpl_ident)) {
         return nullptr;
     }
@@ -2941,7 +3040,22 @@ const core::type::SampledTexture* Resolver::SampledTexture(const ast::Identifier
         return nullptr;
     }
 
-    auto* out = b.create<core::type::SampledTexture>(dim, ty_expr);
+    core::TextureFilterable filterable = core::TextureFilterable::kUndefined;
+    if (tmpl_ident->arguments.Length() > 1) {
+        filterable = sem_.GetTextureFilterable(tmpl_ident->arguments[1]);
+        if (DAWN_UNLIKELY(filterable == core::TextureFilterable::kUndefined)) {
+            return nullptr;
+        }
+
+        if (!ty_expr->IsAnyOf<core::type::F32, core::type::F16>()) {
+            AddError(tmpl_ident->arguments[1]->source)
+                << "texture filterability only applies to float textures, got '"
+                << sem_.TypeNameOf(ty_expr) << "'";
+            return nullptr;
+        }
+    }
+
+    auto* out = b.create<core::type::SampledTexture>(dim, ty_expr, filterable);
     return validator_.SampledTexture(out, ident->source) ? out : nullptr;
 }
 
@@ -3045,6 +3159,25 @@ const core::type::SubgroupMatrix* Resolver::SubgroupMatrix(const ast::Identifier
     }
 
     return validator_.SubgroupMatrix(out, ident->source) ? out : nullptr;
+}
+
+const core::type::Buffer* Resolver::Buffer(const ast::Identifier* ident) {
+    core::type::Buffer* out = nullptr;
+    if (ident->Is<ast::TemplatedIdentifier>()) {
+        auto* tmpl_ident = TemplatedIdentifier(ident, 1);
+        if (DAWN_UNLIKELY(!tmpl_ident)) {
+            return nullptr;
+        }
+        auto* arg = tmpl_ident->arguments[0];
+        const core::type::ArrayCount* size = ArrayCount(arg, /* array = */ false);
+        if (!size) {
+            return nullptr;
+        }
+        out = b.create<core::type::Buffer>(size);
+    } else {
+        out = b.create<core::type::Buffer>(b.create<core::type::RuntimeArrayCount>());
+    }
+    return validator_.Buffer(out, ident->source) ? out : nullptr;
 }
 
 const core::type::TexelBuffer* Resolver::TexelBuffer(const ast::Identifier* ident) {
@@ -3382,6 +3515,22 @@ sem::Expression* Resolver::Identifier(const ast::IdentifierExpression* expr) {
                    : nullptr;
     }
 
+    if (auto filterable = resolved->TextureFilterable();
+        filterable != core::TextureFilterable::kUndefined) {
+        return CheckNotTemplated("texture filterable", ident)
+                   ? b.create<sem::BuiltinEnumExpression<core::TextureFilterable>>(
+                         expr, current_statement_, filterable)
+                   : nullptr;
+    }
+
+    if (auto filterable = resolved->SamplerFiltering();
+        filterable != core::SamplerFiltering::kUndefined) {
+        return CheckNotTemplated("sampler filtering", ident)
+                   ? b.create<sem::BuiltinEnumExpression<core::SamplerFiltering>>(
+                         expr, current_statement_, filterable)
+                   : nullptr;
+    }
+
     if (resolved->Unresolved()) {
         return b.create<UnresolvedIdentifier>(expr, current_statement_);
     }
@@ -3503,37 +3652,31 @@ sem::ValueExpression* Resolver::MemberAccessor(const ast::MemberAccessorExpressi
                 return nullptr;
             }
 
-            const sem::ValueExpression* obj_expr = object;
             if (size == 1) {
                 // A single element swizzle is just the type of the vector.
                 ty = vec->Type();
                 // If we're extracting from a memory view, we return a reference.
-                if (memory_view) {
+                // TODO(crbug.com/477280751): The swizzle view exception preserves some existing
+                // buggy behavior in single element swizzle of a swizzle assignment, but this should
+                // be fixed in a follow up.
+                if (memory_view && !memory_view->Is<core::type::SwizzleView>()) {
                     ty = b.create<core::type::Reference>(memory_view->AddressSpace(), ty,
                                                          memory_view->Access());
                 }
             } else {
-                // The vector will have a number of components equal to the length of
-                // the swizzle.
-                ty = b.create<core::type::Vector>(vec->Type(), static_cast<uint32_t>(size));
-
-                if (obj_expr->Type()->Is<core::type::Pointer>()) {
-                    // If the LHS is a pointer, the load rule is invoked. We special case this
-                    // because our usual handling of implicit loads assumes the expression has
-                    // reference type. This expression also has an implicit dereference before the
-                    // load, but we have no way of representing that, so we create the load directly
-                    // from the pointer expression.
-                    auto* load =
-                        b.create<sem::Load>(obj_expr, current_statement_, obj_expr->Stage());
-                    b.Sem().Replace(obj_expr->Declaration(), load);
-
-                    // Register the load for the alias analysis.
-                    RegisterLoad(obj_expr);
-
-                    obj_expr = load;
+                if (memory_view) {
+                    auto* vec_ty =
+                        b.create<core::type::Vector>(vec->Type(), static_cast<uint32_t>(size));
+                    ty = b.create<core::type::SwizzleView>(memory_view->AddressSpace(), vec_ty,
+                                                           memory_view->Access(), vec->Width(),
+                                                           static_cast<uint32_t>(size));
+                    // The object being swizzled will be loaded during IR generation, so we register
+                    // the load ahead of time here for the purpose of alias analysis.
+                    RegisterLoad(object);
                 } else {
-                    // The load rule is invoked before the swizzle, if necessary.
-                    obj_expr = Load(obj_expr);
+                    // The vector will have a number of components equal to the length of
+                    // the swizzle.
+                    ty = b.create<core::type::Vector>(vec->Type(), static_cast<uint32_t>(size));
                 }
             }
             const core::constant::Value* val = nullptr;
@@ -3544,7 +3687,7 @@ sem::ValueExpression* Resolver::MemberAccessor(const ast::MemberAccessorExpressi
                 }
                 val = res.Get();
             }
-            return b.create<sem::Swizzle>(expr, ty, current_statement_, val, obj_expr,
+            return b.create<sem::Swizzle>(expr, ty, current_statement_, val, object,
                                           std::move(swizzle), root_ident);
         },
 
@@ -3700,7 +3843,12 @@ sem::ValueExpression* Resolver::UnaryOp(const ast::UnaryOpExpression* unary) {
 
         default: {
             stage = expr->Stage();
-            auto overload = intrinsic_table_.Lookup(unary->op, expr_ty->UnwrapRef(), stage);
+            auto* arg_ty = expr_ty->UnwrapRef();
+            // Use the swizzle result type as the arg type for intrinsic lookup.
+            if (auto* swizzle_view = expr_ty->As<core::type::SwizzleView>()) {
+                arg_ty = swizzle_view->StoreType();
+            }
+            auto overload = intrinsic_table_.Lookup(unary->op, arg_ty, stage);
             if (overload != Success) {
                 AddError(unary->source) << overload.Failure();
                 return nullptr;
@@ -4123,7 +4271,8 @@ const core::type::Type* Resolver::TypeDecl(const ast::TypeDecl* named_type) {
     return result;
 }
 
-const core::type::ArrayCount* Resolver::ArrayCount(const ast::Expression* count_expr) {
+const core::type::ArrayCount* Resolver::ArrayCount(const ast::Expression* count_expr, bool array) {
+    const std::string count_kind = array ? "array count" : "buffer size";
     // Evaluate the constant array count expression.
     const auto* count_sem = Materialize(sem_.GetVal(count_expr));
     if (!count_sem) {
@@ -4149,7 +4298,7 @@ const core::type::ArrayCount* Resolver::ArrayCount(const ast::Expression* count_
             auto* count_val = count_sem->ConstantValue();
             if (auto* ty = count_val->Type(); !ty->IsIntegerScalar()) {
                 AddError(count_expr->source)
-                    << "array count must evaluate to a constant integer expression, but is type "
+                    << count_kind << " must evaluate to a constant integer expression, but is type "
                     << style::Type(ty->FriendlyName());
                 return nullptr;
             }
@@ -4157,7 +4306,7 @@ const core::type::ArrayCount* Resolver::ArrayCount(const ast::Expression* count_
             int64_t count = count_val->ValueAs<AInt>();
             if (count < 1) {
                 AddError(count_expr->source)
-                    << "array count (" << count << ") must be greater than 0";
+                    << count_kind << " (" << count << ") must be greater than 0";
                 return nullptr;
             }
 
@@ -4165,9 +4314,9 @@ const core::type::ArrayCount* Resolver::ArrayCount(const ast::Expression* count_
         }
 
         default: {
-            AddError(count_expr->source)
-                << "array count must evaluate to a constant integer expression "
-                   "or override variable";
+            AddError(count_expr->source) << count_kind
+                                         << " must evaluate to a constant integer expression "
+                                            "or override variable";
             return nullptr;
         }
     }
@@ -4712,8 +4861,17 @@ sem::Statement* Resolver::CompoundAssignmentStatement(
 
         auto stage = core::EarliestStage(lhs->Stage(), rhs->Stage());
 
-        auto overload = intrinsic_table_.Lookup(stmt->op, lhs->Type()->UnwrapRef(),
-                                                rhs->Type()->UnwrapRef(), stage, true);
+        // TODO(crbug.com/477255032): See if this can be cleaned up by improving the consistency of
+        // resolver subexpression loading.
+        auto* rhs_type = rhs->Type();
+        if (auto* swizzle_view = rhs_type->As<core::type::SwizzleView>()) {
+            // Use the swizzle result type as the arg type for intrinsic lookup.
+            rhs_type = swizzle_view->StoreType();
+        } else {
+            rhs_type = rhs_type->UnwrapRef();
+        }
+        auto overload =
+            intrinsic_table_.Lookup(stmt->op, lhs->Type()->UnwrapRef(), rhs_type, stage, true);
         if (overload != Success) {
             AddError(stmt->source) << overload.Failure();
             return false;
@@ -4829,6 +4987,13 @@ bool Resolver::ApplyAddressSpaceUsageToType(core::AddressSpace address_space,
         AddError(usage) << "subgroup matrix types cannot be declared in the "
                         << style::Enum(address_space) << " address space";
         return false;
+    }
+
+    if (ty->Is<core::type::Buffer>() && address_space != core::AddressSpace::kStorage &&
+        address_space != core::AddressSpace::kUniform &&
+        address_space != core::AddressSpace::kWorkgroup) {
+        AddError(usage) << "buffer types cannot be declared in the " << style::Enum(address_space)
+                        << " address space";
     }
 
     if (core::IsHostShareable(address_space) && !ty->IsHostShareable()) {

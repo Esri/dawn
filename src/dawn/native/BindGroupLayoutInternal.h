@@ -130,6 +130,10 @@ class BindGroupLayoutInternalBase : public ApiObjectBase,
     BindingIndex AsBindingIndex(APIBindingIndex index) const;
     APIBindingIndex GetAPIBindingIndex(BindingNumber bindingNumber) const;
 
+    // Map used to convert APIBindingIndex to indices in BindGroupBase::GetBoundExternalTextures.
+    using BoundExternalTextureMap = absl::flat_hash_map<APIBindingIndex, size_t>;
+    const BoundExternalTextureMap& GetBoundExternalTextureMap() const;
+
     // Returns the number of internal bindings, excluding things like ExternalTexture.
     BindingIndex GetBindingCount() const;
     // Returns |BindingIndex| because dynamic buffers are packed at the front.
@@ -138,6 +142,8 @@ class BindGroupLayoutInternalBase : public ApiObjectBase,
     uint32_t GetUnverifiedBufferCount() const;
     uint32_t GetStaticSamplerCount() const;
     bool IsStorageBufferBinding(BindingIndex bindingIndex) const;
+
+    uint32_t GetExternalTextureCount() const;
 
     // Returns the exact ranges of indices that contains specific binding types.
     BeginEndRange<BindingIndex> GetDynamicBufferIndices() const;
@@ -229,6 +235,10 @@ class BindGroupLayoutInternalBase : public ApiObjectBase,
     // Map from BindGroupLayoutEntry.binding as BindingNumber to packed indices as BindingIndex.
     // TODO(https://issues.chromium.org/448578977): Use a more optimized map type.
     BindingMap mBindingMap;
+
+    // Map from APIBindingIndex of External Texture to its index in
+    // BindGroupBase::mBoundExternalTextures.
+    BoundExternalTextureMap mBoundExternalTextureMap;
 
     BindingCounts mValidationBindingCounts = {};
     bool mNeedsCrossBindingValidation = false;

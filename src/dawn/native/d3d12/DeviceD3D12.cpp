@@ -52,6 +52,7 @@
 #include "dawn/native/d3d12/QueueD3D12.h"
 #include "dawn/native/d3d12/RenderPipelineD3D12.h"
 #include "dawn/native/d3d12/ResidencyManagerD3D12.h"
+#include "dawn/native/d3d12/ResourceTableD3D12.h"
 #include "dawn/native/d3d12/SamplerD3D12.h"
 #include "dawn/native/d3d12/SamplerHeapCacheD3D12.h"
 #include "dawn/native/d3d12/ShaderModuleD3D12.h"
@@ -326,6 +327,7 @@ MaybeError Device::CreateZeroBuffer() {
 
         DAWN_TRY_ASSIGN(zeroBufferBase, CreateBuffer(&zeroBufferDescriptor));
 
+        auto scopedUseZeroBuffer = zeroBufferBase->UseInternal();
         CommandRecordingContext* commandContext =
             ToBackend(GetQueue())->GetPendingCommandContext(QueueBase::SubmitMode::Passive);
 
@@ -354,6 +356,7 @@ MaybeError Device::ClearBufferToZero(CommandRecordingContext* commandContext,
     Buffer* dstBuffer = ToBackend(destination);
 
     // Necessary to ensure residency of the zero buffer.
+    auto scopedUseZeroBuffer = mZeroBuffer->UseInternal();
     mZeroBuffer->TrackUsageAndTransitionNow(commandContext, wgpu::BufferUsage::CopySrc);
     dstBuffer->TrackUsageAndTransitionNow(commandContext, wgpu::BufferUsage::CopyDst);
 
@@ -425,8 +428,7 @@ Ref<RenderPipelineBase> Device::CreateUninitializedRenderPipelineImpl(
 }
 ResultOrError<Ref<ResourceTableBase>> Device::CreateResourceTableImpl(
     const ResourceTableDescriptor* descriptor) {
-    // TODO(https://issues.chromium.org/473354062): Implement resource tables in D3D12.
-    return DAWN_UNIMPLEMENTED_ERROR("ResourceTable is not implemented on D3D12");
+    return ResourceTable::Create(this, descriptor);
 }
 ResultOrError<Ref<SamplerBase>> Device::CreateSamplerImpl(const SamplerDescriptor* descriptor) {
     return Sampler::Create(this, descriptor);
@@ -548,7 +550,6 @@ MaybeError Device::CopyFromStagingToBuffer(BufferBase* source,
         ToBackend(GetQueue())->GetPendingCommandContext(QueueBase::SubmitMode::Passive);
 
     Buffer* dstBuffer = ToBackend(destination);
-    DAWN_TRY(dstBuffer->SynchronizeBufferBeforeUseOnGPU());
 
     [[maybe_unused]] bool cleared;
     DAWN_TRY_ASSIGN(cleared, dstBuffer->EnsureDataInitializedAsDestination(

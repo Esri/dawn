@@ -171,14 +171,16 @@ MaybeError ValidateCompatibilityWithPipelineLayout(DeviceBase* device,
 // Return extent3D with workgroup size dimension info if it is valid.
 // width = x, height = y, depthOrArrayLength = z.
 ResultOrError<Extent3D> ValidateComputeStageWorkgroupSize(
-    uint32_t x,
-    uint32_t y,
-    uint32_t z,
-    size_t workgroupStorageSize,
+    const tint::WorkgroupInfo& workgroupInfo,
     bool usesSubgroupMatrix,
     uint32_t maxSubgroupSize,
     const LimitsForCompilationRequest& limits,
     const LimitsForCompilationRequest& adaterSupportedlimits);
+
+MaybeError ValidateExplicitComputeSubgroupSize(const tint::WorkgroupInfo& workgroupInfo,
+                                               uint32_t minExplicitSubgroupSize,
+                                               uint32_t maxExplicitSubgroupSize,
+                                               uint32_t maxComputeWorkgroupSubgroups);
 
 MaybeError ValidateSubgroupMatrixConfiguration(const tint::SubgroupMatrixInfo& smInfo,
                                                const std::vector<SubgroupMatrixConfig>& cfg);
@@ -325,7 +327,9 @@ using OverridesMap = absl::flat_hash_map<std::string, Override>;
     X(bool, usesFineDerivativeBuiltin)                                                            \
     X(bool, usesResourceTable)                                                                    \
     /* Immediate Data block byte size */                                                          \
-    X(uint32_t, immediateDataRangeByteSize)
+    X(uint32_t, immediateDataRangeByteSize)                                                       \
+    /* Immediate Data block used slots */                                                         \
+    X(ImmediateConstantMask, immediateDataUsedSlots)
 DAWN_SERIALIZABLE(struct, EntryPointMetadata, ENTRY_POINT_METADATA_MEMBER) {
     using SamplerTexturePair = detail::SamplerTexturePair;
     // TODO(crbug.com/409438000): Remove the hack of sampler placeholders for non-sampler texture.

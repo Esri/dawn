@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "dawn/common/Enumerator.h"
@@ -549,6 +550,12 @@ MaybeError RecordBeginDynamicRenderPass(CommandRecordingContext* recordingContex
             colorAttachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
             colorAttachment.resolveImageView = resolveView->GetHandle();
             colorAttachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        } else if (renderPass->msaaRenderToSingleSampled &&
+                   view->GetTexture()->GetSampleCount() == 1) {
+            // VUID-VkRenderingAttachmentInfo-None-12256: If MSRTSS is used and the attachment has
+            // a sample count of 1, the resolve mode can't be VK_RESOLVE_MODE_NONE.
+            colorAttachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+            colorAttachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         }
 
         colorAttachment.loadOp = VulkanAttachmentLoadOp(attachmentInfo.loadOp);
@@ -601,6 +608,17 @@ MaybeError RecordBeginDynamicRenderPass(CommandRecordingContext* recordingContex
         }
     }
 
+    VkMultisampledRenderToSingleSampledInfoEXT msrtss = {};
+    if (renderPass->msaaRenderToSingleSampled) {
+        msrtss.sType = VK_STRUCTURE_TYPE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_INFO_EXT;
+        msrtss.pNext = nullptr;
+        msrtss.multisampledRenderToSingleSampledEnable = VK_TRUE;
+        msrtss.rasterizationSamples =
+            VulkanSampleCount(renderPass->attachmentState->GetSampleCount());
+
+        renderInfo.pNext = &msrtss;
+    }
+
     device->fn.CmdBeginRenderingKHR(recordingContext->commandBuffer, &renderInfo);
 
     return {};
@@ -624,9 +642,11 @@ MaybeError RecordBeginRenderPass(CommandRecordingContext* recordingContext,
         for (auto i : renderPass->attachmentState->GetColorAttachmentsMask()) {
             const auto& attachmentInfo = renderPass->colorAttachments[i];
             bool hasResolveTarget = attachmentInfo.resolveTarget != nullptr;
+            bool renderToSingleSampled = renderPass->msaaRenderToSingleSampled &&
+                                         attachmentInfo.view->GetTexture()->GetSampleCount() == 1;
 
             query.SetColor(i, attachmentInfo.view->GetFormat().format, attachmentInfo.loadOp,
-                           attachmentInfo.storeOp, hasResolveTarget);
+                           attachmentInfo.storeOp, hasResolveTarget, renderToSingleSampled);
         }
 
         if (renderPass->attachmentState->HasDepthStencilAttachment()) {
@@ -777,6 +797,7 @@ MaybeError CommandBuffer::RecordCopyImageWithTemporaryBuffer(
     Ref<BufferBase> tempBufferBase;
     DAWN_TRY_ASSIGN(tempBufferBase, device->CreateBuffer(&tempBufferDescriptor));
     Buffer* tempBuffer = ToBackend(tempBufferBase.Get());
+    auto scopedUseTempBuffer = tempBuffer->UseInternal();
 
     BufferCopy tempBufferCopy;
     tempBufferCopy.buffer = tempBuffer;
@@ -806,7 +827,7 @@ MaybeError CommandBuffer::RecordCopyImageWithTemporaryBuffer(
                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
                                     &tempBufferToDstRegion);
 
-    recordingContext->tempBuffers.emplace_back(tempBuffer);
+    recordingContext->tempBuffers.emplace_back(std::move(tempBuffer));
 
     return {};
 }
@@ -1648,10 +1669,10 @@ MaybeError CommandBuffer::RecordRenderPass(CommandRecordingContext* recordingCon
             }
 
             case Command::SetImmediates: {
-                SetImmediatesCmd* cmd = mCommands.NextCommand<SetImmediatesCmd>();
+                SetImmediatesCmd* cmd = iter->NextCommand<SetImmediatesCmd>();
                 DAWN_ASSERT(cmd->size > 0);
                 uint8_t* value = nullptr;
-                value = mCommands.NextData<uint8_t>(cmd->size);
+                value = iter->NextData<uint8_t>(cmd->size);
                 immediates.SetImmediates(cmd->offset, value, cmd->size);
                 break;
             }

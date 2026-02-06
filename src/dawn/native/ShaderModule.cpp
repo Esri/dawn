@@ -483,6 +483,7 @@ MaybeError ParseSPIRV(const std::vector<uint32_t>& spirv,
 
     tint::wgsl::writer::Options options;
     options.allow_non_uniform_derivatives = allowNonUniformDerivatives;
+    options.disable_unreachable_code_warning = true;
     options.allowed_features = allowedFeatures.ToTint();
     auto wgslResult = tint::wgsl::writer::ProgramFromIR(irResult.Get(), options);
 
@@ -827,6 +828,16 @@ ResultOrError<std::unique_ptr<EntryPointMetadata>> ReflectEntryPointUsingTint(
     if (entryPoint.immediate_data_size) {
         DAWN_ASSERT(IsAligned(entryPoint.immediate_data_size, 4u));
         metadata->immediateDataRangeByteSize = entryPoint.immediate_data_size;
+
+        // Avoid calling GetImmediateBlockInfo if the size exceeds the limit,
+        // as it might cause an assertion in Tint.
+        DAWN_INVALID_IF(
+            entryPoint.immediate_data_size > kMaxExternalImmediateConstantsPerPipeline * 4,
+            "Immediate data size (%u) exceeds the maximum allowed size (%u).",
+            entryPoint.immediate_data_size, kMaxExternalImmediateConstantsPerPipeline * 4);
+
+        auto immediateBlockInfo = inspector->GetImmediateBlockInfo(entryPoint.name);
+        metadata->immediateDataUsedSlots = ImmediateConstantMask(immediateBlockInfo.to_ullong());
     }
 
     // Vertex shader specific reflection.
@@ -850,7 +861,7 @@ ResultOrError<std::unique_ptr<EntryPointMetadata>> ReflectEntryPointUsingTint(
         // Vertex output (inter-stage variables) reflection.
         uint32_t clipDistancesSlots = 0;
         if (entryPoint.clip_distances_size.has_value()) {
-            clipDistancesSlots = RoundUp(*entryPoint.clip_distances_size, 4) / 4;
+            clipDistancesSlots = uint32_t(RoundUp(*entryPoint.clip_distances_size, 4) / 4);
         }
         uint32_t minInvalidLocation = maxInterStageShaderVariables - clipDistancesSlots;
         for (const auto& outputVar : entryPoint.output_variables) {
@@ -889,7 +900,7 @@ ResultOrError<std::unique_ptr<EntryPointMetadata>> ReflectEntryPointUsingTint(
 
         // Other vertex metadata.
         metadata->totalInterStageShaderVariables =
-            entryPoint.output_variables.size() + clipDistancesSlots;
+            uint32_t(entryPoint.output_variables.size()) + clipDistancesSlots;
         if (metadata->totalInterStageShaderVariables > maxInterStageShaderVariables) {
             size_t userDefinedOutputVariables = entryPoint.output_variables.size();
 
@@ -948,15 +959,30 @@ ResultOrError<std::unique_ptr<EntryPointMetadata>> ReflectEntryPointUsingTint(
             }
         }
 
-        uint32_t totalInterStageShaderVariables = entryPoint.input_variables.size();
+        uint32_t totalInterStageShaderVariables = uint32_t(entryPoint.input_variables.size());
 
         // Other fragment metadata
         metadata->usesSampleMaskOutput = entryPoint.output_sample_mask_used;
         metadata->usesSampleIndex = entryPoint.sample_index_used;
-        if (entryPoint.front_facing_used || entryPoint.input_sample_mask_used ||
-            entryPoint.sample_index_used) {
-            ++totalInterStageShaderVariables;
+
+        struct BoolName {
+            const bool& value;
+            const char* name;
+        };
+        BoolName boolNames[] = {
+            {entryPoint.front_facing_used, "front_facing"},
+            {entryPoint.input_sample_mask_used, "sample_mask"},
+            {entryPoint.sample_index_used, "sample_index_used"},
+            {entryPoint.primitive_index_used, "primitive_index_used"},
+            {entryPoint.subgroup_invocation_id_used, "subgroup_invocation_id"},
+            {entryPoint.subgroup_size_used, "subgroup_size"},
+        };
+        for (const auto& boolName : boolNames) {
+            if (boolName.value) {
+                ++totalInterStageShaderVariables;
+            }
         }
+
         metadata->usesFragDepth = entryPoint.frag_depth_used;
         metadata->usesFragPosition = entryPoint.frag_position_used;
         metadata->usesFineDerivativeBuiltin = entryPoint.fine_derivative_builtin_used;
@@ -968,24 +994,13 @@ ResultOrError<std::unique_ptr<EntryPointMetadata>> ReflectEntryPointUsingTint(
             std::ostringstream builtinInfo;
             if (metadata->totalInterStageShaderVariables > userDefinedInputVariables) {
                 builtinInfo << " + 1 (";
-                bool isFirst = true;
-                if (entryPoint.front_facing_used) {
-                    builtinInfo << "front_facing";
-                    isFirst = false;
-                }
-                if (entryPoint.input_sample_mask_used) {
-                    if (!isFirst) {
-                        builtinInfo << "|";
+
+                const char* separator = "";
+                for (const auto& boolName : boolNames) {
+                    if (boolName.value) {
+                        builtinInfo << separator << boolName.name;
+                        separator = "|";
                     }
-                    builtinInfo << "sample_mask";
-                    isFirst = false;
-                }
-                if (entryPoint.sample_index_used) {
-                    if (!isFirst) {
-                        builtinInfo << "|";
-                    }
-                    builtinInfo << "sample_index";
-                    isFirst = false;
                 }
             }
 
@@ -1299,30 +1314,29 @@ void ReflectShaderUsingTint(const ShaderModuleParseDeviceInfo& deviceInfo,
 }  // anonymous namespace
 
 ResultOrError<Extent3D> ValidateComputeStageWorkgroupSize(
-    uint32_t x,
-    uint32_t y,
-    uint32_t z,
-    size_t workgroupStorageSize,
+    const tint::WorkgroupInfo& workgroupInfo,
     bool usesSubgroupMatrix,
     uint32_t maxSubgroupSize,
     const LimitsForCompilationRequest& limits,
-    const LimitsForCompilationRequest& adaterSupportedlimits) {
-    DAWN_INVALID_IF(x < 1 || y < 1 || z < 1,
+    const LimitsForCompilationRequest& adapterSupportedlimits) {
+    DAWN_INVALID_IF(workgroupInfo.x < 1 || workgroupInfo.y < 1 || workgroupInfo.z < 1,
                     "Entry-point uses workgroup_size(%u, %u, %u) that are below the "
                     "minimum allowed (1, 1, 1).",
-                    x, y, z);
+                    workgroupInfo.x, workgroupInfo.y, workgroupInfo.z);
 
-    if (x > limits.maxComputeWorkgroupSizeX || y > limits.maxComputeWorkgroupSizeY ||
-        z > limits.maxComputeWorkgroupSizeZ) [[unlikely]] {
+    if (workgroupInfo.x > limits.maxComputeWorkgroupSizeX ||
+        workgroupInfo.y > limits.maxComputeWorkgroupSizeY ||
+        workgroupInfo.z > limits.maxComputeWorkgroupSizeZ) [[unlikely]] {
         uint32_t maxComputeWorkgroupSizeXAdapterLimit =
-            adaterSupportedlimits.maxComputeWorkgroupSizeX;
+            adapterSupportedlimits.maxComputeWorkgroupSizeX;
         uint32_t maxComputeWorkgroupSizeYAdapterLimit =
-            adaterSupportedlimits.maxComputeWorkgroupSizeY;
+            adapterSupportedlimits.maxComputeWorkgroupSizeY;
         uint32_t maxComputeWorkgroupSizeZAdapterLimit =
-            adaterSupportedlimits.maxComputeWorkgroupSizeZ;
+            adapterSupportedlimits.maxComputeWorkgroupSizeZ;
         std::string increaseLimitAdvice =
-            (x <= maxComputeWorkgroupSizeXAdapterLimit &&
-             y <= maxComputeWorkgroupSizeYAdapterLimit && z <= maxComputeWorkgroupSizeZAdapterLimit)
+            (workgroupInfo.x <= maxComputeWorkgroupSizeXAdapterLimit &&
+             workgroupInfo.y <= maxComputeWorkgroupSizeYAdapterLimit &&
+             workgroupInfo.z <= maxComputeWorkgroupSizeZAdapterLimit)
                 ? absl::StrFormat(
                       " This adapter supports higher maxComputeWorkgroupSizeX of %u, "
                       "maxComputeWorkgroupSizeY of %u, and maxComputeWorkgroupSizeZ of %u, which "
@@ -1335,39 +1349,74 @@ ResultOrError<Extent3D> ValidateComputeStageWorkgroupSize(
         return DAWN_VALIDATION_ERROR(
             "Entry-point uses workgroup_size(%u, %u, %u) that exceeds the "
             "maximum allowed (%u, %u, %u).%s",
-            x, y, z, limits.maxComputeWorkgroupSizeX, limits.maxComputeWorkgroupSizeY,
-            limits.maxComputeWorkgroupSizeZ, increaseLimitAdvice);
+            workgroupInfo.x, workgroupInfo.y, workgroupInfo.z, limits.maxComputeWorkgroupSizeX,
+            limits.maxComputeWorkgroupSizeY, limits.maxComputeWorkgroupSizeZ, increaseLimitAdvice);
     }
 
-    uint64_t numInvocations = static_cast<uint64_t>(x) * y * z;
+    uint64_t numInvocations =
+        static_cast<uint64_t>(workgroupInfo.x) * workgroupInfo.y * workgroupInfo.z;
     uint32_t maxComputeInvocationsPerWorkgroup = limits.maxComputeInvocationsPerWorkgroup;
     DAWN_INVALID_IF(numInvocations > maxComputeInvocationsPerWorkgroup,
                     "The total number of workgroup invocations (%u) exceeds the "
                     "maximum allowed (%u).%s",
                     numInvocations, maxComputeInvocationsPerWorkgroup,
-                    DAWN_INCREASE_LIMIT_MESSAGE(adaterSupportedlimits,
+                    DAWN_INCREASE_LIMIT_MESSAGE(adapterSupportedlimits,
                                                 maxComputeInvocationsPerWorkgroup, numInvocations));
 
     uint32_t maxComputeWorkgroupStorageSize = limits.maxComputeWorkgroupStorageSize;
     DAWN_INVALID_IF(
-        workgroupStorageSize > maxComputeWorkgroupStorageSize,
+        workgroupInfo.storage_size > maxComputeWorkgroupStorageSize,
         "The total use of workgroup storage (%u bytes) is larger than "
         "the maximum allowed (%u bytes).%s",
-        workgroupStorageSize, maxComputeWorkgroupStorageSize,
-        DAWN_INCREASE_LIMIT_MESSAGE(adaterSupportedlimits, maxComputeWorkgroupStorageSize,
-                                    workgroupStorageSize));
+        workgroupInfo.storage_size, maxComputeWorkgroupStorageSize,
+        DAWN_INCREASE_LIMIT_MESSAGE(adapterSupportedlimits, maxComputeWorkgroupStorageSize,
+                                    workgroupInfo.storage_size));
 
     if (usesSubgroupMatrix) {
         // maxSubgroupSize must have a valid value if usesSubgroupMatrix is true and subgroups
         // feature is supported.
         DAWN_ASSERT(maxSubgroupSize > 0);
-        DAWN_INVALID_IF((x % maxSubgroupSize) != 0,
+        DAWN_INVALID_IF((workgroupInfo.x % maxSubgroupSize) != 0,
                         "The x-dimension of workgroup_size (%u) must be a multiple of the device "
                         "maxSubgroupSize (%u) when the shader uses a subgroup matrix",
-                        x, maxSubgroupSize);
+                        workgroupInfo.x, maxSubgroupSize);
     }
 
-    return Extent3D{x, y, z};
+    if (workgroupInfo.subgroup_size.has_value()) {
+        const uint32_t explicitSubgroupSize = workgroupInfo.subgroup_size.value();
+        DAWN_ASSERT(explicitSubgroupSize > 0);
+        DAWN_INVALID_IF((workgroupInfo.x % explicitSubgroupSize != 0),
+                        "The x-dimension of workgroup invocations (%u) is not a multiple of the "
+                        "subgroup_size attribute (%u)",
+                        workgroupInfo.x, explicitSubgroupSize);
+    }
+
+    return Extent3D{workgroupInfo.x, workgroupInfo.y, workgroupInfo.z};
+}
+
+MaybeError ValidateExplicitComputeSubgroupSize(const tint::WorkgroupInfo& workgroupInfo,
+                                               uint32_t minExplicitSubgroupSize,
+                                               uint32_t maxExplicitSubgroupSize,
+                                               uint32_t maxComputeWorkgroupSubgroups) {
+    if (workgroupInfo.subgroup_size.has_value()) {
+        DAWN_ASSERT(minExplicitSubgroupSize > 0 && maxExplicitSubgroupSize > 0);
+        const uint32_t explicitSubgroupSize = workgroupInfo.subgroup_size.value();
+        DAWN_INVALID_IF(
+            explicitSubgroupSize < minExplicitSubgroupSize ||
+                explicitSubgroupSize > maxExplicitSubgroupSize,
+            "The subgroup_size attribute (%u) is not in the allowed range "
+            "[minExplicitComputeSubgroupSize, maxExplicitComputeSubgroupSize] ([%u, %u]).",
+            explicitSubgroupSize, minExplicitSubgroupSize, maxExplicitSubgroupSize);
+        uint64_t numInvocations =
+            static_cast<uint64_t>(workgroupInfo.x) * workgroupInfo.y * workgroupInfo.z;
+        DAWN_INVALID_IF(
+            numInvocations > maxComputeWorkgroupSubgroups * explicitSubgroupSize,
+            "The total number of workgroup invocations (%u) exceeds the product of"
+            "maxComputeWorkgroupSubgroups and the subgroup_size attribute (%u * %u = %u).",
+            numInvocations, maxComputeWorkgroupSubgroups, explicitSubgroupSize, numInvocations);
+    }
+
+    return {};
 }
 
 CachedValidationError::CachedValidationError(std::unique_ptr<ErrorData>&& errorData) {
@@ -1675,6 +1724,8 @@ MaybeError ValidateSubgroupMatrixConfiguration(const tint::SubgroupMatrixInfo& s
                 return "i32";
             case tint::SubgroupMatrixType::kU32:
                 return "u32";
+            default:
+                DAWN_UNREACHABLE();
         }
     };
 
@@ -2070,7 +2121,7 @@ ShaderModuleParseRequest ShaderModuleBase::GenerateShaderModuleParseRequest(
             spirvOptionsDescriptor.allowNonUniformDerivatives = mAllowSpirvNonUniformDerivitives;
             spirvDescriptor.nextInChain = &spirvOptionsDescriptor;
 
-            spirvDescriptor.codeSize = mOriginalSpirv.size();
+            spirvDescriptor.codeSize = uint32_t(mOriginalSpirv.size());
             spirvDescriptor.code = mOriginalSpirv.data();
             descriptor.nextInChain = &spirvDescriptor;
             break;

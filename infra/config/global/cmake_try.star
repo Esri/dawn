@@ -30,6 +30,8 @@
 load("@chromium-luci//builders.star", "cpu", "os")
 load("@chromium-luci//try.star", "try_")
 load("//constants.star", "siso")
+load("//location_filters.star", "exclusion_filters")
+load("//project.star", "ACTIVE_MILESTONES")
 
 try_.defaults.set(
     executable = "recipe:dawn/cmake",
@@ -55,12 +57,9 @@ def apply_cq_builder_defaults(kwargs):
     # There are fewer optimizations such as the use of `gn analyze` for CMake
     # builders, so allow more concurrent builds than GN equivalents.
     kwargs.setdefault("max_concurrent_builds", 5)
-
-    # TODO(crbug.com/459517292): Add this once we confirm that CMake builders
-    # defined this way are equivalent to the old approach.
-    # kwargs.setdefault("tryjob", try_.job(
-    #     location_filters = exclusion_filters.cmake_cq_file_exclusions,
-    # ))
+    kwargs.setdefault("tryjob", try_.job(
+        location_filters = exclusion_filters.cmake_cq_file_exclusions,
+    ))
     return kwargs
 
 def apply_linux_cq_builder_defaults(kwargs):
@@ -78,25 +77,96 @@ def apply_linux_cq_builder_defaults(kwargs):
     kwargs.setdefault("ssd", None)
     return kwargs
 
+def apply_mac_cq_builder_defaults(kwargs):
+    """Sets default arguments for Mac CMake CQ builders.
+
+    Args:
+        kwargs: The kwargs for creating a try builder.
+
+    Returns:
+        |kwargs| with Mac/CMake defaults set.
+    """
+    kwargs = apply_cq_builder_defaults(kwargs)
+    kwargs.setdefault("cpu", cpu.X86_64)
+    kwargs.setdefault("os", os.MAC_DEFAULT)
+    kwargs.setdefault("pool", "luci.chromium.gpu.try")
+    return kwargs
+
+def apply_win_cq_builder_defaults(kwargs):
+    """Sets default arguments for Win CMake CQ builders.
+
+    Args:
+        kwargs: The kwargs for creating a try builder.
+
+    Returns:
+        |kwargs| with Win/CMake defaults set.
+    """
+    kwargs = apply_cq_builder_defaults(kwargs)
+    kwargs.setdefault("builderless", True)
+    kwargs.setdefault("cpu", cpu.X86_64)
+    kwargs.setdefault("os", os.WINDOWS_DEFAULT)
+    kwargs.setdefault("pool", "luci.chromium.gpu.try")
+    kwargs.setdefault("ssd", None)
+    return kwargs
+
 def add_builder_to_main_and_milestone_cq_groups(kwargs):
     # Dawn standalone builders run fine unbranched on branched CLs.
     try_.builder(**kwargs)
-    # TODO(crbug.com/459517292): Add this once we confirm that CMake builders
-    # defined this way are equivalent to the old approach.
-    # for milestone in ACTIVE_MILESTONES.keys():
-    #     luci.cq_tryjob_verifier(
-    #         cq_group = "Dawn-CQ-" + milestone,
-    #         builder = "dawn:try/" + kwargs["name"],
-    #     )
+    for milestone in ACTIVE_MILESTONES.keys():
+        # TODO(crbug.com/459517292): Figure out why the legacy builders were
+        # marked as experimental and remove the need for that.
+        luci.cq_tryjob_verifier(
+            cq_group = "Dawn-CQ-" + milestone,
+            builder = "dawn:try/" + kwargs["name"],
+            experiment_percentage = 100,
+        )
 
 def dawn_linux_cmake_cq_tester(**kwargs):
     kwargs = apply_linux_cq_builder_defaults(kwargs)
     add_builder_to_main_and_milestone_cq_groups(kwargs)
 
+def dawn_mac_cmake_cq_tester(**kwargs):
+    kwargs = apply_mac_cq_builder_defaults(kwargs)
+    add_builder_to_main_and_milestone_cq_groups(kwargs)
+
+def dawn_win_cmake_cq_tester(**kwargs):
+    kwargs = apply_win_cq_builder_defaults(kwargs)
+    add_builder_to_main_and_milestone_cq_groups(kwargs)
+
 ## CQ Builders
 
 dawn_linux_cmake_cq_tester(
-    name = "dawn-cq-linux-x64-sws-cmake-rel",
+    name = "dawn-cq-linux-x64-cmake-asan",
+    description_html = "Compiles and tests release Dawn test binaries for Linux/x64 using CMake and Clang with ASan and UBSan enabled. Blocks CL submission",
+    mirrors = [
+        "ci/dawn-linux-x64-sws-cmake-asan",
+    ],
+    properties = {
+        "asan": True,
+        "clang": True,
+        "debug": False,
+        "target_cpu": "x64",
+        "ubsan": True,
+    },
+)
+
+dawn_linux_cmake_cq_tester(
+    name = "dawn-cq-linux-x64-cmake-dbg",
+    description_html = "Compiles and tests debug Dawn test binaries for Linux/x64 using CMake and Clang. Blocks CL submission",
+    mirrors = [
+        "ci/dawn-linux-x64-sws-cmake-dbg",
+    ],
+    properties = {
+        "asan": False,
+        "clang": True,
+        "debug": True,
+        "target_cpu": "x64",
+        "ubsan": False,
+    },
+)
+
+dawn_linux_cmake_cq_tester(
+    name = "dawn-cq-linux-x64-cmake-rel",
     description_html = "Compiles and tests release Dawn test binaries for Linux/x64 using CMake and Clang. Blocks CL submission",
     mirrors = [
         "ci/dawn-linux-x64-sws-cmake-rel",
@@ -104,6 +174,51 @@ dawn_linux_cmake_cq_tester(
     properties = {
         "asan": False,
         "clang": True,
+        "debug": False,
+        "target_cpu": "x64",
+        "ubsan": False,
+    },
+)
+
+dawn_mac_cmake_cq_tester(
+    name = "dawn-cq-mac-x64-cmake-dbg",
+    description_html = "Compiles and tests debug Dawn test binaries for Mac/x64 using CMake and Clang. Blocks CL submission",
+    mirrors = [
+        "ci/dawn-mac-x64-sws-cmake-dbg",
+    ],
+    properties = {
+        "asan": False,
+        "clang": True,
+        "debug": True,
+        "target_cpu": "x64",
+        "ubsan": False,
+    },
+)
+
+dawn_mac_cmake_cq_tester(
+    name = "dawn-cq-mac-x64-cmake-rel",
+    description_html = "Compiles and tests release Dawn test binaries for Mac/x64 using CMake and Clang. Blocks CL submission",
+    mirrors = [
+        "ci/dawn-mac-x64-sws-cmake-rel",
+    ],
+    properties = {
+        "asan": False,
+        "clang": True,
+        "debug": False,
+        "target_cpu": "x64",
+        "ubsan": False,
+    },
+)
+
+dawn_win_cmake_cq_tester(
+    name = "dawn-cq-win-x64-msvc-cmake-rel",
+    description_html = "Compiles and tests release Dawn test binaries for Win/x64 using CMake and MSVC. Blocks CL submission",
+    mirrors = [
+        "ci/dawn-win-x64-sws-msvc-cmake-rel",
+    ],
+    properties = {
+        "asan": False,
+        "clang": False,
         "debug": False,
         "target_cpu": "x64",
         "ubsan": False,

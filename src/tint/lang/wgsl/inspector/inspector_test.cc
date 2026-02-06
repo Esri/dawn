@@ -280,116 +280,6 @@ fn foo() {}
     EXPECT_EQ(1u, workgroup_size->z);
 }
 
-TEST_F(InspectorGetEntryPointTest, WorkgroupStorageSizeEmpty) {
-    auto* src = R"(
-@compute @workgroup_size(1i)
-fn ep_func() {}
-)";
-    Inspector& inspector = Initialize(src);
-    auto result = inspector.GetEntryPoints();
-    ASSERT_FALSE(inspector.has_error()) << inspector.error();
-
-    ASSERT_EQ(1u, result.size());
-    EXPECT_EQ(0u, result[0].workgroup_storage_size);
-}
-
-TEST_F(InspectorGetEntryPointTest, WorkgroupStorageSizeSimple) {
-    auto* src = R"(
-var<workgroup> wg_f32: f32;
-var<workgroup> wg_i32: i32;
-
-fn f32_func() { _ = wg_f32; }
-fn i32_func() { _ = wg_i32; }
-
-@compute @workgroup_size(1i)
-fn ep_func() {
-  f32_func();
-  i32_func();
-}
-)";
-    Inspector& inspector = Initialize(src);
-    auto result = inspector.GetEntryPoints();
-    ASSERT_FALSE(inspector.has_error()) << inspector.error();
-
-    ASSERT_EQ(1u, result.size());
-    EXPECT_EQ(32u, result[0].workgroup_storage_size);
-}
-
-TEST_F(InspectorGetEntryPointTest, WorkgroupStorageSizeCompoundTypes) {
-    auto* src = R"(
-// This struct should occupy 68 bytes.
-struct WgStruct {
-  a: i32,
-  b: array<i32, 16>,
-}
-var<workgroup> wg_struct_var: WgStruct;
-
-fn wg_struct_func() { _ = wg_struct_var.a; }
-
-// Plus another 4 bytes from this other workgroup-class f32.
-var<workgroup> wg_f32: f32;
-fn f32_func() { _ = wg_f32; }
-
-@compute @workgroup_size(1i)
-fn ep_func() {
-  wg_struct_func();
-  f32_func();
-}
-)";
-    Inspector& inspector = Initialize(src);
-    auto result = inspector.GetEntryPoints();
-    ASSERT_FALSE(inspector.has_error()) << inspector.error();
-
-    ASSERT_EQ(1u, result.size());
-    EXPECT_EQ(96u, result[0].workgroup_storage_size);
-}
-
-TEST_F(InspectorGetEntryPointTest, WorkgroupStorageSizeAlignmentPadding) {
-    auto* src = R"(
-// vec3<f32> has an alignment of 16 but a size of 12. We leverage this to test
-// that our padded size calculation for workgroup storage is accurate.
-var<workgroup> wg_vec3: vec3f;
-
-fn wg_func() { _ = wg_vec3; }
-
-@compute @workgroup_size(1i)
-fn ep_func() {
-  wg_func();
-}
-)";
-    Inspector& inspector = Initialize(src);
-    auto result = inspector.GetEntryPoints();
-    ASSERT_FALSE(inspector.has_error()) << inspector.error();
-
-    ASSERT_EQ(1u, result.size());
-    EXPECT_EQ(16u, result[0].workgroup_storage_size);
-}
-
-TEST_F(InspectorGetEntryPointTest, WorkgroupStorageSizeStructAlignment) {
-    auto* src = R"(
-// Per WGSL spec, a struct's size is the offset its last member plus the size
-// of its last member, rounded up to the alignment of its largest member. So
-// here the struct is expected to occupy 1024 bytes of workgroup storage.
-struct WgStruct {
-  @align(1024i) a: f32,
-}
-var<workgroup> wg_struct_var: WgStruct;
-
-fn wg_struct_func() { _ = wg_struct_var.a; }
-
-@compute @workgroup_size(1i)
-fn ep_func() {
-  wg_struct_func();
-}
-)";
-    Inspector& inspector = Initialize(src);
-    auto result = inspector.GetEntryPoints();
-    ASSERT_FALSE(inspector.has_error()) << inspector.error();
-
-    ASSERT_EQ(1u, result.size());
-    EXPECT_EQ(1024u, result[0].workgroup_storage_size);
-}
-
 TEST_F(InspectorGetEntryPointTest, NoInOutVariables) {
     auto* src = R"(
 fn func() {}
@@ -1133,6 +1023,9 @@ fn ep_func() {}
     EXPECT_FALSE(result[0].num_workgroups_used);
     EXPECT_FALSE(result[0].frag_depth_used);
     EXPECT_FALSE(result[0].fine_derivative_builtin_used);
+    EXPECT_FALSE(result[0].primitive_index_used);
+    EXPECT_FALSE(result[0].subgroup_invocation_id_used);
+    EXPECT_FALSE(result[0].subgroup_size_used);
 }
 
 TEST_F(InspectorGetEntryPointTest, InputSampleMaskSimpleReferenced) {
@@ -1227,6 +1120,99 @@ fn ep_func(in_var: in_struct) {}
 
     ASSERT_EQ(1u, result.size());
     EXPECT_TRUE(result[0].front_facing_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, PrimitiveIndexSimpleReferenced) {
+    auto* src = R"(
+enable primitive_index;
+@fragment
+fn ep_func(@builtin(primitive_index) in_var: u32) {}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].primitive_index_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, PrimitiveIndexStructReferenced) {
+    auto* src = R"(
+enable primitive_index;
+struct in_struct {
+  @builtin(primitive_index) inner_position: u32,
+}
+@fragment
+fn ep_func(in_var: in_struct) {}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].primitive_index_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, SubgroupInvocationIdSimpleReferenced) {
+    auto* src = R"(
+enable subgroups;
+@fragment
+fn ep_func(@builtin(subgroup_invocation_id) in_var: u32) {}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].subgroup_invocation_id_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, SubgroupInvocationIdStructReferenced) {
+    auto* src = R"(
+enable subgroups;
+struct in_struct {
+  @builtin(subgroup_invocation_id) inner_position: u32,
+}
+@fragment
+fn ep_func(in_var: in_struct) {}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].subgroup_invocation_id_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, SubgroupSizeSimpleReferenced) {
+    auto* src = R"(
+enable subgroups;
+@fragment
+fn ep_func(@builtin(subgroup_size) in_var: u32) {}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].subgroup_size_used);
+}
+
+TEST_F(InspectorGetEntryPointTest, SubgroupSizeStructReferenced) {
+    auto* src = R"(
+enable subgroups;
+struct in_struct {
+  @builtin(subgroup_size) inner_position: u32,
+}
+@fragment
+fn ep_func(in_var: in_struct) {}
+)";
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetEntryPoints();
+
+    ASSERT_EQ(1u, result.size());
+    EXPECT_TRUE(result[0].subgroup_size_used);
 }
 
 TEST_F(InspectorGetEntryPointTest, SampleIndexSimpleReferenced) {
@@ -3059,6 +3045,29 @@ fn nested() {
     EXPECT_EQ(ResourceType::kTexture2d_f32, types[1]);
     EXPECT_EQ(ResourceType::kTexture3d_f32, types[2]);
     EXPECT_EQ(ResourceType::kTextureCube_f32, types[3]);
+}
+
+TEST_F(InspectorGetResourceTableInfoTest, ResourceTable_Samplers) {
+    auto* src = R"(
+enable chromium_experimental_resource_table;
+
+@fragment fn ep() {
+  _ = hasResource<sampler>(0);
+  _ = getResource<sampler_comparison>(1);
+}
+)";
+
+    Inspector& inspector = Initialize(src);
+
+    auto result = inspector.GetResourceTableInfo("ep");
+    ASSERT_FALSE(inspector.has_error()) << inspector.error();
+
+    ASSERT_EQ(2u, result.size());
+
+    std::vector<ResourceType> types(result.begin(), result.end());
+    std::sort(types.begin(), types.end());
+    EXPECT_EQ(ResourceType::kSampler, types[0]);
+    EXPECT_EQ(ResourceType::kSampler_comparison, types[1]);
 }
 
 class InspectorGetSamplerTextureUsesTest : public TestHelper, public testing::Test {

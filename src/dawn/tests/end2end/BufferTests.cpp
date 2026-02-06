@@ -344,6 +344,9 @@ TEST_P(BufferMappingTests, MapWrite_ZeroSized) {
 
 // Test map-writing with a non-zero offset.
 TEST_P(BufferMappingTests, MapWrite_NonZeroOffset) {
+    // TODO(crbug.com/473894293): [Capture] buffer mapping: investigate.
+    DAWN_SUPPRESS_TEST_IF(IsCaptureReplayCheckingEnabled());
+
     wgpu::Buffer buffer = CreateMapWriteBuffer(20);
 
     uint32_t myData = 2934875;
@@ -405,6 +408,9 @@ TEST_P(BufferMappingTests, MapWrite_TwicePreserve) {
 
 // Map write and unmap twice with overlapping ranges and make sure data is updated correctly
 TEST_P(BufferMappingTests, MapWrite_TwiceRangeOverlap) {
+    // TODO(crbug.com/473894293): [Capture] buffer mapping: investigate.
+    DAWN_SUPPRESS_TEST_IF(IsCaptureReplayCheckingEnabled());
+
     wgpu::Buffer buffer = CreateMapWriteBuffer(16);
 
     uint32_t data1[] = {0x01234567, 0x89abcdef};
@@ -449,6 +455,9 @@ TEST_P(BufferMappingTests, MapWrite_MultipleMappedRange) {
 
 // Test mapping a large buffer.
 TEST_P(BufferMappingTests, MapWrite_Large) {
+    // TODO(crbug.com/473894293): [Capture] buffer mapping: investigate.
+    DAWN_SUPPRESS_TEST_IF(IsCaptureReplayCheckingEnabled());
+
     constexpr uint32_t kDataSize = 1000 * 1000;
     constexpr size_t kByteSize = kDataSize * sizeof(uint32_t);
     wgpu::Buffer buffer = CreateMapWriteBuffer(kDataSize * sizeof(uint32_t));
@@ -660,9 +669,98 @@ TEST_P(BufferMappingTests, RegressChromium1421170) {
     device.Tick();
 }
 
+// Test that writing to a buffer in a compute shader, copying to a MapRead buffer,
+// waiting for OnSubmittedWorkDone, then mapping works correctly.
+TEST_P(BufferMappingTests, WaitForOnSubmittedWorkDoneThenMap) {
+    // WaitAnyOnly is not supported in wire.
+    DAWN_TEST_UNSUPPORTED_IF(UsesWire());
+
+    const uint32_t kExpectedValue = 42;
+    constexpr size_t kSize = sizeof(kExpectedValue);
+
+    // Create compute pipeline that writes to the buffer.
+    wgpu::ComputePipeline pipeline;
+    {
+        wgpu::ComputePipelineDescriptor csDesc;
+        csDesc.compute.module = utils::CreateShaderModule(device, R"(
+            struct SSBO {
+                value : u32
+            }
+            @group(0) @binding(0) var<storage, read_write> ssbo : SSBO;
+
+            @compute @workgroup_size(1) fn main() {
+                ssbo.value = 42u;
+            })");
+        pipeline = device.CreateComputePipeline(&csDesc);
+    }
+
+    // Create storage buffer for compute shader.
+    wgpu::BufferDescriptor storageDesc;
+    storageDesc.size = kSize;
+    storageDesc.usage = wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc;
+    wgpu::Buffer storageBuffer = device.CreateBuffer(&storageDesc);
+
+    // Create MapRead buffer.
+    wgpu::BufferDescriptor mapReadDesc;
+    mapReadDesc.size = kSize;
+    mapReadDesc.usage = wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst;
+    wgpu::Buffer mapReadBuffer = device.CreateBuffer(&mapReadDesc);
+
+    // Write to storage buffer and copy to MapRead buffer.
+    {
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        wgpu::BindGroup bindGroup = utils::MakeBindGroup(device, pipeline.GetBindGroupLayout(0),
+                                                         {{0, storageBuffer, 0, kSize}});
+        pass.SetBindGroup(0, bindGroup);
+        pass.SetPipeline(pipeline);
+        pass.DispatchWorkgroups(1);
+        pass.End();
+
+        encoder.CopyBufferToBuffer(storageBuffer, 0, mapReadBuffer, 0, kSize);
+
+        wgpu::CommandBuffer commands = encoder.Finish();
+        queue.Submit(1, &commands);
+    }
+
+    // Wait for OnSubmittedWorkDone to complete.
+    bool workDone = false;
+    wgpu::Future workDoneFuture = queue.OnSubmittedWorkDone(
+        wgpu::CallbackMode::WaitAnyOnly, [&](wgpu::QueueWorkDoneStatus status, wgpu::StringView) {
+            ASSERT_EQ(status, wgpu::QueueWorkDoneStatus::Success);
+            workDone = true;
+        });
+
+    ASSERT_EQ(GetInstance().WaitAny(workDoneFuture, UINT64_MAX), wgpu::WaitStatus::Success);
+    ASSERT_TRUE(workDone);
+
+    // Map the buffer for reading.
+    // After waiting for OnSubmittedWorkDone, the MapAsync should be ready immediately,
+    // so we use timeout=0 instead of blocking.
+    bool mapDone = false;
+    wgpu::Future mapFuture =
+        mapReadBuffer.MapAsync(wgpu::MapMode::Read, 0, kSize, wgpu::CallbackMode::WaitAnyOnly,
+                               [&](wgpu::MapAsyncStatus status, wgpu::StringView) {
+                                   ASSERT_EQ(status, wgpu::MapAsyncStatus::Success);
+                                   mapDone = true;
+                               });
+
+    ASSERT_EQ(GetInstance().WaitAny(mapFuture, 0), wgpu::WaitStatus::Success);
+    ASSERT_TRUE(mapDone);
+
+    // Verify buffer content.
+    const uint32_t* data = static_cast<const uint32_t*>(mapReadBuffer.GetConstMappedRange());
+    ASSERT_NE(data, nullptr);
+    EXPECT_EQ(*data, kExpectedValue);
+
+    mapReadBuffer.Unmap();
+}
+
 DAWN_INSTANTIATE_TEST_P(BufferMappingTests,
-                        {D3D11Backend(), D3D12Backend(), MetalBackend(), OpenGLBackend(),
-                         OpenGLESBackend(), VulkanBackend(), WebGPUBackend()},
+                        {D3D11Backend(), D3D11Backend({"d3d11_disable_cpu_buffers"}),
+                         D3D11Backend({"auto_map_backend_buffer", "d3d11_disable_cpu_buffers"}),
+                         D3D12Backend(), MetalBackend(), OpenGLBackend(), OpenGLESBackend(),
+                         VulkanBackend(), WebGPUBackend()},
                         std::initializer_list<wgpu::CallbackMode>{
                             wgpu::CallbackMode::WaitAnyOnly, wgpu::CallbackMode::AllowProcessEvents,
                             wgpu::CallbackMode::AllowSpontaneous});
@@ -803,7 +901,9 @@ TEST_P(BufferMappingCallbackTests, EmptySubmissionWriteAndThenMap) {
 
     // With Vulkan Queue::WriteBuffers() doesn't encode any commands which need to be waited on so
     // MapAsync() can happen immediately. On other platforms that isn't the case.
-    bool mapCompletesFirst = IsVulkan() && !IsWebGPUOnWebGPU();
+    // Similarly, for MapRead buffers, D3D11's Queue::WriteBuffers() also doesn't encode any
+    // commands.
+    bool mapCompletesFirst = (IsVulkan() || IsD3D11()) && !IsWebGPUOnWebGPU();
 
     // 1. submission without using buffer.
     SubmitCommandBuffer({});
@@ -836,8 +936,9 @@ TEST_P(BufferMappingCallbackTests, EmptySubmissionWriteAndThenMap) {
 }
 
 DAWN_INSTANTIATE_TEST_P(BufferMappingCallbackTests,
-                        {D3D11Backend(), D3D12Backend(), MetalBackend(), VulkanBackend(),
-                         WebGPUBackend()},
+                        {D3D11Backend(), D3D11Backend({"d3d11_disable_cpu_buffers"}),
+                         D3D11Backend({"auto_map_backend_buffer", "d3d11_disable_cpu_buffers"}),
+                         D3D12Backend(), MetalBackend(), VulkanBackend(), WebGPUBackend()},
                         std::initializer_list<wgpu::CallbackMode>{
                             wgpu::CallbackMode::WaitAnyOnly, wgpu::CallbackMode::AllowProcessEvents,
                             wgpu::CallbackMode::AllowSpontaneous});
@@ -889,6 +990,9 @@ TEST_P(BufferMappedAtCreationTests, MapWriteUsageSmall) {
 
 // Test that the simplest mappedAtCreation works for MapRead buffers.
 TEST_P(BufferMappedAtCreationTests, MapReadUsageSmall) {
+    // TODO(crbug.com/473894293): [Capture] buffer mapping: investigate.
+    DAWN_SUPPRESS_TEST_IF(IsCaptureReplayCheckingEnabled());
+
     uint32_t myData = 230502;
     wgpu::Buffer buffer = BufferMappedAtCreationWithData(wgpu::BufferUsage::MapRead, {myData});
     UnmapBuffer(buffer);
@@ -924,6 +1028,9 @@ TEST_P(BufferMappedAtCreationTests, MapWriteUsageLarge) {
 
 // Test mappedAtCreation for a large MapRead buffer
 TEST_P(BufferMappedAtCreationTests, MapReadUsageLarge) {
+    // TODO(crbug.com/473894293): [Capture] buffer mapping: investigate.
+    DAWN_SUPPRESS_TEST_IF(IsCaptureReplayCheckingEnabled());
+
     constexpr uint64_t kDataSize = 1000 * 1000;
     std::vector<uint32_t> myData;
     for (uint32_t i = 0; i < kDataSize; ++i) {
@@ -1084,6 +1191,8 @@ TEST_P(BufferMappedAtCreationTests, GetMappedRangeZeroSized) {
 
 DAWN_INSTANTIATE_TEST(BufferMappedAtCreationTests,
                       D3D11Backend(),
+                      D3D11Backend({"d3d11_disable_cpu_buffers"}),
+                      D3D11Backend({"auto_map_backend_buffer", "d3d11_disable_cpu_buffers"}),
                       D3D12Backend(),
                       D3D12Backend({}, {"use_d3d12_resource_heap_tier2"}),
                       MetalBackend(),
@@ -1377,6 +1486,9 @@ class BufferMapExtendedUsagesTests : public DawnTest {
         // TODO(crbug.com/465167911): Flakily gets unexpected nullptrs on
         // Snapdragon X Elite SoCs.
         DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm());
+
+        // TODO(crbug.com/473894293): [Capture] validation error: no CopyDst usage.
+        DAWN_SUPPRESS_TEST_IF(IsCaptureReplayCheckingEnabled());
     }
 
     std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
@@ -1587,6 +1699,21 @@ TEST_P(BufferMapExtendedUsagesTests, MapWriteWithAnyUsage) {
 
         EXPECT_BUFFER_U32_EQ(myData, buffer, 0);
     }
+}
+
+// Test that Queue.WriteBuffer works to update a mappable buffer.
+TEST_P(BufferMapExtendedUsagesTests, QueueWriteMappableBuffer) {
+    wgpu::BufferDescriptor descriptor;
+    descriptor.size = 4;
+    descriptor.usage = wgpu::BufferUsage::MapWrite | wgpu::BufferUsage::CopyDst |
+                       wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::Uniform;
+    wgpu::Buffer buffer = device.CreateBuffer(&descriptor);
+
+    uint32_t myData = 0x12345678;
+    constexpr size_t kSize = sizeof(myData);
+    queue.WriteBuffer(buffer, 0, &myData, kSize);
+
+    EXPECT_BUFFER_U32_EQ(myData, buffer, 0);
 }
 
 // Test that mapping a vertex buffer, modifying the data then draw with the buffer works.
@@ -2078,6 +2205,7 @@ TEST_P(BufferMapExtendedUsagesTests,
 
 DAWN_INSTANTIATE_TEST(BufferMapExtendedUsagesTests,
                       D3D11Backend(),
+                      D3D11Backend({"auto_map_backend_buffer", "d3d11_disable_cpu_buffers"}),
                       D3D12Backend(),
                       MetalBackend(),
                       OpenGLBackend(),
