@@ -32,6 +32,7 @@
 
 #include "absl/container/inlined_vector.h"
 #include "dawn/common/NSRef.h"
+#include "dawn/native/PassResourceUsage.h"
 #include "dawn/native/dawn_platform.h"
 #include "dawn/native/metal/DeviceMTL.h"
 #include "dawn/native/metal/ShaderModuleMTL.h"
@@ -50,14 +51,14 @@ namespace dawn::native::metal {
 
 MTLPixelFormat MetalPixelFormat(const DeviceBase* device, wgpu::TextureFormat format);
 
-NSRef<NSString> MakeDebugName(DeviceBase* device, const char* prefix, std::string label = "");
+NSRef<NSString> MakeDebugName(DeviceBase* device, const char* prefix, std::string_view label = "");
 
 // Templating for setting the label on MTL objects because not all MTL objects are of the same base
 // class. For example MTLBuffer and MTLTexture inherit MTLResource, but MTLFunction does not. Note
 // that we allow a nullable Metal object because APISetLabel does not currently do any checks on
 // backend resources.
 template <typename T>
-void SetDebugName(DeviceBase* device, T* mtlObj, const char* prefix, std::string label = "") {
+void SetDebugName(DeviceBase* device, T* mtlObj, const char* prefix, std::string_view label = "") {
     if (!device->IsToggleEnabled(Toggle::UseUserDefinedLabelsInBackend)) {
         return;
     }
@@ -124,11 +125,16 @@ using EncodeInsideRenderPass =
     std::function<MaybeError(id<MTLRenderCommandEncoder>, BeginRenderPassCmd* renderPassCmd)>;
 MaybeError EncodeMetalRenderPass(Device* device,
                                  CommandRecordingContext* commandContext,
+                                 const RenderPassResourceUsage* resourceUsage,
                                  MTLRenderPassDescriptor* mtlRenderPass,
                                  uint32_t width,
                                  uint32_t height,
                                  EncodeInsideRenderPass encodeInside,
                                  BeginRenderPassCmd* renderPassCmd = nullptr);
+
+void MetalComputePassMakeResourcesResident(DeviceBase* device,
+                                           id<MTLComputeCommandEncoder> encoder,
+                                           const SyncScopeResourceUsage& resourceUsage);
 
 id<MTLTexture> CreateTextureMtlForPlane(MTLTextureUsage mtlUsage,
                                         const Format& format,
@@ -143,6 +149,8 @@ MaybeError EncodeEmptyMetalRenderPass(Device* device,
 
 bool SupportCounterSamplingAtCommandBoundary(id<MTLDevice> device);
 bool SupportCounterSamplingAtStageBoundary(id<MTLDevice> device);
+
+bool SupportTextureComponentSwizzle(id<MTLDevice> device);
 
 }  // namespace dawn::native::metal
 

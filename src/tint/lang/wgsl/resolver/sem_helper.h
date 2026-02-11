@@ -30,7 +30,7 @@
 
 #include <string>
 
-#include "src/tint/lang/core/builtin_value.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/wgsl/program/program_builder.h"
 #include "src/tint/lang/wgsl/resolver/dependency_graph.h"
 #include "src/tint/lang/wgsl/sem/builtin_enum_expression.h"
@@ -59,11 +59,10 @@ class SemHelper {
     auto* Get(const AST* ast) const {
         using T = sem::Info::GetResultType<SEM, AST>;
         auto* sem = builder_->Sem().Get(ast);
-        if (DAWN_UNLIKELY(!sem)) {
-            TINT_ICE() << "AST node '" << ast->TypeInfo().name << "' had no semantic info\n"
-                       << "At: " << ast->source << "\n"
-                       << "Pointer: " << ast;
-        }
+        TINT_ASSERT(sem) << "AST node '" << ast->TypeInfo().name << "' had no semantic info\n"
+                         << "At: " << ast->source << "\n"
+                         << "Pointer: " << ast;
+
         return const_cast<T*>(As<T>(sem));
     }
 
@@ -148,6 +147,64 @@ class SemHelper {
             return expr->Value();
         }
         return core::AddressSpace::kUndefined;
+    }
+
+    /// @param expr the semantic node
+    /// @returns nullptr if @p expr is nullptr, or @p expr cast to
+    /// sem::BuiltinEnumExpression<core::TextureFilterable> if the cast is successful, otherwise an
+    /// error diagnostic is raised.
+    sem::BuiltinEnumExpression<core::TextureFilterable>* AsTextureFilterable(
+        sem::Expression* expr) const {
+        if (DAWN_LIKELY(expr)) {
+            auto* enum_expr = expr->As<sem::BuiltinEnumExpression<core::TextureFilterable>>();
+            if (DAWN_LIKELY(enum_expr)) {
+                return enum_expr;
+            }
+            ErrorUnexpectedExprKind(expr, "texture filterable", core::kTextureFilterableStrings);
+        }
+        return nullptr;
+    }
+
+    /// GetTextureFilterable is a helper for obtaining the texture filterability for the given AST
+    /// expression. Raises an error diagnostic and returns core::TextureFilterable::kUndefined if
+    /// the semantic node is not a sem::BuiltinEnumExpression<core::TextureFilterable>
+    /// @param ast the ast node to get the address space
+    /// @returns the sem node for @p ast
+    core::TextureFilterable GetTextureFilterable(const ast::Expression* ast) const {
+        auto* expr = AsTextureFilterable(Get(ast));
+        if (DAWN_LIKELY(expr)) {
+            return expr->Value();
+        }
+        return core::TextureFilterable::kUndefined;
+    }
+
+    /// @param expr the semantic node
+    /// @returns nullptr if @p expr is nullptr, or @p expr cast to
+    /// sem::BuiltinEnumExpression<core::SamplerFiltering> if the cast is successful, otherwise an
+    /// error diagnostic is raised.
+    sem::BuiltinEnumExpression<core::SamplerFiltering>* AsSamplerFiltering(
+        sem::Expression* expr) const {
+        if (DAWN_LIKELY(expr)) {
+            auto* enum_expr = expr->As<sem::BuiltinEnumExpression<core::SamplerFiltering>>();
+            if (DAWN_LIKELY(enum_expr)) {
+                return enum_expr;
+            }
+            ErrorUnexpectedExprKind(expr, "sampler filtering", core::kSamplerFilteringStrings);
+        }
+        return nullptr;
+    }
+
+    /// GetSamplerFiltering is a helper for obtaining the sampler filtering for the given AST
+    /// expression. Raises an error diagnostic and returns core::SamplerFiltering::kUndefined if
+    /// the semantic node is not a sem::BuiltinEnumExpression<core::SamplerFiltering>
+    /// @param ast the ast node to get the address space
+    /// @returns the sem node for @p ast
+    core::SamplerFiltering GetSamplerFiltering(const ast::Expression* ast) const {
+        auto* expr = AsSamplerFiltering(Get(ast));
+        if (DAWN_LIKELY(expr)) {
+            return expr->Value();
+        }
+        return core::SamplerFiltering::kUndefined;
     }
 
     /// @param expr the semantic node

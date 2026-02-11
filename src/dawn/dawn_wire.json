@@ -84,11 +84,21 @@
             { "name": "future", "type": "future" }
         ],
         "queue write buffer": [
-            {"name": "queue id", "type": "ObjectId", "id_type": "queue" },
-            {"name": "buffer id", "type": "ObjectId", "id_type": "buffer" },
-            {"name": "buffer offset", "type": "uint64_t"},
+            { "name": "queue id", "type": "ObjectId", "id_type": "queue" },
+            { "name": "buffer id", "type": "ObjectId", "id_type": "buffer" },
+            { "name": "buffer offset", "type": "uint64_t"},
             {"name": "data", "type": "uint8_t", "annotation": "const*", "length": "size", "wire_is_data_only": true},
             {"name": "size", "type": "uint64_t"}
+        ],
+        "queue write buffer xl": [
+            { "name": "queue id", "type": "ObjectId", "id_type": "queue" },
+            { "name": "buffer id", "type": "ObjectId", "id_type": "buffer" },
+            { "name": "buffer offset", "type": "uint64_t"},
+            { "name": "size", "type": "uint64_t"},
+            { "name": "write handle create info length", "type": "uint64_t" },
+            { "name": "write handle create info", "type": "uint8_t", "annotation": "const*", "length": "write handle create info length", "skip_serialize": true},
+            { "name": "write data update info length", "type": "uint64_t" },
+            { "name": "write data update info", "type": "uint8_t", "annotation": "const*", "length": "write data update info length", "skip_serialize": true}
         ],
         "queue write texture": [
             {"name": "queue id", "type": "ObjectId", "id_type": "queue" },
@@ -97,6 +107,17 @@
             {"name": "data size", "type": "uint64_t"},
             {"name": "data layout", "type": "texel copy buffer layout", "annotation": "const*"},
             {"name": "writeSize", "type": "extent 3D", "annotation": "const*"}
+        ],
+        "queue write texture xl": [
+            { "name": "queue id", "type": "ObjectId", "id_type": "queue" },
+            { "name": "destination", "type": "texel copy texture info", "annotation": "const*"},
+            { "name": "data size", "type": "uint64_t"},
+            { "name": "data layout", "type": "texel copy buffer layout", "annotation": "const*"},
+            { "name": "writeSize", "type": "extent 3D", "annotation": "const*"},
+            { "name": "write handle create info length", "type": "uint64_t" },
+            { "name": "write handle create info", "type": "uint8_t", "annotation": "const*", "length": "write handle create info length", "skip_serialize": true},
+            { "name": "write data update info length", "type": "uint64_t" },
+            { "name": "write data update info", "type": "uint8_t", "annotation": "const*", "length": "write data update info length", "skip_serialize": true}
         ],
         "shader module get compilation info": [
             { "name": "shader module id", "type": "ObjectId", "id_type": "shader module" },
@@ -123,21 +144,21 @@
             { "name": "device lost future", "type": "future" },
             { "name": "descriptor", "type": "device descriptor", "annotation": "const*" }
         ],
-        "render pass encoder set immediate data": [
+        "render pass encoder set immediates": [
             { "name": "render pass encoder id", "type": "ObjectId", "id_type": "render pass encoder"},
-            {"name": "offset", "type": "uint32_t"},
+            { "name": "offset", "type": "uint32_t"},
             { "name": "data", "type": "uint8_t", "annotation": "const*", "length": "size", "wire_is_data_only": true},
             { "name": "size", "type": "size_t"}
         ],
-        "render bundle encoder set immediate data": [
+        "render bundle encoder set immediates": [
             { "name": "render bundle encoder id", "type": "ObjectId", "id_type": "render bundle encoder"},
             {"name": "offset", "type": "uint32_t"},
             { "name": "data", "type": "uint8_t", "annotation": "const*", "length": "size", "wire_is_data_only": true},
             { "name": "size", "type": "size_t"}
         ],
-        "compute pass encoder set immediate data": [
+        "compute pass encoder set immediates": [
             { "name": "compute pass encoder id", "type": "ObjectId", "id_type": "compute pass encoder"},
-            {"name": "offset", "type": "uint32_t"},
+            { "name": "offset", "type": "uint32_t"},
             { "name": "data", "type": "uint8_t", "annotation": "const*", "length": "size", "wire_is_data_only": true},
             { "name": "size", "type": "size_t"}
         ]
@@ -218,6 +239,14 @@
             { "name": "features", "type": "feature name", "annotation": "const*", "length": "features count"}
         ]
     },
+    "special commands": {
+        "chunked command": [
+            {"name": "id", "type": "uint64_t"},
+            {"name": "size", "type": "uint64_t"},
+            {"name": "chunk data", "type": "char", "annotation": "const*", "length": "chunk size", "wire_is_data_only": true},
+            {"name": "chunk size", "type": "uint32_t"}
+        ]
+    },
     "special items": {
         "client_side_structures": [
             "FutureWaitInfo",
@@ -248,6 +277,7 @@
             "BufferGetMapState",
             "BufferGetSize",
             "BufferGetUsage",
+            "ComputePassEncoderSetImmediates",
             "DeviceCreateBuffer",
             "DeviceCreateComputePipelineAsync",
             "DeviceCreateRenderPipelineAsync",
@@ -258,19 +288,21 @@
             "DeviceGetLostFuture",
             "DeviceHasFeature",
             "DevicePopErrorScope",
-            "DevicePopErrorScopeF",
-            "DevicePopErrorScope2",
             "DeviceSetLoggingCallback",
             "InstanceGetWGSLLanguageFeatures",
             "InstanceHasWGSLLanguageFeature",
             "InstanceCreateSurface",
             "InstanceRequestAdapter",
-            "ShaderModuleGetCompilationInfo",
             "QuerySetGetType",
             "QuerySetGetCount",
             "QueueOnSubmittedWorkDone",
             "QueueWriteBuffer",
             "QueueWriteTexture",
+            "RenderBundleEncoderSetImmediates",
+            "RenderPassEncoderSetImmediates",
+            "ResourceTableGetSize",
+            "ResourceTableInsertBinding",
+            "ShaderModuleGetCompilationInfo",
             "SurfaceGetCapabilities",
             "SurfaceGetCurrentTexture",
             "SurfaceGetPreferredFormat",
@@ -282,22 +314,28 @@
             "TextureGetDimension",
             "TextureGetFormat",
             "TextureGetUsage",
-            "RenderPassEncoderSetImmediateData",
-            "RenderBundleEncoderSetImmediateData",
-            "ComputePassEncoderSetImmediateData"
+            "TextureGetTextureBindingViewDimension"
         ],
         "client_handwritten_commands": [
             "AdapterGetInstance",
             "BufferDestroy",
             "BufferUnmap",
             "DeviceCreateErrorBuffer",
+            "DeviceCreateErrorTexture",
+            "DeviceCreateResourceTable",
+            "DeviceCreateTexture",
             "DeviceDestroy",
             "DeviceGetQueue",
             "DeviceGetSupportedSurfaceUsage",
             "DeviceInjectError",
             "InstanceProcessEvents",
             "InstanceWaitAny",
+            "QueueSubmit",
+            "ResourceTableDestroy",
+            "ResourceTableRemoveBinding",
+            "ResourceTableUpdate",
             "SurfaceConfigure",
+            "SurfacePresent",
             "SurfaceUnconfigure"
         ],
         "client_special_objects": [
@@ -307,6 +345,7 @@
             "Instance",
             "QuerySet",
             "Queue",
+            "ResourceTable",
             "ShaderModule",
             "Surface",
             "SurfaceCapabilities",

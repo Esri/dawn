@@ -27,12 +27,11 @@
 
 #include "src/tint/lang/glsl/writer/helpers/generate_bindings.h"
 
-#include <algorithm>
-#include <unordered_set>
-
 #include "src/tint/api/common/binding_point.h"
 #include "src/tint/lang/core/ir/module.h"
+#include "src/tint/lang/core/ir/referenced_module_vars.h"
 #include "src/tint/lang/core/ir/var.h"
+#include "src/tint/lang/core/type/binding_array.h"
 #include "src/tint/lang/core/type/external_texture.h"
 #include "src/tint/lang/core/type/pointer.h"
 #include "src/tint/lang/core/type/storage_texture.h"
@@ -41,37 +40,52 @@
 
 namespace tint::glsl::writer {
 
-Bindings GenerateBindings(const core::ir::Module& module) {
-    Bindings bindings{};
+BindingData GenerateBindings(const core::ir::Module& module, const std::string& ep) {
+    BindingData data{
+        .bindings = {},
+        .texture_builtins_from_uniform = {.ubo_binding = {.group = 0, .binding = 0u}},
+    };
 
-    std::unordered_set<tint::BindingPoint> seen_binding_points;
+    uint32_t texture_builtin_offset = 0;
 
-    // Set a binding point for the texture-builtins-from-uniform buffer.
-    constexpr uint32_t kMaxBindGroups = 4u;
-    bindings.texture_builtins_from_uniform.ubo_binding = {kMaxBindGroups, 0u};
+    // Track the next available GLSL binding number.
+    // NOTE: GLSL does not have a concept of groups, so the next GLSL binding number
+    // is a global value across all WGSL binding groups. The same WGSL binding point should map
+    // consistently to the same GLSL binding number though.
+    uint32_t next_binding = 0;
+    Hashmap<tint::BindingPoint, uint32_t, 4> wgsl_to_glsl_bindings;
+    auto get_binding = [&next_binding,
+                        &wgsl_to_glsl_bindings](const tint::BindingPoint& bp) -> uint32_t {
+        if (auto binding = wgsl_to_glsl_bindings.Get(bp)) {
+            return *binding;
+        }
+        auto binding = next_binding++;
+        wgsl_to_glsl_bindings.Add(bp, binding);
+        return binding;
+    };
 
-    // Collect next valid binding number per group
-    Hashmap<uint32_t, uint32_t, 4> group_to_next_binding_number;
-    Vector<tint::BindingPoint, 4> ext_tex_bps;
-    for (auto* inst : *module.root_block) {
-        auto* var = inst->As<core::ir::Var>();
-        if (!var) {
+    core::ir::Function* ep_func = nullptr;
+    for (auto* f : module.functions) {
+        if (!f->IsEntryPoint()) {
             continue;
         }
+        if (module.NameOf(f).NameView() == ep) {
+            ep_func = f;
+            break;
+        }
+    }
+    // No entrypoint, so no bindings needed
+    if (!ep_func) {
+        return data;
+    }
 
+    core::ir::ReferencedModuleVars<const core::ir::Module> referenced_module_vars{module};
+    auto& refs = referenced_module_vars.TransitiveReferences(ep_func);
+
+    Vector<tint::BindingPoint, 4> ext_tex_bps;
+    for (auto* var : refs) {
         if (auto bp = var->BindingPoint()) {
-            if (auto val = group_to_next_binding_number.Get(bp->group)) {
-                *val = std::max(*val, bp->binding + 1);
-            } else {
-                group_to_next_binding_number.Add(bp->group, bp->binding + 1);
-            }
-
             auto* ptr_type = var->Result()->Type()->As<core::type::Pointer>();
-
-            // Add all texture variables to the texture-builtin-from-uniform map.
-            if (ptr_type->StoreType()->Is<core::type::Texture>()) {
-                bindings.texture_builtins_from_uniform.ubo_bindingpoint_ordering.emplace_back(*bp);
-            }
 
             // Store up the external textures, we'll add them in the next step
             if (ptr_type->StoreType()->Is<core::type::ExternalTexture>()) {
@@ -79,22 +93,47 @@ Bindings GenerateBindings(const core::ir::Module& module) {
                 continue;
             }
 
-            binding::BindingInfo info{bp->binding};
+            BindingPoint info{
+                .group = 0,
+                .binding = get_binding(bp.value()),
+            };
             switch (ptr_type->AddressSpace()) {
-                case core::AddressSpace::kHandle:
+                case core::AddressSpace::kHandle: {
+                    // Handle binding_array<handle> before logic dependent on the base handle type.
+                    const core::type::Type* handle_type = ptr_type->StoreType();
+                    uint32_t count = 1;
+                    if (auto* ba = handle_type->As<core::type::BindingArray>()) {
+                        handle_type = ba->ElemType();
+                        if (auto* cnt = ba->Count()->As<core::type::ConstantArrayCount>()) {
+                            count = cnt->value;
+                        }
+                    }
+
                     Switch(
-                        ptr_type->StoreType(),  //
-                        [&](const core::type::Sampler*) { bindings.sampler.emplace(*bp, info); },
-                        [&](const core::type::StorageTexture*) {
-                            bindings.storage_texture.emplace(*bp, info);
+                        handle_type,
+                        [&](const core::type::Sampler*) {
+                            data.bindings.sampler.emplace(*bp, info);
                         },
-                        [&](const core::type::Texture*) { bindings.texture.emplace(*bp, info); });
+                        [&](const core::type::StorageTexture*) {
+                            data.bindings.storage_texture.emplace(*bp, info);
+                        },
+                        [&](const core::type::Texture*) {
+                            data.bindings.texture.emplace(*bp, info);
+
+                            // Add all texture variables to the texture-builtin-from-uniform map.
+                            data.texture_builtins_from_uniform.ubo_contents.push_back(
+                                {.offset = texture_builtin_offset,
+                                 .count = count,
+                                 .binding = info});
+                            texture_builtin_offset += count;
+                        });
                     break;
+                }
                 case core::AddressSpace::kStorage:
-                    bindings.storage.emplace(*bp, info);
+                    data.bindings.storage.emplace(*bp, info);
                     break;
                 case core::AddressSpace::kUniform:
-                    bindings.uniform.emplace(*bp, info);
+                    data.bindings.uniform.emplace(*bp, info);
                     break;
 
                 case core::AddressSpace::kUndefined:
@@ -111,19 +150,14 @@ Bindings GenerateBindings(const core::ir::Module& module) {
     }
 
     for (auto bp : ext_tex_bps) {
-        uint32_t g = bp.group;
-        uint32_t& next_num = group_to_next_binding_number.GetOrAddZero(g);
+        BindingPoint plane0{.group = 0, .binding = get_binding(bp)};
+        BindingPoint plane1{.group = 0, .binding = next_binding++};
+        BindingPoint metadata{.group = 0, .binding = next_binding++};
 
-        binding::BindingInfo plane0{bp.binding};
-        binding::BindingInfo plane1{next_num++};
-        binding::BindingInfo metadata{next_num++};
-
-        group_to_next_binding_number.Replace(g, next_num);
-
-        bindings.external_texture.emplace(bp, binding::ExternalTexture{metadata, plane0, plane1});
+        data.bindings.external_texture.emplace(bp, ExternalTexture{metadata, plane0, plane1});
     }
 
-    return bindings;
+    return data;
 }
 
 }  // namespace tint::glsl::writer

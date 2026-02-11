@@ -288,6 +288,7 @@ class HashmapBase {
             }
             slots_[slot_idx].nodes = nullptr;
         }
+        count_ = 0;
     }
 
     /// Ensures that the map can hold @p n entries without heap reallocation or rehashing.
@@ -660,10 +661,7 @@ class HashmapBase {
             constexpr size_t kAllocationSize = RoundUp(alignof(Node), sizeof(Allocation));
             auto* memory =
                 reinterpret_cast<std::byte*>(malloc(kAllocationSize + sizeof(Node) * count));
-            if (DAWN_UNLIKELY(!memory)) {
-                TINT_ICE() << "out of memory";
-                return;
-            }
+            TINT_ASSERT(memory) << "out of memory";
             auto* nodes_allocation = Bitcast<Allocation*>(memory);
             nodes_allocation->next = allocations_;
             allocations_ = nodes_allocation;

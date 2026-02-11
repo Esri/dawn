@@ -46,7 +46,7 @@ bool CheckMetalValidationEnabled(InstanceBase* instance) {
         return true;
     }
 
-    // Sometime validation layer can be enabled eternally via xcode or command line.
+    // Validation layer can also be enabled externally via Xcode or command line.
     if (GetEnvironmentVar("METAL_DEVICE_WRAPPER_TYPE").first == "1" ||
         GetEnvironmentVar("MTL_DEBUG_LAYER").first == "1") {
         return true;
@@ -76,15 +76,15 @@ std::vector<Ref<PhysicalDeviceBase>> Backend::DiscoverPhysicalDevices(
     }
 
     bool metalValidationEnabled = CheckMetalValidationEnabled(GetInstance());
-    @autoreleasepool {
 #if DAWN_PLATFORM_IS(MACOS)
-        for (id<MTLDevice> device in MTLCopyAllDevices()) {
-            Ref<PhysicalDevice> physicalDevice = AcquireRef(
-                new PhysicalDevice(GetInstance(), AcquireNSPRef(device), metalValidationEnabled));
-            if (!GetInstance()->ConsumedErrorAndWarnOnce(physicalDevice->Initialize())) {
-                mPhysicalDevices.push_back(std::move(physicalDevice));
-            }
+    NSRef<NSArray<id<MTLDevice>>> devices = AcquireNSRef(MTLCopyAllDevices());
+    for (id<MTLDevice> device in* devices) {
+        Ref<PhysicalDevice> physicalDevice =
+            AcquireRef(new PhysicalDevice(GetInstance(), {device}, metalValidationEnabled));
+        if (!GetInstance()->ConsumedErrorAndWarnOnce(physicalDevice->Initialize())) {
+            mPhysicalDevices.push_back(std::move(physicalDevice));
         }
+    }
 #endif
 
         // iOS only has a single device so MTLCopyAllDevices doesn't exist there.
@@ -95,7 +95,7 @@ std::vector<Ref<PhysicalDeviceBase>> Backend::DiscoverPhysicalDevices(
             mPhysicalDevices.push_back(std::move(physicalDevice));
         }
 #endif
-    }
+
     return std::vector<Ref<PhysicalDeviceBase>>{mPhysicalDevices};
 }
 

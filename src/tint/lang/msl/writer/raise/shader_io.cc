@@ -82,7 +82,10 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
 
         for (auto& input : inputs) {
             if (input.attributes.builtin) {
-                auto* param = b.FunctionParam(input.name.Name(), input.type);
+                auto* param = b.FunctionParam(input.type);
+                if (input.name) {
+                    ir.SetName(param, input.name);
+                }
                 param->SetInvariant(input.attributes.invariant);
                 param->SetBuiltin(input.attributes.builtin.value());
                 input_indices.Push(InputIndex{static_cast<uint32_t>(input_params.Length()), 0u});
@@ -112,7 +115,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                     break;
                 case core::ir::Function::PipelineStage::kCompute:
                 case core::ir::Function::PipelineStage::kUndefined:
-                    TINT_UNREACHABLE();
+                    TINT_IR_UNREACHABLE(ir);
             }
             input_struct_param->SetType(input_struct);
         }
@@ -140,7 +143,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                 break;
             case core::ir::Function::PipelineStage::kCompute:
             case core::ir::Function::PipelineStage::kUndefined:
-                TINT_UNREACHABLE();
+                TINT_IR_UNREACHABLE(ir);
         }
         output_values.Resize(outputs.Length());
         return output_struct;
@@ -159,11 +162,19 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
 
     /// @copydoc ShaderIO::BackendState::SetOutput
     void SetOutput(core::ir::Builder& builder, uint32_t idx, core::ir::Value* value) override {
+        auto& output = outputs[idx];
+
         // If this a sample mask builtin, combine with the fixed sample mask if provided.
         if (config.fixed_sample_mask != UINT32_MAX &&
-            outputs[idx].attributes.builtin == core::BuiltinValue::kSampleMask) {
-            value = builder.And<u32>(value, u32(config.fixed_sample_mask))->Result();
+            output.attributes.builtin == core::BuiltinValue::kSampleMask) {
+            value = builder.And(value, u32(config.fixed_sample_mask))->Result();
         }
+
+        // Clamp frag_depth values if necessary.
+        if (output.attributes.builtin == core::BuiltinValue::kFragDepth) {
+            value = ClampFragDepth(builder, value);
+        }
+
         output_values[idx] = value;
     }
 
@@ -187,7 +198,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             if (outputs[i].attributes.builtin == core::BuiltinValue::kClipDistances) {
                 // Copy each clip distance to the result array.
                 auto* arr = outputs[i].type->As<core::type::Array>();
-                TINT_ASSERT(arr && arr->ConstantCount());
+                TINT_IR_ASSERT(ir, arr && arr->ConstantCount());
                 for (uint32_t d = 0; d < arr->ConstantCount(); d++) {
                     auto* to = builder.Access<ptr<function, f32>>(result, u32(i), u32(d));
                     auto* from = builder.Access<f32>(output_values[i], u32(d));
@@ -221,16 +232,34 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                                                 .builtin = core::BuiltinValue::kSampleMask,
                                             });
     }
+
+    /// Clamp a frag_depth builtin value if necessary.
+    /// @param builder the builder to use for new instructions
+    /// @param frag_depth the incoming frag_depth value
+    /// @returns the clamped value
+    core::ir::Value* ClampFragDepth(core::ir::Builder& builder, core::ir::Value* frag_depth) {
+        if (!config.depth_range_offsets) {
+            return frag_depth;
+        }
+
+        auto* immediate_data = config.immediate_data_layout.var;
+        auto min_idx = u32(config.immediate_data_layout.IndexOf(config.depth_range_offsets->min));
+        auto max_idx = u32(config.immediate_data_layout.IndexOf(config.depth_range_offsets->max));
+        auto* min = builder.Load(builder.Access<ptr<immediate, f32>>(immediate_data, min_idx));
+        auto* max = builder.Load(builder.Access<ptr<immediate, f32>>(immediate_data, max_idx));
+        return builder.Clamp(frag_depth, min, max)->Result();
+    }
 };
+
 }  // namespace
 
 Result<SuccessType> ShaderIO(core::ir::Module& ir, const ShaderIOConfig& config) {
-    auto result = ValidateAndDumpIfNeeded(
-        ir, "msl.ShaderIO",
-        tint::core::ir::Capabilities{tint::core::ir::Capability::kAllowDuplicateBindings});
-    if (result != Success) {
-        return result;
-    }
+    TINT_CHECK_RESULT(ValidateAndDumpIfNeeded(ir, "msl.ShaderIO",
+                                              tint::core::ir::Capabilities{
+                                                  core::ir::Capability::kAllow8BitIntegers,
+                                                  core::ir::Capability::kAllowDuplicateBindings,
+                                                  core::ir::Capability::kAllowNonCoreTypes,
+                                              }));
 
     core::ir::transform::RunShaderIOBase(ir, [&](core::ir::Module& mod, core::ir::Function* func) {
         return std::make_unique<StateImpl>(mod, func, config);

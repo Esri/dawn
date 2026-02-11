@@ -114,10 +114,8 @@ def main(args):
         'third_party/vulkan-headers/src',
         'third_party/vulkan-loader/src',
         'third_party/vulkan-utility-libraries/src',
+        'third_party/webgpu-headers/src',
     ]
-    if args.use_test_deps:
-        log("""WARNING: --use-test-deps argument deprecated. 
-            Test dependencies are now always included.""")
 
     root_dir = Path(args.directory).resolve()
 

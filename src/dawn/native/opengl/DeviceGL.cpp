@@ -151,13 +151,14 @@ Device::Device(AdapterBase* adapter,
       mContext(std::move(context)) {}
 
 Device::~Device() {
-    Destroy();
+    Destroy(DestroyReason::CppDestructor);
 }
 
 MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
     // Directly set the context current and use mGL instead of calling GetGL as GetGL will notify
     // the (yet inexistent) queue that GL was used.
-    mContext->MakeCurrent();
+    ContextEGL::ScopedMakeCurrent scopedCurrentContext;
+    DAWN_TRY_ASSIGN(scopedCurrentContext, mContext->MakeCurrent());
     mContext->RequestRequiredExtensionsExplicitly();
 
     const OpenGLFunctions& gl = mGL;
@@ -210,11 +211,15 @@ MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
         DAWN_GL_TRY(gl, GetIntegerv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &mMaxTextureMaxAnisotropy));
     }
 
-    DAWN_TRY(DeviceBase::Initialize(std::move(queue)));
+    DAWN_TRY(DeviceBase::Initialize(descriptor, std::move(queue)));
 
     // Create internal buffers needed for workarounds.
     if (mTextureBuiltinsBuffer.Get() == nullptr) {
         BufferDescriptor desc = {};
+        // The uniform buffer will contain an array of vec4u so make sure that it contains the last
+        // possible vec4u entirely by rounding the size to 4 u32s. Check that the constant is indeed
+        // a multiple of 4.
+        static_assert(kGLMaxTextureImageUnitsReported % 4 == 0);
         desc.size = kGLMaxTextureImageUnitsReported * sizeof(uint32_t);
         desc.usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst;
         Ref<BufferBase> buffer;
@@ -232,7 +237,7 @@ MaybeError Device::Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor) {
         mArrayLengthBuffer = ToBackend(std::move(buffer));
     }
 
-    return {};
+    return scopedCurrentContext.End();
 }
 
 const GLFormat& Device::GetGLFormat(const Format& format) {
@@ -245,11 +250,11 @@ const GLFormat& Device::GetGLFormat(const Format& format) {
 }
 
 ResultOrError<Ref<BindGroupBase>> Device::CreateBindGroupImpl(
-    const BindGroupDescriptor* descriptor) {
+    const UnpackedPtr<BindGroupDescriptor>& descriptor) {
     return BindGroup::Create(this, descriptor);
 }
 ResultOrError<Ref<BindGroupLayoutInternalBase>> Device::CreateBindGroupLayoutImpl(
-    const BindGroupLayoutDescriptor* descriptor) {
+    const UnpackedPtr<BindGroupLayoutDescriptor>& descriptor) {
     return AcquireRef(new BindGroupLayout(this, descriptor));
 }
 ResultOrError<Ref<BufferBase>> Device::CreateBufferImpl(
@@ -276,16 +281,17 @@ Ref<RenderPipelineBase> Device::CreateUninitializedRenderPipelineImpl(
     const UnpackedPtr<RenderPipelineDescriptor>& descriptor) {
     return RenderPipeline::CreateUninitialized(this, descriptor);
 }
+ResultOrError<Ref<ResourceTableBase>> Device::CreateResourceTableImpl(
+    const ResourceTableDescriptor* descriptor) {
+    return DAWN_UNIMPLEMENTED_ERROR("ResourceTable is not supported on OpenGL");
+}
 ResultOrError<Ref<SamplerBase>> Device::CreateSamplerImpl(const SamplerDescriptor* descriptor) {
     return Sampler::Create(this, descriptor);
 }
 ResultOrError<Ref<ShaderModuleBase>> Device::CreateShaderModuleImpl(
     const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
-    const std::vector<tint::wgsl::Extension>& internalExtensions,
-    ShaderModuleParseResult* parseResult,
-    std::unique_ptr<OwnedCompilationMessages>* compilationMessages) {
-    return ShaderModule::Create(this, descriptor, internalExtensions, parseResult,
-                                compilationMessages);
+    const std::vector<tint::wgsl::Extension>& internalExtensions) {
+    return ShaderModule::Create(this, descriptor, internalExtensions);
 }
 ResultOrError<Ref<SwapChainBase>> Device::CreateSwapChainImpl(Surface* surface,
                                                               SwapChainBase* previousSwapChain,
@@ -379,7 +385,12 @@ Ref<TextureBase> Device::CreateTextureWrappingEGLImage(const ExternalImageDescri
 ResultOrError<Ref<TextureBase>> Device::CreateTextureWrappingEGLImageImpl(
     const ExternalImageDescriptor* descriptor,
     ::EGLImage image) {
-    const OpenGLFunctions& gl = GetGL();
+    // TODO(451928481): We cannot defer the GL work here because the external texture may be
+    // deleted after this method returns. In the future, we should deprecate this method and
+    // require clients to use SharedTextureMemory for better lifetime management.
+    ContextEGL::ScopedMakeCurrent scopedCurrentContext;
+    DAWN_TRY_ASSIGN(scopedCurrentContext, mContext->MakeCurrent());
+    const OpenGLFunctions& gl = GetGL(/*makeCurrent=*/false);
 
     TextureDescriptor reifiedDescriptor =
         FromAPI(descriptor->cTextureDescriptor)->WithTrivialFrontendDefaults();
@@ -417,6 +428,9 @@ ResultOrError<Ref<TextureBase>> Device::CreateTextureWrappingEGLImageImpl(
     auto result = AcquireRef(new Texture(this, textureDescriptor, tex, OwnsHandle::No));
     result->SetIsSubresourceContentInitialized(descriptor->isInitialized,
                                                result->GetAllSubresources());
+
+    DAWN_TRY(scopedCurrentContext.End());
+
     return result;
 }
 
@@ -433,7 +447,12 @@ Ref<TextureBase> Device::CreateTextureWrappingGLTexture(const ExternalImageDescr
 ResultOrError<Ref<TextureBase>> Device::CreateTextureWrappingGLTextureImpl(
     const ExternalImageDescriptor* descriptor,
     GLuint texture) {
-    const OpenGLFunctions& gl = GetGL();
+    // TODO(451928481): We cannot defer the GL work here because the external texture may be
+    // deleted after this method returns. In the future, we should deprecate this method and
+    // require clients to use SharedTextureMemory for better lifetime management.
+    ContextEGL::ScopedMakeCurrent scopedCurrentContext;
+    DAWN_TRY_ASSIGN(scopedCurrentContext, mContext->MakeCurrent());
+    const OpenGLFunctions& gl = GetGL(/*makeCurrent=*/false);
 
     TextureDescriptor reifiedDescriptor =
         FromAPI(descriptor->cTextureDescriptor)->WithTrivialFrontendDefaults();
@@ -462,6 +481,9 @@ ResultOrError<Ref<TextureBase>> Device::CreateTextureWrappingGLTextureImpl(
     auto result = AcquireRef(new Texture(this, textureDescriptor, texture, OwnsHandle::No));
     result->SetIsSubresourceContentInitialized(descriptor->isInitialized,
                                                result->GetAllSubresources());
+
+    DAWN_TRY(scopedCurrentContext.End());
+
     return result;
 }
 
@@ -470,15 +492,32 @@ MaybeError Device::TickImpl() {
     return {};
 }
 
-MaybeError Device::CopyFromStagingToBufferImpl(BufferBase* source,
-                                               uint64_t sourceOffset,
-                                               BufferBase* destination,
-                                               uint64_t destinationOffset,
-                                               uint64_t size) {
+MaybeError Device::FlushPendingGLCommands() {
+    std::vector<GLWorkFunc> workList;
+    mPendingGLWorkList.Use([&](auto pendingList) { std::swap(workList, *pendingList); });
+
+    if (workList.empty()) {
+        return {};
+    }
+
+    ContextEGL::ScopedMakeCurrent scopedCurrentContext;
+    DAWN_TRY_ASSIGN(scopedCurrentContext, mContext->MakeCurrent());
+    const OpenGLFunctions& gl = GetGL(/*makeCurrent=*/false);
+    for (auto& work : workList) {
+        DAWN_TRY(work(gl));
+    }
+    return scopedCurrentContext.End();
+}
+
+MaybeError Device::CopyFromStagingToBuffer(BufferBase* source,
+                                           uint64_t sourceOffset,
+                                           BufferBase* destination,
+                                           uint64_t destinationOffset,
+                                           uint64_t size) {
     return DAWN_UNIMPLEMENTED_ERROR("Device unable to copy from staging buffer.");
 }
 
-MaybeError Device::CopyFromStagingToTextureImpl(const BufferBase* source,
+MaybeError Device::CopyFromStagingToTextureImpl(BufferBase* source,
                                                 const TexelCopyBufferLayout& src,
                                                 const TextureCopy& dst,
                                                 const Extent3D& copySizePixels) {
@@ -486,11 +525,20 @@ MaybeError Device::CopyFromStagingToTextureImpl(const BufferBase* source,
     return DAWN_UNIMPLEMENTED_ERROR("Device unable to copy from staging buffer to texture.");
 }
 
-void Device::DestroyImpl() {
+void Device::DestroyImpl(DestroyReason reason) {
     DAWN_ASSERT(GetState() == State::Disconnected);
 
     mTextureBuiltinsBuffer = nullptr;
     mArrayLengthBuffer = nullptr;
+}
+
+void Device::MarkGLUsed(ExecutionQueueBase::SubmitMode submitMode) const {
+    if (submitMode == ExecutionQueueBase::SubmitMode::Normal) {
+        // - Only need fence sync if submit mode is normal. So the commands will be flushed and a
+        // fence is inserted in next Tick().
+        // - For passive mode, the commands will eventually be flushed in Queue::Submit().
+        ToBackend(GetQueue())->SetNeedsFenceSync();
+    }
 }
 
 uint32_t Device::GetOptimalBytesPerRowAlignment() const {
@@ -524,9 +572,11 @@ const AHBFunctions* Device::GetOrLoadAHBFunctions() {
 #endif  // DAWN_PLATFORM_IS(ANDROID)
 }
 
-const OpenGLFunctions& Device::GetGL() const {
-    mContext->MakeCurrent();
-    ToBackend(GetQueue())->OnGLUsed();
+const OpenGLFunctions& Device::GetGL(bool makeCurrent) const {
+    if (makeCurrent) {
+        mContext->DeprecatedMakeCurrent();
+    }
+    MarkGLUsed(ExecutionQueueBase::SubmitMode::Normal);
     return mGL;
 }
 
@@ -536,8 +586,8 @@ int Device::GetMaxTextureMaxAnisotropy() const {
 
 const EGLFunctions& Device::GetEGL(bool makeCurrent) const {
     if (makeCurrent) {
-        mContext->MakeCurrent();
-        ToBackend(GetQueue())->OnGLUsed();
+        mContext->DeprecatedMakeCurrent();
+        MarkGLUsed(ExecutionQueueBase::SubmitMode::Normal);
     }
     return ToBackend(GetPhysicalDevice())->GetDisplay()->egl;
 }

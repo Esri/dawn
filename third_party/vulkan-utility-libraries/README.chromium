@@ -2,11 +2,12 @@ Name: Khronos Vulkan Utility Libraries
 Short Name: Vulkan Utility Libraries
 Version: N/A
 URL: https://github.com/KhronosGroup/Vulkan-Utility-Libraries
+Update Mechanism: Autoroll
 SOURCE CODE: git clone https://github.com/KhronosGroup/Vulkan-Utility-Libraries.git
 Revision: DEPS
 Security Critical: no
 Shipped: no
-License: Apache 2.0
+License: Apache-2.0
 License File: src/LICENSE.md
 
 Description:

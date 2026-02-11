@@ -121,6 +121,10 @@ config("internal_config") {
     defines += [ "DAWN_ENABLE_ERROR_INJECTION" ]
   }
 
+  if (dawn_force_system_component_load) {
+    defines += [ "DAWN_FORCE_SYSTEM_COMPONENT_LOAD" ]
+  }
+
   # Only internal Dawn targets can use this config, this means only targets in
   # this BUILD.gn file and related subdirs.
   visibility = [
@@ -133,6 +137,14 @@ config("internal_config") {
   if (is_clang) {
     # We use __builtin_assume liberally in DAWN_ASSERT, allow ignoring side-effects there.
     cflags += [ "-Wno-assume" ]
+
+    # Flags use of __COUNTER__, which is used in histogram macros that were
+    # largely copied from Chromium. Chromium continues to use __COUNTER__ in
+    # their copy.
+    cflags += [ "-Wno-c2y-extensions" ]
+
+    # Dawn doesn't have the annotations to work with this analysis.
+    cflags_cc = [ "-Wno-thread-safety" ]
   }
 
   # Enable more warnings that were found when using Dawn in other projects.
@@ -192,6 +204,9 @@ config("internal_config") {
     # (otherwise we have to add default: DAWN_UNREACHABLE() that silences clang too)
     cflags += [ "/wd4715" ]
 
+    # MSVC needs a flag to enable a standard-compliant preprocessor.
+    cflags += [ "/Zc:preprocessor" ]
+
     if (dawn_is_winuwp) {
       # /ZW makes sure we don't add calls that are forbidden in UWP.
       # and /EHsc is required to be used in combination with it,
@@ -240,21 +255,6 @@ dawn_generator("dawn_gpu_info_gen") {
   ]
 }
 
-group("abseil") {
-  # When building within Chromium or ANGLE we need to include "//third_party/abseil-cpp:absl" while
-  # it's beneficial to be more specific with standalone Dawn, especially when it comes to
-  # including it as a dependency in other projects (such as Skia).
-  if (build_with_chromium || build_with_angle) {
-    public_deps = [ "$dawn_abseil_dir:absl" ]
-  } else {
-    public_deps = [
-      "${dawn_root}/third_party/gn/abseil-cpp:flat_hash_set",
-      "${dawn_root}/third_party/gn/abseil-cpp:inlined_vector",
-      "${dawn_root}/third_party/gn/abseil-cpp:no_destructor",
-    ]
-  }
-}
-
 # This GN file is discovered by all Chromium builds, but common doesn't support
 # all of Chromium's OSes so we explicitly make the target visible only on
 # systems we know Dawn is able to compile on.
@@ -267,6 +267,7 @@ if (is_win || is_linux || is_chromeos || is_mac || is_fuchsia || is_android ||
       "Alloc.h",
       "Assert.cpp",
       "Assert.h",
+      "Atomic.h",
       "BitSetRangeIterator.h",
       "Compiler.h",
       "Constants.h",
@@ -284,13 +285,13 @@ if (is_win || is_linux || is_chromeos || is_mac || is_fuchsia || is_android ||
       "GPUInfo.h",
       "HashUtils.h",
       "IOKitRef.h",
+      "LRUCache.h",
       "LinkedList.h",
       "Log.cpp",
       "Log.h",
       "MatchVariant.h",
       "Math.cpp",
       "Math.h",
-      "Mutex.cpp",
       "Mutex.h",
       "MutexProtected.h",
       "NSRef.h",
@@ -322,6 +323,7 @@ if (is_win || is_linux || is_chromeos || is_mac || is_fuchsia || is_android ||
       "SystemUtils.h",
       "ThreadLocal.cpp",
       "ThreadLocal.h",
+      "Time.h",
       "TypeTraits.h",
       "TypedInteger.h",
       "UnderlyingType.h",
@@ -341,11 +343,11 @@ if (is_win || is_linux || is_chromeos || is_mac || is_fuchsia || is_android ||
     sources += get_target_outputs(":dawn_gpu_info_gen")
 
     public_deps = [
-      ":abseil",
       ":dawn_gpu_info_gen",
       ":dawn_version_gen",
+      "${dawn_root}:abseil",
       "${dawn_root}/src/dawn/partition_alloc:raw_ptr",
-      "${dawn_root}/src/utils:utils",
+      "${dawn_root}/src/utils",
     ]
 
     if (is_apple) {

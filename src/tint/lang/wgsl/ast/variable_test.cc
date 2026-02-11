@@ -25,7 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/core/builtin_value.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/wgsl/ast/helper_test.h"
 #include "src/tint/lang/wgsl/ast/id_attribute.h"
 
@@ -81,26 +81,6 @@ TEST_F(VariableDeathTest, Assert_Null_Name) {
         {
             ProgramBuilder b;
             b.Var(static_cast<Identifier*>(nullptr), b.ty.i32());
-        },
-        "internal compiler error");
-}
-
-TEST_F(VariableDeathTest, Assert_DifferentGenerationID_Symbol) {
-    EXPECT_DEATH_IF_SUPPORTED(
-        {
-            ProgramBuilder b1;
-            ProgramBuilder b2;
-            b1.Var(b2.Sym("x"), b1.ty.f32());
-        },
-        "internal compiler error");
-}
-
-TEST_F(VariableDeathTest, Assert_DifferentGenerationID_Initializer) {
-    EXPECT_DEATH_IF_SUPPORTED(
-        {
-            ProgramBuilder b1;
-            ProgramBuilder b2;
-            b1.Var("x", b1.ty.f32(), b2.Expr(1.2_f));
         },
         "internal compiler error");
 }

@@ -25,6 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/439062058): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "src/tint/lang/spirv/writer/common/binary_writer.h"
 #include "gtest/gtest.h"
 
@@ -41,6 +46,19 @@ TEST_F(SpirvWriterBinaryWriterTest, Preamble) {
     ASSERT_EQ(res.size(), 5u);
     EXPECT_EQ(res[0], spv::MagicNumber);
     EXPECT_EQ(res[1], 0x00010300u);  // SPIR-V 1.3
+    EXPECT_EQ(res[2], 23u << 16);    // Generator ID
+    EXPECT_EQ(res[3], 5u);           // ID Bound
+    EXPECT_EQ(res[4], 0u);           // Reserved
+}
+
+TEST_F(SpirvWriterBinaryWriterTest, Preamble_Spirv1p4) {
+    BinaryWriter bw;
+    bw.WriteHeader(5, 0, 0x10400);
+
+    auto res = bw.Result();
+    ASSERT_EQ(res.size(), 5u);
+    EXPECT_EQ(res[0], spv::MagicNumber);
+    EXPECT_EQ(res[1], 0x00010400u);  // SPIR-V 1.4
     EXPECT_EQ(res[2], 23u << 16);    // Generator ID
     EXPECT_EQ(res[3], 5u);           // ID Bound
     EXPECT_EQ(res[4], 0u);           // Reserved

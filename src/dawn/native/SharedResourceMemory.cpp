@@ -52,7 +52,7 @@ SharedResourceMemory::SharedResourceMemory(DeviceBase* device,
 
 SharedResourceMemory::~SharedResourceMemory() = default;
 
-void SharedResourceMemory::DestroyImpl() {}
+void SharedResourceMemory::DestroyImpl(DestroyReason reason) {}
 
 bool SharedResourceMemoryContents::HasWriteAccess() const {
     return mSharedResourceAccessState == SharedResourceAccessState::Write;
@@ -64,6 +64,10 @@ bool SharedResourceMemoryContents::HasExclusiveReadAccess() const {
 
 int SharedResourceMemoryContents::GetReadAccessCount() const {
     return mReadAccessCount;
+}
+
+bool SharedResourceMemoryContents::HasAccess() const {
+    return mSharedResourceAccessState != SharedResourceAccessState::NotAccessed;
 }
 
 void SharedResourceMemory::Initialize() {

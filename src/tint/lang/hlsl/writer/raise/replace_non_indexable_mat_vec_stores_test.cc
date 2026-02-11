@@ -50,7 +50,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, Vector) {
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
         auto* static_index = b.Let("static_index", 0_u);
-        auto* v = b.Var("v", ty.ptr<function>(ty.vec3<f32>()));
+        auto* v = b.Var("v", ty.ptr<function>(ty.vec3f()));
         b.StoreVectorElement(v, b.Load(dyn_index), 1_f);
         b.StoreVectorElement(v, static_index, 1_f);
         b.Return(func);
@@ -87,8 +87,8 @@ $B1: {  # root
     %5:u32 = load %dyn_index
     %6:vec3<f32> = load %v
     %7:vec3<f32> = construct 1.0f
-    %8:vec3<f32> = construct %5
-    %9:vec3<f32> = construct 0i, 1i, 2i
+    %8:vec3<u32> = construct %5
+    %9:vec3<u32> = construct 0u, 1u, 2u
     %10:vec3<bool> = eq %8, %9
     %11:vec3<f32> = select %6, %7, %10
     store %v, %11
@@ -104,7 +104,7 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, VectorInStruct) {
-    auto* vec_ty = ty.vec3<f32>();
+    auto* vec_ty = ty.vec3f();
     auto* struct_ty = ty.Struct(mod.symbols.New("S"), {{mod.symbols.New("v"), vec_ty}});
     auto* dyn_index = b.Var("dyn_index", ty.ptr<uniform, u32>());
     dyn_index->SetBindingPoint(0, 0);
@@ -161,8 +161,8 @@ $B1: {  # root
     %6:u32 = load %dyn_index
     %7:vec3<f32> = load %5
     %8:vec3<f32> = construct 1.0f
-    %9:vec3<f32> = construct %6
-    %10:vec3<f32> = construct 0i, 1i, 2i
+    %9:vec3<u32> = construct %6
+    %10:vec3<u32> = construct 0u, 1u, 2u
     %11:vec3<bool> = eq %9, %10
     %12:vec3<f32> = select %7, %8, %11
     store %5, %12
@@ -185,7 +185,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, VectorInArray) {
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
         auto* static_index = b.Let("static_index", 0_u);
-        auto* vec_ty = ty.vec3<f32>();
+        auto* vec_ty = ty.vec3f();
         auto* v = b.Var("v", ty.ptr<function>(ty.array(vec_ty, 8)));
         auto* access = b.Access(ty.ptr<function>(vec_ty), v, 0_u);
         b.StoreVectorElement(access, b.Load(dyn_index), 1_f);
@@ -226,8 +226,8 @@ $B1: {  # root
     %6:u32 = load %dyn_index
     %7:vec3<f32> = load %5
     %8:vec3<f32> = construct 1.0f
-    %9:vec3<f32> = construct %6
-    %10:vec3<f32> = construct 0i, 1i, 2i
+    %9:vec3<u32> = construct %6
+    %10:vec3<u32> = construct 0u, 1u, 2u
     %11:vec3<bool> = eq %9, %10
     %12:vec3<f32> = select %7, %8, %11
     store %5, %12
@@ -243,7 +243,7 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, VectorInArrayInStruct) {
-    auto* vec_ty = ty.vec3<f32>();
+    auto* vec_ty = ty.vec3f();
     auto* struct_ty =
         ty.Struct(mod.symbols.New("S"), {{mod.symbols.New("v"), ty.array(vec_ty, 8)}});
     auto* dyn_index = b.Var("dyn_index", ty.ptr<uniform, u32>());
@@ -301,8 +301,8 @@ $B1: {  # root
     %6:u32 = load %dyn_index
     %7:vec3<f32> = load %5
     %8:vec3<f32> = construct 1.0f
-    %9:vec3<f32> = construct %6
-    %10:vec3<f32> = construct 0i, 1i, 2i
+    %9:vec3<u32> = construct %6
+    %10:vec3<u32> = construct 0u, 1u, 2u
     %11:vec3<bool> = eq %9, %10
     %12:vec3<f32> = select %7, %8, %11
     store %5, %12
@@ -328,7 +328,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, VectorByFunc) {
 
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
-        auto* v = b.Var("v", ty.ptr<function>(ty.vec3<f32>()));
+        auto* v = b.Var("v", ty.ptr<function>(ty.vec3f()));
         b.StoreVectorElement(v, b.Call(get_dynamic), 1_f);
         // Will be transformed because we assume functions return a dynamic value
         b.StoreVectorElement(v, b.Call(get_static), 1_f);
@@ -387,16 +387,16 @@ $B1: {  # root
     %7:u32 = call %get_dynamic
     %8:vec3<f32> = load %v
     %9:vec3<f32> = construct 1.0f
-    %10:vec3<f32> = construct %7
-    %11:vec3<f32> = construct 0i, 1i, 2i
+    %10:vec3<u32> = construct %7
+    %11:vec3<u32> = construct 0u, 1u, 2u
     %12:vec3<bool> = eq %10, %11
     %13:vec3<f32> = select %8, %9, %12
     store %v, %13
     %14:u32 = call %get_static
     %15:vec3<f32> = load %v
     %16:vec3<f32> = construct 1.0f
-    %17:vec3<f32> = construct %14
-    %18:vec3<f32> = construct 0i, 1i, 2i
+    %17:vec3<u32> = construct %14
+    %18:vec3<u32> = construct 0u, 1u, 2u
     %19:vec3<bool> = eq %17, %18
     %20:vec3<f32> = select %15, %16, %19
     store %v, %20
@@ -418,7 +418,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, Vector_ViaPointer) {
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
         auto* static_index = b.Let("static_index", 0_u);
-        auto* v = b.Var("v", ty.ptr<function>(ty.vec3<f32>()));
+        auto* v = b.Var("v", ty.ptr<function>(ty.vec3f()));
         auto* p = b.Let("p", v);
         b.StoreVectorElement(p, b.Load(dyn_index), 1_f);
         b.StoreVectorElement(p, static_index, 1_f);
@@ -457,8 +457,8 @@ $B1: {  # root
     %5:u32 = load %dyn_index
     %6:vec3<f32> = load %v
     %7:vec3<f32> = construct 1.0f
-    %8:vec3<f32> = construct %5
-    %9:vec3<f32> = construct 0i, 1i, 2i
+    %8:vec3<u32> = construct %5
+    %9:vec3<u32> = construct 0u, 1u, 2u
     %10:vec3<bool> = eq %8, %9
     %11:vec3<f32> = select %6, %7, %10
     store %v, %11
@@ -477,7 +477,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, Vector_PrivateVar) {
     auto* dyn_index = b.Var("dyn_index", ty.ptr<uniform, u32>());
     dyn_index->SetBindingPoint(0, 0);
     mod.root_block->Append(dyn_index);
-    auto* v = b.Var("v", ty.ptr<private_>(ty.vec3<f32>()));
+    auto* v = b.Var("v", ty.ptr<private_>(ty.vec3f()));
     mod.root_block->Append(v);
 
     auto* func = b.ComputeFunction("main");
@@ -519,8 +519,8 @@ $B1: {  # root
     %5:u32 = load %dyn_index
     %6:vec3<f32> = load %v
     %7:vec3<f32> = construct 1.0f
-    %8:vec3<f32> = construct %5
-    %9:vec3<f32> = construct 0i, 1i, 2i
+    %8:vec3<u32> = construct %5
+    %9:vec3<u32> = construct 0u, 1u, 2u
     %10:vec3<bool> = eq %8, %9
     %11:vec3<f32> = select %6, %7, %10
     store %v, %11
@@ -539,7 +539,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, Vector_StorageVar) {
     auto* dyn_index = b.Var("dyn_index", ty.ptr<uniform, u32>());
     dyn_index->SetBindingPoint(0, 0);
     mod.root_block->Append(dyn_index);
-    auto* v = b.Var("v", ty.ptr<storage>(ty.vec3<f32>()));
+    auto* v = b.Var("v", ty.ptr<storage>(ty.vec3f()));
     v->SetBindingPoint(0, 1);
     mod.root_block->Append(v);
 
@@ -581,7 +581,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, Vector_WorkgroupVar) {
     auto* dyn_index = b.Var("dyn_index", ty.ptr<uniform, u32>());
     dyn_index->SetBindingPoint(0, 0);
     mod.root_block->Append(dyn_index);
-    auto* v = b.Var("v", ty.ptr<workgroup>(ty.vec3<f32>()));
+    auto* v = b.Var("v", ty.ptr<workgroup>(ty.vec3f()));
     mod.root_block->Append(v);
 
     auto* func = b.ComputeFunction("main");
@@ -666,8 +666,8 @@ $B1: {  # root
     %6:u32 = load %dyn_index
     %7:vec4<f32> = load %5
     %8:vec4<f32> = construct 1.0f
-    %9:vec4<f32> = construct %6
-    %10:vec4<f32> = construct 0i, 1i, 2i, 3i
+    %9:vec4<u32> = construct %6
+    %10:vec4<u32> = construct 0u, 1u, 2u, 3u
     %11:vec4<bool> = eq %9, %10
     %12:vec4<f32> = select %7, %8, %11
     store %5, %12
@@ -740,8 +740,8 @@ $B1: {  # root
     %6:u32 = load %dyn_index
     %7:vec4<f32> = load %5
     %8:vec4<f32> = construct 1.0f
-    %9:vec4<f32> = construct %6
-    %10:vec4<f32> = construct 0i, 1i, 2i, 3i
+    %9:vec4<u32> = construct %6
+    %10:vec4<u32> = construct 0u, 1u, 2u, 3u
     %11:vec4<bool> = eq %9, %10
     %12:vec4<f32> = select %7, %8, %11
     store %5, %12
@@ -804,8 +804,8 @@ $B1: {  # root
     %6:u32 = load %dyn_index
     %7:vec4<f32> = load %5
     %8:vec4<f32> = construct 1.0f
-    %9:vec4<f32> = construct %6
-    %10:vec4<f32> = construct 0i, 1i, 2i, 3i
+    %9:vec4<u32> = construct %6
+    %10:vec4<u32> = construct 0u, 1u, 2u, 3u
     %11:vec4<bool> = eq %9, %10
     %12:vec4<f32> = select %7, %8, %11
     store %5, %12
@@ -879,8 +879,8 @@ $B1: {  # root
     %6:u32 = load %dyn_index
     %7:vec4<f32> = load %5
     %8:vec4<f32> = construct 1.0f
-    %9:vec4<f32> = construct %6
-    %10:vec4<f32> = construct 0i, 1i, 2i, 3i
+    %9:vec4<u32> = construct %6
+    %10:vec4<u32> = construct 0u, 1u, 2u, 3u
     %11:vec4<bool> = eq %9, %10
     %12:vec4<f32> = select %7, %8, %11
     store %5, %12
@@ -969,16 +969,16 @@ $B1: {  # root
     %8:u32 = call %get_dynamic
     %9:vec4<f32> = load %7
     %10:vec4<f32> = construct 1.0f
-    %11:vec4<f32> = construct %8
-    %12:vec4<f32> = construct 0i, 1i, 2i, 3i
+    %11:vec4<u32> = construct %8
+    %12:vec4<u32> = construct 0u, 1u, 2u, 3u
     %13:vec4<bool> = eq %11, %12
     %14:vec4<f32> = select %9, %10, %13
     store %7, %14
     %15:u32 = call %get_static
     %16:vec4<f32> = load %7
     %17:vec4<f32> = construct 1.0f
-    %18:vec4<f32> = construct %15
-    %19:vec4<f32> = construct 0i, 1i, 2i, 3i
+    %18:vec4<u32> = construct %15
+    %19:vec4<u32> = construct 0u, 1u, 2u, 3u
     %20:vec4<bool> = eq %18, %19
     %21:vec4<f32> = select %16, %17, %20
     store %7, %21
@@ -1042,8 +1042,8 @@ $B1: {  # root
     %6:u32 = load %dyn_index
     %7:vec4<f32> = load %5
     %8:vec4<f32> = construct 1.0f
-    %9:vec4<f32> = construct %6
-    %10:vec4<f32> = construct 0i, 1i, 2i, 3i
+    %9:vec4<u32> = construct %6
+    %10:vec4<u32> = construct 0u, 1u, 2u, 3u
     %11:vec4<bool> = eq %9, %10
     %12:vec4<f32> = select %7, %8, %11
     store %5, %12
@@ -1107,8 +1107,8 @@ $B1: {  # root
     %6:u32 = load %dyn_index
     %7:vec4<f32> = load %5
     %8:vec4<f32> = construct 1.0f
-    %9:vec4<f32> = construct %6
-    %10:vec4<f32> = construct 0i, 1i, 2i, 3i
+    %9:vec4<u32> = construct %6
+    %10:vec4<u32> = construct 0u, 1u, 2u, 3u
     %11:vec4<bool> = eq %9, %10
     %12:vec4<f32> = select %7, %8, %11
     store %5, %12
@@ -1219,7 +1219,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, MatrixColumn) {
     b.Append(func->Block(), [&] {
         auto* static_index = b.Let("static_index", 0_u);
         auto* v = b.Var("v", ty.ptr<function>(ty.mat2x4<f32>()));
-        auto* vec = b.Construct(ty.vec4<f32>(), 0_f);
+        auto* vec = b.Construct(ty.vec4f(), 0_f);
         auto* access0 = b.Access(ty.ptr<function, vec4<f32>>(), v, b.Load(dyn_index));
         b.Store(access0, vec);
         auto* access1 = b.Access(ty.ptr<function, vec4<f32>>(), v, static_index);
@@ -1299,7 +1299,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, MatrixColumnInStruct) {
     b.Append(func->Block(), [&] {
         auto* static_index = b.Let("static_index", 0_u);
         auto* v = b.Var("v", ty.ptr<function>(struct_ty));
-        auto* vec = b.Construct(ty.vec4<f32>(), 0_f);
+        auto* vec = b.Construct(ty.vec4f(), 0_f);
         auto* access0 = b.Access(ty.ptr<function, vec4<f32>>(), v, 0_u, b.Load(dyn_index));
         b.Store(access0, vec);
         auto* access1 = b.Access(ty.ptr<function, vec4<f32>>(), v, 0_u, static_index);
@@ -1386,7 +1386,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, MatrixColumnInArray) {
     b.Append(func->Block(), [&] {
         auto* static_index = b.Let("static_index", 0_u);
         auto* v = b.Var("v", ty.ptr<function>(ty.array(ty.mat2x4<f32>(), 8)));
-        auto* vec = b.Construct(ty.vec4<f32>(), 0_f);
+        auto* vec = b.Construct(ty.vec4f(), 0_f);
         auto* access0 = b.Access(ty.ptr<function, vec4<f32>>(), v, 7_u, b.Load(dyn_index));
         b.Store(access0, vec);
         auto* access1 = b.Access(ty.ptr<function, vec4<f32>>(), v, 7_u, static_index);
@@ -1468,7 +1468,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, MatrixColumnInArrayInStruc
     b.Append(func->Block(), [&] {
         auto* static_index = b.Let("static_index", 0_u);
         auto* v = b.Var("v", ty.ptr<function>(struct_ty));
-        auto* vec = b.Construct(ty.vec4<f32>(), 0_f);
+        auto* vec = b.Construct(ty.vec4f(), 0_f);
         auto* access0 = b.Access(ty.ptr<function, vec4<f32>>(), v, 0_u, 7_u, b.Load(dyn_index));
         b.Store(access0, vec);
         auto* access1 = b.Access(ty.ptr<function, vec4<f32>>(), v, 0_u, 7_u, static_index);
@@ -1558,7 +1558,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, MatrixColumnByFunc) {
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
         auto* v = b.Var("v", ty.ptr<function>(ty.mat2x4<f32>()));
-        auto* vec = b.Construct(ty.vec4<f32>(), 0_f);
+        auto* vec = b.Construct(ty.vec4f(), 0_f);
         auto* access0 = b.Access(ty.ptr<function, vec4<f32>>(), v, b.Call(get_dynamic));
         b.Store(access0, vec);
         // Will be transformed because we assume functions return a dynamic value
@@ -1673,7 +1673,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, MatrixColumn_ViaPointer) {
     b.Append(func->Block(), [&] {
         auto* static_index = b.Let("static_index", 0_u);
         auto* v = b.Var("v", ty.ptr<function>(ty.mat2x4<f32>()));
-        auto* vec = b.Construct(ty.vec4<f32>(), 0_f);
+        auto* vec = b.Construct(ty.vec4f(), 0_f);
         auto* access0 = b.Access(ty.ptr<function, vec4<f32>>(), v, b.Load(dyn_index));
         auto* p0 = b.Let("p0", access0);
         b.Store(p0, vec);
@@ -1756,7 +1756,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, MatrixColumn_PrivateVar) {
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
         auto* static_index = b.Let("static_index", 0_u);
-        auto* vec = b.Construct(ty.vec4<f32>(), 0_f);
+        auto* vec = b.Construct(ty.vec4f(), 0_f);
         auto* access0 = b.Access(ty.ptr<private_, vec4<f32>>(), v, b.Load(dyn_index));
         b.Store(access0, vec);
         auto* access1 = b.Access(ty.ptr<private_, vec4<f32>>(), v, static_index);
@@ -1836,7 +1836,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, MatrixColumn_StorageVar) {
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
         auto* static_index = b.Let("static_index", 0_u);
-        auto* vec = b.Construct(ty.vec4<f32>(), 0_f);
+        auto* vec = b.Construct(ty.vec4f(), 0_f);
         auto* access0 = b.Access(ty.ptr<storage, vec4<f32>>(), v, b.Load(dyn_index));
         b.Store(access0, vec);
         auto* access1 = b.Access(ty.ptr<storage, vec4<f32>>(), v, static_index);
@@ -1883,7 +1883,7 @@ TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, MatrixColumn_WorkgroupVar)
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
         auto* static_index = b.Let("static_index", 0_u);
-        auto* vec = b.Construct(ty.vec4<f32>(), 0_f);
+        auto* vec = b.Construct(ty.vec4f(), 0_f);
         auto* access0 = b.Access(ty.ptr<workgroup, vec4<f32>>(), v, b.Load(dyn_index));
         b.Store(access0, vec);
         auto* access1 = b.Access(ty.ptr<workgroup, vec4<f32>>(), v, static_index);
@@ -1975,8 +1975,8 @@ $B1: {  # root
         %8:ptr<function, vec4<f32>, read_write> = access %v, 0u
         %9:vec4<f32> = load %8
         %10:vec4<f32> = construct 1.0f
-        %11:vec4<f32> = construct %7
-        %12:vec4<f32> = construct 0i, 1i, 2i, 3i
+        %11:vec4<u32> = construct %7
+        %12:vec4<u32> = construct 0u, 1u, 2u, 3u
         %13:vec4<bool> = eq %11, %12
         %14:vec4<f32> = select %9, %10, %13
         store %8, %14
@@ -1986,8 +1986,8 @@ $B1: {  # root
         %15:ptr<function, vec4<f32>, read_write> = access %v, 1u
         %16:vec4<f32> = load %15
         %17:vec4<f32> = construct 1.0f
-        %18:vec4<f32> = construct %7
-        %19:vec4<f32> = construct 0i, 1i, 2i, 3i
+        %18:vec4<u32> = construct %7
+        %19:vec4<u32> = construct 0u, 1u, 2u, 3u
         %20:vec4<bool> = eq %18, %19
         %21:vec4<f32> = select %16, %17, %20
         store %15, %21
@@ -1999,6 +1999,68 @@ $B1: {  # root
     }
     %22:ptr<function, vec4<f32>, read_write> = access %v, %static_index
     store_vector_element %22, %static_index, 1.0f
+    ret
+  }
+}
+)";
+
+    Run(ReplaceNonIndexableMatVecStores);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterReplaceNonIndexableMatVecStoresTest, Vector_I32Index) {
+    auto* dyn_index = b.Var("dyn_index", ty.ptr<uniform, i32>());
+    dyn_index->SetBindingPoint(0, 0);
+    mod.root_block->Append(dyn_index);
+
+    auto* func = b.ComputeFunction("main");
+    b.Append(func->Block(), [&] {
+        auto* static_index = b.Let("static_index", 0_i);
+        auto* v = b.Var("v", ty.ptr<function>(ty.vec3f()));
+        b.StoreVectorElement(v, b.Load(dyn_index), 1_f);
+        b.StoreVectorElement(v, static_index, 1_f);
+        b.Return(func);
+    });
+
+    auto* src = R"(
+$B1: {  # root
+  %dyn_index:ptr<uniform, i32, read> = var undef @binding_point(0, 0)
+}
+
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    %static_index:i32 = let 0i
+    %v:ptr<function, vec3<f32>, read_write> = var undef
+    %5:i32 = load %dyn_index
+    store_vector_element %v, %5, 1.0f
+    store_vector_element %v, %static_index, 1.0f
+    ret
+  }
+}
+)";
+
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+$B1: {  # root
+  %dyn_index:ptr<uniform, i32, read> = var undef @binding_point(0, 0)
+}
+
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    %static_index:i32 = let 0i
+    %v:ptr<function, vec3<f32>, read_write> = var undef
+    %5:i32 = load %dyn_index
+    %6:vec3<f32> = load %v
+    %7:vec3<f32> = construct 1.0f
+    %8:u32 = convert %5
+    %9:vec3<u32> = construct %8
+    %10:vec3<u32> = construct 0u, 1u, 2u
+    %11:vec3<bool> = eq %9, %10
+    %12:vec3<f32> = select %6, %7, %11
+    store %v, %12
+    store_vector_element %v, %static_index, 1.0f
     ret
   }
 }

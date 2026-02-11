@@ -33,11 +33,17 @@ using namespace tint::core::number_suffixes;  // NOLINT
 namespace tint::hlsl::writer {
 namespace {
 
-TEST_F(HlslWriterTest, ConstructF32Var) {
+TEST_F(HlslWriterTest, ConstructF32) {
     auto* f = b.Function("a", ty.f32());
     b.Append(f->Block(), [&] {
-        auto* v = b.Var("v", 2_f);
+        auto* v = b.Let("v", 2_f);
         b.Return(f, b.Construct(ty.f32(), v));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -48,17 +54,24 @@ float a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float x = a();
 }
 
 )");
 }
 
-TEST_F(HlslWriterTest, ConstructF16Var) {
+TEST_F(HlslWriterTest, ConstructF16) {
     auto* f = b.Function("a", ty.f16());
     b.Append(f->Block(), [&] {
-        auto* v = b.Var("v", 2_h);
+        auto* v = b.Let("v", 2_h);
         b.Return(f, b.Construct(ty.f16(), v));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -69,17 +82,24 @@ float16_t a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float16_t x = a();
 }
 
 )");
 }
 
-TEST_F(HlslWriterTest, ConstructBoolVar) {
+TEST_F(HlslWriterTest, ConstructBool) {
     auto* f = b.Function("a", ty.bool_());
     b.Append(f->Block(), [&] {
-        auto* v = b.Var("v", false);
+        auto* v = b.Let("v", false);
         b.Return(f, b.Construct(ty.bool_(), v));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -90,17 +110,24 @@ bool a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  bool x = a();
 }
 
 )");
 }
 
-TEST_F(HlslWriterTest, ConstructI32Var) {
+TEST_F(HlslWriterTest, ConstructI32) {
     auto* f = b.Function("a", ty.i32());
     b.Append(f->Block(), [&] {
-        auto* v = b.Var("v", 2_i);
+        auto* v = b.Let("v", 2_i);
         b.Return(f, b.Construct(ty.i32(), v));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -111,7 +138,8 @@ int a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  int x = a();
 }
 
 )");
@@ -120,8 +148,14 @@ void unused_entry_point() {
 TEST_F(HlslWriterTest, ConstructU32) {
     auto* f = b.Function("a", ty.u32());
     b.Append(f->Block(), [&] {
-        auto* v = b.Var("v", 2_u);
+        auto* v = b.Let("v", 2_u);
         b.Return(f, b.Construct(ty.u32(), v));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -132,7 +166,8 @@ uint a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  uint x = a();
 }
 
 )");
@@ -141,29 +176,43 @@ void unused_entry_point() {
 TEST_F(HlslWriterTest, ConstructMatrix) {
     auto* f = b.Function("a", ty.mat2x2<f32>());
     b.Append(f->Block(), [&] {
-        auto* v = b.Var("v", 2_f);
+        auto* v = b.Let("v", 2_f);
         b.Return(f, b.Construct(ty.mat2x2<f32>(), v, v, v, v));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 float2x2 a() {
   float v = 2.0f;
-  return float2x2(v, v, v, v);
+  float2 v_1 = float2(v, v);
+  return float2x2(v_1, float2(v, v));
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float2x2 x = a();
 }
 
 )");
 }
 
-TEST_F(HlslWriterTest, ConstructVecSingleScalarF32Var) {
-    auto* f = b.Function("a", ty.vec3<f32>());
+TEST_F(HlslWriterTest, ConstructVecSingleScalarF32) {
+    auto* f = b.Function("a", ty.vec3f());
     b.Append(f->Block(), [&] {
-        auto* v = b.Var("v", 2_f);
-        b.Return(f, b.Construct(ty.vec3<f32>(), v));
+        auto* v = b.Let("v", 2_f);
+        b.Return(f, b.Construct(ty.vec3f(), v));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -174,17 +223,24 @@ float3 a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float3 x = a();
 }
 
 )");
 }
 
-TEST_F(HlslWriterTest, ConstructVecSingleScalarF16Var) {
-    auto* f = b.Function("a", ty.vec3<f16>());
+TEST_F(HlslWriterTest, ConstructVecSingleScalarF16) {
+    auto* f = b.Function("a", ty.vec3h());
     b.Append(f->Block(), [&] {
-        auto* v = b.Var("v", 2_h);
-        b.Return(f, b.Construct(ty.vec3<f16>(), v));
+        auto* v = b.Let("v", 2_h);
+        b.Return(f, b.Construct(ty.vec3h(), v));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -195,17 +251,24 @@ vector<float16_t, 3> a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  vector<float16_t, 3> x = a();
 }
 
 )");
 }
 
-TEST_F(HlslWriterTest, ConstructVecSingleScalarBoolVar) {
+TEST_F(HlslWriterTest, ConstructVecSingleScalarBool) {
     auto* f = b.Function("a", ty.vec3<bool>());
     b.Append(f->Block(), [&] {
-        auto* v = b.Var("v", true);
+        auto* v = b.Let("v", true);
         b.Return(f, b.Construct(ty.vec3<bool>(), v));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -216,26 +279,27 @@ bool3 a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  bool3 x = a();
 }
 
 )");
 }
 
 TEST_F(HlslWriterTest, ConstructArray) {
-    auto* f = b.ComputeFunction("a");
+    auto* f = b.ComputeFunction("main");
 
     b.Append(f->Block(), [&] {
-        b.Var("v", b.Construct(ty.array<vec3<f32>, 3>(), b.Composite(ty.vec3<f32>(), 1_f, 2_f, 3_f),
-                               b.Composite(ty.vec3<f32>(), 4_f, 5_f, 6_f),
-                               b.Composite(ty.vec3<f32>(), 7_f, 8_f, 9_f)));
+        b.Var("v", b.Construct(ty.array<vec3<f32>, 3>(), b.Composite(ty.vec3f(), 1_f, 2_f, 3_f),
+                               b.Composite(ty.vec3f(), 4_f, 5_f, 6_f),
+                               b.Composite(ty.vec3f(), 7_f, 8_f, 9_f)));
         b.Return(f);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 [numthreads(1, 1, 1)]
-void a() {
+void main() {
   float3 v[3] = {float3(1.0f, 2.0f, 3.0f), float3(4.0f, 5.0f, 6.0f), float3(7.0f, 8.0f, 9.0f)};
 }
 
@@ -248,14 +312,20 @@ TEST_F(HlslWriterTest, ConstructStruct) {
                                          core::IOAttributes{}),
         ty.Get<core::type::StructMember>(b.ir.symbols.New("b"), ty.f32(), 1u, 4u, 4u, 4u,
                                          core::IOAttributes{}),
-        ty.Get<core::type::StructMember>(b.ir.symbols.New("c"), ty.vec3<i32>(), 2u, 8u, 16u, 16u,
+        ty.Get<core::type::StructMember>(b.ir.symbols.New("c"), ty.vec3i(), 2u, 8u, 16u, 16u,
                                          core::IOAttributes{}),
     };
     auto* strct = ty.Struct(b.ir.symbols.New("S"), std::move(members));
 
     auto* f = b.Function("a", strct);
     b.Append(f->Block(), [&] {
-        b.Return(f, b.Construct(strct, 1_i, 2_f, b.Composite(ty.vec3<i32>(), 3_i, 4_i, 5_i)));
+        b.Return(f, b.Construct(strct, 1_i, 2_f, b.Composite(ty.vec3i(), 3_i, 4_i, 5_i)));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -272,7 +342,8 @@ S a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  S x = a();
 }
 
 )");

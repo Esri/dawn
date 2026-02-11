@@ -51,6 +51,10 @@ interop::GPUSubgroupMatrixComponentType SubgroupMatrixComponentType(
             return interop::GPUSubgroupMatrixComponentType::kU32;
         case SubgroupMatrixComponentType::I32:
             return interop::GPUSubgroupMatrixComponentType::kI32;
+        case SubgroupMatrixComponentType::U8:
+            return interop::GPUSubgroupMatrixComponentType::kU8;
+        case SubgroupMatrixComponentType::I8:
+            return interop::GPUSubgroupMatrixComponentType::kI8;
     }
     assert(false);
     return interop::GPUSubgroupMatrixComponentType::kF32;
@@ -92,7 +96,7 @@ std::string NormalizeIdentifierString(wgpu::StringView s) {
 
     for (char c : std::string_view(s)) {
         if (std::isalnum(c)) {
-            o << std::tolower(c);
+            o << static_cast<char>(std::tolower(c));
             lastWasDash = false;
             hadAlnum = true;
         } else if (!lastWasDash && hadAlnum) {

@@ -46,11 +46,17 @@ BindingInfoType GetBindingInfoType(const BindingInfo& info) {
         [](const StorageTextureBindingInfo&) -> BindingInfoType {
             return BindingInfoType::StorageTexture;
         },
+        [](const TexelBufferBindingInfo&) -> BindingInfoType {
+            return BindingInfoType::TexelBuffer;
+        },
         [](const StaticSamplerBindingInfo&) -> BindingInfoType {
             return BindingInfoType::StaticSampler;
         },
         [](const InputAttachmentBindingInfo&) -> BindingInfoType {
             return BindingInfoType::InputAttachment;
+        },
+        [](const ExternalTextureBindingInfo&) -> BindingInfoType {
+            return BindingInfoType::ExternalTexture;
         });
 }
 
@@ -105,6 +111,8 @@ void IncrementBindingCounts(BindingCounts* bindingCounts,
         }
     } else if (entry->storageTexture.access != wgpu::StorageTextureAccess::BindingNotUsed) {
         perStageBindingCountMember = &PerStageBindingCounts::storageTextureCount;
+    } else if (entry.Get<TexelBufferBindingLayout>()) {
+        perStageBindingCountMember = &PerStageBindingCounts::texelBufferCount;
     } else if (entry.Get<ExternalTextureBindingLayout>()) {
         perStageBindingCountMember = &PerStageBindingCounts::externalTextureCount;
     } else if (entry.Get<StaticSamplerBindingLayout>()) {
@@ -132,6 +140,7 @@ void AccumulateBindingCounts(BindingCounts* bindingCounts, const BindingCounts& 
         bindingCounts->perStage[stage].storageBufferCount += rhs.perStage[stage].storageBufferCount;
         bindingCounts->perStage[stage].storageTextureCount +=
             rhs.perStage[stage].storageTextureCount;
+        bindingCounts->perStage[stage].texelBufferCount += rhs.perStage[stage].texelBufferCount;
         bindingCounts->perStage[stage].uniformBufferCount += rhs.perStage[stage].uniformBufferCount;
         bindingCounts->perStage[stage].externalTextureCount +=
             rhs.perStage[stage].externalTextureCount;
@@ -166,12 +175,12 @@ MaybeError ValidateBindingCounts(const CombinedLimits& limits,
 
     uint32_t maxSampledTexturesPerShaderStage = limits.v1.maxSampledTexturesPerShaderStage;
     uint32_t maxSamplersPerShaderStage = limits.v1.maxSamplersPerShaderStage;
-    uint32_t maxStorageBuffersInFragmentStage = limits.v1.maxStorageBuffersInFragmentStage;
-    uint32_t maxStorageBuffersInVertexStage = limits.v1.maxStorageBuffersInVertexStage;
+    uint32_t maxStorageBuffersInFragmentStage = limits.compat.maxStorageBuffersInFragmentStage;
+    uint32_t maxStorageBuffersInVertexStage = limits.compat.maxStorageBuffersInVertexStage;
     uint32_t maxStorageBuffersPerShaderStage = limits.v1.maxStorageBuffersPerShaderStage;
     uint32_t maxUniformBuffersPerShaderStage = limits.v1.maxUniformBuffersPerShaderStage;
-    uint32_t maxStorageTexturesInFragmentStage = limits.v1.maxStorageTexturesInFragmentStage;
-    uint32_t maxStorageTexturesInVertexStage = limits.v1.maxStorageTexturesInVertexStage;
+    uint32_t maxStorageTexturesInFragmentStage = limits.compat.maxStorageTexturesInFragmentStage;
+    uint32_t maxStorageTexturesInVertexStage = limits.compat.maxStorageTexturesInVertexStage;
     uint32_t maxStorageTexturesPerShaderStage = limits.v1.maxStorageTexturesPerShaderStage;
     for (SingleShaderStage stage : IterateStages(kAllStages)) {
         uint32_t sampledTextureCount = bindingCounts.perStage[stage].sampledTextureCount;
@@ -261,14 +270,14 @@ MaybeError ValidateBindingCounts(const CombinedLimits& limits,
                                 "number of storage buffers used in fragment stage (%u) exceeds "
                                 "maxStorageBuffersInFragmentStage (%u).%s",
                                 storageBufferCount, maxStorageBuffersInFragmentStage,
-                                DAWN_INCREASE_LIMIT_MESSAGE(adapter->GetLimits().v1,
+                                DAWN_INCREASE_LIMIT_MESSAGE(adapter->GetLimits().compat,
                                                             maxStorageBuffersInFragmentStage,
                                                             storageBufferCount));
                 DAWN_INVALID_IF(storageTextureCount > maxStorageTexturesInFragmentStage,
                                 "number of storage textures used in fragment stage (%u) exceeds "
                                 "maxStorageTexturesInFragmentStage (%u).%s",
                                 storageTextureCount, maxStorageTexturesInFragmentStage,
-                                DAWN_INCREASE_LIMIT_MESSAGE(adapter->GetLimits().v1,
+                                DAWN_INCREASE_LIMIT_MESSAGE(adapter->GetLimits().compat,
                                                             maxStorageTexturesInFragmentStage,
                                                             storageTextureCount));
                 break;
@@ -277,14 +286,14 @@ MaybeError ValidateBindingCounts(const CombinedLimits& limits,
                                 "number of storage buffers used in vertex stage (%u) exceeds "
                                 "maxStorageBuffersInVertexStage (%u).%s",
                                 storageBufferCount, maxStorageBuffersInVertexStage,
-                                DAWN_INCREASE_LIMIT_MESSAGE(adapter->GetLimits().v1,
+                                DAWN_INCREASE_LIMIT_MESSAGE(adapter->GetLimits().compat,
                                                             maxStorageBuffersInVertexStage,
                                                             storageBufferCount));
                 DAWN_INVALID_IF(storageTextureCount > maxStorageTexturesInVertexStage,
                                 "number of storage textures used in vertex stage (%u) exceeds "
                                 "maxStorageTexturesInVertexStage (%u).%s",
                                 storageTextureCount, maxStorageTexturesInVertexStage,
-                                DAWN_INCREASE_LIMIT_MESSAGE(adapter->GetLimits().v1,
+                                DAWN_INCREASE_LIMIT_MESSAGE(adapter->GetLimits().compat,
                                                             maxStorageTexturesInVertexStage,
                                                             storageTextureCount));
                 break;
@@ -320,6 +329,17 @@ TextureBindingInfo TextureBindingInfo::From(const TextureBindingLayout& layout) 
     }};
 }
 
+// TexelBufferBindingInfo
+
+// static
+TexelBufferBindingInfo TexelBufferBindingInfo::From(const TexelBufferBindingLayout& layout) {
+    TexelBufferBindingLayout defaultedLayout = layout.WithTrivialFrontendDefaults();
+    return {{
+        .format = defaultedLayout.format,
+        .access = defaultedLayout.access,
+    }};
+}
+
 // StorageTextureBindingInfo
 
 // static
@@ -349,8 +369,7 @@ SamplerBindingInfo SamplerBindingInfo::From(const SamplerBindingLayout& layout) 
 StaticSamplerBindingInfo StaticSamplerBindingInfo::From(const StaticSamplerBindingLayout& layout) {
     return {
         .sampler = layout.sampler,
-        .sampledTextureBinding = BindingNumber{layout.sampledTextureBinding},
-        .isUsedForSingleTextureBinding = layout.sampledTextureBinding < WGPU_LIMIT_U32_UNDEFINED,
+        .isUsedForSingleTexture = layout.sampledTextureBinding < WGPU_LIMIT_U32_UNDEFINED,
     };
 }
 

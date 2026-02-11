@@ -697,10 +697,6 @@ TEST_P(ExternalTextureTests, RotateAndOrFlipSampleSinglePlane) {
     // TODO(crbug.com/dawn/2295): diagnose this failure on Pixel 4 OpenGLES
     DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsAndroid() && IsQualcomm());
 
-    // TODO(41487285): Fails on OpenGL ANGLE D3D11 Intel (but not other configs). Suppress since we
-    // don't want to ship that configuration.
-    DAWN_SUPPRESS_TEST_IF(IsANGLED3D11() && IsIntel());
-
     wgpu::Texture sourceTexture =
         Create2DTexture(device, kWidth, kHeight, kFormat,
                         wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::RenderAttachment);
@@ -955,10 +951,6 @@ TEST_P(ExternalTextureTests, RotateAndOrFlipTextureLoadSinglePlaneNotSquare) {
 TEST_P(ExternalTextureTests, RotateAndOrFlipSampleMultiplanar) {
     // TODO(crbug.com/dawn/2295): diagnose this failure on Pixel 4 OpenGLES
     DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsAndroid() && IsQualcomm());
-
-    // TODO(41487285): Fails on OpenGL ANGLE D3D11 Intel (but not other configs). Suppress since we
-    // don't want to ship that configuration.
-    DAWN_SUPPRESS_TEST_IF(IsANGLED3D11() && IsIntel());
 
     wgpu::Texture sourceTexturePlane0 =
         Create2DTexture(device, kWidth, kHeight, wgpu::TextureFormat::R8Unorm,
@@ -1608,7 +1600,8 @@ DAWN_INSTANTIATE_TEST(ExternalTextureTests,
                       MetalBackend(),
                       OpenGLBackend(),
                       OpenGLESBackend(),
-                      VulkanBackend());
+                      VulkanBackend(),
+                      WebGPUBackend());
 
 enum class AccessMode { Sample, Load };
 enum class OOBAccess { BelowBottomLeft, OverTopRight };
@@ -1670,6 +1663,7 @@ class ExternalTextureOOBTests : public ExternalTextureTestsBase<DawnTestWithPara
   protected:
     void SetUp() override {
         ExternalTextureTestsBase<DawnTestWithParams<OOBTestParams>>::SetUp();
+
         sourceTexturePlane0 = Create2DTexture(
             device, kPlaneWidth, kPlaneHeight, wgpu::TextureFormat::R8Unorm,
             wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::RenderAttachment);
@@ -1821,7 +1815,7 @@ TEST_P(ExternalTextureOOBTests, ExternalTextureOOB) {
 DAWN_INSTANTIATE_TEST_P(
     ExternalTextureOOBTests,
     {D3D11Backend(), D3D12Backend(), D3D12Backend({}, {"d3d12_use_root_signature_version_1_1"}),
-     MetalBackend(), OpenGLBackend(), OpenGLESBackend(), VulkanBackend()},
+     MetalBackend(), OpenGLBackend(), OpenGLESBackend(), VulkanBackend(), WebGPUBackend()},
     std::vector<wgpu::ExternalTextureRotation>({wgpu::ExternalTextureRotation::Rotate0Degrees,
                                                 wgpu::ExternalTextureRotation::Rotate90Degrees,
                                                 wgpu::ExternalTextureRotation::Rotate180Degrees,

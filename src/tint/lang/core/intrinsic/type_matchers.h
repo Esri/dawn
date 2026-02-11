@@ -53,7 +53,9 @@
 #include "src/tint/lang/core/type/reference.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/storage_texture.h"
+#include "src/tint/lang/core/type/string.h"
 #include "src/tint/lang/core/type/texture_dimension.h"
+#include "src/tint/lang/core/type/u16.h"
 #include "src/tint/lang/core/type/u32.h"
 #include "src/tint/lang/core/type/u64.h"
 #include "src/tint/lang/core/type/u8.h"
@@ -125,6 +127,14 @@ inline const type::U8* BuildU8(intrinsic::MatchState& state, const type::Type*) 
 
 inline bool MatchU8(intrinsic::MatchState&, const type::Type* ty) {
     return ty->IsAnyOf<intrinsic::Any, type::U8, type::AbstractInt>();
+}
+
+inline const type::U16* BuildU16(intrinsic::MatchState& state, const type::Type*) {
+    return state.types.u16();
+}
+
+inline bool MatchU16(intrinsic::MatchState&, const type::Type* ty) {
+    return ty->IsAnyOf<intrinsic::Any, type::U16, type::AbstractInt>();
 }
 
 inline bool MatchVec(intrinsic::MatchState&,
@@ -307,6 +317,40 @@ inline const type::SubgroupMatrix* BuildSubgroupMatrix(intrinsic::MatchState& st
                                                        intrinsic::Number B) {
     return state.types.subgroup_matrix(static_cast<core::SubgroupMatrixKind>(S.Value()), T,
                                        A.Value(), B.Value());
+}
+
+inline bool MatchUnsizedBuffer(intrinsic::MatchState&, const type::Type* ty) {
+    if (ty->Is<intrinsic::Any>()) {
+        return true;
+    }
+    if (auto* b = ty->As<type::Buffer>()) {
+        return b->Size() == 0;
+    }
+    return false;
+}
+
+inline const type::Buffer* BuildUnsizedBuffer(intrinsic::MatchState& state, const type::Type*) {
+    return state.types.unsized_buffer();
+}
+
+inline bool MatchBuffer(intrinsic::MatchState&, const type::Type* ty, intrinsic::Number& N) {
+    if (ty->Is<intrinsic::Any>()) {
+        N = intrinsic::Number::any;
+        return true;
+    }
+    if (auto* b = ty->As<type::Buffer>()) {
+        if (b->Size() != 0) {
+            N = b->Size();
+            return true;
+        }
+    }
+    return false;
+}
+
+inline const type::Buffer* BuildBuffer(intrinsic::MatchState& state,
+                                       const type::Type*,
+                                       intrinsic::Number N) {
+    return state.types.buffer(N.Value());
 }
 
 inline bool MatchArray(intrinsic::MatchState&,
@@ -643,6 +687,32 @@ inline const type::ExternalTexture* BuildTextureExternal(intrinsic::MatchState& 
     return state.types.external_texture();
 }
 
+inline bool MatchTexelBuffer(intrinsic::MatchState&,
+                             const type::Type* ty,
+                             intrinsic::Number& F,
+                             intrinsic::Number& A) {
+    if (ty->Is<intrinsic::Any>()) {
+        F = intrinsic::Number::any;
+        A = intrinsic::Number::any;
+        return true;
+    }
+    if (auto* v = ty->As<type::TexelBuffer>()) {
+        F = intrinsic::Number(static_cast<uint32_t>(v->TexelFormat()));
+        A = intrinsic::Number(static_cast<uint32_t>(v->Access()));
+        return true;
+    }
+    return false;
+}
+
+inline const type::TexelBuffer* BuildTexelBuffer(intrinsic::MatchState& state,
+                                                 const type::Type*,
+                                                 intrinsic::Number F,
+                                                 intrinsic::Number A) {
+    auto format = static_cast<TexelFormat>(F.Value());
+    auto access = static_cast<Access>(A.Value());
+    return state.types.texel_buffer(format, access);
+}
+
 inline bool MatchInputAttachment(intrinsic::MatchState&,
                                  const type::Type* ty,
                                  const type::Type*& T) {
@@ -745,6 +815,15 @@ inline const type::Struct* BuildAtomicCompareExchangeResult(intrinsic::MatchStat
                                                             const type::Type*,
                                                             const type::Type* ty) {
     return type::CreateAtomicCompareExchangeResult(state.types, state.symbols, ty);
+}
+
+inline bool MatchString(core::intrinsic::MatchState&, const core::type::Type* ty) {
+    return ty->Is<type::String>();
+}
+
+inline const core::type::Type* BuildString(core::intrinsic::MatchState& state,
+                                           const core::type::Type*) {
+    return state.types.String();
 }
 
 }  // namespace tint::core::intrinsic

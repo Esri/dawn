@@ -1,44 +1,48 @@
+
 cbuffer cbuffer_u : register(b0) {
   uint4 u[2];
 };
 RWByteAddressBuffer s : register(u1);
-
-void s_store(uint offset, matrix<float16_t, 3, 4> value) {
-  s.Store<vector<float16_t, 4> >((offset + 0u), value[0u]);
-  s.Store<vector<float16_t, 4> >((offset + 8u), value[1u]);
-  s.Store<vector<float16_t, 4> >((offset + 16u), value[2u]);
+vector<float16_t, 2> tint_bitcast_to_f16(uint src) {
+  uint v = src;
+  float t_low = f16tof32((v & 65535u));
+  float t_high = f16tof32(((v >> 16u) & 65535u));
+  float16_t v_1 = float16_t(t_low);
+  return vector<float16_t, 2>(v_1, float16_t(t_high));
 }
 
-matrix<float16_t, 3, 4> u_load(uint offset) {
-  const uint scalar_offset = ((offset + 0u)) / 4;
-  uint4 ubo_load_1 = u[scalar_offset / 4];
-  uint2 ubo_load = ((scalar_offset & 2) ? ubo_load_1.zw : ubo_load_1.xy);
-  vector<float16_t, 2> ubo_load_xz = vector<float16_t, 2>(f16tof32(ubo_load & 0xFFFF));
-  vector<float16_t, 2> ubo_load_yw = vector<float16_t, 2>(f16tof32(ubo_load >> 16));
-  const uint scalar_offset_1 = ((offset + 8u)) / 4;
-  uint4 ubo_load_3 = u[scalar_offset_1 / 4];
-  uint2 ubo_load_2 = ((scalar_offset_1 & 2) ? ubo_load_3.zw : ubo_load_3.xy);
-  vector<float16_t, 2> ubo_load_2_xz = vector<float16_t, 2>(f16tof32(ubo_load_2 & 0xFFFF));
-  vector<float16_t, 2> ubo_load_2_yw = vector<float16_t, 2>(f16tof32(ubo_load_2 >> 16));
-  const uint scalar_offset_2 = ((offset + 16u)) / 4;
-  uint4 ubo_load_5 = u[scalar_offset_2 / 4];
-  uint2 ubo_load_4 = ((scalar_offset_2 & 2) ? ubo_load_5.zw : ubo_load_5.xy);
-  vector<float16_t, 2> ubo_load_4_xz = vector<float16_t, 2>(f16tof32(ubo_load_4 & 0xFFFF));
-  vector<float16_t, 2> ubo_load_4_yw = vector<float16_t, 2>(f16tof32(ubo_load_4 >> 16));
-  return matrix<float16_t, 3, 4>(vector<float16_t, 4>(ubo_load_xz[0], ubo_load_yw[0], ubo_load_xz[1], ubo_load_yw[1]), vector<float16_t, 4>(ubo_load_2_xz[0], ubo_load_2_yw[0], ubo_load_2_xz[1], ubo_load_2_yw[1]), vector<float16_t, 4>(ubo_load_4_xz[0], ubo_load_4_yw[0], ubo_load_4_xz[1], ubo_load_4_yw[1]));
+vector<float16_t, 4> tint_bitcast_to_f16_1(uint2 src) {
+  uint2 v = src;
+  uint2 mask = (65535u).xx;
+  uint2 shift = (16u).xx;
+  float2 t_low = f16tof32((v & mask));
+  float2 t_high = f16tof32(((v >> shift) & mask));
+  float16_t v_2 = float16_t(t_low.x);
+  float16_t v_3 = float16_t(t_high.x);
+  float16_t v_4 = float16_t(t_low.y);
+  return vector<float16_t, 4>(v_2, v_3, v_4, float16_t(t_high.y));
+}
+
+void v_5(uint offset, matrix<float16_t, 3, 4> obj) {
+  s.Store<vector<float16_t, 4> >((offset + 0u), obj[0u]);
+  s.Store<vector<float16_t, 4> >((offset + 8u), obj[1u]);
+  s.Store<vector<float16_t, 4> >((offset + 16u), obj[2u]);
+}
+
+matrix<float16_t, 3, 4> v_6(uint start_byte_offset) {
+  uint4 v_7 = u[(start_byte_offset / 16u)];
+  vector<float16_t, 4> v_8 = tint_bitcast_to_f16_1((((((start_byte_offset & 15u) >> 2u) == 2u)) ? (v_7.zw) : (v_7.xy)));
+  uint4 v_9 = u[((8u + start_byte_offset) / 16u)];
+  vector<float16_t, 4> v_10 = tint_bitcast_to_f16_1(((((((8u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_9.zw) : (v_9.xy)));
+  uint4 v_11 = u[((16u + start_byte_offset) / 16u)];
+  return matrix<float16_t, 3, 4>(v_8, v_10, tint_bitcast_to_f16_1(((((((16u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_11.zw) : (v_11.xy))));
 }
 
 [numthreads(1, 1, 1)]
 void f() {
-  s_store(0u, u_load(0u));
-  uint2 ubo_load_6 = u[0].xy;
-  vector<float16_t, 2> ubo_load_6_xz = vector<float16_t, 2>(f16tof32(ubo_load_6 & 0xFFFF));
-  vector<float16_t, 2> ubo_load_6_yw = vector<float16_t, 2>(f16tof32(ubo_load_6 >> 16));
-  s.Store<vector<float16_t, 4> >(8u, vector<float16_t, 4>(ubo_load_6_xz[0], ubo_load_6_yw[0], ubo_load_6_xz[1], ubo_load_6_yw[1]));
-  uint2 ubo_load_7 = u[0].xy;
-  vector<float16_t, 2> ubo_load_7_xz = vector<float16_t, 2>(f16tof32(ubo_load_7 & 0xFFFF));
-  vector<float16_t, 2> ubo_load_7_yw = vector<float16_t, 2>(f16tof32(ubo_load_7 >> 16));
-  s.Store<vector<float16_t, 4> >(8u, vector<float16_t, 4>(ubo_load_7_xz[0], ubo_load_7_yw[0], ubo_load_7_xz[1], ubo_load_7_yw[1]).ywxz);
-  s.Store<float16_t>(2u, float16_t(f16tof32(((u[0].z) & 0xFFFF))));
-  return;
+  v_5(0u, v_6(0u));
+  s.Store<vector<float16_t, 4> >(8u, tint_bitcast_to_f16_1(u[0u].xy));
+  s.Store<vector<float16_t, 4> >(8u, tint_bitcast_to_f16_1(u[0u].xy).ywxz);
+  s.Store<float16_t>(2u, tint_bitcast_to_f16(u[0u].z).x);
 }
+

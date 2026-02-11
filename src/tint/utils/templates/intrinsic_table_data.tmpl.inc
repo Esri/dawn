@@ -45,8 +45,6 @@ using TemplateNumberMatcher = tint::core::intrinsic::TemplateNumberMatcher<N>;
 template<size_t N>
 using TemplateTypeMatcher = tint::core::intrinsic::TemplateTypeMatcher<N>;
 
-// clang-format off
-
 {{  with $I.Sem -}}
 {{    range .Types -}}
 {{      template "Type" . }}
@@ -83,6 +81,9 @@ constexpr ParameterInfo kParameters[] = {
 {{-   if $p.Usage }}k{{PascalCase $p.Usage}}
 {{-   else        }}kNone
 {{-   end }},
+    /* is_const */
+{{-   if $p.IsConst }} true
+{{-   else          }} false{{end}},
     /* matcher_indices */
 {{-   if ge $p.MatcherIndicesOffset 0 }} MatcherIndicesIndex({{$p.MatcherIndicesOffset}})
 {{-   else                            }} MatcherIndicesIndex(/* invalid */)
@@ -236,8 +237,6 @@ constexpr IntrinsicInfo kConstructorsAndConverters[] = {
 {{-   end }}
 };
 {{- end }}
-
-// clang-format on
 
 }  // anonymous namespace
 

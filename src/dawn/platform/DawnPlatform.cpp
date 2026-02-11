@@ -99,14 +99,12 @@ bool Platform::IsFeatureEnabled(Features feature) {
 #else
             return false;
 #endif
-        case Features::kWebGPUUseTintIR:
-#if defined(DAWN_OS_CHROMEOS)
+        case Features::kWebGPUEnableRangeAnalysisForRobustness:
             return true;
-#else
-            return false;
-#endif
-        case Features::kWebGPUUseVulkanMemoryModel:
-            return false;
+        case Features::kWebGPUUseSpirv14:
+            return true;
+        case Features::kWebGPUDecomposeUniformBuffers:
+            return true;
     }
     return false;
 }

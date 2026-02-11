@@ -83,11 +83,19 @@ class OperandInstruction : public Castable<OperandInstruction<N, R>, Instruction
 
     /// Appends a new operand
     /// @param operand the new operand
-    void PushOperand(ir::Value* operand) {
-        auto idx = operands_.Length();
+    /// @returns the operand index
+    uint32_t PushOperand(ir::Value* operand) {
+        uint32_t idx = static_cast<uint32_t>(operands_.Length());
         operands_.Push(operand);
-        operand->AddUsage({this, static_cast<uint32_t>(idx)});
+        if (operand) {
+            operand->AddUsage({this, idx});
+        }
+        return idx;
     }
+
+    /// Pops the last operand off the operand list
+    /// @returns the removed element
+    Value* PopOperand() { return operands_.Pop(); }
 
     /// Removes all operands from the instruction
     void ClearOperands() {

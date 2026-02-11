@@ -1,0 +1,27 @@
+{
+	"lucicfg": "1.46.2",
+	"packages": [
+		{
+			"name": "@dawn-project",
+			"deps": [
+				"@chromium-luci"
+			],
+			"lucicfg": "1.45.6",
+			"resources": [
+				"milestones.json"
+			],
+			"entrypoints": [
+				"main.star"
+			]
+		},
+		{
+			"name": "@chromium-luci",
+			"source": {
+				"repo": "https://chromium.googlesource.com/infra/chromium/+/refs/heads/main",
+				"revision": "76c662527154a5f02454d66f1d42f412c418c19f",
+				"path": "starlark-libs/chromium-luci"
+			},
+			"lucicfg": "1.46.1"
+		}
+	]
+}

@@ -2,7 +2,8 @@
 
 void some_loop_body() {
 }
-void f() {
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+void main() {
   {
     int i = 0;
     while(true) {
@@ -12,12 +13,10 @@ void f() {
       }
       some_loop_body();
       {
-        i = (i + 1);
+        uint v = uint(i);
+        i = int((v + uint(1)));
       }
       continue;
     }
   }
-}
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-void main() {
 }

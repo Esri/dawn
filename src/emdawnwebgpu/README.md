@@ -1,33 +1,16 @@
-# "emdawnwebgpu" (Dawn's fork of Emscripten's WebGPU bindings)
+# Building Emdawnwebgpu
 
-"emdawnwebgpu" is Dawn's fork of the Emscripten WebGPU bindings
-(`library_webgpu.js` and friends). The forked files live in
-[`//third_party/emdawnwebgpu`](../third_party/emdawnwebgpu/)
-and the build targets in this directory produce the other files needed to build
-an Emscripten-based project using these bindings.
+**Emdawnwebgpu is easiest to use as a pre-built package from
+<https://github.com/google/dawn/releases>. For information on using those,
+and other general information, read [`pkg/README.md`](pkg/README.md) instead.**
 
-We keep the `webgpu.h` interface roughly in sync between Dawn and emdawnwebgpu,
-however we don't guarantee it will always be in sync - we don't have any
-automated testing for this, so we'll periodically fix
-it up as needed for import into other projects that use these bindings.
+This README discusses building the pre-packaged `emdawnwebgpu_pkg`, building the
+in-tree Dawn samples/tests for Wasm, and using our CMake or GN build files to
+link either Dawn (for native) or Emdawnwebgpu (for Wasm).
 
-Projects should use this fork (by compiling Dawn as instructed below) if they
-want the latest version, which is mostly compatible with the same version of Dawn
-Native. For the future of this fork, please see <https://crbug.com/371024051>.
+## Setting up a CMake project that automatically chooses Dawn or Emdawnwebgpu
 
-## Using emdawnwebgpu pre-built releases
-
-Pre-built releases are published at <https://github.com/google/dawn/releases>.
-
-**See the [included README](./pkg/README.md) on how to use them.**
-
-TODO(crbug.com/371024051): Link to a sample project in that README.
-
-Instructions are provided below on how to build the package yourself, as well as
-samples that exercise the bindings.
-
-If for any reason you don't want to use the package, it's also possible to
-build emdawnwebgpu as a subproject of a CMake or gn project.
+Please read <https://developer.chrome.com/docs/web-platform/webgpu/build-app>.
 
 ## Building emdawnwebgpu and emdawnwebgpu_pkg
 
@@ -88,3 +71,45 @@ Samples and tests produce HTML files which can be served and viewed in a compati
 - Build the `emdawnwebgpu` and `samples` GN build targets.
 
 Samples and tests produce HTML files in `out/<dir>/wasm` which can be served and viewed in a compatible browser.
+
+## Appendix: Bits of Emscripten we depend on
+
+(Internal docs for coordination between Emscripten and Emdawnwebgpu.)
+
+Emdawnwebgpu depends on a lot of random bits of Emscripten that aren't usually
+public. We assume they're "mostly stable" for now and will update this (and roll
+into Emscripten) as needed if they change. Most, but not all, incompatible
+changes will be detected on Emscripten's CI, because it tests Emdawnwebgpu. This
+list is a best effort to enumerate them, but definitely isn't complete.
+
+- Remote ports
+- In `emdawnwebgpu.port.py`:
+  - Ports API in general
+  - Modifying various settings in `linker_setup()`
+  - `tools.diagnostics.error`
+- In package build:
+  - `tools/gen_struct_info.py`
+- In `library_webgpu.js`:
+  - Various items from `parseTools` and `jsifier`
+    - `*__i53abi: true`
+    - `makeGetValue`
+    - `runtimeKeepalivePush`/`runtimeKeepalivePop`
+  - Public settings:
+    - `ASSERTIONS`
+    - `ASYNCIFY`
+    - `USE_WEBGPU`
+    - `MEMORY64`, `WASM_BIGINT`
+  - `settings_internal.js` settings:
+    - `CAN_ADDRESS_2GB`
+  - Public preamble:
+    - `assert`, `abort`
+  - Internal library functions:
+    - `stackSave`, `stackRestore`
+    - `stringToUTF8OnStack`, `UTF8ToString`, `stringToNewUTF8`, `lengthBytesUTF8`
+    - `callUserCallback`
+    - `warnOnce`
+    - `readI53FromI64`/`writeI53ToI64`
+    - `findCanvasEventTarget`
+- In `webgpu.cpp`:
+  - Public APIs:
+    - `emscripten_has_asyncify`

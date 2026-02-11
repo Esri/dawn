@@ -56,20 +56,20 @@ class ShaderModule final : public ShaderModuleBase {
         VkShaderModule module;
         std::vector<uint32_t> spirv;
         bool hasInputAttachment;
+        std::optional<uint32_t> explicitSubgroupSize;
     };
 
     static ResultOrError<Ref<ShaderModule>> Create(
         Device* device,
         const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
-        const std::vector<tint::wgsl::Extension>& internalExtensions,
-        ShaderModuleParseResult* parseResult,
-        std::unique_ptr<OwnedCompilationMessages>* compilationMessages);
+        const std::vector<tint::wgsl::Extension>& internalExtensions);
 
     // Caller is responsible for destroying the `VkShaderModule` returned.
     ResultOrError<ModuleAndSpirv> GetHandleAndSpirv(SingleShaderStage stage,
                                                     const ProgrammableStage& programmableStage,
                                                     const PipelineLayout* layout,
                                                     bool emitPointSize,
+                                                    bool isSampled,
                                                     const ImmediateConstantMask& pipelineMask);
 
   private:
@@ -77,9 +77,6 @@ class ShaderModule final : public ShaderModuleBase {
                  const UnpackedPtr<ShaderModuleDescriptor>& descriptor,
                  std::vector<tint::wgsl::Extension> internalExtensions);
     ~ShaderModule() override;
-    MaybeError Initialize(ShaderModuleParseResult* parseResult,
-                          std::unique_ptr<OwnedCompilationMessages>* compilationMessages);
-    void DestroyImpl() override;
 };
 
 }  // namespace vulkan

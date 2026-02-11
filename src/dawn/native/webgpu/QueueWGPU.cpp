@@ -27,12 +27,18 @@
 
 #include "dawn/native/webgpu/QueueWGPU.h"
 
+#include <limits>
 #include <vector>
 
+#include "dawn/native/Error.h"
 #include "dawn/native/Queue.h"
 #include "dawn/native/webgpu/BufferWGPU.h"
+#include "dawn/native/webgpu/CaptureContext.h"
 #include "dawn/native/webgpu/CommandBufferWGPU.h"
 #include "dawn/native/webgpu/DeviceWGPU.h"
+#include "dawn/native/webgpu/TextureWGPU.h"
+#include "dawn/native/webgpu/ToWGPU.h"
+#include "dawn/native/webgpu/WebGPUError.h"
 
 namespace dawn::native::webgpu {
 
@@ -42,14 +48,8 @@ ResultOrError<Ref<Queue>> Queue::Create(Device* device, const QueueDescriptor* d
 }
 
 Queue::Queue(Device* device, const QueueDescriptor* descriptor)
-    : QueueBase(device, descriptor),
-      mInnerQueue(device->wgpu.deviceGetQueue(device->GetInnerHandle())) {}
-
-Queue::~Queue() {
-    if (mInnerQueue) {
-        ToBackend(GetDevice())->wgpu.queueRelease(mInnerQueue);
-        mInnerQueue = nullptr;
-    }
+    : QueueBase(device, descriptor), ObjectWGPU(device->wgpu.queueRelease) {
+    mInnerHandle = device->wgpu.deviceGetQueue(device->GetInnerHandle());
 }
 
 MaybeError Queue::SubmitImpl(uint32_t commandCount, CommandBufferBase* const* commands) {
@@ -57,54 +57,214 @@ MaybeError Queue::SubmitImpl(uint32_t commandCount, CommandBufferBase* const* co
         return {};
     }
 
-    auto& wgpu = ToBackend(GetDevice())->wgpu;
+    if (IsCapturing()) {
+        std::vector<schema::ObjectId> commandBufferIds;
+        commandBufferIds.reserve(commandCount);
+
+        for (uint32_t i = 0; i < commandCount; ++i) {
+            schema::ObjectId id;
+            DAWN_TRY_ASSIGN(id, mCaptureContext->AddResourceAndGetId(ToBackend(commands[i])));
+            commandBufferIds.emplace_back(id);
+        }
+
+        schema::RootCommandQueueSubmitCmd cmd{{
+            .data = {{
+                .commandBuffers = commandBufferIds,
+            }},
+        }};
+        Serialize(*mCaptureContext, cmd);
+    }
 
     std::vector<WGPUCommandBuffer> innerCommandBuffers(commandCount);
     for (uint32_t i = 0; i < commandCount; ++i) {
         innerCommandBuffers[i] = ToBackend(commands[i])->Encode();
     }
 
-    wgpu.queueSubmit(mInnerQueue, commandCount, innerCommandBuffers.data());
+    auto& wgpu = ToBackend(GetDevice())->wgpu;
+    wgpu.queueSubmit(mInnerHandle, commandCount, innerCommandBuffers.data());
 
     for (uint32_t i = 0; i < commandCount; ++i) {
         wgpu.commandBufferRelease(innerCommandBuffers[i]);
     }
 
+    DAWN_TRY(SubmitFutureSync());
     return {};
+}
+
+CaptureContext* Queue::GetCaptureContext() const {
+    return mCaptureContext.get();
 }
 
 MaybeError Queue::WriteBufferImpl(BufferBase* buffer,
                                   uint64_t bufferOffset,
                                   const void* data,
                                   size_t size) {
+    if (IsCapturing()) {
+        DAWN_TRY(
+            mCaptureContext->CaptureQueueWriteBuffer(ToBackend(buffer), bufferOffset, data, size));
+    }
+
     auto innerBuffer = ToBackend(buffer)->GetInnerHandle();
     ToBackend(GetDevice())
-        ->wgpu.queueWriteBuffer(mInnerQueue, innerBuffer, bufferOffset, data, size);
+        ->wgpu.queueWriteBuffer(mInnerHandle, innerBuffer, bufferOffset, data, size);
+    buffer->MarkUsedInPendingCommands();
+
+    return {};
+}
+
+MaybeError Queue::WriteTextureImpl(const TexelCopyTextureInfo& destination,
+                                   const void* data,
+                                   size_t dataSize,
+                                   const TexelCopyBufferLayout& dataLayout,
+                                   const Extent3D& writeSizePixel) {
+    if (IsCapturing()) {
+        DAWN_TRY(mCaptureContext->CaptureQueueWriteTexture(destination, data, dataSize, dataLayout,
+                                                           writeSizePixel));
+    }
+
+    auto innerTexture = ToBackend(destination.texture)->GetInnerHandle();
+    WGPUTexelCopyTextureInfo dest = {
+        .texture = innerTexture,
+        .mipLevel = destination.mipLevel,
+        .origin = ToWGPU(destination.origin),
+        .aspect = ToAPI(destination.aspect),
+    };
+    WGPUTexelCopyBufferLayout layout = {
+        .offset = dataLayout.offset,
+        .bytesPerRow = dataLayout.bytesPerRow,
+        .rowsPerImage = dataLayout.rowsPerImage,
+    };
+    WGPUExtent3D writeSize = ToWGPU(writeSizePixel);
+    ToBackend(GetDevice())
+        ->wgpu.queueWriteTexture(mInnerHandle, &dest, data, dataSize, &layout, &writeSize);
+    destination.texture->SetInitialized(true);
+
     return {};
 }
 
 ResultOrError<ExecutionSerial> Queue::CheckAndUpdateCompletedSerials() {
-    // TODO(crbug.com/413053623): finish implementing WebGPU backend.
-    return GetLastSubmittedCommandSerial();
+    auto& wgpu = ToBackend(GetDevice())->wgpu;
+    return mFuturesInFlight.Use([&](auto futuresInFlight) -> ResultOrError<ExecutionSerial> {
+        ExecutionSerial fenceSerial(GetCompletedCommandSerial());
+        while (!futuresInFlight->empty()) {
+            auto [future, tentativeSerial] = futuresInFlight->front();
+
+            WGPUFutureWaitInfo waitInfo = {future, false};
+            WGPUWaitStatus status =
+                wgpu.instanceWaitAny(ToBackend(GetDevice())->GetInnerInstance(), 1, &waitInfo, 0);
+
+            if (status == WGPUWaitStatus_TimedOut) {
+                return fenceSerial;
+            }
+            DAWN_TRY(CheckWGPUSuccess(status, "instanceWaitAny"));
+
+            // Update fenceSerial since future is ready.
+            fenceSerial = tentativeSerial;
+
+            futuresInFlight->pop_front();
+        }
+        return fenceSerial;
+    });
 }
 
 void Queue::ForceEventualFlushOfCommands() {
-    DAWN_UNREACHABLE();
+    mHasPendingCommands = true;
 }
 
 bool Queue::HasPendingCommands() const {
-    return false;
+    return mHasPendingCommands;
 }
 
-MaybeError Queue::SubmitPendingCommands() {
+MaybeError Queue::SubmitPendingCommandsImpl() {
+    if (mHasPendingCommands) {
+        DAWN_TRY(SubmitFutureSync());
+    }
     return {};
 }
 
-ResultOrError<bool> Queue::WaitForQueueSerial(ExecutionSerial serial, Nanoseconds timeout) {
-    return DAWN_UNIMPLEMENTED_ERROR("webgpu::Queue implementation is incomplete.");
+MaybeError Queue::SubmitFutureSync() {
+    // Call queueOnSubmittedWorkDone to get a future and maintain in mFuturesFlight.
+    // TODO(crbug.com/413053623): Essentially track only via callbacks spontaneously, move content
+    // from CheckAndUpdateCompletedSerials to WGPUQueueWorkDoneCallbackInfo::callback
+    WGPUFuture future =
+        ToBackend(GetDevice())
+            ->wgpu.queueOnSubmittedWorkDone(
+                mInnerHandle,
+                {nullptr, WGPUCallbackMode_AllowSpontaneous,
+                 [](WGPUQueueWorkDoneStatus, WGPUStringView, void*, void*) {}, nullptr, nullptr});
+    if (future.id == kNullFutureID) {
+        return DAWN_INTERNAL_ERROR("inner queueOnSubmittedWorkDone returned a null future.");
+    }
+    IncrementLastSubmittedCommandSerial();
+    mFuturesInFlight.Use([&](auto futuresInFlight) {
+        futuresInFlight->emplace_back(future, GetLastSubmittedCommandSerial());
+    });
+    mHasPendingCommands = false;
+    return {};
 }
 
-MaybeError Queue::WaitForIdleForDestruction() {
+ResultOrError<ExecutionSerial> Queue::WaitForQueueSerialImpl(ExecutionSerial waitSerial,
+                                                             Nanoseconds timeout) {
+    return mFuturesInFlight.Use([&](auto futuresInFlight) -> ResultOrError<ExecutionSerial> {
+        WGPUFuture future = {kNullFutureID};
+        ExecutionSerial completedSerial = kWaitSerialTimeout;
+        for (const auto& f : *futuresInFlight) {
+            if (f.second >= waitSerial) {
+                future = f.first;
+                completedSerial = f.second;
+                break;
+            }
+        }
+        if (future.id == kNullFutureID) {
+            return waitSerial;
+        }
+
+        WGPUFutureWaitInfo waitInfo = {future, false};
+        WGPUWaitStatus status =
+            ToBackend(GetDevice())
+                ->wgpu.instanceWaitAny(ToBackend(GetDevice())->GetInnerInstance(), 1, &waitInfo,
+                                       static_cast<uint64_t>(timeout));
+
+        switch (status) {
+            case WGPUWaitStatus_TimedOut:
+                return kWaitSerialTimeout;
+            case WGPUWaitStatus_Success:
+                return completedSerial;
+            default:
+                return DAWN_FORMAT_INTERNAL_ERROR("inner instanceWaitAny status is (%s).",
+                                                  FromAPI(status));
+        }
+    });
+}
+
+MaybeError Queue::WaitForIdleForDestructionImpl() {
+    auto& wgpu = ToBackend(GetDevice())->wgpu;
+    mFuturesInFlight.Use([&](auto futuresInFlight) {
+        while (!futuresInFlight->empty()) {
+            WGPUFuture future = futuresInFlight->front().first;
+            WGPUFutureWaitInfo waitInfo = {future, false};
+            wgpu.instanceWaitAny(ToBackend(GetDevice())->GetInnerInstance(), 1, &waitInfo,
+                                 UINT64_MAX);
+
+            futuresInFlight->pop_front();
+        }
+    });
+    mHasPendingCommands = false;
+    return {};
+}
+
+bool Queue::IsCapturing() const {
+    return mCaptureContext != nullptr;
+}
+
+MaybeError Queue::SetCaptureContext(std::unique_ptr<CaptureContext> captureContext) {
+    if (captureContext) {
+        DAWN_INVALID_IF(mCaptureContext != nullptr, "A capture is already in progress.");
+        mCaptureContext = std::move(captureContext);
+    } else {
+        DAWN_INVALID_IF(!mCaptureContext, "No capture is in progress.");
+        mCaptureContext.reset();
+    }
     return {};
 }
 

@@ -227,7 +227,7 @@ ResultOrError<ShaderModuleEntryPoint> ValidateVertexState(
         DAWN_TRY_CONTEXT(ValidateVertexBufferLayout(device, &descriptor->buffers[i], vertexMetadata,
                                                     &attributesSetMask),
                          "validating buffers[%u].", i);
-        totalAttributesNum += descriptor->buffers[i].attributeCount;
+        totalAttributesNum += uint32_t(descriptor->buffers[i].attributeCount);
     }
 
     if (device->IsCompatibilityMode() &&
@@ -332,7 +332,7 @@ MaybeError ValidateDepthStencilState(const DeviceBase* device,
 
     const Format* format;
     DAWN_TRY_ASSIGN(format, device->GetInternalFormat(descriptor->format));
-    DAWN_INVALID_IF(!format->HasDepthOrStencil() || !format->isRenderable,
+    DAWN_INVALID_IF(!format->HasDepthOrStencil() || !format->IsRenderable(),
                     "Depth stencil format (%s) is not depth-stencil renderable.",
                     descriptor->format);
 
@@ -514,10 +514,10 @@ MaybeError ValidateColorTargetState(
     }
 
     DAWN_TRY(ValidateColorWriteMask(descriptor.writeMask));
-    DAWN_INVALID_IF(!format->IsColor() || !format->isRenderable,
+    DAWN_INVALID_IF(!format->IsColor() || !format->IsRenderable(),
                     "Color format (%s) is not color renderable.", format->format);
 
-    DAWN_INVALID_IF(descriptor.blend && !format->isBlendable,
+    DAWN_INVALID_IF(descriptor.blend && !format->IsBlendable(),
                     "Blending is enabled but color format (%s) is not blendable.", format->format);
 
     if (!fragmentWritten) {
@@ -953,7 +953,7 @@ RenderPipelineBase::RenderPipelineBase(DeviceBase* device,
                    descriptor->label,
                    GetRenderStagesAndSetPlaceholderShader(device, *descriptor)),
       mAttachmentState(device->GetOrCreateAttachmentState(descriptor, GetLayout())) {
-    mVertexBufferCount = descriptor->vertex.bufferCount;
+    mVertexBufferCount = uint32_t(descriptor->vertex.bufferCount);
 
     auto buffers =
         ityp::SpanFromUntyped<VertexBufferSlot>(descriptor->vertex.buffers, mVertexBufferCount);
@@ -1064,6 +1064,9 @@ RenderPipelineBase::RenderPipelineBase(DeviceBase* device,
 
     if (HasStage(SingleShaderStage::Fragment)) {
         mUsesFragDepth = GetStage(SingleShaderStage::Fragment).metadata->usesFragDepth;
+        mUsesFragPosition = GetStage(SingleShaderStage::Fragment).metadata->usesFragPosition;
+        mIsFragMultiSampled = GetStage(SingleShaderStage::Fragment).metadata->isFragMultiSampled;
+        mUsesSampleIndex = GetStage(SingleShaderStage::Fragment).metadata->usesSampleIndex;
     }
 
     if (HasStage(SingleShaderStage::Vertex)) {
@@ -1085,7 +1088,7 @@ RenderPipelineBase::RenderPipelineBase(DeviceBase* device,
 
 RenderPipelineBase::~RenderPipelineBase() = default;
 
-void RenderPipelineBase::DestroyImpl() {
+void RenderPipelineBase::DestroyImpl(DestroyReason reason) {
     Uncache();
 
     // Remove reference to the attachment state so that we don't have lingering references to
@@ -1274,6 +1277,21 @@ bool RenderPipelineBase::WritesStencil() const {
 bool RenderPipelineBase::UsesFragDepth() const {
     DAWN_ASSERT(!IsError());
     return mUsesFragDepth;
+}
+
+bool RenderPipelineBase::UsesSampleIndex() const {
+    DAWN_ASSERT(!IsError());
+    return mUsesSampleIndex;
+}
+
+bool RenderPipelineBase::UsesFragPosition() const {
+    DAWN_ASSERT(!IsError());
+    return mUsesFragPosition;
+}
+
+bool RenderPipelineBase::IsFragMultiSampled() const {
+    DAWN_ASSERT(!IsError());
+    return mIsFragMultiSampled;
 }
 
 bool RenderPipelineBase::UsesVertexIndex() const {

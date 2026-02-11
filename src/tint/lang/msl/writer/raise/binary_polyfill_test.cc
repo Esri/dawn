@@ -48,7 +48,7 @@ TEST_F(MslWriter_BinaryPolyfillTest, FMod_Scalar) {
     auto* func = b.Function("foo", ty.f32());
     func->SetParams({lhs, rhs});
     b.Append(func->Block(), [&] {
-        auto* result = b.Modulo<f32>(lhs, rhs);
+        auto* result = b.Modulo(lhs, rhs);
         b.Return(func, result);
     });
 
@@ -79,10 +79,10 @@ TEST_F(MslWriter_BinaryPolyfillTest, FMod_Scalar) {
 TEST_F(MslWriter_BinaryPolyfillTest, FMod_Vector) {
     auto* lhs = b.FunctionParam<vec4<f16>>("lhs");
     auto* rhs = b.FunctionParam<vec4<f16>>("rhs");
-    auto* func = b.Function("foo", ty.vec4<f16>());
+    auto* func = b.Function("foo", ty.vec4h());
     func->SetParams({lhs, rhs});
     b.Append(func->Block(), [&] {
-        auto* result = b.Modulo<vec4<f16>>(lhs, rhs);
+        auto* result = b.Modulo(lhs, rhs);
         b.Return(func, result);
     });
 
@@ -116,7 +116,7 @@ TEST_F(MslWriter_BinaryPolyfillTest, NoModify_I32And) {
     auto* func = b.Function("foo", ty.i32());
     func->SetParams({lhs, rhs});
     b.Append(func->Block(), [&] {
-        auto* result = b.And<i32>(lhs, rhs);
+        auto* result = b.And(lhs, rhs);
         b.Return(func, result);
     });
 
@@ -143,7 +143,7 @@ TEST_F(MslWriter_BinaryPolyfillTest, BoolAnd_Scalar) {
     auto* func = b.Function("foo", ty.bool_());
     func->SetParams({lhs, rhs});
     b.Append(func->Block(), [&] {
-        auto* result = b.And<bool>(lhs, rhs);
+        auto* result = b.And(lhs, rhs);
         b.Return(func, result);
     });
 
@@ -180,7 +180,7 @@ TEST_F(MslWriter_BinaryPolyfillTest, BoolAnd_Vector) {
     auto* func = b.Function("foo", ty.vec4<bool>());
     func->SetParams({lhs, rhs});
     b.Append(func->Block(), [&] {
-        auto* result = b.And<vec4<bool>>(lhs, rhs);
+        auto* result = b.And(lhs, rhs);
         b.Return(func, result);
     });
 
@@ -217,7 +217,7 @@ TEST_F(MslWriter_BinaryPolyfillTest, BoolOr_Scalar) {
     auto* func = b.Function("foo", ty.bool_());
     func->SetParams({lhs, rhs});
     b.Append(func->Block(), [&] {
-        auto* result = b.Or<bool>(lhs, rhs);
+        auto* result = b.Or(lhs, rhs);
         b.Return(func, result);
     });
 
@@ -254,7 +254,7 @@ TEST_F(MslWriter_BinaryPolyfillTest, BoolOr_Vector) {
     auto* func = b.Function("foo", ty.vec4<bool>());
     func->SetParams({lhs, rhs});
     b.Append(func->Block(), [&] {
-        auto* result = b.Or<vec4<bool>>(lhs, rhs);
+        auto* result = b.Or(lhs, rhs);
         b.Return(func, result);
     });
 
@@ -276,300 +276,6 @@ TEST_F(MslWriter_BinaryPolyfillTest, BoolOr_Vector) {
     %6:vec4<u32> = or %4, %5
     %7:vec4<bool> = convert %6
     ret %7
-  }
-}
-)";
-
-    Run(BinaryPolyfill);
-
-    EXPECT_EQ(expect, str());
-}
-
-TEST_F(MslWriter_BinaryPolyfillTest, IntAdd_Scalar) {
-    auto* lhs = b.FunctionParam<i32>("lhs");
-    auto* rhs = b.FunctionParam<i32>("rhs");
-    auto* func = b.Function("foo", ty.i32());
-    func->SetParams({lhs, rhs});
-    b.Append(func->Block(), [&] {
-        auto* result = b.Add<i32>(lhs, rhs);
-        b.Return(func, result);
-    });
-
-    auto* src = R"(
-%foo = func(%lhs:i32, %rhs:i32):i32 {
-  $B1: {
-    %4:i32 = add %lhs, %rhs
-    ret %4
-  }
-}
-)";
-    EXPECT_EQ(src, str());
-
-    auto* expect = R"(
-%foo = func(%lhs:i32, %rhs:i32):i32 {
-  $B1: {
-    %4:u32 = bitcast %lhs
-    %5:u32 = bitcast %rhs
-    %6:u32 = add %4, %5
-    %7:i32 = bitcast %6
-    ret %7
-  }
-}
-)";
-
-    Run(BinaryPolyfill);
-
-    EXPECT_EQ(expect, str());
-}
-
-TEST_F(MslWriter_BinaryPolyfillTest, IntMul_Scalar) {
-    auto* lhs = b.FunctionParam<i32>("lhs");
-    auto* rhs = b.FunctionParam<i32>("rhs");
-    auto* func = b.Function("foo", ty.i32());
-    func->SetParams({lhs, rhs});
-    b.Append(func->Block(), [&] {
-        auto* result = b.Multiply<i32>(lhs, rhs);
-        b.Return(func, result);
-    });
-
-    auto* src = R"(
-%foo = func(%lhs:i32, %rhs:i32):i32 {
-  $B1: {
-    %4:i32 = mul %lhs, %rhs
-    ret %4
-  }
-}
-)";
-    EXPECT_EQ(src, str());
-
-    auto* expect = R"(
-%foo = func(%lhs:i32, %rhs:i32):i32 {
-  $B1: {
-    %4:u32 = bitcast %lhs
-    %5:u32 = bitcast %rhs
-    %6:u32 = mul %4, %5
-    %7:i32 = bitcast %6
-    ret %7
-  }
-}
-)";
-
-    Run(BinaryPolyfill);
-
-    EXPECT_EQ(expect, str());
-}
-
-TEST_F(MslWriter_BinaryPolyfillTest, IntSub_Scalar) {
-    auto* lhs = b.FunctionParam<i32>("lhs");
-    auto* rhs = b.FunctionParam<i32>("rhs");
-    auto* func = b.Function("foo", ty.i32());
-    func->SetParams({lhs, rhs});
-    b.Append(func->Block(), [&] {
-        auto* result = b.Subtract<i32>(lhs, rhs);
-        b.Return(func, result);
-    });
-
-    auto* src = R"(
-%foo = func(%lhs:i32, %rhs:i32):i32 {
-  $B1: {
-    %4:i32 = sub %lhs, %rhs
-    ret %4
-  }
-}
-)";
-    EXPECT_EQ(src, str());
-
-    auto* expect = R"(
-%foo = func(%lhs:i32, %rhs:i32):i32 {
-  $B1: {
-    %4:u32 = bitcast %lhs
-    %5:u32 = bitcast %rhs
-    %6:u32 = sub %4, %5
-    %7:i32 = bitcast %6
-    ret %7
-  }
-}
-)";
-
-    Run(BinaryPolyfill);
-
-    EXPECT_EQ(expect, str());
-}
-
-TEST_F(MslWriter_BinaryPolyfillTest, IntAdd_Vector) {
-    auto* lhs = b.FunctionParam<vec4<i32>>("lhs");
-    auto* rhs = b.FunctionParam<vec4<i32>>("rhs");
-    auto* func = b.Function("foo", ty.vec4<i32>());
-    func->SetParams({lhs, rhs});
-    b.Append(func->Block(), [&] {
-        auto* result = b.Add<vec4<i32>>(lhs, rhs);
-        b.Return(func, result);
-    });
-
-    auto* src = R"(
-%foo = func(%lhs:vec4<i32>, %rhs:vec4<i32>):vec4<i32> {
-  $B1: {
-    %4:vec4<i32> = add %lhs, %rhs
-    ret %4
-  }
-}
-)";
-    EXPECT_EQ(src, str());
-
-    auto* expect = R"(
-%foo = func(%lhs:vec4<i32>, %rhs:vec4<i32>):vec4<i32> {
-  $B1: {
-    %4:vec4<u32> = bitcast %lhs
-    %5:vec4<u32> = bitcast %rhs
-    %6:vec4<u32> = add %4, %5
-    %7:vec4<i32> = bitcast %6
-    ret %7
-  }
-}
-)";
-
-    Run(BinaryPolyfill);
-
-    EXPECT_EQ(expect, str());
-}
-
-TEST_F(MslWriter_BinaryPolyfillTest, IntAdd_ScalarVector) {
-    auto* lhs = b.FunctionParam<i32>("lhs");
-    auto* rhs = b.FunctionParam<vec4<i32>>("rhs");
-    auto* func = b.Function("foo", ty.vec4<i32>());
-    func->SetParams({lhs, rhs});
-    b.Append(func->Block(), [&] {
-        auto* result = b.Add<vec4<i32>>(lhs, rhs);
-        b.Return(func, result);
-    });
-
-    auto* src = R"(
-%foo = func(%lhs:i32, %rhs:vec4<i32>):vec4<i32> {
-  $B1: {
-    %4:vec4<i32> = add %lhs, %rhs
-    ret %4
-  }
-}
-)";
-    EXPECT_EQ(src, str());
-
-    auto* expect = R"(
-%foo = func(%lhs:i32, %rhs:vec4<i32>):vec4<i32> {
-  $B1: {
-    %4:u32 = bitcast %lhs
-    %5:vec4<u32> = bitcast %rhs
-    %6:vec4<u32> = add %4, %5
-    %7:vec4<i32> = bitcast %6
-    ret %7
-  }
-}
-)";
-
-    Run(BinaryPolyfill);
-
-    EXPECT_EQ(expect, str());
-}
-
-TEST_F(MslWriter_BinaryPolyfillTest, IntAdd_VectorScalar) {
-    auto* lhs = b.FunctionParam<vec4<i32>>("lhs");
-    auto* rhs = b.FunctionParam<i32>("rhs");
-    auto* func = b.Function("foo", ty.vec4<i32>());
-    func->SetParams({lhs, rhs});
-    b.Append(func->Block(), [&] {
-        auto* result = b.Add<vec4<i32>>(lhs, rhs);
-        b.Return(func, result);
-    });
-
-    auto* src = R"(
-%foo = func(%lhs:vec4<i32>, %rhs:i32):vec4<i32> {
-  $B1: {
-    %4:vec4<i32> = add %lhs, %rhs
-    ret %4
-  }
-}
-)";
-    EXPECT_EQ(src, str());
-
-    auto* expect = R"(
-%foo = func(%lhs:vec4<i32>, %rhs:i32):vec4<i32> {
-  $B1: {
-    %4:vec4<u32> = bitcast %lhs
-    %5:u32 = bitcast %rhs
-    %6:vec4<u32> = add %4, %5
-    %7:vec4<i32> = bitcast %6
-    ret %7
-  }
-}
-)";
-
-    Run(BinaryPolyfill);
-
-    EXPECT_EQ(expect, str());
-}
-
-TEST_F(MslWriter_BinaryPolyfillTest, IntShift_Scalar) {
-    auto* lhs = b.FunctionParam<i32>("lhs");
-    auto* rhs = b.FunctionParam<u32>("rhs");
-    auto* func = b.Function("foo", ty.i32());
-    func->SetParams({lhs, rhs});
-    b.Append(func->Block(), [&] {
-        auto* result = b.ShiftLeft<i32>(lhs, rhs);
-        b.Return(func, result);
-    });
-
-    auto* src = R"(
-%foo = func(%lhs:i32, %rhs:u32):i32 {
-  $B1: {
-    %4:i32 = shl %lhs, %rhs
-    ret %4
-  }
-}
-)";
-    EXPECT_EQ(src, str());
-
-    auto* expect = R"(
-%foo = func(%lhs:i32, %rhs:u32):i32 {
-  $B1: {
-    %4:u32 = bitcast %lhs
-    %5:u32 = shl %4, %rhs
-    %6:i32 = bitcast %5
-    ret %6
-  }
-}
-)";
-
-    Run(BinaryPolyfill);
-
-    EXPECT_EQ(expect, str());
-}
-
-TEST_F(MslWriter_BinaryPolyfillTest, IntShift_Vector) {
-    auto* lhs = b.FunctionParam<vec4<i32>>("lhs");
-    auto* rhs = b.FunctionParam<vec4<u32>>("rhs");
-    auto* func = b.Function("foo", ty.vec4<i32>());
-    func->SetParams({lhs, rhs});
-    b.Append(func->Block(), [&] {
-        auto* result = b.ShiftLeft<vec4<i32>>(lhs, rhs);
-        b.Return(func, result);
-    });
-
-    auto* src = R"(
-%foo = func(%lhs:vec4<i32>, %rhs:vec4<u32>):vec4<i32> {
-  $B1: {
-    %4:vec4<i32> = shl %lhs, %rhs
-    ret %4
-  }
-}
-)";
-    EXPECT_EQ(src, str());
-
-    auto* expect = R"(
-%foo = func(%lhs:vec4<i32>, %rhs:vec4<u32>):vec4<i32> {
-  $B1: {
-    %4:vec4<u32> = bitcast %lhs
-    %5:vec4<u32> = shl %4, %rhs
-    %6:vec4<i32> = bitcast %5
-    ret %6
   }
 }
 )";

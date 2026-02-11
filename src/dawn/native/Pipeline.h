@@ -46,10 +46,13 @@
 
 namespace dawn::native {
 
+class ComputePipelineBase;
+class RenderPipelineBase;
+
 ResultOrError<ShaderModuleEntryPoint> ValidateProgrammableStage(DeviceBase* device,
                                                                 const ShaderModuleBase* module,
                                                                 StringView entryPointName,
-                                                                uint32_t constantCount,
+                                                                size_t constantCount,
                                                                 const ConstantEntry* constants,
                                                                 const PipelineLayoutBase* layout,
                                                                 SingleShaderStage stage);
@@ -70,6 +73,12 @@ class PipelineBase : public ApiObjectBase, public CachedObject {
   public:
     ~PipelineBase() override;
 
+    virtual const ComputePipelineBase* AsComputePipeline() const { return nullptr; }
+    virtual ComputePipelineBase* AsComputePipeline() { return nullptr; }
+
+    virtual const RenderPipelineBase* AsRenderPipeline() const { return nullptr; }
+    virtual RenderPipelineBase* AsRenderPipeline() { return nullptr; }
+
     PipelineLayoutBase* GetLayout();
     const PipelineLayoutBase* GetLayout() const;
     const RequiredBufferSizes& GetMinBufferSizes() const;
@@ -78,6 +87,7 @@ class PipelineBase : public ApiObjectBase, public CachedObject {
     bool HasStage(SingleShaderStage stage) const;
     wgpu::ShaderStage GetStageMask() const;
     const ImmediateConstantMask& GetImmediateMask() const;
+    virtual ImmediateConstantMask GetUserImmediateSlots() const;
 
     ResultOrError<Ref<BindGroupLayoutBase>> GetBindGroupLayout(uint32_t groupIndex);
 
@@ -106,6 +116,7 @@ class PipelineBase : public ApiObjectBase, public CachedObject {
     PipelineBase(DeviceBase* device, ObjectBase::ErrorTag tag, StringView label);
 
     ImmediateConstantMask mImmediateMask = ImmediateConstantMask(0);
+    ImmediateConstantMask mUserImmdiateSlots = ImmediateConstantMask(0);
 
   private:
     MaybeError ValidateGetBindGroupLayout(BindGroupIndex group);

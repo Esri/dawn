@@ -44,14 +44,14 @@ class ComputePipeline final : public ComputePipelineBase, public PipelineGL {
         Device* device,
         const UnpackedPtr<ComputePipelineDescriptor>& descriptor);
 
-    MaybeError ApplyNow();
+    MaybeError ApplyNow(const OpenGLFunctions& gl);
 
     MaybeError InitializeImpl() override;
 
   private:
     using ComputePipelineBase::ComputePipelineBase;
     ~ComputePipeline() override;
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 };
 
 }  // namespace dawn::native::opengl

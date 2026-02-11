@@ -28,6 +28,7 @@
 #ifndef SRC_DAWN_NATIVE_VULKAN_BINDGROUPLAYOUTVK_H_
 #define SRC_DAWN_NATIVE_VULKAN_BINDGROUPLAYOUTVK_H_
 
+#include <memory>
 #include <vector>
 
 #include "dawn/common/MutexProtected.h"
@@ -48,29 +49,19 @@ class Device;
 
 VkDescriptorType VulkanDescriptorType(const BindingInfo& bindingInfo);
 
-// In Vulkan descriptor pools have to be sized to an exact number of descriptors. This means
-// it's hard to have something where we can mix different types of descriptor sets because
-// we don't know if their vector of number of descriptors will be similar.
-//
-// That's why that in addition to containing the VkDescriptorSetLayout to create
-// VkDescriptorSets for its bindgroups, the layout also acts as an allocator for the descriptor
-// sets.
-//
-// The allocations is done with one pool per descriptor set, which is inefficient, but at least
-// the pools are reused when no longer used. Minimizing the number of descriptor pool allocation
-// is important because creating them can incur GPU memory allocation which is usually an
-// expensive syscall.
-class BindGroupLayout final : public BindGroupLayoutInternalBase {
+// Backend BindGroupLayout implementation for Vulkan. In addition to containing a BindGroupAllocator
+// for the CPU-side tracking data, it has a DescriptorSetAllocator that handles efficient allocation
+// of the corresponding VkDescriptorSets.
+class BindGroupLayout : public BindGroupLayoutInternalBase {
   public:
-    static ResultOrError<Ref<BindGroupLayout>> Create(Device* device,
-                                                      const BindGroupLayoutDescriptor* descriptor);
-
-    BindGroupLayout(DeviceBase* device, const BindGroupLayoutDescriptor* descriptor);
+    static ResultOrError<Ref<BindGroupLayout>> Create(
+        Device* device,
+        const UnpackedPtr<BindGroupLayoutDescriptor>& descriptor);
 
     VkDescriptorSetLayout GetHandle() const;
 
-    ResultOrError<Ref<BindGroup>> AllocateBindGroup(Device* device,
-                                                    const BindGroupDescriptor* descriptor);
+    ResultOrError<Ref<BindGroup>> AllocateBindGroup(
+        const UnpackedPtr<BindGroupDescriptor>& descriptor);
     void DeallocateBindGroup(BindGroup* bindGroup);
     void DeallocateDescriptorSet(DescriptorSetAllocation* descriptorSetAllocation);
     void ReduceMemoryUsage() override;
@@ -80,21 +71,25 @@ class BindGroupLayout final : public BindGroupLayoutInternalBase {
     // sampler that is sampling this texture.
     std::optional<BindingIndex> GetStaticSamplerIndexForTexture(BindingIndex textureBinding) const;
 
-  private:
+  protected:
+    BindGroupLayout(DeviceBase* device, const UnpackedPtr<BindGroupLayoutDescriptor>& descriptor);
     ~BindGroupLayout() override;
-    MaybeError Initialize();
-    void DestroyImpl() override;
 
+    MaybeError Initialize();
+    void DestroyImpl(DestroyReason reason) override;
+
+    MutexProtected<SlabAllocator<BindGroup>> mBindGroupAllocator;
+
+  private:
     // Dawn API
     void SetLabelImpl() override;
 
-    // Maps from indices of texture entries that are paired with static samplers
-    // to indices of the entries of their respective samplers.
-    absl::flat_hash_map<BindingIndex, BindingIndex> mTextureToStaticSamplerIndices;
-
     VkDescriptorSetLayout mHandle = VK_NULL_HANDLE;
 
-    MutexProtected<SlabAllocator<BindGroup>> mBindGroupAllocator;
+    // Maps from indices of texture entries that are paired with static samplers
+    // to indices of the entries of their respective samplers.
+    absl::flat_hash_map<BindingIndex, BindingIndex> mTextureToStaticSamplerIndex;
+
     Ref<DescriptorSetAllocator> mDescriptorSetAllocator;
 };
 

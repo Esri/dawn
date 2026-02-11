@@ -2,11 +2,12 @@ Name: Khronos Vulkan Validation Layers Components
 Short Name: Vulkan Validation Layers
 Version: N/A
 URL: https://github.com/KhronosGroup/Vulkan-ValidationLayers
+Update Mechanism: Autoroll
 SOURCE CODE: git clone https://github.com/KhronosGroup/Vulkan-ValidationLayers.git
 Revision: DEPS
 Security Critical: no
 Shipped: no
-License: Apache 2.0
+License: Apache-2.0
 License File: src/LICENSE.txt
 
 Description:

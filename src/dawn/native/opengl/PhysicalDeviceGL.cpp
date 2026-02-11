@@ -41,6 +41,7 @@
 #include "dawn/native/opengl/DisplayEGL.h"
 #include "dawn/native/opengl/SwapChainEGL.h"
 #include "dawn/native/opengl/UtilsGL.h"
+#include "dawn/platform/DawnPlatform.h"
 
 namespace dawn::native::opengl {
 
@@ -56,7 +57,7 @@ const Vendor kVendors[] = {{"ATI", gpu_info::kVendorID_AMD},
                            {"Imagination", gpu_info::kVendorID_ImgTec},
                            {"Intel", gpu_info::kVendorID_Intel},
                            {"NVIDIA", gpu_info::kVendorID_Nvidia},
-                           {"Qualcomm", gpu_info::kVendorID_Qualcomm_PCI}};
+                           {"Qualcomm", gpu_info::kVendorID_QualcommPCI}};
 
 uint32_t GetVendorIdFromVendors(const char* vendor) {
     uint32_t vendorId = 0;
@@ -105,40 +106,39 @@ bool IsSwiftShader(std::string_view renderer) {
 // static
 ResultOrError<Ref<PhysicalDevice>> PhysicalDevice::Create(wgpu::BackendType backendType,
                                                           Ref<DisplayEGL> display,
-                                                          bool forceES31AndMinExtensions) {
-    const EGLFunctions& egl = display->egl;
-    EGLDisplay eglDisplay = display->GetDisplay();
-
+                                                          bool forceES31AndMinExtensions,
+                                                          EGLint angleVirtualizationGroup) {
     // Create a temporary context and make it current during the creation of the PhysicalDevice so
     // that we can query the limits and other properties. Assumes that the limit are the same
     // irrespective of the context creation options.
     std::unique_ptr<ContextEGL> context;
-    DAWN_TRY_ASSIGN(context,
-                    ContextEGL::Create(display, backendType, /*useRobustness*/ false,
-                                       /*useANGLETextureSharing*/ false,
-                                       /*forceES31AndMinExtensions*/ forceES31AndMinExtensions));
+    DAWN_TRY_ASSIGN(
+        context, ContextEGL::Create(display, backendType, /*useRobustness*/ false,
+                                    /*disableEGL15Robustness */ false,
+                                    /*useANGLETextureSharing*/ false,
+                                    /*forceES31AndMinExtensions*/ forceES31AndMinExtensions,
+                                    /*bindContextOnlyDuringUse*/ true, angleVirtualizationGroup));
 
-    EGLSurface prevDrawSurface = egl.GetCurrentSurface(EGL_DRAW);
-    EGLSurface prevReadSurface = egl.GetCurrentSurface(EGL_READ);
-    EGLContext prevContext = egl.GetCurrentContext();
-
-    context->MakeCurrent();
+    ContextEGL::ScopedMakeCurrent scopedCurrentContext;
+    DAWN_TRY_ASSIGN(scopedCurrentContext, context->MakeCurrent());
     // Needed to request extensions here to initialize supported gl extensions set
     context->RequestRequiredExtensionsExplicitly();
 
     Ref<PhysicalDevice> physicalDevice =
-        AcquireRef(new PhysicalDevice(backendType, std::move(display)));
-    DAWN_TRY_WITH_CLEANUP(physicalDevice->Initialize(), {
-        egl.MakeCurrent(eglDisplay, prevDrawSurface, prevReadSurface, prevContext);
-    });
+        AcquireRef(new PhysicalDevice(backendType, std::move(display), angleVirtualizationGroup));
+    DAWN_TRY(physicalDevice->Initialize());
 
-    egl.MakeCurrent(eglDisplay, prevDrawSurface, prevReadSurface, prevContext);
+    DAWN_TRY(scopedCurrentContext.End());
 
     return physicalDevice;
 }
 
-PhysicalDevice::PhysicalDevice(wgpu::BackendType backendType, Ref<DisplayEGL> display)
-    : PhysicalDeviceBase(backendType), mDisplay(std::move(display)) {}
+PhysicalDevice::PhysicalDevice(wgpu::BackendType backendType,
+                               Ref<DisplayEGL> display,
+                               EGLint angleVirtualizationGroup)
+    : PhysicalDeviceBase(backendType),
+      mDisplay(std::move(display)),
+      mAngleVirtualizationGroup(angleVirtualizationGroup) {}
 
 DisplayEGL* PhysicalDevice::GetDisplay() const {
     return mDisplay.Get();
@@ -237,6 +237,12 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
 
     if (mFunctions.IsGLExtensionSupported("GL_KHR_texture_compression_astc_ldr")) {
         EnableFeature(Feature::TextureCompressionASTC);
+
+        // GL_KHR_texture_compression_astc_sliced_3d is an extension in OpenGL ES 3.1.
+        // https://registry.khronos.org/OpenGL/extensions/KHR/KHR_texture_compression_astc_sliced_3d.txt
+        if (mFunctions.IsGLExtensionSupported("GL_KHR_texture_compression_astc_sliced_3d")) {
+            EnableFeature(Feature::TextureCompressionASTCSliced3D);
+        }
     }
 
     // ETC2 is core in ES 3.0.
@@ -282,16 +288,19 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
         EnableFeature(Feature::DualSourceBlending);
     }
 
-    // Unorm16TextureFormats, Snorm16TextureFormats and Norm16TextureFormats
+    // Unorm16TextureFormats
     if (mFunctions.IsGLExtensionSupported("GL_EXT_texture_norm16")) {
         EnableFeature(Feature::Unorm16TextureFormats);
-        EnableFeature(Feature::Snorm16TextureFormats);
-        EnableFeature(Feature::Norm16TextureFormats);
     }
 
     // Float32Blendable
     if (mFunctions.IsGLExtensionSupported("GL_EXT_float_blend")) {
         EnableFeature(Feature::Float32Blendable);
+    }
+
+    // TextureComponentSwizzle
+    if (SupportTextureComponentSwizzle()) {
+        EnableFeature(Feature::TextureComponentSwizzle);
     }
 }
 
@@ -338,14 +347,14 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits)
     // image uniforms, so this isn't technically correct for vertex shaders.
     DAWN_TRY_ASSIGN(limits->v1.maxStorageTexturesPerShaderStage,
                     Get(gl, GL_MAX_COMPUTE_IMAGE_UNIFORMS));
-    DAWN_TRY_ASSIGN(limits->v1.maxStorageTexturesInFragmentStage,
+    DAWN_TRY_ASSIGN(limits->compat.maxStorageTexturesInFragmentStage,
                     Get(gl, GL_MAX_FRAGMENT_IMAGE_UNIFORMS));
 
-    DAWN_TRY_ASSIGN(limits->v1.maxStorageBuffersInFragmentStage,
+    DAWN_TRY_ASSIGN(limits->compat.maxStorageBuffersInFragmentStage,
                     Get(gl, GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS));
-    DAWN_TRY_ASSIGN(limits->v1.maxStorageTexturesInVertexStage,
+    DAWN_TRY_ASSIGN(limits->compat.maxStorageTexturesInVertexStage,
                     Get(gl, GL_MAX_VERTEX_IMAGE_UNIFORMS));
-    DAWN_TRY_ASSIGN(limits->v1.maxStorageBuffersInVertexStage,
+    DAWN_TRY_ASSIGN(limits->compat.maxStorageBuffersInVertexStage,
                     Get(gl, GL_MAX_VERTEX_SHADER_STORAGE_BLOCKS));
 
     DAWN_TRY_ASSIGN(limits->v1.maxUniformBuffersPerShaderStage,
@@ -378,8 +387,9 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits)
     DAWN_TRY_ASSIGN(maxDrawBuffers, Get(gl, GL_MAX_DRAW_BUFFERS));
     limits->v1.maxColorAttachments = std::min(maxColorAttachments, maxDrawBuffers);
 
-    // TODO(crbug.com/dawn/1834): determine if GL has an equivalent value here.
-    //    limits->v1.maxColorAttachmentBytesPerSample = WGPU_LIMIT_U32_UNDEFINED;
+    // OpenGL has no such limit; set it to 16 (the byte width of the largest format) multiplied by
+    // the maximum number of attachments in order to make it a no-op.
+    limits->v1.maxColorAttachmentBytesPerSample = 16 * maxColorAttachments;
 
     DAWN_TRY_ASSIGN(limits->v1.maxComputeWorkgroupStorageSize,
                     Get(gl, GL_MAX_COMPUTE_SHARED_MEMORY_SIZE));
@@ -400,7 +410,11 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits)
 }
 
 void PhysicalDevice::SetupBackendAdapterToggles(dawn::platform::Platform* platform,
-                                                TogglesState* adapterToggles) const {}
+                                                TogglesState* adapterToggles) const {
+    adapterToggles->Default(
+        Toggle::DecomposeUniformBuffers,
+        platform->IsFeatureEnabled(platform::Features::kWebGPUDecomposeUniformBuffers));
+}
 
 void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platform,
                                                TogglesState* deviceToggles) const {
@@ -488,6 +502,12 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
     deviceToggles->Default(
         Toggle::GLUseArrayLengthFromUniform,
         mVendorId == gpu_info::kVendorID_ImgTec || mVendorId == gpu_info::kVendorID_Nvidia);
+
+    // Enable the integer range analysis for shader robustness by default if the corresponding
+    // platform feature is enabled.
+    deviceToggles->Default(
+        Toggle::EnableIntegerRangeAnalysisInRobustness,
+        platform->IsFeatureEnabled(platform::Features::kWebGPUEnableRangeAnalysisForRobustness));
 }
 
 ResultOrError<Ref<DeviceBase>> PhysicalDevice::CreateDeviceImpl(
@@ -503,11 +523,18 @@ ResultOrError<Ref<DeviceBase>> PhysicalDevice::CreateDeviceImpl(
     }
 
     bool useRobustness = !deviceToggles.IsEnabled(Toggle::DisableRobustness);
+
+    // Workaround: Imagination EGL 1.5 drivers do not support the new robustness enum.
+    // Use the pre-1.5 extension enum instead.
+    bool disableEGL15Robustness = mVendorId == gpu_info::kVendorID_ImgTec;
     bool forceES31AndMinExtensions = deviceToggles.IsEnabled(Toggle::GLForceES31AndNoExtensions);
+    bool bindContextOnlyDuringUse = deviceToggles.IsEnabled(Toggle::GLAllowContextOnMultiThreads);
 
     std::unique_ptr<ContextEGL> context;
     DAWN_TRY_ASSIGN(context, ContextEGL::Create(mDisplay, GetBackendType(), useRobustness,
-                                                useANGLETextureSharing, forceES31AndMinExtensions));
+                                                disableEGL15Robustness, useANGLETextureSharing,
+                                                forceES31AndMinExtensions, bindContextOnlyDuringUse,
+                                                mAngleVirtualizationGroup));
 
     return Device::Create(adapter, descriptor, mFunctions, std::move(context), deviceToggles,
                           std::move(lostEvent));
@@ -552,6 +579,13 @@ FeatureValidationResult PhysicalDevice::ValidateFeatureSupportedWithTogglesImpl(
     return {};
 }
 
-void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info) const {}
+void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
+                                               const TogglesState&) const {}
+
+bool PhysicalDevice::SupportTextureComponentSwizzle() const {
+    // Texture component swizzle requires GLES 3.0 / GL 3.3+ and is known to be incomplete or
+    // unsupported on the ANGLE D3D11 backend (as D3D11 lacks native support).
+    return (mFunctions.IsAtLeastGLES(3, 0) || mFunctions.IsAtLeastGL(3, 3));
+}
 
 }  // namespace dawn::native::opengl

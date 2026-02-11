@@ -7,11 +7,9 @@ f16vec3 m() {
   return f16vec3(t);
 }
 ivec3 tint_v3f16_to_v3i32(f16vec3 value) {
-  return mix(ivec3(2147483647), mix(ivec3((-2147483647 - 1)), ivec3(value), greaterThanEqual(value, f16vec3(-65504.0hf))), lessThanEqual(value, f16vec3(65504.0hf)));
-}
-void f() {
-  ivec3 v = tint_v3f16_to_v3i32(m());
+  return ivec3(clamp(value, f16vec3(-65504.0hf), f16vec3(65504.0hf)));
 }
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
+  ivec3 v = tint_v3f16_to_v3i32(m());
 }

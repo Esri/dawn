@@ -40,6 +40,12 @@ TEST_F(HlslWriterTest, ConstantBoolFalse) {
     auto* f = b.Function("a", ty.bool_());
     f->Block()->Append(b.Return(f, false));
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 bool a() {
@@ -47,7 +53,8 @@ bool a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  bool x = a();
 }
 
 )");
@@ -57,6 +64,12 @@ TEST_F(HlslWriterTest, ConstantBoolTrue) {
     auto* f = b.Function("a", ty.bool_());
     f->Block()->Append(b.Return(f, true));
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 bool a() {
@@ -64,7 +77,8 @@ bool a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  bool x = a();
 }
 
 )");
@@ -74,6 +88,12 @@ TEST_F(HlslWriterTest, ConstantInt) {
     auto* f = b.Function("a", ty.i32());
     f->Block()->Append(b.Return(f, -12345_i));
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 int a() {
@@ -81,7 +101,8 @@ int a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  int x = a();
 }
 
 )");
@@ -91,6 +112,12 @@ TEST_F(HlslWriterTest, ConstantUInt) {
     auto* f = b.Function("a", ty.u32());
     f->Block()->Append(b.Return(f, 56779_u));
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 uint a() {
@@ -98,7 +125,8 @@ uint a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  uint x = a();
 }
 
 )");
@@ -109,6 +137,12 @@ TEST_F(HlslWriterTest, ConstantFloat) {
     // Use a number close to 1<<30 but whose decimal representation ends in 0.
     f->Block()->Append(b.Return(f, f32((1 << 30) - 4)));
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 float a() {
@@ -116,7 +150,8 @@ float a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float x = a();
 }
 
 )");
@@ -127,6 +162,12 @@ TEST_F(HlslWriterTest, ConstantF16) {
     // Use a number close to 1<<16 but whose decimal representation ends in 0.
     f->Block()->Append(b.Return(f, f16((1 << 15) - 8)));
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 float16_t a() {
@@ -134,15 +175,22 @@ float16_t a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float16_t x = a();
 }
 
 )");
 }
 
 TEST_F(HlslWriterTest, ConstantTypeVecF32) {
-    auto* f = b.Function("a", ty.vec3<f32>());
-    b.Append(f->Block(), [&] { b.Return(f, b.Composite(ty.vec3<f32>(), 1_f, 2_f, 3_f)); });
+    auto* f = b.Function("a", ty.vec3f());
+    b.Append(f->Block(), [&] { b.Return(f, b.Composite(ty.vec3f(), 1_f, 2_f, 3_f)); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
@@ -151,15 +199,22 @@ float3 a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float3 x = a();
 }
 
 )");
 }
 
 TEST_F(HlslWriterTest, ConstantTypeVecF16) {
-    auto* f = b.Function("a", ty.vec3<f16>());
-    b.Append(f->Block(), [&] { b.Return(f, b.Composite(ty.vec3<f16>(), 1_h, 2_h, 3_h)); });
+    auto* f = b.Function("a", ty.vec3h());
+    b.Append(f->Block(), [&] { b.Return(f, b.Composite(ty.vec3h(), 1_h, 2_h, 3_h)); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
@@ -168,15 +223,22 @@ vector<float16_t, 3> a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  vector<float16_t, 3> x = a();
 }
 
 )");
 }
 
 TEST_F(HlslWriterTest, ConstantTypeVecEmptyF32) {
-    auto* f = b.Function("a", ty.vec3<f32>());
+    auto* f = b.Function("a", ty.vec3f());
     b.Append(f->Block(), [&] { b.Return(f, b.Zero<vec3<f32>>()); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
@@ -185,15 +247,22 @@ float3 a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float3 x = a();
 }
 
 )");
 }
 
 TEST_F(HlslWriterTest, ConstantTypeVecEmptyF16) {
-    auto* f = b.Function("a", ty.vec3<f16>());
+    auto* f = b.Function("a", ty.vec3h());
     b.Append(f->Block(), [&] { b.Return(f, b.Zero<vec3<f16>>()); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
@@ -202,15 +271,22 @@ vector<float16_t, 3> a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  vector<float16_t, 3> x = a();
 }
 
 )");
 }
 
 TEST_F(HlslWriterTest, ConstantTypeVecSingleScalarF32Literal) {
-    auto* f = b.Function("a", ty.vec3<f32>());
-    b.Append(f->Block(), [&] { b.Return(f, b.Splat(ty.vec3<f32>(), 2_f)); });
+    auto* f = b.Function("a", ty.vec3f());
+    b.Append(f->Block(), [&] { b.Return(f, b.Splat(ty.vec3f(), 2_f)); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
@@ -219,15 +295,22 @@ float3 a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float3 x = a();
 }
 
 )");
 }
 
 TEST_F(HlslWriterTest, ConstantTypeVecSingleScalarF16Literal) {
-    auto* f = b.Function("a", ty.vec3<f16>());
-    b.Append(f->Block(), [&] { b.Return(f, b.Splat(ty.vec3<f16>(), 2_h)); });
+    auto* f = b.Function("a", ty.vec3h());
+    b.Append(f->Block(), [&] { b.Return(f, b.Splat(ty.vec3h(), 2_h)); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
@@ -236,7 +319,8 @@ vector<float16_t, 3> a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  vector<float16_t, 3> x = a();
 }
 
 )");
@@ -246,6 +330,12 @@ TEST_F(HlslWriterTest, ConstantTypeVecSingleScalarBoolLiteral) {
     auto* f = b.Function("a", ty.vec3<bool>());
     b.Append(f->Block(), [&] { b.Return(f, b.Splat(ty.vec3<bool>(), true)); });
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 bool3 a() {
@@ -253,15 +343,22 @@ bool3 a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  bool3 x = a();
 }
 
 )");
 }
 
 TEST_F(HlslWriterTest, ConstantTypeVecSingleScalarInt) {
-    auto* f = b.Function("a", ty.vec3<i32>());
-    b.Append(f->Block(), [&] { b.Return(f, b.Splat(ty.vec3<i32>(), 2_i)); });
+    auto* f = b.Function("a", ty.vec3i());
+    b.Append(f->Block(), [&] { b.Return(f, b.Splat(ty.vec3i(), 2_i)); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
@@ -270,15 +367,22 @@ int3 a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  int3 x = a();
 }
 
 )");
 }
 
 TEST_F(HlslWriterTest, ConstantTypeVecSingleScalarUInt) {
-    auto* f = b.Function("a", ty.vec3<u32>());
-    b.Append(f->Block(), [&] { b.Return(f, b.Splat(ty.vec3<u32>(), 2_u)); });
+    auto* f = b.Function("a", ty.vec3u());
+    b.Append(f->Block(), [&] { b.Return(f, b.Splat(ty.vec3u(), 2_u)); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
@@ -287,7 +391,8 @@ uint3 a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  uint3 x = a();
 }
 
 )");
@@ -296,8 +401,14 @@ void unused_entry_point() {
 TEST_F(HlslWriterTest, ConstantTypeMatF32) {
     auto* f = b.Function("a", ty.mat2x3<f32>());
     b.Append(f->Block(), [&] {
-        b.Return(f, b.Composite(ty.mat2x3<f32>(), b.Composite(ty.vec3<f32>(), 1_f, 2_f, 3_f),
-                                b.Composite(ty.vec3<f32>(), 3_f, 4_f, 5_f)));
+        b.Return(f, b.Composite(ty.mat2x3<f32>(), b.Composite(ty.vec3f(), 1_f, 2_f, 3_f),
+                                b.Composite(ty.vec3f(), 3_f, 4_f, 5_f)));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -307,7 +418,8 @@ float2x3 a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float2x3 x = a();
 }
 
 )");
@@ -316,8 +428,14 @@ void unused_entry_point() {
 TEST_F(HlslWriterTest, ConstantTypeMatF16) {
     auto* f = b.Function("a", ty.mat2x3<f16>());
     b.Append(f->Block(), [&] {
-        b.Return(f, b.Composite(ty.mat2x3<f16>(), b.Composite(ty.vec3<f16>(), 1_h, 2_h, 3_h),
-                                b.Composite(ty.vec3<f16>(), 3_h, 4_h, 5_h)));
+        b.Return(f, b.Composite(ty.mat2x3<f16>(), b.Composite(ty.vec3h(), 1_h, 2_h, 3_h),
+                                b.Composite(ty.vec3h(), 3_h, 4_h, 5_h)));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -327,7 +445,8 @@ matrix<float16_t, 2, 3> a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  matrix<float16_t, 2, 3> x = a();
 }
 
 )");
@@ -342,9 +461,15 @@ TEST_F(HlslWriterTest, ConstantTypeMatComplexF32) {
     //   );
     auto* f = b.Function("a", ty.mat4x4<f32>());
     b.Append(f->Block(), [&] {
-        b.Return(f, b.Composite(ty.mat4x4<f32>(), b.Composite(ty.vec4<f32>(), 2_f, 3_f, 4_f, 8_f),
-                                b.Zero<vec4<f32>>(), b.Splat(ty.vec4<f32>(), 7_f),
-                                b.Composite(ty.vec4<f32>(), 42_f, 21_f, 6_f, -5_f)));
+        b.Return(f, b.Composite(ty.mat4x4<f32>(), b.Composite(ty.vec4f(), 2_f, 3_f, 4_f, 8_f),
+                                b.Zero<vec4<f32>>(), b.Splat(ty.vec4f(), 7_f),
+                                b.Composite(ty.vec4f(), 42_f, 21_f, 6_f, -5_f)));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -354,7 +479,8 @@ float4x4 a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float4x4 x = a();
 }
 
 )");
@@ -369,9 +495,15 @@ TEST_F(HlslWriterTest, ConstantTypeMatComplexF16) {
     //   );
     auto* f = b.Function("a", ty.mat4x4<f16>());
     b.Append(f->Block(), [&] {
-        b.Return(f, b.Composite(ty.mat4x4<f16>(), b.Composite(ty.vec4<f16>(), 2_h, 3_h, 4_h, 8_h),
-                                b.Zero<vec4<f16>>(), b.Splat(ty.vec4<f16>(), 7_h),
-                                b.Composite(ty.vec4<f16>(), 42_h, 21_h, 6_h, -5_h)));
+        b.Return(f, b.Composite(ty.mat4x4<f16>(), b.Composite(ty.vec4h(), 2_h, 3_h, 4_h, 8_h),
+                                b.Zero<vec4<f16>>(), b.Splat(ty.vec4h(), 7_h),
+                                b.Composite(ty.vec4h(), 42_h, 21_h, 6_h, -5_h)));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -381,7 +513,8 @@ matrix<float16_t, 4, 4> a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  matrix<float16_t, 4, 4> x = a();
 }
 
 )");
@@ -391,6 +524,12 @@ TEST_F(HlslWriterTest, ConstantTypeMatEmptyF32) {
     auto* f = b.Function("a", ty.mat2x3<f32>());
     b.Append(f->Block(), [&] { b.Return(f, b.Zero<mat2x3<f32>>()); });
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 float2x3 a() {
@@ -398,7 +537,8 @@ float2x3 a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float2x3 x = a();
 }
 
 )");
@@ -408,6 +548,12 @@ TEST_F(HlslWriterTest, ConstantTypeMatEmptyF16) {
     auto* f = b.Function("a", ty.mat2x3<f16>());
     b.Append(f->Block(), [&] { b.Return(f, b.Zero<mat2x3<f16>>()); });
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 matrix<float16_t, 2, 3> a() {
@@ -415,7 +561,8 @@ matrix<float16_t, 2, 3> a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  matrix<float16_t, 2, 3> x = a();
 }
 
 )");
@@ -427,7 +574,7 @@ TEST_F(HlslWriterTest, ConstantTypeMatIdentityF32) {
     //  var m_2: mat4x4<f32> = mat4x4<f32>(m_1);
     // }
 
-    auto* f = b.Function("a", ty.void_());
+    auto* f = b.ComputeFunction("main");
     b.Append(f->Block(), [&] {
         auto* m1 = b.Var("m_1", b.Zero<mat4x4<f32>>());
         b.Var("m_2", b.Load(m1));
@@ -436,13 +583,10 @@ TEST_F(HlslWriterTest, ConstantTypeMatIdentityF32) {
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
-void a() {
+[numthreads(1, 1, 1)]
+void main() {
   float4x4 m_1 = float4x4((0.0f).xxxx, (0.0f).xxxx, (0.0f).xxxx, (0.0f).xxxx);
   float4x4 m_2 = m_1;
-}
-
-[numthreads(1, 1, 1)]
-void unused_entry_point() {
 }
 
 )");
@@ -454,7 +598,7 @@ TEST_F(HlslWriterTest, ConstantTypeMatIdentityF16) {
     //   var m_2: mat4x4<f16> = mat4x4<f16>(m_1);
     // }
 
-    auto* f = b.Function("a", ty.void_());
+    auto* f = b.ComputeFunction("main");
     b.Append(f->Block(), [&] {
         auto* m1 = b.Var("m_1", b.Zero<mat4x4<f16>>());
         b.Var("m_2", b.Load(m1));
@@ -463,13 +607,10 @@ TEST_F(HlslWriterTest, ConstantTypeMatIdentityF16) {
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
-void a() {
+[numthreads(1, 1, 1)]
+void main() {
   matrix<float16_t, 4, 4> m_1 = matrix<float16_t, 4, 4>((float16_t(0.0h)).xxxx, (float16_t(0.0h)).xxxx, (float16_t(0.0h)).xxxx, (float16_t(0.0h)).xxxx);
   matrix<float16_t, 4, 4> m_2 = m_1;
-}
-
-[numthreads(1, 1, 1)]
-void unused_entry_point() {
 }
 
 )");
@@ -478,10 +619,15 @@ void unused_entry_point() {
 TEST_F(HlslWriterTest, ConstantTypeArrayFunctionReturn) {
     auto* f = b.Function("a", ty.array<vec3<f32>, 3>());
     b.Append(f->Block(), [&] {
-        b.Return(f,
-                 b.Composite(ty.array<vec3<f32>, 3>(), b.Composite(ty.vec3<f32>(), 1_f, 2_f, 3_f),
-                             b.Composite(ty.vec3<f32>(), 4_f, 5_f, 6_f),
-                             b.Composite(ty.vec3<f32>(), 7_f, 8_f, 9_f)));
+        b.Return(f, b.Composite(ty.array<vec3<f32>, 3>(), b.Composite(ty.vec3f(), 1_f, 2_f, 3_f),
+                                b.Composite(ty.vec3f(), 4_f, 5_f, 6_f),
+                                b.Composite(ty.vec3f(), 7_f, 8_f, 9_f)));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -493,7 +639,8 @@ ary_ret a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float3 x[3] = a();
 }
 
 )");
@@ -502,6 +649,12 @@ void unused_entry_point() {
 TEST_F(HlslWriterTest, ConstantTypeArrayEmptyFunctionReturn) {
     auto* f = b.Function("a", ty.array<vec3<f32>, 3>());
     b.Append(f->Block(), [&] { b.Return(f, b.Zero<array<vec3<f32>, 3>>()); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
@@ -512,26 +665,27 @@ ary_ret a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float3 x[3] = a();
 }
 
 )");
 }
 
 TEST_F(HlslWriterTest, ConstantTypeArray) {
-    auto* f = b.ComputeFunction("a");
+    auto* f = b.ComputeFunction("main");
 
     b.Append(f->Block(), [&] {
-        b.Var("v", b.Composite(ty.array<vec3<f32>, 3>(), b.Composite(ty.vec3<f32>(), 1_f, 2_f, 3_f),
-                               b.Composite(ty.vec3<f32>(), 4_f, 5_f, 6_f),
-                               b.Composite(ty.vec3<f32>(), 7_f, 8_f, 9_f)));
+        b.Var("v", b.Composite(ty.array<vec3<f32>, 3>(), b.Composite(ty.vec3f(), 1_f, 2_f, 3_f),
+                               b.Composite(ty.vec3f(), 4_f, 5_f, 6_f),
+                               b.Composite(ty.vec3f(), 7_f, 8_f, 9_f)));
         b.Return(f);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 [numthreads(1, 1, 1)]
-void a() {
+void main() {
   float3 v[3] = {float3(1.0f, 2.0f, 3.0f), float3(4.0f, 5.0f, 6.0f), float3(7.0f, 8.0f, 9.0f)};
 }
 
@@ -539,21 +693,28 @@ void a() {
 }
 
 TEST_F(HlslWriterTest, ConstantTypeArrayModuleScopeZero) {
-    b.ir.root_block->Append(b.Var<private_>("v", b.Zero<array<f32, 65536>>()));
+    core::ir::Var* v = b.Var<private_>("v", b.Zero<array<f32, 65536>>());
+    b.ir.root_block->Append(v);
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", v);
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 static const float v_1[65536] = (float[65536])0;
 static float v[65536] = v_1;
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
 }
 
 )");
 }
 
 TEST_F(HlslWriterTest, ConstantTypeArrayEmpty) {
-    auto* f = b.ComputeFunction("a");
+    auto* f = b.ComputeFunction("main");
 
     b.Append(f->Block(), [&] {
         b.Var("v", b.Zero<array<vec3<f32>, 3>>());
@@ -563,7 +724,7 @@ TEST_F(HlslWriterTest, ConstantTypeArrayEmpty) {
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(
 [numthreads(1, 1, 1)]
-void a() {
+void main() {
   float3 v[3] = (float3[3])0;
 }
 
@@ -592,6 +753,12 @@ TEST_F(HlslWriterTest, ConstantTypeStructNestedEmpty) {
     auto* f = b.Function("a", s_strct);
     b.Append(f->Block(), [&] { b.Return(f, b.Zero(s_strct)); });
 
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
+
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(struct A {
   int d;
@@ -611,7 +778,8 @@ S a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  S x = a();
 }
 
 )");
@@ -619,7 +787,7 @@ void unused_entry_point() {
 
 TEST_F(HlslWriterTest, ConstantTypeStructNested) {
     Vector members_a{
-        ty.Get<core::type::StructMember>(b.ir.symbols.New("e"), ty.vec4<f32>(), 0u, 0u, 16u, 16u,
+        ty.Get<core::type::StructMember>(b.ir.symbols.New("e"), ty.vec4f(), 0u, 0u, 16u, 16u,
                                          core::IOAttributes{}),
     };
     auto* a_strct = ty.Struct(b.ir.symbols.New("A"), std::move(members_a));
@@ -632,7 +800,13 @@ TEST_F(HlslWriterTest, ConstantTypeStructNested) {
 
     auto* f = b.Function("a", s_strct);
     b.Append(f->Block(), [&] {
-        b.Return(f, b.Construct(s_strct, b.Construct(a_strct, b.Splat(ty.vec4<f32>(), 1_f))));
+        b.Return(f, b.Construct(s_strct, b.Construct(a_strct, b.Splat(ty.vec4f(), 1_f))));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -652,7 +826,8 @@ S a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  S x = a();
 }
 
 )");
@@ -660,7 +835,7 @@ void unused_entry_point() {
 
 TEST_F(HlslWriterTest, ConstantTypeLetStructComposite) {
     Vector members_a{
-        ty.Get<core::type::StructMember>(b.ir.symbols.New("e"), ty.vec4<f32>(), 0u, 0u, 16u, 16u,
+        ty.Get<core::type::StructMember>(b.ir.symbols.New("e"), ty.vec4f(), 0u, 0u, 16u, 16u,
                                          core::IOAttributes{}),
     };
     auto* a_strct = ty.Struct(b.ir.symbols.New("A"), std::move(members_a));
@@ -673,8 +848,14 @@ TEST_F(HlslWriterTest, ConstantTypeLetStructComposite) {
 
     auto* f = b.Function("a", ty.f32());
     b.Append(f->Block(), [&] {
-        b.Let("z", b.Composite(s_strct, b.Composite(a_strct, b.Splat(ty.vec4<f32>(), 1_f))));
+        b.Let("z", b.Composite(s_strct, b.Composite(a_strct, b.Splat(ty.vec4f(), 1_f))));
         b.Return(f, 1_f);
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -693,7 +874,8 @@ float a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float x = a();
 }
 
 )");
@@ -701,7 +883,7 @@ void unused_entry_point() {
 
 TEST_F(HlslWriterTest, ConstantTypeLetStructCompositeModuleScoped) {
     Vector members_a{
-        ty.Get<core::type::StructMember>(b.ir.symbols.New("e"), ty.vec4<f32>(), 0u, 0u, 16u, 16u,
+        ty.Get<core::type::StructMember>(b.ir.symbols.New("e"), ty.vec4f(), 0u, 0u, 16u, 16u,
                                          core::IOAttributes{}),
     };
     auto* a_strct = ty.Struct(b.ir.symbols.New("A"), std::move(members_a));
@@ -712,14 +894,19 @@ TEST_F(HlslWriterTest, ConstantTypeLetStructCompositeModuleScoped) {
     };
     auto* s_strct = ty.Struct(b.ir.symbols.New("S"), std::move(members_s));
 
-    b.ir.root_block->Append(b.Var<private_>(
-        "z", b.Composite(s_strct, b.Composite(a_strct, b.Splat(ty.vec4<f32>(), 1_f)))));
+    b.ir.root_block->Append(
+        b.Var<private_>("z", b.Composite(s_strct, b.Composite(a_strct, b.Splat(ty.vec4f(), 1_f)))));
 
     auto* f = b.Function("a", ty.f32());
     b.Append(f->Block(), [&] {
-        b.Var<function>("t",
-                        b.Composite(s_strct, b.Composite(a_strct, b.Splat(ty.vec4<f32>(), 1_f))));
+        b.Var<function>("t", b.Composite(s_strct, b.Composite(a_strct, b.Splat(ty.vec4f(), 1_f))));
         b.Return(f, 1_f);
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -732,16 +919,14 @@ struct S {
 };
 
 
-static const A v = {(1.0f).xxxx};
-static const S v_1 = {v};
-static S z = v_1;
 float a() {
   S t = {{(1.0f).xxxx}};
   return 1.0f;
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float x = a();
 }
 
 )");
@@ -753,15 +938,21 @@ TEST_F(HlslWriterTest, ConstantTypeStructEmpty) {
                                          core::IOAttributes{}),
         ty.Get<core::type::StructMember>(b.ir.symbols.New("b"), ty.f32(), 1u, 4u, 4u, 4u,
                                          core::IOAttributes{}),
-        ty.Get<core::type::StructMember>(b.ir.symbols.New("c"), ty.vec3<i32>(), 2u, 8u, 16u, 16u,
+        ty.Get<core::type::StructMember>(b.ir.symbols.New("c"), ty.vec3i(), 2u, 8u, 16u, 16u,
                                          core::IOAttributes{}),
-        ty.Get<core::type::StructMember>(b.ir.symbols.New("d"), ty.array<f32, 3>(), 2u, 8u, 16u,
+        ty.Get<core::type::StructMember>(b.ir.symbols.New("d"), ty.array<f32, 3>(), 2u, 24u, 16u,
                                          16u, core::IOAttributes{}),
     };
     auto* strct = ty.Struct(b.ir.symbols.New("S"), std::move(members));
 
     auto* f = b.Function("a", strct);
     b.Append(f->Block(), [&] { b.Return(f, b.Zero(strct)); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(struct S {
@@ -778,7 +969,8 @@ S a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  S x = a();
 }
 
 )");
@@ -790,17 +982,23 @@ TEST_F(HlslWriterTest, ConstantTypeStruct) {
                                          core::IOAttributes{}),
         ty.Get<core::type::StructMember>(b.ir.symbols.New("b"), ty.f32(), 1u, 4u, 4u, 4u,
                                          core::IOAttributes{}),
-        ty.Get<core::type::StructMember>(b.ir.symbols.New("c"), ty.vec3<i32>(), 2u, 16u, 16u, 16u,
+        ty.Get<core::type::StructMember>(b.ir.symbols.New("c"), ty.vec3i(), 2u, 16u, 16u, 16u,
                                          core::IOAttributes{}),
-        ty.Get<core::type::StructMember>(b.ir.symbols.New("d"), ty.vec4<f32>(), 2u, 32u, 16u, 16u,
+        ty.Get<core::type::StructMember>(b.ir.symbols.New("d"), ty.vec4f(), 2u, 32u, 16u, 16u,
                                          core::IOAttributes{}),
     };
     auto* strct = ty.Struct(b.ir.symbols.New("S"), std::move(members));
 
     auto* f = b.Function("a", strct);
     b.Append(f->Block(), [&] {
-        b.Return(f, b.Construct(strct, 1_i, 1_f, b.Splat(ty.vec3<i32>(), 2_i),
-                                b.Splat(ty.vec4<f32>(), 3_f)));
+        b.Return(f,
+                 b.Construct(strct, 1_i, 1_f, b.Splat(ty.vec3i(), 2_i), b.Splat(ty.vec4f(), 3_f)));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -818,7 +1016,8 @@ S a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  S x = a();
 }
 
 )");
@@ -830,18 +1029,24 @@ TEST_F(HlslWriterTest, ConstantTypeLetStruct) {
                                          core::IOAttributes{}),
         ty.Get<core::type::StructMember>(b.ir.symbols.New("b"), ty.f32(), 1u, 4u, 4u, 4u,
                                          core::IOAttributes{}),
-        ty.Get<core::type::StructMember>(b.ir.symbols.New("c"), ty.vec3<i32>(), 2u, 16u, 16u, 16u,
+        ty.Get<core::type::StructMember>(b.ir.symbols.New("c"), ty.vec3i(), 2u, 16u, 16u, 16u,
                                          core::IOAttributes{}),
-        ty.Get<core::type::StructMember>(b.ir.symbols.New("d"), ty.vec4<f32>(), 2u, 32u, 16u, 16u,
+        ty.Get<core::type::StructMember>(b.ir.symbols.New("d"), ty.vec4f(), 2u, 32u, 16u, 16u,
                                          core::IOAttributes{}),
     };
     auto* strct = ty.Struct(b.ir.symbols.New("S"), std::move(members));
 
     auto* f = b.Function("a", ty.f32());
     b.Append(f->Block(), [&] {
-        b.Let("z", b.Construct(strct, 1_i, 1_f, b.Splat(ty.vec3<i32>(), 2_i),
-                               b.Splat(ty.vec4<f32>(), 3_f)));
+        b.Let("z",
+              b.Construct(strct, 1_i, 1_f, b.Splat(ty.vec3i(), 2_i), b.Splat(ty.vec4f(), 3_f)));
         b.Return(f, 1_f);
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", b.Call(f));
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -859,7 +1064,8 @@ float a() {
 }
 
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
+  float x = a();
 }
 
 )");
@@ -872,7 +1078,14 @@ TEST_F(HlslWriterTest, ConstantTypeStructStaticEmpty) {
     };
     auto* strct = ty.Struct(b.ir.symbols.New("S"), std::move(members));
 
-    b.Append(b.ir.root_block, [&] { b.Var<private_>("p", b.Zero(strct)); });
+    core::ir::Var* v = nullptr;
+    b.Append(b.ir.root_block, [&] { v = b.Var<private_>("p", b.Zero(strct)); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", v);
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(struct S {
@@ -883,7 +1096,7 @@ TEST_F(HlslWriterTest, ConstantTypeStructStaticEmpty) {
 static const S v = {int(0)};
 static S p = v;
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
 }
 
 )");
@@ -896,7 +1109,14 @@ TEST_F(HlslWriterTest, ConstantTypeStructStatic) {
     };
     auto* strct = ty.Struct(b.ir.symbols.New("S"), std::move(members));
 
-    b.Append(b.ir.root_block, [&] { b.Var<private_>("p", b.Composite(strct, 3_i)); });
+    core::ir::Var* v = nullptr;
+    b.Append(b.ir.root_block, [&] { v = b.Var<private_>("p", b.Composite(strct, 3_i)); });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("x", v);
+        b.Return(eb);
+    });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
     EXPECT_EQ(output_.hlsl, R"(struct S {
@@ -907,7 +1127,7 @@ TEST_F(HlslWriterTest, ConstantTypeStructStatic) {
 static const S v = {int(3)};
 static S p = v;
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
 }
 
 )");
@@ -925,22 +1145,38 @@ TEST_F(HlslWriterTest, ConstantTypeMultiStructAndArray) {
                                                      {mod.symbols.New("a"), a_ty},
                                                  });
 
+    core::ir::Var* v1 = nullptr;
+    core::ir::Var* v2 = nullptr;
+    core::ir::Var* v3 = nullptr;
+    core::ir::Var* v4 = nullptr;
+    core::ir::Var* v5 = nullptr;
     b.Append(b.ir.root_block, [&] {
-        b.Var<private_>("a", b.Composite(a_ty, b.Composite(ty.array<i32, 2>(), 9_i, 10_i)));
-        b.Var<private_>(
+        v1 = b.Var<private_>("a", b.Composite(a_ty, b.Composite(ty.array<i32, 2>(), 9_i, 10_i)));
+        v2 = b.Var<private_>(
             "b",
             b.Composite(b_ty, b.Composite(ty.array<array<i32, 4>, 1>(),
                                           b.Composite(ty.array<i32, 4>(), 5_i, 6_i, 7_i, 8_i))));
-        b.Var<private_>(
+        v3 = b.Var<private_>(
             "c", b.Composite(c_ty, b.Composite(a_ty, b.Composite(ty.array<i32, 2>(), 1_i, 2_i))));
 
-        b.Var<private_>("d", b.Composite(ty.array<i32, 2>(), 11_i, 12_i));
-        b.Var<private_>("e", b.Composite(ty.array<array<array<i32, 3>, 2>, 1>(),
+        v4 = b.Var<private_>("d", b.Composite(ty.array<i32, 2>(), 11_i, 12_i));
+        v5 = b.Var<private_>("e",
+                             b.Composite(ty.array<array<array<i32, 3>, 2>, 1>(),
                                          b.Composite(ty.array<array<i32, 3>, 2>(),
                                                      b.Composite(ty.array<i32, 3>(), 1_i, 2_i, 3_i),
                                                      b.Composite(ty.array<i32, 3>(), 4_i, 5_i, 6_i)
 
                                                          )));
+    });
+
+    auto* eb = b.ComputeFunction("main");
+    b.Append(eb->Block(), [&] {
+        b.Let("t", v1);
+        b.Let("w", v2);
+        b.Let("x", v3);
+        b.Let("y", v4);
+        b.Let("z", v5);
+        b.Return(eb);
     });
 
     ASSERT_TRUE(Generate()) << err_ << output_.hlsl;
@@ -969,7 +1205,7 @@ static int d[2] = v_4;
 static const int v_5[1][2][3] = {{{int(1), int(2), int(3)}, {int(4), int(5), int(6)}}};
 static int e[1][2][3] = v_5;
 [numthreads(1, 1, 1)]
-void unused_entry_point() {
+void main() {
 }
 
 )");

@@ -67,16 +67,33 @@ class ErrorMonad : public RefCounted {
     struct ErrorTag {};
     static constexpr ErrorTag kError = {};
 
+    struct DelayedInitializationTag {};
+    static constexpr DelayedInitializationTag kDelayedInitialization = {};
+
     ErrorMonad();
     explicit ErrorMonad(ErrorTag tag);
+    explicit ErrorMonad(DelayedInitializationTag tag);
+
+    // Test if the error state is valid yet. It is an error to check the error state before the
+    // object is initialized.
+    bool IsInitialized() const;
 
     bool IsError() const;
+
+  protected:
+    // Transition from the initializing state to either an error or valid object. Can only be done
+    // once and only if this object was marked as having delayed initialization.
+    // These are payload modifications and must be externally synchronized with calls to
+    // IsInitialized and IsError.
+    void SetInitializedError();
+    void SetInitializedNoError();
 };
 
 class ObjectBase : public ErrorMonad {
   public:
     explicit ObjectBase(DeviceBase* device);
     ObjectBase(DeviceBase* device, ErrorTag tag);
+    ObjectBase(DeviceBase* device, DelayedInitializationTag tag);
 
     InstanceBase* GetInstance() const;
     DeviceBase* GetDevice() const;
@@ -84,6 +101,15 @@ class ObjectBase : public ErrorMonad {
   private:
     // Ref to owning device.
     Ref<DeviceBase> mDevice;
+};
+
+// The reason why Destroy() and DestroyImpl() are called.
+enum class DestroyReason {
+    // The object will be delete (in the C++ sense) so no further references to it can be taken.
+    CppDestructor,
+    // Destroy is called before the object is going to be deleted, for example because the
+    // wgpu::Object::Destroy method was called, or because the parent object is being deleted.
+    EarlyDestroy,
 };
 
 // Generic object list with a mutex for tracking for destruction.
@@ -96,7 +122,7 @@ class ApiObjectList {
     bool Untrack(ApiObjectBase* object);
 
     // Destroys and removes all the objects tracked in the list.
-    void Destroy();
+    void Destroy(DestroyReason reason);
 
     template <typename F>
     void ForEach(F fn) const {
@@ -125,6 +151,7 @@ class ApiObjectBase : public ObjectBase, public LinkNode<ApiObjectBase> {
     ApiObjectBase(DeviceBase* device, LabelNotImplementedTag tag);
     ApiObjectBase(DeviceBase* device, StringView label);
     ApiObjectBase(DeviceBase* device, ErrorTag tag, StringView label = {});
+    ApiObjectBase(DeviceBase* device, DelayedInitializationTag tag, StringView label = {});
     ~ApiObjectBase() override;
 
     virtual ObjectType GetType() const = 0;
@@ -138,7 +165,7 @@ class ApiObjectBase : public ObjectBase, public LinkNode<ApiObjectBase> {
     bool IsAlive() const;
 
     // This needs to be public because it can be called from the device owning the object.
-    void Destroy();
+    void Destroy(DestroyReason reason = DestroyReason::EarlyDestroy);
 
     // Dawn API
     void APISetLabel(StringView label);
@@ -163,10 +190,11 @@ class ApiObjectBase : public ObjectBase, public LinkNode<ApiObjectBase> {
     virtual ApiObjectList* GetObjectTrackingList();
 
     // Sub-classes may override this function multiple times. Whenever overriding this function,
-    // however, users should be sure to call their parent's version in the new override to make
-    // sure that all destroy functionality is kept. This function is guaranteed to only be
-    // called once through the exposed Destroy function.
-    virtual void DestroyImpl() = 0;
+    // however, users should be sure to call their parent's version in the new override with the
+    // same `reason` parameter to make sure that all destroy functionality is kept. This function
+    // is guaranteed to only be called once through the exposed Destroy function. However it is
+    // not called on error objects
+    virtual void DestroyImpl(DestroyReason reason) = 0;
 
     virtual void SetLabelImpl();
 

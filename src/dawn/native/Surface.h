@@ -116,7 +116,7 @@ class Surface final : public ErrorMonad {
 
     // Valid to call if the type is WindowsXlib
     void* GetXDisplay() const;
-    uint32_t GetXWindow() const;
+    uint64_t GetXWindow() const;
 
     const std::string& GetLabel() const;
 
@@ -124,7 +124,7 @@ class Surface final : public ErrorMonad {
     void APIConfigure(const SurfaceConfiguration* config);
     wgpu::Status APIGetCapabilities(AdapterBase* adapter, SurfaceCapabilities* capabilities) const;
     void APIGetCurrentTexture(SurfaceTexture* surfaceTexture) const;
-    void APIPresent();
+    wgpu::Status APIPresent();
     void APIUnconfigure();
     void APISetLabel(StringView label);
 
@@ -137,16 +137,16 @@ class Surface final : public ErrorMonad {
 
     MaybeError GetCapabilities(AdapterBase* adapter, SurfaceCapabilities* capabilities) const;
     MaybeError GetCurrentTexture(SurfaceTexture* surfaceTexture) const;
-    MaybeError Present();
 
     Ref<InstanceBase> mInstance;
     Type mType;
     std::string mLabel;
 
-    // The surface has an associated device only when it is configured
+    // The surface has an associated device *if and only if* it is configured.
     Ref<DeviceBase> mCurrentDevice;
 
-    // The swapchain is created when configuring the surface.
+    // The swapchain is created when configuring the surface (but may still be
+    // null even if it's in the "configured" state).
     Ref<SwapChainBase> mSwapChain;
 
     // We keep on storing the previous swap chain after Unconfigure in case we could reuse it
@@ -182,7 +182,7 @@ class Surface final : public ErrorMonad {
 
     // Xlib
     raw_ptr<void> mXDisplay = nullptr;
-    uint32_t mXWindow = 0;
+    uint64_t mXWindow = 0;
 };
 
 // Not defined in webgpu_absl_format.h/cpp because you can't forward-declare a nested type.

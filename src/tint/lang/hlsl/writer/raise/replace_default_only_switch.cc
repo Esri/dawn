@@ -85,7 +85,7 @@ struct State {
         auto swtch_default_block = swtch->Cases()[0].block;
         for (auto* inst = *swtch_default_block->begin(); inst;) {
             // Remember next instruction as we're about to remove the current one from its block
-            auto* next = inst->next.Get();
+            auto* next = inst->next;
             TINT_DEFER(inst = next);
             inst->Remove();
             loop->Body()->Append(inst);
@@ -98,12 +98,9 @@ struct State {
 }  // namespace
 
 Result<SuccessType> ReplaceDefaultOnlySwitch(core::ir::Module& ir) {
-    auto result = ValidateAndDumpIfNeeded(
+    TINT_CHECK_RESULT(ValidateAndDumpIfNeeded(
         ir, "hlsl.ReplaceDefaultOnlySwitch",
-        core::ir::Capabilities{core::ir::Capability::kAllowDuplicateBindings});
-    if (result != Success) {
-        return result.Failure();
-    }
+        core::ir::Capabilities{core::ir::Capability::kAllowDuplicateBindings}));
 
     State{ir}.Process();
 

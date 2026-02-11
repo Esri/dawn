@@ -204,7 +204,7 @@ struct State {
                         // If we ever support value declarations at module-scope, we will need to
                         // modify the partial access logic above since `access` instructions cannot
                         // be used in the root block.
-                        TINT_ASSERT(decl->Block() != ir.root_block);
+                        TINT_IR_ASSERT(ir, decl->Block() != ir.root_block);
                     });
                 }
 
@@ -249,10 +249,8 @@ struct State {
 }  // namespace
 
 Result<SuccessType> VarForDynamicIndex(core::ir::Module& ir) {
-    auto result = ValidateAndDumpIfNeeded(ir, "spirv.VarForDynamicIndex", kVarForDynamicIndex);
-    if (result != Success) {
-        return result;
-    }
+    TINT_CHECK_RESULT(
+        ValidateAndDumpIfNeeded(ir, "spirv.VarForDynamicIndex", kVarForDynamicIndexCapabilities));
 
     State{ir}.Process();
 

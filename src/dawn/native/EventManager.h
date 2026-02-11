@@ -39,6 +39,7 @@
 #include "dawn/common/MutexProtected.h"
 #include "dawn/common/NonMovable.h"
 #include "dawn/common/Ref.h"
+#include "dawn/common/Time.h"
 #include "dawn/common/WeakRef.h"
 #include "dawn/native/Error.h"
 #include "dawn/native/Forward.h"
@@ -67,10 +68,6 @@ class EventManager final : NonMovable {
     ~EventManager();
 
     MaybeError Initialize(const UnpackedPtr<InstanceDescriptor>& descriptor);
-    // Called by WillDropLastExternalRef. Once shut down, the EventManager stops tracking anything.
-    // It drops any refs to TrackedEvents, to break reference cycles. If doing so frees the last ref
-    // of any uncompleted TrackedEvents, they'll get completed with EventCompletionType::Shutdown.
-    void ShutDown();
 
     class TrackedEvent;
     // Track a TrackedEvent and give it a FutureID.
@@ -84,8 +81,6 @@ class EventManager final : NonMovable {
                                            Nanoseconds timeout);
 
   private:
-    bool IsShutDown() const;
-
     // Raw pointer to the Instance to allow for logging. The Instance owns the EventManager, so a
     // raw pointer here is always safe.
     raw_ptr<const InstanceBase> mInstance;
@@ -97,7 +92,7 @@ class EventManager final : NonMovable {
     // Freed once the user has dropped their last ref to the Instance, so can't call WaitAny or
     // ProcessEvents anymore. This breaks reference cycles.
     using EventMap = absl::flat_hash_map<FutureID, Ref<TrackedEvent>>;
-    MutexProtected<std::optional<EventMap>> mEvents;
+    MutexProtected<EventMap> mEvents;
 
     // Records last process event id in order to properly return whether or not there are still
     // events to process when we have re-entrant callbacks.
@@ -106,7 +101,9 @@ class EventManager final : NonMovable {
 
 struct QueueAndSerial {
     WeakRef<QueueBase> queue;
-    ExecutionSerial completionSerial;
+    std::atomic<ExecutionSerial> completionSerial;
+
+    QueueAndSerial(QueueBase* q, ExecutionSerial serial);
 
     // Returns the most recently completed serial on |queue|. Otherwise, returns |completionSerial|.
     ExecutionSerial GetCompletedSerial() const;
@@ -133,6 +130,7 @@ class EventManager::TrackedEvent : public RefCounted {
 
     bool IsReadyToComplete() const;
 
+    QueueAndSerial* GetIfQueueAndSerial() { return std::get_if<QueueAndSerial>(&mCompletionData); }
     const QueueAndSerial* GetIfQueueAndSerial() const {
         return std::get_if<QueueAndSerial>(&mCompletionData);
     }
@@ -200,15 +198,12 @@ class EventManager::TrackedEvent : public RefCounted {
     wgpu::CallbackMode mCallbackMode;
     FutureID mFutureID = kNullFutureID;
 
-#if DAWN_ENABLE_ASSERTS
-    std::atomic<bool> mCurrentlyBeingWaited = false;
-#endif
-
   private:
     CompletionData mCompletionData;
     const bool mIsProgressing = true;
-    // Callback has been called.
-    std::atomic<bool> mCompleted = false;
+
+    // Flag used to ensure that the callback is only completed once.
+    std::once_flag mFlag;
 };
 
 }  // namespace dawn::native

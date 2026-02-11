@@ -34,6 +34,8 @@
 //                       Do not modify this file directly
 ////////////////////////////////////////////////////////////////////////////////
 
+// clang-format off
+
 #include "src/tint/lang/spirv/builtin_fn.h"
 
 namespace tint::spirv {
@@ -96,18 +98,24 @@ const char* str(BuiltinFn i) {
             return "image_sample_implicit_lod";
         case BuiltinFn::kImageSampleProjImplicitLod:
             return "image_sample_proj_implicit_lod";
+        case BuiltinFn::kImageSampleProjDrefImplicitLod:
+            return "image_sample_proj_dref_implicit_lod";
         case BuiltinFn::kImageSampleExplicitLod:
             return "image_sample_explicit_lod";
         case BuiltinFn::kImageSampleProjExplicitLod:
             return "image_sample_proj_explicit_lod";
+        case BuiltinFn::kImageSampleProjDrefExplicitLod:
+            return "image_sample_proj_dref_explicit_lod";
         case BuiltinFn::kImageSampleDrefImplicitLod:
             return "image_sample_dref_implicit_lod";
         case BuiltinFn::kImageSampleDrefExplicitLod:
             return "image_sample_dref_explicit_lod";
         case BuiltinFn::kImageWrite:
             return "image_write";
-        case BuiltinFn::kSampledImage:
-            return "sampled_image";
+        case BuiltinFn::kOpImage:
+            return "op_image";
+        case BuiltinFn::kOpSampledImage:
+            return "op_sampled_image";
         case BuiltinFn::kMatrixTimesMatrix:
             return "matrix_times_matrix";
         case BuiltinFn::kMatrixTimesScalar:
@@ -198,6 +206,10 @@ const char* str(BuiltinFn i) {
             return "convert_s_to_f";
         case BuiltinFn::kConvertUToF:
             return "convert_u_to_f";
+        case BuiltinFn::kSConvert:
+            return "s_convert";
+        case BuiltinFn::kUConvert:
+            return "u_convert";
         case BuiltinFn::kBitwiseAnd:
             return "bitwise_and";
         case BuiltinFn::kBitwiseOr:
@@ -232,6 +244,26 @@ const char* str(BuiltinFn i) {
             return "cooperative_matrix_store";
         case BuiltinFn::kCooperativeMatrixMulAdd:
             return "cooperative_matrix_mul_add";
+        case BuiltinFn::kGroupNonUniformBroadcast:
+            return "group_non_uniform_broadcast";
+        case BuiltinFn::kGroupNonUniformBroadcastFirst:
+            return "group_non_uniform_broadcast_first";
+        case BuiltinFn::kGroupNonUniformQuadBroadcast:
+            return "group_non_uniform_quad_broadcast";
+        case BuiltinFn::kGroupNonUniformQuadSwap:
+            return "group_non_uniform_quad_swap";
+        case BuiltinFn::kGroupNonUniformShuffle:
+            return "group_non_uniform_shuffle";
+        case BuiltinFn::kGroupNonUniformShuffleXor:
+            return "group_non_uniform_shuffle_xor";
+        case BuiltinFn::kGroupNonUniformShuffleDown:
+            return "group_non_uniform_shuffle_down";
+        case BuiltinFn::kGroupNonUniformShuffleUp:
+            return "group_non_uniform_shuffle_up";
+        case BuiltinFn::kGroupNonUniformSMin:
+            return "group_non_uniform_s_min";
+        case BuiltinFn::kGroupNonUniformSMax:
+            return "group_non_uniform_s_max";
     }
     return "<unknown>";
 }
@@ -249,7 +281,10 @@ tint::core::ir::Instruction::Accesses GetSideEffects(BuiltinFn fn) {
         case BuiltinFn::kImageSampleProjExplicitLod:
         case BuiltinFn::kImageSampleDrefImplicitLod:
         case BuiltinFn::kImageSampleDrefExplicitLod:
-        case BuiltinFn::kSampledImage:
+        case BuiltinFn::kImageSampleProjDrefImplicitLod:
+        case BuiltinFn::kImageSampleProjDrefExplicitLod:
+        case BuiltinFn::kOpImage:
+        case BuiltinFn::kOpSampledImage:
         case BuiltinFn::kCooperativeMatrixLoad:
             return core::ir::Instruction::Accesses{core::ir::Instruction::Access::kLoad};
 
@@ -273,8 +308,7 @@ tint::core::ir::Instruction::Accesses GetSideEffects(BuiltinFn fn) {
         case BuiltinFn::kAtomicXor:
         case BuiltinFn::kAtomicIIncrement:
         case BuiltinFn::kAtomicIDecrement:
-            return core::ir::Instruction::Accesses{core::ir::Instruction::Access::kLoad,
-                                                   core::ir::Instruction::Access::kStore};
+            return core::ir::Instruction::Accesses{core::ir::Instruction::Access::kLoad, core::ir::Instruction::Access::kStore};
 
         case BuiltinFn::kArrayLength:
         case BuiltinFn::kDot:
@@ -341,9 +375,23 @@ tint::core::ir::Instruction::Accesses GetSideEffects(BuiltinFn fn) {
         case BuiltinFn::kSNegate:
         case BuiltinFn::kFMod:
         case BuiltinFn::kOuterProduct:
+        case BuiltinFn::kGroupNonUniformBroadcast:
+        case BuiltinFn::kGroupNonUniformBroadcastFirst:
+        case BuiltinFn::kGroupNonUniformShuffle:
+        case BuiltinFn::kGroupNonUniformShuffleXor:
+        case BuiltinFn::kGroupNonUniformShuffleDown:
+        case BuiltinFn::kGroupNonUniformShuffleUp:
+        case BuiltinFn::kGroupNonUniformQuadBroadcast:
+        case BuiltinFn::kGroupNonUniformQuadSwap:
+        case BuiltinFn::kGroupNonUniformSMin:
+        case BuiltinFn::kGroupNonUniformSMax:
+        case BuiltinFn::kSConvert:
+        case BuiltinFn::kUConvert:
             break;
     }
     return core::ir::Instruction::Accesses{};
 }
 
 }  // namespace tint::spirv
+
+// clang-format on

@@ -39,25 +39,18 @@ load("@bazel_skylib//lib:selects.bzl", "selects")
 cc_library(
   name = "wgsl",
   srcs = [
-    "builtin_fn.cc",
-    "diagnostic_rule.cc",
-    "diagnostic_severity.cc",
-    "extension.cc",
+    "enums.cc",
     "feature_status.cc",
-    "language_feature.cc",
     "reserved_words.cc",
   ],
   hdrs = [
     "allowed_features.h",
-    "builtin_fn.h",
-    "diagnostic_rule.h",
-    "diagnostic_severity.h",
-    "extension.h",
+    "enums.h",
     "feature_status.h",
-    "language_feature.h",
     "reserved_words.h",
   ],
   deps = [
+    "//src/tint/lang/core",
     "//src/tint/utils",
     "//src/tint/utils/containers",
     "//src/tint/utils/diagnostic",
@@ -77,16 +70,14 @@ cc_library(
   alwayslink = True,
   srcs = [
     "allowed_features_test.cc",
-    "diagnostic_rule_test.cc",
-    "diagnostic_severity_test.cc",
-    "extension_test.cc",
+    "enums_test.cc",
     "language_feature_status_test.cc",
-    "language_feature_test.cc",
   ] + select({
     "//conditions:default": [],
   }) + select({
     ":tint_build_wgsl_reader_and_tint_build_wgsl_writer": [
       "ir_roundtrip_test.cc",
+      "minifier_test.cc",
     ],
     "//conditions:default": [],
   }) + select({
@@ -102,6 +93,7 @@ cc_library(
     "//src/tint/lang/wgsl/ast",
     "//src/tint/lang/wgsl/program",
     "//src/tint/lang/wgsl/sem",
+    "//src/tint/lang/wgsl/writer/common",
     "//src/tint/lang/wgsl/writer/ir_to_program",
     "//src/tint/lang/wgsl/writer/raise",
     "//src/tint/utils",

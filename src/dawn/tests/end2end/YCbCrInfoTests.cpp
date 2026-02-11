@@ -292,6 +292,12 @@ TEST_P(YCbCrInfoTest, YCbCrTextureViewInvalidWithNoYCbCrDescriptor) {
 // Tests that creating a bind group layout with a valid static sampler succeeds if the
 // required feature is enabled.
 TEST_P(YCbCrInfoTest, CreateBindGroupWithYCbCrSamplerSupported) {
+    // TODO(crbug.com/444741058): Fails on Intel-based brya devices running Android Desktop.
+    DAWN_SUPPRESS_TEST_IF(IsVulkan() && IsIntel() && IsAndroid());
+
+    // TODO(crbug.com/40238674): Fails on Pixel 10 vulkan.
+    DAWN_SUPPRESS_TEST_IF(IsImgTec() && IsVulkan());
+
     std::vector<wgpu::BindGroupLayoutEntry> entries;
 
     wgpu::YCbCrVkDescriptor yCbCrDesc = {};
@@ -427,6 +433,12 @@ TEST_P(YCbCrInfoTest, CreateBindGroupLayoutWithYCbCrSamplerDuplicateSampledTextu
 // Verifies that creation of a correctly-specified bind group for a layout that
 // has a sampler and a static sampler succeeds.
 TEST_P(YCbCrInfoTest, CreateBindGroupWithSamplerAndStaticSamplerSupported) {
+    // TODO(crbug.com/444741058): Fails on Intel-based brya devices running Android Desktop.
+    DAWN_SUPPRESS_TEST_IF(IsVulkan() && IsIntel() && IsAndroid());
+
+    // TODO(crbug.com/40238674): Fails on Pixel 10 vulkan.
+    DAWN_SUPPRESS_TEST_IF(IsImgTec() && IsVulkan());
+
     std::vector<wgpu::BindGroupLayoutEntry> entries;
 
     wgpu::BindGroupLayoutEntry& binding0 = entries.emplace_back();

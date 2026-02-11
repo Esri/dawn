@@ -12,12 +12,13 @@ void foo() {
       } else {
         break;
       }
-      v2f[min(uint(i), 1u)] = 1.0f;
-      v3i[min(uint(i), 2u)] = 1;
-      v4u[min(uint(i), 3u)] = 1u;
-      v2b[min(uint(i), 1u)] = true;
+      v2f[i] = 1.0f;
+      v3i[i] = 1;
+      v4u[i] = 1u;
+      v2b[i] = true;
       {
-        i = (i + 1);
+        uint v = uint(i);
+        i = int((v + uint(1)));
       }
       continue;
     }
@@ -34,7 +35,8 @@ void main() {
       }
       foo();
       {
-        i = (i + 1);
+        uint v_1 = uint(i);
+        i = int((v_1 + uint(1)));
       }
       continue;
     }

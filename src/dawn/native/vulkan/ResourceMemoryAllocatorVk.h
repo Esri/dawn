@@ -38,6 +38,7 @@
 #include "dawn/native/IntegerTypes.h"
 #include "dawn/native/PooledResourceMemoryAllocator.h"
 #include "dawn/native/ResourceMemoryAllocation.h"
+#include "dawn/native/vulkan/MemoryTypeSelector.h"
 #include "partition_alloc/pointers/raw_ptr.h"
 
 namespace dawn::native::vulkan {
@@ -45,19 +46,6 @@ namespace dawn::native::vulkan {
 class Device;
 class ResourceHeap;
 struct VulkanDeviceInfo;
-
-// Each bit of MemoryKind represents a kind of memory that influence the result of the allocation.
-// For example, to take into account mappability and Vulkan's bufferImageGranularity.
-enum class MemoryKind : uint8_t {
-    LazilyAllocated = 1,
-    Linear = 2,
-    DeviceLocal = 4,
-    ReadMappable = 8,
-    WriteMappable = 16,
-    HostCached = 32,
-};
-
-bool SupportsBufferMapExtendedUsages(const VulkanDeviceInfo& deviceInfo);
 
 class ResourceMemoryAllocator {
   public:
@@ -83,36 +71,50 @@ class ResourceMemoryAllocator {
 
     int FindBestTypeIndex(VkMemoryRequirements requirements, MemoryKind kind);
 
+    // Reports the total vulkan allocated and vulkan used memories.
     uint64_t GetTotalUsedMemory() const;
     uint64_t GetTotalAllocatedMemory() const;
+    // Reports the total lazy allocated and used vulkan memory.
+    uint64_t GetTotalLazyAllocatedMemory() const;
+    uint64_t GetTotalLazyUsedMemory() const;
 
   protected:
-    void RecordHeapAllocation(VkDeviceSize size);
-    void DeallocateResourceHeap(ResourceHeap* heap);
+    void RecordHeapAllocation(VkDeviceSize size, bool isLazyMemoryType);
+    void DeallocateResourceHeap(ResourceHeap* heap, bool isLazyMemoryType);
 
   private:
+    // Wrapper for tracking the allocation sizes to be decremented up to a completed ExecutionSerial
+    // and reporting total allocation/used sizes.
+    class AllocationSizeTracker {
+      public:
+        // Increment the total size for tracking.
+        void Increment(VkDeviceSize incrementSize);
+        // Track the size to be decremented on Tick.
+        void Decrement(ExecutionSerial currentSerial, VkDeviceSize decrementSize);
+        // Update the total size after completed serials.
+        void Tick(ExecutionSerial completedSerial);
+
+        VkDeviceSize Size() const { return mTotalSize; }
+
+      private:
+        std::map<ExecutionSerial, VkDeviceSize> mMemoryToDecrement;
+        VkDeviceSize mTotalSize = 0;
+    };
+
     raw_ptr<Device> mDevice;
     const VkDeviceSize mMaxSizeForSuballocation;
+    MemoryTypeSelector mMemoryTypeSelector;
 
     class SingleTypeAllocator;
     std::vector<std::unique_ptr<SingleTypeAllocator>> mAllocatorsPerType;
 
     SerialQueue<ExecutionSerial, ResourceMemoryAllocation> mSubAllocationsToDelete;
-    std::map<ExecutionSerial, VkDeviceSize> mUsedMemoryToDecrement;
-    std::map<ExecutionSerial, VkDeviceSize> mAllocatedMemoryToDecrement;
-
-    VkDeviceSize mTotalAllocatedMemory = 0;
-    VkDeviceSize mTotalUsedMemory = 0;
+    AllocationSizeTracker mAllocatedMemory;
+    AllocationSizeTracker mUsedMemory;
+    AllocationSizeTracker mLazyAllocatedMemory;
+    AllocationSizeTracker mLazyUsedMemory;
 };
 
 }  // namespace dawn::native::vulkan
-
-namespace wgpu {
-template <>
-struct IsWGPUBitmask<dawn::native::vulkan::MemoryKind> {
-    static constexpr bool enable = true;
-};
-
-}  // namespace wgpu
 
 #endif  // SRC_DAWN_NATIVE_VULKAN_RESOURCEMEMORYALLOCATORVK_H_

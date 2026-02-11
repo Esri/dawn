@@ -39,8 +39,8 @@
 #include "src/tint/api/common/binding_point.h"
 #include "src/tint/lang/core/constant/eval.h"
 #include "src/tint/lang/core/constant/value.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/intrinsic/table.h"
-#include "src/tint/lang/core/subgroup_matrix_kind.h"
 #include "src/tint/lang/core/type/input_attachment.h"
 #include "src/tint/lang/wgsl/allowed_features.h"
 #include "src/tint/lang/wgsl/intrinsic/dialect.h"
@@ -172,6 +172,9 @@ class Resolver {
     /// @returns a new u8, if the subgroup matrix extension is enabled, otherwise nullptr
     const core::type::U8* U8(const ast::Identifier* ident);
 
+    /// @returns nullptr since u16 is not enabled in WGSL.
+    const core::type::U16* U16(const ast::Identifier* ident);
+
     /// @returns a vector with the element type @p el of width @p n resolved from the identifier @p
     /// ident.
     const core::type::Vector* Vec(const ast::Identifier* ident,
@@ -211,6 +214,9 @@ class Resolver {
     /// @returns a pointer resolved from the templated identifier @p ident.
     const core::type::Pointer* Ptr(const ast::Identifier* ident);
 
+    /// @returns a sampler resolved from the templated identifier @p ident
+    const core::type::Sampler* Sampler(const ast::Identifier* ident);
+
     /// @returns a sampled texture resolved from the templated identifier @p ident with the
     /// dimensions @p dim.
     const core::type::SampledTexture* SampledTexture(const ast::Identifier* ident,
@@ -226,12 +232,19 @@ class Resolver {
     const core::type::StorageTexture* StorageTexture(const ast::Identifier* ident,
                                                      core::type::TextureDimension dim);
 
+    /// @returns a texel buffer resolved from the templated identifier @p ident.
+    /// @param ident the identifier to resolve
+    const core::type::TexelBuffer* TexelBuffer(const ast::Identifier* ident);
+
     /// @returns an input attachment resolved from the templated identifier @p ident
     const core::type::InputAttachment* InputAttachment(const ast::Identifier* ident);
 
     /// @returns a subgroup matrix resolved from the templated identifier @p ident
     const core::type::SubgroupMatrix* SubgroupMatrix(const ast::Identifier* ident,
                                                      core::SubgroupMatrixKind kind);
+
+    /// @returns a buffer resolved from the templated identifier @p ident
+    const core::type::Buffer* Buffer(const ast::Identifier* ident);
 
     /// @returns @p ident cast to an ast::TemplatedIdentifier, if the identifier is templated and
     /// the number of templated arguments are between @p min_args and @p max_args.
@@ -250,13 +263,6 @@ class Resolver {
     /// sem::BuiltinEnumExpression<core::AddressSpace>, then an error diagnostic is raised and
     /// nullptr is returned.
     sem::BuiltinEnumExpression<core::AddressSpace>* AddressSpaceExpression(
-        const ast::Expression* expr);
-
-    /// @returns the call of Expression() cast to a
-    /// sem::BuiltinEnumExpression<core::type::TexelFormat>. If the sem::Expression is not a
-    /// sem::BuiltinEnumExpression<core::type::TexelFormat>, then an error diagnostic is raised and
-    /// nullptr is returned.
-    sem::BuiltinEnumExpression<core::TexelFormat>* TexelFormatExpression(
         const ast::Expression* expr);
 
     /// @returns the call of Expression() cast to a sem::BuiltinEnumExpression<core::Access>*.
@@ -285,8 +291,7 @@ class Resolver {
     sem::Function* Function(const ast::Function*);
     sem::Call* FunctionCall(const ast::CallExpression*,
                             sem::Function* target,
-                            VectorRef<const sem::ValueExpression*> args,
-                            sem::Behaviors arg_behaviors);
+                            VectorRef<const sem::ValueExpression*> args);
     sem::Expression* Identifier(const ast::IdentifierExpression*);
     template <size_t N>
     sem::Call* BuiltinCall(const ast::CallExpression*,
@@ -433,6 +438,10 @@ class Resolver {
     /// @returns the workgroup size on success.
     tint::Result<sem::WorkgroupSize> WorkgroupAttribute(const ast::WorkgroupAttribute* attr);
 
+    /// Resolves the `@sugbroup_size` attribute @p attr
+    /// @returns the subgroup size on success.
+    tint::Result<uint32_t> SubgroupSizeAttribute(const ast::SubgroupSizeAttribute* attr);
+
     /// Resolves the `@diagnostic` attribute @p attr
     /// @returns true on success, false on failure
     bool DiagnosticAttribute(const ast::DiagnosticAttribute* attr);
@@ -448,14 +457,6 @@ class Resolver {
     /// Resolves the `@invariant` attribute @p attr
     /// @returns true on success, false on failure
     bool InvariantAttribute(const ast::InvariantAttribute*);
-
-    /// Resolves the `@stride` attribute @p attr
-    /// @returns true on success, false on failure
-    bool StrideAttribute(const ast::StrideAttribute*);
-
-    /// Resolves the internal attribute @p attr
-    /// @returns true on success, false on failure
-    bool InternalAttribute(const ast::InternalAttribute* attr);
 
     /// @param control the diagnostic control
     /// @returns true on success, false on failure
@@ -475,17 +476,9 @@ class Resolver {
 
     /// Resolves and validates the expression used as the count parameter of an array.
     /// @param count_expr the expression used as the second template parameter to an array<>.
+    /// @param array indicates whether the count is for an array or buffer
     /// @returns the number of elements in the array.
-    const core::type::ArrayCount* ArrayCount(const ast::Expression* count_expr);
-
-    /// Resolves and validates the attributes on an array.
-    /// @param attributes the attributes on the array type.
-    /// @param el_ty the element type of the array.
-    /// @param explicit_stride assigned the specified stride of the array in bytes.
-    /// @returns true on success, false on failure
-    bool ArrayAttributes(VectorRef<const ast::Attribute*> attributes,
-                         const core::type::Type* el_ty,
-                         uint32_t& explicit_stride);
+    const core::type::ArrayCount* ArrayCount(const ast::Expression* count_expr, bool array = true);
 
     /// Builds and returns the semantic information for an array.
     /// @returns the semantic Array information, or nullptr if an error is raised.
@@ -496,13 +489,11 @@ class Resolver {
     ///        locally-declared element AST node.
     /// @param el_ty the Array element type
     /// @param el_count the number of elements in the array.
-    /// @param explicit_stride the explicit byte stride of the array. Zero means implicit stride.
     sem::Array* Array(const Source& array_source,
                       const Source& el_source,
                       const Source& count_source,
                       const core::type::Type* el_ty,
-                      const core::type::ArrayCount* el_count,
-                      uint32_t explicit_stride);
+                      const core::type::ArrayCount* el_count);
 
     /// Builds and returns the semantic information for the alias `alias`.
     /// This method does not mark the ast::Alias node, nor attach the generated

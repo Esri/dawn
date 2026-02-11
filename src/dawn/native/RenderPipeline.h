@@ -96,6 +96,9 @@ class RenderPipelineBase : public PipelineBase,
 
     ObjectType GetType() const override;
 
+    const RenderPipelineBase* AsRenderPipeline() const override { return this; }
+    RenderPipelineBase* AsRenderPipeline() override { return this; }
+
     // Vertex getters
     const VertexAttributeMask& GetAttributeLocationsUsed() const;
     const VertexAttributeInfo& GetAttribute(VertexAttributeLocation location) const;
@@ -136,6 +139,9 @@ class RenderPipelineBase : public PipelineBase,
     bool WritesDepth() const;
     bool WritesStencil() const;
     bool UsesFragDepth() const;
+    bool UsesFragPosition() const;
+    bool IsFragMultiSampled() const;
+    bool UsesSampleIndex() const;
     bool UsesVertexIndex() const;
     bool UsesInstanceIndex() const;
 
@@ -151,7 +157,7 @@ class RenderPipelineBase : public PipelineBase,
     static constexpr wgpu::TextureFormat kImplicitPLSSlotFormat = wgpu::TextureFormat::R32Uint;
 
   protected:
-    void DestroyImpl() override;
+    void DestroyImpl(DestroyReason reason) override;
 
   private:
     RenderPipelineBase(DeviceBase* device, ObjectBase::ErrorTag tag, StringView label);
@@ -177,6 +183,9 @@ class RenderPipelineBase : public PipelineBase,
     bool mWritesDepth = false;
     bool mWritesStencil = false;
     bool mUsesFragDepth = false;
+    bool mUsesFragPosition = false;
+    bool mIsFragMultiSampled = false;
+    bool mUsesSampleIndex = false;
     bool mUsesVertexIndex = false;
     bool mUsesInstanceIndex = false;
 };

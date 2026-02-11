@@ -1,71 +1,91 @@
-groupshared matrix<float16_t, 4, 3> w[4];
+struct f_inputs {
+  uint tint_local_index : SV_GroupIndex;
+};
 
-void tint_zero_workgroup_memory(uint local_idx) {
-  {
-    for(uint idx = local_idx; (idx < 4u); idx = (idx + 1u)) {
-      uint i = idx;
-      w[i] = matrix<float16_t, 4, 3>((float16_t(0.0h)).xxx, (float16_t(0.0h)).xxx, (float16_t(0.0h)).xxx, (float16_t(0.0h)).xxx);
-    }
-  }
-  GroupMemoryBarrierWithGroupSync();
-}
 
 cbuffer cbuffer_u : register(b0) {
   uint4 u[8];
 };
-
-struct tint_symbol_1 {
-  uint local_invocation_index : SV_GroupIndex;
-};
-
-matrix<float16_t, 4, 3> u_load_1(uint offset) {
-  const uint scalar_offset = ((offset + 0u)) / 4;
-  uint4 ubo_load_1 = u[scalar_offset / 4];
-  uint2 ubo_load = ((scalar_offset & 2) ? ubo_load_1.zw : ubo_load_1.xy);
-  vector<float16_t, 2> ubo_load_xz = vector<float16_t, 2>(f16tof32(ubo_load & 0xFFFF));
-  float16_t ubo_load_y = f16tof32(ubo_load[0] >> 16);
-  const uint scalar_offset_1 = ((offset + 8u)) / 4;
-  uint4 ubo_load_3 = u[scalar_offset_1 / 4];
-  uint2 ubo_load_2 = ((scalar_offset_1 & 2) ? ubo_load_3.zw : ubo_load_3.xy);
-  vector<float16_t, 2> ubo_load_2_xz = vector<float16_t, 2>(f16tof32(ubo_load_2 & 0xFFFF));
-  float16_t ubo_load_2_y = f16tof32(ubo_load_2[0] >> 16);
-  const uint scalar_offset_2 = ((offset + 16u)) / 4;
-  uint4 ubo_load_5 = u[scalar_offset_2 / 4];
-  uint2 ubo_load_4 = ((scalar_offset_2 & 2) ? ubo_load_5.zw : ubo_load_5.xy);
-  vector<float16_t, 2> ubo_load_4_xz = vector<float16_t, 2>(f16tof32(ubo_load_4 & 0xFFFF));
-  float16_t ubo_load_4_y = f16tof32(ubo_load_4[0] >> 16);
-  const uint scalar_offset_3 = ((offset + 24u)) / 4;
-  uint4 ubo_load_7 = u[scalar_offset_3 / 4];
-  uint2 ubo_load_6 = ((scalar_offset_3 & 2) ? ubo_load_7.zw : ubo_load_7.xy);
-  vector<float16_t, 2> ubo_load_6_xz = vector<float16_t, 2>(f16tof32(ubo_load_6 & 0xFFFF));
-  float16_t ubo_load_6_y = f16tof32(ubo_load_6[0] >> 16);
-  return matrix<float16_t, 4, 3>(vector<float16_t, 3>(ubo_load_xz[0], ubo_load_y, ubo_load_xz[1]), vector<float16_t, 3>(ubo_load_2_xz[0], ubo_load_2_y, ubo_load_2_xz[1]), vector<float16_t, 3>(ubo_load_4_xz[0], ubo_load_4_y, ubo_load_4_xz[1]), vector<float16_t, 3>(ubo_load_6_xz[0], ubo_load_6_y, ubo_load_6_xz[1]));
+groupshared matrix<float16_t, 4, 3> w[4];
+vector<float16_t, 2> tint_bitcast_to_f16(uint src) {
+  uint v = src;
+  float t_low = f16tof32((v & 65535u));
+  float t_high = f16tof32(((v >> 16u) & 65535u));
+  float16_t v_1 = float16_t(t_low);
+  return vector<float16_t, 2>(v_1, float16_t(t_high));
 }
 
-typedef matrix<float16_t, 4, 3> u_load_ret[4];
-u_load_ret u_load(uint offset) {
-  matrix<float16_t, 4, 3> arr[4] = (matrix<float16_t, 4, 3>[4])0;
+vector<float16_t, 4> tint_bitcast_to_f16_1(uint2 src) {
+  uint2 v = src;
+  uint2 mask = (65535u).xx;
+  uint2 shift = (16u).xx;
+  float2 t_low = f16tof32((v & mask));
+  float2 t_high = f16tof32(((v >> shift) & mask));
+  float16_t v_2 = float16_t(t_low.x);
+  float16_t v_3 = float16_t(t_high.x);
+  float16_t v_4 = float16_t(t_low.y);
+  return vector<float16_t, 4>(v_2, v_3, v_4, float16_t(t_high.y));
+}
+
+matrix<float16_t, 4, 3> v_5(uint start_byte_offset) {
+  uint4 v_6 = u[(start_byte_offset / 16u)];
+  vector<float16_t, 3> v_7 = tint_bitcast_to_f16_1((((((start_byte_offset & 15u) >> 2u) == 2u)) ? (v_6.zw) : (v_6.xy))).xyz;
+  uint4 v_8 = u[((8u + start_byte_offset) / 16u)];
+  vector<float16_t, 3> v_9 = tint_bitcast_to_f16_1(((((((8u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_8.zw) : (v_8.xy))).xyz;
+  uint4 v_10 = u[((16u + start_byte_offset) / 16u)];
+  vector<float16_t, 3> v_11 = tint_bitcast_to_f16_1(((((((16u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_10.zw) : (v_10.xy))).xyz;
+  uint4 v_12 = u[((24u + start_byte_offset) / 16u)];
+  return matrix<float16_t, 4, 3>(v_7, v_9, v_11, tint_bitcast_to_f16_1(((((((24u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_12.zw) : (v_12.xy))).xyz);
+}
+
+typedef matrix<float16_t, 4, 3> ary_ret[4];
+ary_ret v_13(uint start_byte_offset) {
+  matrix<float16_t, 4, 3> a[4] = (matrix<float16_t, 4, 3>[4])0;
   {
-    for(uint i_1 = 0u; (i_1 < 4u); i_1 = (i_1 + 1u)) {
-      arr[i_1] = u_load_1((offset + (i_1 * 32u)));
+    uint v_14 = 0u;
+    v_14 = 0u;
+    while(true) {
+      uint v_15 = v_14;
+      if ((v_15 >= 4u)) {
+        break;
+      }
+      a[v_15] = v_5((start_byte_offset + (v_15 * 32u)));
+      {
+        v_14 = (v_15 + 1u);
+      }
+      continue;
     }
   }
-  return arr;
+  matrix<float16_t, 4, 3> v_16[4] = a;
+  return v_16;
 }
 
-void f_inner(uint local_invocation_index) {
-  tint_zero_workgroup_memory(local_invocation_index);
-  w = u_load(0u);
-  w[1] = u_load_1(64u);
-  uint2 ubo_load_8 = u[0].zw;
-  vector<float16_t, 2> ubo_load_8_xz = vector<float16_t, 2>(f16tof32(ubo_load_8 & 0xFFFF));
-  float16_t ubo_load_8_y = f16tof32(ubo_load_8[0] >> 16);
-  w[1][0] = vector<float16_t, 3>(ubo_load_8_xz[0], ubo_load_8_y, ubo_load_8_xz[1]).zxy;
-  w[1][0].x = float16_t(f16tof32(((u[0].z) & 0xFFFF)));
+void f_inner(uint tint_local_index) {
+  {
+    uint v_17 = 0u;
+    v_17 = tint_local_index;
+    while(true) {
+      uint v_18 = v_17;
+      if ((v_18 >= 4u)) {
+        break;
+      }
+      w[v_18] = matrix<float16_t, 4, 3>((float16_t(0.0h)).xxx, (float16_t(0.0h)).xxx, (float16_t(0.0h)).xxx, (float16_t(0.0h)).xxx);
+      {
+        v_17 = (v_18 + 1u);
+      }
+      continue;
+    }
+  }
+  GroupMemoryBarrierWithGroupSync();
+  matrix<float16_t, 4, 3> v_19[4] = v_13(0u);
+  w = v_19;
+  w[1u] = v_5(64u);
+  w[1u][0u] = tint_bitcast_to_f16_1(u[0u].zw).xyz.zxy;
+  w[1u][0u].x = tint_bitcast_to_f16(u[0u].z).x;
 }
 
 [numthreads(1, 1, 1)]
-void f(tint_symbol_1 tint_symbol) {
-  f_inner(tint_symbol.local_invocation_index);
-  return;
+void f(f_inputs inputs) {
+  f_inner(inputs.tint_local_index);
 }
+

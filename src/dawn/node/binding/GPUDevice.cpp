@@ -29,7 +29,6 @@
 
 #include <cassert>
 #include <memory>
-#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -133,6 +132,30 @@ createErrorFromWGPUError(Napi::Env env, wgpu::ErrorType type, wgpu::StringView m
     }
     assert(false);
     return {};
+}
+
+Napi::Value createGPUPipelineError(Napi::Env env,
+                                   wgpu::CreatePipelineAsyncStatus status,
+                                   wgpu::StringView message) {
+    Napi::Object pipeline_error_init = Napi::Object::New(env);
+    const char* reason = "invalid";  // this is an illegal reason
+    switch (status) {
+        case wgpu::CreatePipelineAsyncStatus::InternalError:
+            reason = "internal";
+            break;
+        case wgpu::CreatePipelineAsyncStatus::ValidationError:
+            reason = "validation";
+            break;
+        case wgpu::CreatePipelineAsyncStatus::Success:
+        case wgpu::CreatePipelineAsyncStatus::CallbackCancelled:
+            break;
+    }
+
+    pipeline_error_init.Set("reason", reason);
+
+    auto constructors = interop::ConstructorsFor(env);
+    return constructors->GPUPipelineError_ctor.New(
+        {Napi::String::New(env, std::string(message)), pipeline_error_init});
 }
 
 static std::mutex s_device_to_js_map_mutex_;
@@ -294,6 +317,13 @@ interop::Interface<interop::GPUBuffer> GPUDevice::createBuffer(
         return {};
     }
 
+    if (desc.mappedAtCreation && desc.size % 4 != 0) {
+        Napi::RangeError::New(
+            env, "createBuffer failed, size is not a multiple of 4 when mappedAtCreation is true.")
+            .ThrowAsJavaScriptException();
+        return {};
+    }
+
     wgpu::Buffer dawnBuffer = device_.CreateBuffer(&desc);
     // Buffer creation may return nullptr if it fails to map at creation. Translate that to a
     // RangeError as required by the spec.
@@ -387,7 +417,8 @@ interop::Interface<interop::GPUPipelineLayout> GPUDevice::createPipelineLayout(
 
     wgpu::PipelineLayoutDescriptor desc{};
     if (!conv(desc.label, descriptor.label) ||
-        !conv(desc.bindGroupLayouts, desc.bindGroupLayoutCount, descriptor.bindGroupLayouts)) {
+        !conv(desc.bindGroupLayouts, desc.bindGroupLayoutCount, descriptor.bindGroupLayouts) ||
+        !conv(desc.immediateSize, descriptor.immediateSize)) {
         return {};
     }
 
@@ -481,14 +512,14 @@ GPUDevice::createComputePipelineAsync(Napi::Env env,
         &desc, wgpu::CallbackMode::AllowProcessEvents,
         [ctx = std::move(ctx), label = CopyLabel(desc.label)](
             wgpu::CreatePipelineAsyncStatus status, wgpu::ComputePipeline pipeline,
-            wgpu::StringView) {
+            wgpu::StringView message) {
             switch (status) {
                 case wgpu::CreatePipelineAsyncStatus::Success:
                     ctx->promise.Resolve(interop::GPUComputePipeline::Create<GPUComputePipeline>(
                         ctx->env, pipeline, label));
                     break;
                 default:
-                    ctx->promise.Reject(Errors::GPUPipelineError(ctx->env));
+                    ctx->promise.Reject(createGPUPipelineError(ctx->env, status, message));
                     break;
             }
         });
@@ -514,14 +545,14 @@ GPUDevice::createRenderPipelineAsync(Napi::Env env,
         &desc, wgpu::CallbackMode::AllowProcessEvents,
         [ctx = std::move(ctx), label = CopyLabel(desc.label)](
             wgpu::CreatePipelineAsyncStatus status, wgpu::RenderPipeline pipeline,
-            wgpu::StringView) {
+            wgpu::StringView message) {
             switch (status) {
                 case wgpu::CreatePipelineAsyncStatus::Success:
                     ctx->promise.Resolve(interop::GPURenderPipeline::Create<GPURenderPipeline>(
                         ctx->env, pipeline, label));
                     break;
                 default:
-                    ctx->promise.Reject(Errors::GPUPipelineError(ctx->env));
+                    ctx->promise.Reject(createGPUPipelineError(ctx->env, status, message));
                     break;
             }
         });

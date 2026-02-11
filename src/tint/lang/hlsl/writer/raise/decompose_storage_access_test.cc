@@ -65,6 +65,10 @@ TEST_F(HlslWriterDecomposeStorageAccessTest, NoBufferAccess) {
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessChainFromUnnamedAccessChain) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* Inner = ty.Struct(mod.symbols.New("Inner"), {
                                                           {mod.symbols.New("c"), ty.f32()},
                                                           {mod.symbols.New("d"), ty.u32()},
@@ -145,6 +149,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessChainFromLetAccessChain) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* Inner = ty.Struct(mod.symbols.New("Inner"), {
                                                           {mod.symbols.New("c"), ty.f32()},
                                                       });
@@ -226,9 +234,13 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessRwByteAddressBuffer) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb = ty.Struct(mod.symbols.New("SB"), {
                                                     {mod.symbols.New("a"), ty.i32()},
-                                                    {mod.symbols.New("b"), ty.vec3<f32>()},
+                                                    {mod.symbols.New("b"), ty.vec3f()},
                                                 });
 
     auto* var = b.Var("v", storage, sb, core::Access::kReadWrite);
@@ -238,8 +250,8 @@ TEST_F(HlslWriterDecomposeStorageAccessTest, AccessRwByteAddressBuffer) {
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     b.Append(func->Block(), [&] {
         b.Let("a", b.Load(b.Access(ty.ptr(storage, ty.i32(), core::Access::kReadWrite), var, 0_u)));
-        b.Let("b", b.Load(b.Access(ty.ptr(storage, ty.vec3<f32>(), core::Access::kReadWrite), var,
-                                   1_u)));
+        b.Let("b",
+              b.Load(b.Access(ty.ptr(storage, ty.vec3f(), core::Access::kReadWrite), var, 1_u)));
         b.Return(func);
     });
 
@@ -295,6 +307,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessByteAddressBuffer) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb = ty.Struct(mod.symbols.New("SB"), {
                                                     {mod.symbols.New("a"), ty.i32()},
                                                 });
@@ -352,6 +368,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessStorageVector) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, vec4<f32>, core::Access::kRead>("v");
     var->SetBindingPoint(0, 0);
 
@@ -420,6 +440,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessStorageVectorF16) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, vec4<f16>, core::Access::kRead>("v");
     var->SetBindingPoint(0, 0);
 
@@ -483,6 +507,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessStorageMatrix) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, mat4x4<f32>, core::Access::kRead>("v");
     var->SetBindingPoint(0, 0);
 
@@ -559,6 +587,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessStorageArray) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, array<vec3<f32>, 5>, core::Access::kRead>("v");
     var->SetBindingPoint(0, 0);
 
@@ -640,6 +672,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessStorageArrayWhichCanHaveSizesOtherThenFive) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, array<vec3<f32>, 42>, core::Access::kRead>("v");
     var->SetBindingPoint(0, 0);
 
@@ -721,6 +757,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessStorageStruct) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* SB = ty.Struct(mod.symbols.New("SB"), {
                                                     {mod.symbols.New("a"), ty.i32()},
                                                     {mod.symbols.New("b"), ty.f32()},
@@ -798,6 +838,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessStorageNested) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* Inner =
         ty.Struct(mod.symbols.New("Inner"), {
                                                 {mod.symbols.New("s"), ty.mat3x3<f32>()},
@@ -973,9 +1017,13 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, ComplexStaticAccessChain) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* S1 = ty.Struct(mod.symbols.New("S1"), {
                                                     {mod.symbols.New("a"), ty.i32()},
-                                                    {mod.symbols.New("b"), ty.vec3<f32>()},
+                                                    {mod.symbols.New("b"), ty.vec3f()},
                                                     {mod.symbols.New("c"), ty.i32()},
                                                 });
     auto* S2 = ty.Struct(mod.symbols.New("S2"), {
@@ -1080,9 +1128,13 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, ComplexDynamicAccessChain) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* S1 = ty.Struct(mod.symbols.New("S1"), {
                                                     {mod.symbols.New("a"), ty.i32()},
-                                                    {mod.symbols.New("b"), ty.vec3<f32>()},
+                                                    {mod.symbols.New("b"), ty.vec3f()},
                                                     {mod.symbols.New("c"), ty.i32()},
                                                 });
     auto* S2 = ty.Struct(mod.symbols.New("S2"), {
@@ -1202,9 +1254,13 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, ComplexDynamicAccessChainDynamicAccessInMiddle) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* S1 = ty.Struct(mod.symbols.New("S1"), {
                                                     {mod.symbols.New("a"), ty.i32()},
-                                                    {mod.symbols.New("b"), ty.vec3<f32>()},
+                                                    {mod.symbols.New("b"), ty.vec3f()},
                                                     {mod.symbols.New("c"), ty.i32()},
                                                 });
     auto* S2 = ty.Struct(mod.symbols.New("S2"), {
@@ -1308,8 +1364,12 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicStore) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb = ty.Struct(mod.symbols.New("SB"), {
-                                                    {mod.symbols.New("padding"), ty.vec4<f32>()},
+                                                    {mod.symbols.New("padding"), ty.vec4f()},
                                                     {mod.symbols.New("a"), ty.atomic<i32>()},
                                                     {mod.symbols.New("b"), ty.atomic<u32>()},
                                                 });
@@ -1372,9 +1432,13 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicStoreDynamicAccessChain) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* S1 =
         ty.Struct(mod.symbols.New("SB"), {
-                                             {mod.symbols.New("padding"), ty.vec4<f32>()},
+                                             {mod.symbols.New("padding"), ty.vec4f()},
                                              {mod.symbols.New("a"), ty.array(ty.atomic<i32>(), 3)},
                                          });
     auto* S2 = ty.Struct(mod.symbols.New("S2"), {
@@ -1388,6 +1452,7 @@ TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicStoreDynamicAccessChai
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     auto index = b.FunctionParam(ty.u32());
     index->SetLocation(0);
+    index->SetInterpolation(core::Interpolation{core::InterpolationType::kFlat});
     func->SetParams({index});
     b.Append(func->Block(), [&] {
         auto* access = b.Access(ty.ptr<storage>(ty.atomic<i32>()), var, 0_u, index, 1_u, index);
@@ -1409,7 +1474,7 @@ $B1: {  # root
   %v:ptr<storage, S2, read_write> = var undef @binding_point(0, 0)
 }
 
-%foo = @fragment func(%3:u32 [@location(0)]):void {
+%foo = @fragment func(%3:u32 [@location(0), @interpolate(flat)]):void {
   $B2: {
     %4:ptr<storage, atomic<i32>, read_write> = access %v, 0u, %3, 1u, %3
     %5:void = atomicStore %4, 123i
@@ -1433,7 +1498,7 @@ $B1: {  # root
   %v:hlsl.byte_address_buffer<read_write> = var undef @binding_point(0, 0)
 }
 
-%foo = @fragment func(%3:u32 [@location(0)]):void {
+%foo = @fragment func(%3:u32 [@location(0), @interpolate(flat)]):void {
   $B2: {
     %4:u32 = mul %3, 32u
     %5:u32 = mul %3, 4u
@@ -1452,6 +1517,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicStoreDirect) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var("v", storage, ty.atomic<i32>(), core::Access::kReadWrite);
     var->SetBindingPoint(0, 0);
     b.ir.root_block->Append(var);
@@ -1496,8 +1565,12 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicLoad) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb = ty.Struct(mod.symbols.New("SB"), {
-                                                    {mod.symbols.New("padding"), ty.vec4<f32>()},
+                                                    {mod.symbols.New("padding"), ty.vec4f()},
                                                     {mod.symbols.New("a"), ty.atomic<i32>()},
                                                     {mod.symbols.New("b"), ty.atomic<u32>()},
                                                 });
@@ -1563,9 +1636,13 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicLoadDynamicAccessChain) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* S1 =
         ty.Struct(mod.symbols.New("SB"), {
-                                             {mod.symbols.New("padding"), ty.vec4<f32>()},
+                                             {mod.symbols.New("padding"), ty.vec4f()},
                                              {mod.symbols.New("a"), ty.array(ty.atomic<i32>(), 3)},
                                          });
     auto* S2 = ty.Struct(mod.symbols.New("S2"), {
@@ -1579,6 +1656,7 @@ TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicLoadDynamicAccessChain
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     auto index = b.FunctionParam(ty.u32());
     index->SetLocation(0);
+    index->SetInterpolation(core::Interpolation{core::InterpolationType::kFlat});
     func->SetParams({index});
     b.Append(func->Block(), [&] {
         auto* access = b.Access(ty.ptr<storage>(ty.atomic<i32>()), var, 0_u, index, 1_u, index);
@@ -1600,7 +1678,7 @@ $B1: {  # root
   %v:ptr<storage, S2, read_write> = var undef @binding_point(0, 0)
 }
 
-%foo = @fragment func(%3:u32 [@location(0)]):void {
+%foo = @fragment func(%3:u32 [@location(0), @interpolate(flat)]):void {
   $B2: {
     %4:ptr<storage, atomic<i32>, read_write> = access %v, 0u, %3, 1u, %3
     %5:i32 = atomicLoad %4
@@ -1625,7 +1703,7 @@ $B1: {  # root
   %v:hlsl.byte_address_buffer<read_write> = var undef @binding_point(0, 0)
 }
 
-%foo = @fragment func(%3:u32 [@location(0)]):void {
+%foo = @fragment func(%3:u32 [@location(0), @interpolate(flat)]):void {
   $B2: {
     %4:u32 = mul %3, 32u
     %5:u32 = mul %3, 4u
@@ -1646,6 +1724,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicLoadDirect) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var("v", storage, ty.atomic<i32>(), core::Access::kReadWrite);
     var->SetBindingPoint(0, 0);
     b.ir.root_block->Append(var);
@@ -1693,8 +1775,12 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicSub) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb = ty.Struct(mod.symbols.New("SB"), {
-                                                    {mod.symbols.New("padding"), ty.vec4<f32>()},
+                                                    {mod.symbols.New("padding"), ty.vec4f()},
                                                     {mod.symbols.New("a"), ty.atomic<i32>()},
                                                     {mod.symbols.New("b"), ty.atomic<u32>()},
                                                 });
@@ -1761,9 +1847,13 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicSubDynamicAccessChain) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* S1 =
         ty.Struct(mod.symbols.New("SB"), {
-                                             {mod.symbols.New("padding"), ty.vec4<f32>()},
+                                             {mod.symbols.New("padding"), ty.vec4f()},
                                              {mod.symbols.New("a"), ty.array(ty.atomic<i32>(), 3)},
                                          });
     auto* S2 = ty.Struct(mod.symbols.New("S2"), {
@@ -1777,6 +1867,7 @@ TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicSubDynamicAccessChain)
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     auto index = b.FunctionParam(ty.u32());
     index->SetLocation(0);
+    index->SetInterpolation(core::Interpolation{core::InterpolationType::kFlat});
     func->SetParams({index});
     b.Append(func->Block(), [&] {
         auto* access = b.Access(ty.ptr<storage>(ty.atomic<i32>()), var, 0_u, index, 1_u, index);
@@ -1798,7 +1889,7 @@ $B1: {  # root
   %v:ptr<storage, S2, read_write> = var undef @binding_point(0, 0)
 }
 
-%foo = @fragment func(%3:u32 [@location(0)]):void {
+%foo = @fragment func(%3:u32 [@location(0), @interpolate(flat)]):void {
   $B2: {
     %4:ptr<storage, atomic<i32>, read_write> = access %v, 0u, %3, 1u, %3
     %5:i32 = atomicSub %4, 123i
@@ -1823,7 +1914,7 @@ $B1: {  # root
   %v:hlsl.byte_address_buffer<read_write> = var undef @binding_point(0, 0)
 }
 
-%foo = @fragment func(%3:u32 [@location(0)]):void {
+%foo = @fragment func(%3:u32 [@location(0), @interpolate(flat)]):void {
   $B2: {
     %4:u32 = mul %3, 32u
     %5:u32 = mul %3, 4u
@@ -1845,6 +1936,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicSubDirect) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var("v", storage, ty.atomic<i32>(), core::Access::kReadWrite);
     var->SetBindingPoint(0, 0);
     b.ir.root_block->Append(var);
@@ -1893,8 +1988,12 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicCompareExchangeWeak) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb = ty.Struct(mod.symbols.New("SB"), {
-                                                    {mod.symbols.New("padding"), ty.vec4<f32>()},
+                                                    {mod.symbols.New("padding"), ty.vec4f()},
                                                     {mod.symbols.New("a"), ty.atomic<i32>()},
                                                     {mod.symbols.New("b"), ty.atomic<u32>()},
                                                 });
@@ -1974,9 +2073,13 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicCompareExchangeWeakDynamicAccessChain) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* S1 =
         ty.Struct(mod.symbols.New("SB"), {
-                                             {mod.symbols.New("padding"), ty.vec4<f32>()},
+                                             {mod.symbols.New("padding"), ty.vec4f()},
                                              {mod.symbols.New("a"), ty.array(ty.atomic<i32>(), 3)},
                                          });
     auto* S2 = ty.Struct(mod.symbols.New("S2"), {
@@ -1990,6 +2093,7 @@ TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicCompareExchangeWeakDyn
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     auto index = b.FunctionParam(ty.u32());
     index->SetLocation(0);
+    index->SetInterpolation(core::Interpolation{core::InterpolationType::kFlat});
     func->SetParams({index});
     b.Append(func->Block(), [&] {
         auto* access = b.Access(ty.ptr<storage>(ty.atomic<i32>()), var, 0_u, index, 1_u, index);
@@ -2017,7 +2121,7 @@ $B1: {  # root
   %v:ptr<storage, S2, read_write> = var undef @binding_point(0, 0)
 }
 
-%foo = @fragment func(%3:u32 [@location(0)]):void {
+%foo = @fragment func(%3:u32 [@location(0), @interpolate(flat)]):void {
   $B2: {
     %4:ptr<storage, atomic<i32>, read_write> = access %v, 0u, %3, 1u, %3
     %5:__atomic_compare_exchange_result_i32 = atomicCompareExchangeWeak %4, 123i, 345i
@@ -2047,7 +2151,7 @@ $B1: {  # root
   %v:hlsl.byte_address_buffer<read_write> = var undef @binding_point(0, 0)
 }
 
-%foo = @fragment func(%3:u32 [@location(0)]):void {
+%foo = @fragment func(%3:u32 [@location(0), @interpolate(flat)]):void {
   $B2: {
     %4:u32 = mul %3, 32u
     %5:u32 = mul %3, 4u
@@ -2070,6 +2174,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StorageAtomicCompareExchangeWeakDirect) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var("v", storage, ty.atomic<i32>(), core::Access::kReadWrite);
     var->SetBindingPoint(0, 0);
     b.ir.root_block->Append(var);
@@ -2140,10 +2248,14 @@ struct AtomicData {
 }
 using DecomposeBuiltinAtomic = core::ir::transform::TransformTestWithParam<AtomicData>;
 TEST_P(DecomposeBuiltinAtomic, IndirectAccess) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto params = GetParam();
 
     auto* sb = ty.Struct(mod.symbols.New("SB"), {
-                                                    {mod.symbols.New("padding"), ty.vec4<f32>()},
+                                                    {mod.symbols.New("padding"), ty.vec4f()},
                                                     {mod.symbols.New("a"), ty.atomic<i32>()},
                                                     {mod.symbols.New("b"), ty.atomic<u32>()},
                                                 });
@@ -2211,6 +2323,10 @@ $B1: {  # root
 }
 
 TEST_P(DecomposeBuiltinAtomic, DirectAccess) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto param = GetParam();
 
     auto* var = b.Var("v", storage, ty.atomic<u32>(), core::Access::kReadWrite);
@@ -2261,6 +2377,10 @@ $B1: {  # root
 }
 
 TEST_P(DecomposeBuiltinAtomic, DynamicAccessChain) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto param = GetParam();
 
     auto* S1 = ty.Struct(mod.symbols.New("S1"),
@@ -2278,6 +2398,7 @@ TEST_P(DecomposeBuiltinAtomic, DynamicAccessChain) {
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     auto index = b.FunctionParam(ty.u32());
     index->SetLocation(0);
+    index->SetInterpolation(core::Interpolation{core::InterpolationType::kFlat});
     func->SetParams({index});
     b.Append(func->Block(), [&] {
         auto* access = b.Access(ty.ptr<storage>(ty.atomic<u32>()), var, 0_u, index, 0_u, index);
@@ -2298,7 +2419,7 @@ $B1: {  # root
   %v:ptr<storage, S2, read_write> = var undef @binding_point(0, 0)
 }
 
-%foo = @fragment func(%3:u32 [@location(0)]):void {
+%foo = @fragment func(%3:u32 [@location(0), @interpolate(flat)]):void {
   $B2: {
     %4:ptr<storage, atomic<u32>, read_write> = access %v, 0u, %3, 0u, %3
     %5:u32 = )" +
@@ -2323,7 +2444,7 @@ $B1: {  # root
   %v:hlsl.byte_address_buffer<read_write> = var undef @binding_point(0, 0)
 }
 
-%foo = @fragment func(%3:u32 [@location(0)]):void {
+%foo = @fragment func(%3:u32 [@location(0), @interpolate(flat)]):void {
   $B2: {
     %4:u32 = mul %3, 12u
     %5:u32 = mul %3, 4u
@@ -2356,6 +2477,10 @@ INSTANTIATE_TEST_SUITE_P(
                                "InterlockedExchange"}));
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreVecF32) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, vec4<f32>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
     b.ir.root_block->Append(var);
@@ -2411,6 +2536,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreScalar) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, f32, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -2453,6 +2582,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreScalarF16) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, f16, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -2494,6 +2627,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreVectorElement) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, vec3<f32>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -2536,6 +2673,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreVectorElementF16) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, vec3<f16>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -2577,13 +2718,17 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreVector) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, vec3<f32>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
     b.ir.root_block->Append(var);
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     b.Append(func->Block(), [&] {
-        b.Store(var, b.Composite(ty.vec3<f32>(), 2_f, 3_f, 4_f));
+        b.Store(var, b.Composite(ty.vec3f(), 2_f, 3_f, 4_f));
         b.Return(func);
     });
 
@@ -2619,13 +2764,17 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreVectorF16) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, vec3<f16>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
     b.ir.root_block->Append(var);
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     b.Append(func->Block(), [&] {
-        b.Store(var, b.Composite(ty.vec3<f16>(), 2_h, 3_h, 4_h));
+        b.Store(var, b.Composite(ty.vec3h(), 2_h, 3_h, 4_h));
 
         b.Return(func);
     });
@@ -2661,6 +2810,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreMatrixElement) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, mat2x3<f32>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -2705,6 +2858,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreMatrixElementF16) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, mat2x3<f16>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -2748,6 +2905,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreMatrixColumn) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, mat2x3<f32>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -2792,6 +2953,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreMatrixColumnF16) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, mat2x3<f16>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -2835,6 +3000,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreMatrix) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, mat2x3<f32>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -2889,6 +3058,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreMatrixF16) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, mat2x3<f16>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -2941,6 +3114,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreArrayElement) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, array<f32, 5>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -2984,6 +3161,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreArrayElementF16) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, array<f16, 5>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -3026,6 +3207,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreArray) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* var = b.Var<storage, array<vec3<f32>, 5>, core::Access::kReadWrite>("v");
     var->SetBindingPoint(0, 0);
 
@@ -3098,6 +3283,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreStructMember) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* SB = ty.Struct(mod.symbols.New("SB"), {
                                                     {mod.symbols.New("a"), ty.i32()},
                                                     {mod.symbols.New("b"), ty.f32()},
@@ -3156,6 +3345,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreStructMemberF16) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* SB = ty.Struct(mod.symbols.New("SB"), {
                                                     {mod.symbols.New("a"), ty.i32()},
                                                     {mod.symbols.New("b"), ty.f16()},
@@ -3213,6 +3406,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreStructNested) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* Inner =
         ty.Struct(mod.symbols.New("Inner"), {
                                                 {mod.symbols.New("s"), ty.mat3x3<f32>()},
@@ -3301,9 +3498,13 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreStruct) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* Inner = ty.Struct(mod.symbols.New("Inner"), {
                                                           {mod.symbols.New("s"), ty.f32()},
-                                                          {mod.symbols.New("t"), ty.vec3<f32>()},
+                                                          {mod.symbols.New("t"), ty.vec3f()},
                                                       });
     auto* Outer = ty.Struct(mod.symbols.New("Outer"), {
                                                           {mod.symbols.New("x"), ty.f32()},
@@ -3426,6 +3627,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, StoreStructComplex) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* Inner =
         ty.Struct(mod.symbols.New("Inner"), {
                                                 {mod.symbols.New("s"), ty.mat3x3<f32>()},
@@ -3595,6 +3800,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, ArrayLengthDirect) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb = b.Var("sb", ty.ptr<storage, array<i32>>());
     sb->SetBindingPoint(0, 0);
     b.ir.root_block->Append(sb);
@@ -3641,6 +3850,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, ArrayLengthInStruct) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* SB =
         ty.Struct(mod.symbols.New("SB"), {
                                              {mod.symbols.New("x"), ty.i32()},
@@ -3706,6 +3919,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, ArrayLengthOfStruct) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* SB = ty.Struct(mod.symbols.New("SB"), {
                                                     {mod.symbols.New("f"), ty.f32()},
                                                 });
@@ -3764,6 +3981,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, ArrayLengthArrayOfArrayOfStruct) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* SB = ty.Struct(mod.symbols.New("SB"), {
                                                     {mod.symbols.New("f"), ty.f32()},
                                                 });
@@ -3821,6 +4042,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, ArrayLengthMultiple) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb = b.Var("sb", ty.ptr<storage, array<i32>>());
     sb->SetBindingPoint(0, 0);
     b.ir.root_block->Append(sb);
@@ -3883,6 +4108,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, ArrayLengthMultipleStorageBuffers) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* SB1 =
         ty.Struct(mod.symbols.New("SB1"), {
                                               {mod.symbols.New("x"), ty.i32()},
@@ -3891,7 +4120,7 @@ TEST_F(HlslWriterDecomposeStorageAccessTest, ArrayLengthMultipleStorageBuffers) 
     auto* SB2 = ty.Struct(mod.symbols.New("SB2"),
                           {
                               {mod.symbols.New("x"), ty.i32()},
-                              {mod.symbols.New("arr2"), ty.runtime_array(ty.vec4<f32>())},
+                              {mod.symbols.New("arr2"), ty.runtime_array(ty.vec4f())},
                           });
     auto* sb1 = b.Var("sb1", ty.ptr(storage, SB1));
     sb1->SetBindingPoint(0, 0);
@@ -3993,9 +4222,13 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, AccessChainReused) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb = ty.Struct(mod.symbols.New("SB"), {
                                                     {mod.symbols.New("a"), ty.i32()},
-                                                    {mod.symbols.New("b"), ty.vec3<f32>()},
+                                                    {mod.symbols.New("b"), ty.vec3f()},
                                                 });
 
     auto* var = b.Var("v", storage, sb, core::Access::kReadWrite);
@@ -4004,7 +4237,7 @@ TEST_F(HlslWriterDecomposeStorageAccessTest, AccessChainReused) {
 
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     b.Append(func->Block(), [&] {
-        auto* x = b.Access(ty.ptr(storage, ty.vec3<f32>(), core::Access::kReadWrite), var, 1_u);
+        auto* x = b.Access(ty.ptr(storage, ty.vec3f(), core::Access::kReadWrite), var, 1_u);
         b.Let("b", b.LoadVectorElement(x, 1_u));
         b.Let("c", b.LoadVectorElement(x, 2_u));
         b.Return(func);
@@ -4061,6 +4294,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, Determinism_MultipleUsesOfLetFromVar) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb =
         ty.Struct(mod.symbols.New("SB"), {
                                              {mod.symbols.New("a"), ty.array<vec4<f32>, 2>()},
@@ -4196,6 +4433,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, Determinism_MultipleUsesOfLetFromAccess) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb =
         ty.Struct(mod.symbols.New("SB"), {
                                              {mod.symbols.New("a"), ty.array<vec4<f32>, 2>()},
@@ -4332,6 +4573,10 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterDecomposeStorageAccessTest, Determinism_MultipleUsesOfAccess) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto* sb =
         ty.Struct(mod.symbols.New("SB"), {
                                              {mod.symbols.New("a"), ty.array<vec4<f32>, 2>()},

@@ -203,9 +203,9 @@ T As(const Scalar& s) {
 }
 
 using ast_type_func_ptr = ast::Type (*)(ProgramBuilder& b);
-using ast_expr_func_ptr = const ast::Expression* (*)(ProgramBuilder& b, VectorRef<Scalar> args);
-using ast_expr_from_double_func_ptr = const ast::Expression* (*)(ProgramBuilder& b, double v);
-using sem_type_func_ptr = const core::type::Type* (*)(ProgramBuilder& b);
+using ast_expr_func_ptr = const ast::Expression* (*)(ProgramBuilder & b, VectorRef<Scalar> args);
+using ast_expr_from_double_func_ptr = const ast::Expression* (*)(ProgramBuilder & b, double v);
+using sem_type_func_ptr = const core::type::Type* (*)(ProgramBuilder & b);
 using type_name_func_ptr = std::string (*)();
 
 struct UnspecializedElementType {};
@@ -635,7 +635,7 @@ struct DataType<alias<T, ID>> {
             auto type = DataType<T>::AST(b);
             b.AST().AddTypeDecl(b.ty.alias(name, type));
         }
-        return b.ty(name);
+        return b.ty.AsType(name);
     }
 
     /// @param b the ProgramBuilder
@@ -747,10 +747,7 @@ struct DataType<core::fluent_types::array<T, N>> {
         return b.create<sem::Array>(
             /* element */ el,
             /* count */ count,
-            /* align */ el->Align(),
-            /* size */ N * el->Size(),
-            /* stride */ el->Align(),
-            /* implicit_stride */ el->Align());
+            /* size */ N * el->Size());
     }
     /// @param b the ProgramBuilder
     /// @param args args of size 1 or N with values of type T to initialize with

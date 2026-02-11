@@ -59,6 +59,10 @@ declare_args() {
   # See crbug.com/tint/1753.
   dawn_use_built_dxc = is_win && target_cpu != "x86"
 
+  # Force Dawn to load components like d3dcompiler_47.dll and vulkan-1.dll from
+  # system directories instead of local directories.
+  dawn_force_system_component_load = false
+
   # Whether to build Dawn's NodeJS bindings
   dawn_build_node_bindings = false
 }
@@ -122,9 +126,9 @@ declare_args() {
   dawn_enable_vulkan_loader =
       dawn_enable_vulkan && (is_mac || (is_linux && !is_android))
 
-  # Disable SPIR-V validation on Android because it adds a significant amount
-  # to the binary size, and Tint's output should be well-formed.
-  dawn_enable_spirv_validation = dawn_enable_vulkan && !is_android
+  # Enable SPIR-V validation by default.
+  # A Dawn toggle can be used to disable this at runtime for Graphite.
+  dawn_enable_spirv_validation = dawn_enable_vulkan
 }
 
 # UWP only supports CoreWindow for windowing

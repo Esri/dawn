@@ -71,14 +71,15 @@ function(tint_core_compile_options TARGET)
   target_compile_definitions(${TARGET} PUBLIC -DTINT_BUILD_MSL_WRITER=$<BOOL:${TINT_BUILD_MSL_WRITER}>)
   target_compile_definitions(${TARGET} PUBLIC -DTINT_BUILD_SPV_READER=$<BOOL:${TINT_BUILD_SPV_READER}>)
   target_compile_definitions(${TARGET} PUBLIC -DTINT_BUILD_SPV_WRITER=$<BOOL:${TINT_BUILD_SPV_WRITER}>)
-  target_compile_definitions(${TARGET} PUBLIC -DTINT_BUILD_SYNTAX_TREE_WRITER=$<BOOL:${TINT_BUILD_SYNTAX_TREE_WRITER}>)
   target_compile_definitions(${TARGET} PUBLIC -DTINT_BUILD_WGSL_READER=$<BOOL:${TINT_BUILD_WGSL_READER}>)
   target_compile_definitions(${TARGET} PUBLIC -DTINT_BUILD_WGSL_WRITER=$<BOOL:${TINT_BUILD_WGSL_WRITER}>)
+  target_compile_definitions(${TARGET} PUBLIC -DTINT_BUILD_NULL_WRITER=$<BOOL:${TINT_BUILD_NULL_WRITER}>)
   target_compile_definitions(${TARGET} PUBLIC -DTINT_BUILD_TINTD=$<BOOL:${TINT_BUILD_TINTD}>)
   target_compile_definitions(${TARGET} PUBLIC -DTINT_ENABLE_IR_VALIDATION=$<BOOL:${TINT_ENABLE_IR_VALIDATION}>)
 
   if(TINT_BUILD_FUZZERS)
     target_compile_options(${TARGET} PRIVATE "-fsanitize=fuzzer")
+    target_compile_definitions(${TARGET} PUBLIC -DTINT_BUILD_FUZZER_VULKAN_SUPPORT=$<BOOL:${TINT_BUILD_FUZZER_VULKAN_SUPPORT}>)
   endif()
 
   common_compile_options(${TARGET})
@@ -104,6 +105,7 @@ function(tint_default_compile_options TARGET)
   set(COMMON_CLANG_OPTIONS
     -Wno-c++98-compat
     -Wno-c++98-compat-pedantic
+    -Wno-deprecated-copy-with-dtor
     -Wno-format-pedantic
     -Wno-poison-system-directories
     -Wno-return-std-move-in-c++11
@@ -113,6 +115,10 @@ function(tint_default_compile_options TARGET)
     -Weverything
     -Wunsafe-buffer-usage
     -Wno-unsafe-buffer-usage-in-libc-call
+    -Wno-covered-switch-default
+    -Wno-c2y-extensions
+    -Wno-lifetime-safety-intra-tu-suggestions
+    -Wno-lifetime-safety-cross-tu-suggestions
   )
 
   if(COMPILER_IS_GNU)
@@ -141,6 +147,7 @@ function(tint_default_compile_options TARGET)
       /bigobj
       /EHsc
       /W4
+      /wd4018 # '>=': signed/unsigned mismatch (Comes from protobuf library)
       /wd4068 # unknown pragma
       /wd4127 # conditional expression is constant
       /wd4244 # 'conversion' conversion from 'type1' to 'type2', possible loss of data
@@ -193,7 +200,9 @@ function(tint_default_compile_options TARGET)
         )
       endif()
     endif()
+  endif()
 
+  if (WIN32)
     target_compile_definitions(${TARGET} INTERFACE "NOMINMAX")
   endif()
 
@@ -409,6 +418,7 @@ function(tint_add_target TARGET KIND)
   elseif(${KIND} STREQUAL cmd)
     add_executable(${TARGET})
     tint_default_compile_options(${TARGET})
+    install(TARGETS "${TARGET}")
   elseif(${KIND} STREQUAL test_cmd)
     add_executable(${TARGET})
     tint_test_cmd_compile_options(${TARGET})
@@ -521,7 +531,7 @@ function(tint_target_add_external_dependencies TARGET KIND)
     elseif(${DEPENDENCY} STREQUAL "dxc-include")
       target_include_directories(${TARGET} PRIVATE "${DAWN_THIRD_PARTY_DIR}/dxc/include")
     elseif(${DEPENDENCY} STREQUAL "dxcompiler-for-fuzzer")
-      if(TINT_BUILD_FUZZERS) # TODO: and target arch is not x86
+      if(TINT_BUILD_FUZZERS AND DAWN_USE_BUILT_DXC) # TODO: and target arch is not x86
         target_link_libraries(${TARGET} PRIVATE dxcompiler)
       endif()
     elseif(${DEPENDENCY} STREQUAL "jsoncpp")
@@ -576,6 +586,13 @@ function(tint_target_add_external_dependencies TARGET KIND)
     elseif(${DEPENDENCY} STREQUAL "thread")
       find_package(Threads REQUIRED)
       target_link_libraries(${TARGET} PRIVATE Threads::Threads)
+    elseif(${DEPENDENCY} STREQUAL "vulkan-headers")
+      target_link_libraries(${TARGET} PRIVATE Vulkan::Headers)
+    elseif(${DEPENDENCY} STREQUAL "libvulkan")
+      if (NOT TINT_BUILD_FUZZER_VULKAN_SUPPORT)
+        message(FATAL_ERROR "unexpected external dependency ${DEPENDENCY} w/o enabling TINT_BUILD_FUZZER_VULKAN_SUPPORT")
+      endif()
+      target_link_libraries(${TARGET} PRIVATE Vulkan::Loader)
     elseif(${DEPENDENCY} STREQUAL "winsock")
       target_link_libraries(${TARGET} PRIVATE ws2_32)
     elseif(${DEPENDENCY} STREQUAL "src_utils")

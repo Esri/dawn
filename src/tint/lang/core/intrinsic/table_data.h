@@ -33,8 +33,8 @@
 #include <string>
 
 #include "src/tint/lang/core/constant/eval.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/evaluation_stage.h"
-#include "src/tint/lang/core/parameter_usage.h"
 #include "src/tint/utils/containers/enum_set.h"
 #include "src/tint/utils/containers/slice.h"
 #include "src/tint/utils/text/styled_text.h"
@@ -160,6 +160,9 @@ using OverloadFlags = tint::EnumSet<OverloadFlag>;
 struct ParameterInfo {
     /// The parameter usage (parameter name in definition file)
     const ParameterUsage usage;
+
+    /// True if the parameter is required to be constant.
+    const bool is_const;
 
     /// Index of the matcher indices that are used to match the parameter types.
     /// These indices are consumed by the matchers themselves.

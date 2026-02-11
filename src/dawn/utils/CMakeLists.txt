@@ -48,18 +48,21 @@ dawn_add_library(
     "${DAWN_UTILS_GEN_HEADERS}"
     "ComboRenderBundleEncoderDescriptor.h"
     "ComboRenderPipelineDescriptor.h"
+    "ScopedIgnoreValidationErrors.h"
     "TextureUtils.h"
     "WGPUHelpers.h"
   SOURCES
     "${DAWN_UTILS_GEN_SOURCES}"
     "ComboRenderBundleEncoderDescriptor.cpp"
     "ComboRenderPipelineDescriptor.cpp"
+    "ScopedIgnoreValidationErrors.cpp"
     "TextureUtils.cpp"
     "WGPUHelpers.cpp"
   DEPENDS
     webgpu_cpp
     dawn_internal_config
     dawn::dawn_common
+    absl::flat_hash_set
   PRIVATE_DEPENDS
     ${private_wgpu_depends}
 )
@@ -87,10 +90,12 @@ dawn_add_library(
     "TestUtils.cpp"
     "WireHelper.cpp"
   DEPENDS
+    dawn_wgpu_utils
     webgpu_cpp
     dawn::dawn_common
     dawn::dawn_wire
     dawn::partition_alloc
+    absl::flat_hash_set
 )
 
 ###############################################################################
@@ -100,11 +105,13 @@ dawn_add_library(
 set(private_system_headers
     "CommandLineParser.h"
     "PlatformDebugLogger.h"
+    "SystemHandle.h"
     "SystemUtils.h"
     "Timer.h"
 )
 set(system_sources
     "CommandLineParser.cpp"
+    "SystemHandle.cpp"
     "SystemUtils.cpp"
 )
 set(private_system_depends)

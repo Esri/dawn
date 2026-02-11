@@ -25,7 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/core/builtin_value.h"
+#include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/wgsl/ast/discard_statement.h"
 #include "src/tint/lang/wgsl/ast/return_statement.h"
 #include "src/tint/lang/wgsl/ast/stage_attribute.h"
@@ -984,7 +984,7 @@ TEST_F(ResolverFunctionValidationTest, ReturnIsConstructible_StructOfAtomic) {
     Structure("S", Vector{
                        Member("m", ty.atomic(ty.i32())),
                    });
-    auto ret_type = ty(Source{{12, 34}}, "S");
+    auto ret_type = ty.AsType(Source{{12, 34}}, "S");
     Func("f", tint::Empty, ret_type, tint::Empty);
 
     EXPECT_FALSE(r()->Resolve());
@@ -1003,7 +1003,7 @@ TEST_F(ResolverFunctionValidationTest, ParameterStoreType_NonAtomicFree) {
     Structure("S", Vector{
                        Member("m", ty.atomic(ty.i32())),
                    });
-    auto ret_type = ty(Source{{12, 34}}, "S");
+    auto ret_type = ty.AsType(Source{{12, 34}}, "S");
     auto* bar = Param("bar", ret_type);
     Func("f", Vector{bar}, ty.void_(), tint::Empty);
 
@@ -1015,7 +1015,7 @@ TEST_F(ResolverFunctionValidationTest, ParameterStoreType_AtomicFree) {
     Structure("S", Vector{
                        Member("m", ty.i32()),
                    });
-    auto ret_type = ty(Source{{12, 34}}, "S");
+    auto ret_type = ty.AsType(Source{{12, 34}}, "S");
     auto* bar = Param(Source{{12, 34}}, "bar", ret_type);
     Func("f", Vector{bar}, ty.void_(), tint::Empty);
 
@@ -1084,7 +1084,7 @@ TEST_P(ResolverFunctionParameterValidationTest, AddressSpaceWithoutUnrestrictedP
 
     auto& param = GetParam();
     Structure("S", Vector{Member("a", ty.i32())});
-    auto ptr_type = ty("ptr", Ident(Source{{12, 34}}, param.address_space), ty("S"));
+    auto ptr_type = ty.AsType("ptr", Ident(Source{{12, 34}}, param.address_space), ty.AsType("S"));
     auto* arg = Param(Source{{12, 34}}, "p", ptr_type);
     Func("f", Vector{arg}, ty.void_(), tint::Empty);
 
@@ -1099,9 +1099,9 @@ TEST_P(ResolverFunctionParameterValidationTest, AddressSpaceWithoutUnrestrictedP
         ss << param.address_space;
         EXPECT_FALSE(r.Resolve());
         if (param.expectation == Expectation::kInvalid) {
-            std::string err = R"(12:34 error: unresolved address space '${addr_space}'
+            std::string err = R"(12:34 error: unresolved address space ')" +
+                              tint::ToString(param.address_space) + R"('
 12:34 note: Possible values: 'function', 'immediate', 'pixel_local', 'private', 'storage', 'uniform', 'workgroup')";
-            err = tint::ReplaceAll(err, "${addr_space}", tint::ToString(param.address_space));
             EXPECT_EQ(r.error(), err);
         } else {
             EXPECT_EQ(r.error(), "12:34 error: function parameter of pointer type cannot be in '" +
@@ -1112,7 +1112,7 @@ TEST_P(ResolverFunctionParameterValidationTest, AddressSpaceWithoutUnrestrictedP
 TEST_P(ResolverFunctionParameterValidationTest, AddressSpaceWithUnrestrictedPointerParameters) {
     auto& param = GetParam();
     Structure("S", Vector{Member("a", ty.i32())});
-    auto ptr_type = ty("ptr", Ident(Source{{12, 34}}, param.address_space), ty("S"));
+    auto ptr_type = ty.AsType("ptr", Ident(Source{{12, 34}}, param.address_space), ty.AsType("S"));
     auto* arg = Param(Source{{12, 34}}, "p", ptr_type);
     Func("f", Vector{arg}, ty.void_(), tint::Empty);
 
@@ -1126,9 +1126,9 @@ TEST_P(ResolverFunctionParameterValidationTest, AddressSpaceWithUnrestrictedPoin
     } else {
         EXPECT_FALSE(r()->Resolve());
         if (param.expectation == Expectation::kInvalid) {
-            std::string err = R"(12:34 error: unresolved address space '${addr_space}'
+            std::string err = R"(12:34 error: unresolved address space ')" +
+                              tint::ToString(param.address_space) + R"('
 12:34 note: Possible values: 'function', 'immediate', 'pixel_local', 'private', 'storage', 'uniform', 'workgroup')";
-            err = tint::ReplaceAll(err, "${addr_space}", tint::ToString(param.address_space));
             EXPECT_EQ(r()->error(), err);
         } else {
             EXPECT_EQ(r()->error(),
@@ -1149,6 +1149,8 @@ INSTANTIATE_TEST_SUITE_P(
                                Expectation::kPassWithUnrestrictedPointerParameters},
                     TestParams{core::AddressSpace::kHandle, Expectation::kInvalid},
                     TestParams{core::AddressSpace::kStorage,
+                               Expectation::kPassWithUnrestrictedPointerParameters},
+                    TestParams{core::AddressSpace::kImmediate,
                                Expectation::kPassWithUnrestrictedPointerParameters},
                     TestParams{core::AddressSpace::kPixelLocal, Expectation::kAlwaysFail},
                     TestParams{core::AddressSpace::kPrivate, Expectation::kAlwaysPass},

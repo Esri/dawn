@@ -454,9 +454,9 @@ class ShaderRobustnessPerf : public DawnPerfTestWithParams<ShaderRobustnessParam
           mDimBOuter(GetParam().mDimBOuter) {}
     ~ShaderRobustnessPerf() override = default;
 
-    void SetUp() override;
-
   protected:
+    void SetUpPerfTest() override;
+
     std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
         auto requirements = DawnPerfTestWithParams<ShaderRobustnessParams>::GetRequiredFeatures();
         if ((GetParam().mElemType == ElemType::F16) &&
@@ -484,9 +484,7 @@ class ShaderRobustnessPerf : public DawnPerfTestWithParams<ShaderRobustnessParam
     uint32_t mDimBOuter;
 };
 
-void ShaderRobustnessPerf::SetUp() {
-    DawnPerfTestWithParams<ShaderRobustnessParams>::SetUp();
-
+void ShaderRobustnessPerf::SetUpPerfTest() {
     DAWN_TEST_UNSUPPORTED_IF((GetParam().mElemType == ElemType::F16) &&
                              !SupportsFeatures({wgpu::FeatureName::ShaderF16}));
 
@@ -594,22 +592,27 @@ TEST_P(ShaderRobustnessPerf, Run) {
     RunTest();
 }
 
-DAWN_INSTANTIATE_TEST_P(
-    ShaderRobustnessPerf,
-    {D3D12Backend({"use_tint_ir"}), D3D12Backend({"disable_robustness", "use_tint_ir"}, {}),
-     D3D12Backend({"enable_integer_range_analysis_in_robustness", "use_tint_ir"}, {}),
-     MetalBackend(), MetalBackend({"disable_robustness"}, {}),
-     MetalBackend({"enable_integer_range_analysis_in_robustness"}, {}), OpenGLBackend(),
-     OpenGLBackend({"disable_robustness"}, {}),
-     OpenGLBackend({"enable_integer_range_analysis_in_robustness"}, {}), VulkanBackend(),
-     VulkanBackend({"disable_robustness"}, {}),
-     VulkanBackend({"enable_integer_range_analysis_in_robustness"}, {})},
-    {MatMulMethod::MatMulFloatOneDimSharedArray, MatMulMethod::MatMulFloatTwoDimSharedArray,
-     MatMulMethod::MatMulVec4OneDimSharedArray, MatMulMethod::MatMulVec4TwoDimSharedArray},
-    {ElemType::F32, ElemType::F16},
-    {512u},
-    {512u},
-    {512u});
+DAWN_INSTANTIATE_TEST_P(ShaderRobustnessPerf,
+                        {D3D12Backend({}, {"enable_integer_range_analysis_in_robustness"}),
+                         D3D12Backend({"enable_integer_range_analysis_in_robustness"}, {}),
+                         D3D12Backend({"disable_robustness"}, {}),
+                         MetalBackend({}, {"enable_integer_range_analysis_in_robustness"}),
+                         MetalBackend({"enable_integer_range_analysis_in_robustness"}, {}),
+                         MetalBackend({"disable_robustness"}, {}),
+                         OpenGLBackend({}, {"enable_integer_range_analysis_in_robustness"}),
+                         OpenGLBackend({"enable_integer_range_analysis_in_robustness"}, {}),
+                         OpenGLBackend({"disable_robustness"}, {}),
+                         VulkanBackend({}, {"enable_integer_range_analysis_in_robustness"}),
+                         VulkanBackend({"enable_integer_range_analysis_in_robustness"}, {}),
+                         VulkanBackend({"disable_robustness"}, {})},
+                        {MatMulMethod::MatMulFloatOneDimSharedArray,
+                         MatMulMethod::MatMulFloatTwoDimSharedArray,
+                         MatMulMethod::MatMulVec4OneDimSharedArray,
+                         MatMulMethod::MatMulVec4TwoDimSharedArray},
+                        {ElemType::F32, ElemType::F16},
+                        {512u},
+                        {512u},
+                        {512u});
 
 }  // anonymous namespace
 }  // namespace dawn

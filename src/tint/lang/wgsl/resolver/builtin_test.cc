@@ -2196,7 +2196,7 @@ class ResolverBuiltinTest_TextureOperation : public ResolverTestWithParam<Textur
     ast::Type GetCoordsType(core::type::TextureDimension dim, ast::Type scalar) {
         switch (dim) {
             case core::type::TextureDimension::k1d:
-                return ty(scalar);
+                return scalar;
             case core::type::TextureDimension::k2d:
             case core::type::TextureDimension::k2dArray:
                 return ty.vec2(scalar);
@@ -2216,7 +2216,7 @@ class ResolverBuiltinTest_TextureOperation : public ResolverTestWithParam<Textur
 
     void add_call_param(std::string name, ast::Type type, ExpressionList* call_params) {
         std::string type_name = type->identifier->symbol.Name();
-        if (tint::HasPrefix(type_name, "texture") || tint::HasPrefix(type_name, "sampler")) {
+        if (type_name.starts_with("texture") || type_name.starts_with("sampler")) {
             GlobalVar(name, type, Binding(0_a), Group(0_a));
         } else {
             GlobalVar(name, type, core::AddressSpace::kPrivate);

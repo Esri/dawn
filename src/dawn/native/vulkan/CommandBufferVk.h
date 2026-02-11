@@ -45,10 +45,13 @@ namespace dawn::native::vulkan {
 
 struct CommandRecordingContext;
 class Device;
+class ResourceTable;
 
 MaybeError RecordBeginRenderPass(CommandRecordingContext* recordingContext,
                                  Device* device,
                                  BeginRenderPassCmd* renderPass);
+
+void RecordEndRenderPass(CommandRecordingContext* recordingContext, Device* device);
 
 class CommandBuffer final : public CommandBufferBase {
   public:
@@ -62,13 +65,15 @@ class CommandBuffer final : public CommandBufferBase {
 
     MaybeError RecordComputePass(CommandRecordingContext* recordingContext,
                                  BeginComputePassCmd* computePass,
-                                 const ComputePassResourceUsage& resourceUsages);
+                                 const ComputePassResourceUsage& resourceUsages,
+                                 ResourceTable* resourceTable);
     MaybeError RecordRenderPass(CommandRecordingContext* recordingContext,
-                                BeginRenderPassCmd* renderPass);
+                                BeginRenderPassCmd* renderPass,
+                                ResourceTable* resourceTable);
     MaybeError RecordCopyImageWithTemporaryBuffer(CommandRecordingContext* recordingContext,
                                                   const TextureCopy& srcCopy,
                                                   const TextureCopy& dstCopy,
-                                                  const Extent3D& copySize);
+                                                  const TexelExtent3D& texelCopySize);
 };
 
 }  // namespace dawn::native::vulkan

@@ -60,7 +60,7 @@ struct HlslWriterPixelLocalTest : core::ir::transform::TransformTest {
         Vector<core::type::Manager::StructMemberDesc, 3> members;
         core::IOAttributes attrs;
         attrs.builtin = core::BuiltinValue::kPosition;
-        members.Emplace(mod.symbols.New("pos"), ty.vec4<f32>(), attrs);
+        members.Emplace(mod.symbols.New("pos"), ty.vec4f(), attrs);
         if (multiple_builtins) {
             attrs.builtin = core::BuiltinValue::kFrontFacing;
             members.Emplace(mod.symbols.New("front_facing"), ty.bool_(), attrs);
@@ -69,8 +69,7 @@ struct HlslWriterPixelLocalTest : core::ir::transform::TransformTest {
         }
         auto* param_struct_ty = ty.Struct(mod.symbols.New("params"), members);
 
-        auto* func =
-            b.Function("main", ty.vec4<f32>(), core::ir::Function::PipelineStage::kFragment);
+        auto* func = b.Function("main", ty.vec4f(), core::ir::Function::PipelineStage::kFragment);
         func->SetReturnLocation(0_u);
         func->SetParams({b.FunctionParam(param_struct_ty)});
         return {func, pl};
@@ -93,10 +92,9 @@ struct HlslWriterPixelLocalTest : core::ir::transform::TransformTest {
         core::IOAttributes attrs;
         attrs.builtin = core::BuiltinValue::kPosition;
         auto* param_struct_ty =
-            ty.Struct(mod.symbols.New("params"), {{mod.symbols.New("pos"), ty.vec4<f32>(), attrs}});
+            ty.Struct(mod.symbols.New("params"), {{mod.symbols.New("pos"), ty.vec4f(), attrs}});
 
-        auto* func =
-            b.Function("main", ty.vec4<f32>(), core::ir::Function::PipelineStage::kFragment);
+        auto* func = b.Function("main", ty.vec4f(), core::ir::Function::PipelineStage::kFragment);
         func->SetReturnLocation(0_u);
         func->SetParams({b.FunctionParam(param_struct_ty)});
         return {func, pl};
@@ -149,10 +147,14 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterPixelLocalTest, UsedInEntry) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto r = OneArgFunc();
     b.Append(r.func->Block(), [&] {
         auto* access = b.Access(ty.ptr<pixel_local>(ty.u32()), r.pl, 0_u);
-        auto* add = b.Add<u32>(b.Load(access), 42_u);
+        auto* add = b.Add(b.Load(access), 42_u);
         b.Store(access, add);
         b.Return(r.func, b.Construct<vec4<f32>>(1_f, 0_f, 0_f, 1_f));
     });
@@ -230,11 +232,15 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterPixelLocalTest, UsedInNonEntry) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto r = OneArgFunc();
     auto* func2 = b.Function("foo", ty.void_());
     b.Append(func2->Block(), [&] {
         auto* access = b.Access(ty.ptr<pixel_local>(ty.u32()), r.pl, 0_u);
-        auto* add = b.Add<u32>(b.Load(access), 42_u);
+        auto* add = b.Add(b.Load(access), 42_u);
         b.Store(access, add);
         b.Return(func2);
     });
@@ -328,12 +334,16 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterPixelLocalTest, UsedInNonEntryViaPointer) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto r = OneArgFunc();
     auto* func2 = b.Function("foo", ty.void_());
     b.Append(func2->Block(), [&] {
         auto* access = b.Access(ty.ptr<pixel_local>(ty.u32()), r.pl, 0_u);
         auto* p = b.Let("p", access);
-        auto* add = b.Add<u32>(b.Load(p), 42_u);
+        auto* add = b.Add(b.Load(p), 42_u);
         b.Store(access, add);
         b.Return(func2);
     });
@@ -428,10 +438,14 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterPixelLocalTest, MultipleInputBuiltins) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto r = OneArgFunc(/*multiple_builtins*/ true);
     b.Append(r.func->Block(), [&] {
         auto* access = b.Access(ty.ptr<pixel_local>(ty.u32()), r.pl, 0_u);
-        auto* add = b.Add<u32>(b.Load(access), 42_u);
+        auto* add = b.Add(b.Load(access), 42_u);
         b.Store(access, add);
         b.Return(r.func, b.Construct<vec4<f32>>(1_f, 0_f, 0_f, 1_f));
     });
@@ -513,10 +527,14 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterPixelLocalTest, MultipleMembers) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto r = ThreeArgFunc();
     b.Append(r.func->Block(), [&] {
         auto* access = b.Access(ty.ptr<pixel_local>(ty.u32()), r.pl, 0_u);
-        auto* add = b.Add<u32>(b.Load(access), 42_u);
+        auto* add = b.Add(b.Load(access), 42_u);
         b.Store(access, add);
         b.Return(r.func, b.Construct<vec4<f32>>(1_f, 0_f, 0_f, 1_f));
     });
@@ -620,10 +638,14 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterPixelLocalTest, MultipleMembers_MismatchedTypes) {
+    capabilities = core::ir::Capabilities{
+        core::ir::Capability::kAllowNonCoreTypes,
+    };
+
     auto r = ThreeArgFunc();
     b.Append(r.func->Block(), [&] {
         auto* access = b.Access(ty.ptr<pixel_local>(ty.u32()), r.pl, 0_u);
-        auto* add = b.Add<u32>(b.Load(access), 42_u);
+        auto* add = b.Add(b.Load(access), 42_u);
         b.Store(access, add);
         b.Return(r.func, b.Construct<vec4<f32>>(1_f, 0_f, 0_f, 1_f));
     });

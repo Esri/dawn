@@ -25,6 +25,9 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <memory>
+#include <utility>
+
 #include "dawn/common/Mutex.h"
 #include "gtest/gtest.h"
 
@@ -49,14 +52,6 @@ class MutexTest : public ::testing::Test {
     Mutex mMutex;
 };
 
-// Simple Lock() then Unlock() test.
-TEST_F(MutexTest, SimpleLockUnlock) {
-    mMutex.Lock();
-    EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
-    mMutex.Unlock();
-    EXPECT_FALSE(mMutex.IsLockedByCurrentThread());
-}
-
 // Test AutoLock automatically locks the mutex and unlocks it when out of scope.
 TEST_F(MutexTest, AutoLock) {
     {
@@ -64,6 +59,74 @@ TEST_F(MutexTest, AutoLock) {
         EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
     }
     EXPECT_FALSE(mMutex.IsLockedByCurrentThread());
+}
+
+// Test AutoLock move constructor transfers ownership of the lock.
+TEST_F(MutexTest, AutoLockMoveConstructor) {
+    {
+        auto autoLock1 = std::make_unique<Mutex::AutoLock>(&mMutex);
+        EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
+
+        // Move autoLock1 to autoLock2
+        Mutex::AutoLock autoLock2(std::move(*autoLock1));
+
+        // autoLock1 should no longer own the lock, so destroying it shouldn't unlock
+        autoLock1.reset();
+        EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
+    }
+    // autoLock2 is destroyed here, mutex should be unlocked
+    EXPECT_FALSE(mMutex.IsLockedByCurrentThread());
+}
+
+// Test AutoLock move assignment transfers ownership of the lock.
+TEST_F(MutexTest, AutoLockMoveAssignment) {
+    {
+        auto autoLock1 = std::make_unique<Mutex::AutoLock>(&mMutex);
+        EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
+
+        // Create a default-constructed lock (not holding any mutex)
+        Mutex::AutoLock autoLock2;
+
+        // Move assign autoLock1 to autoLock2
+        autoLock2 = std::move(*autoLock1);
+
+        // autoLock1 should no longer own the lock, so destroying it shouldn't unlock
+        autoLock1.reset();
+
+        // autoLock2 should now own the lock
+        EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
+    }
+    // autoLock2 is destroyed here, mutex should be unlocked
+    EXPECT_FALSE(mMutex.IsLockedByCurrentThread());
+}
+
+// Test AutoLock move assignment releases the old lock before acquiring the new one.
+TEST_F(MutexTest, AutoLockMoveAssignmentReleasesOldLock) {
+    Mutex mutex2;
+    {
+        auto autoLock1 = std::make_unique<Mutex::AutoLock>(&mMutex);
+        auto autoLock2 = std::make_unique<Mutex::AutoLock>(&mutex2);
+
+        EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
+        EXPECT_TRUE(mutex2.IsLockedByCurrentThread());
+
+        // Move assign autoLock1 to autoLock2
+        // This should release mutex2 and acquire ownership of mMutex
+        *autoLock2 = std::move(*autoLock1);
+
+        // mutex2 should now be unlocked (old lock was released)
+        EXPECT_FALSE(mutex2.IsLockedByCurrentThread());
+
+        // mMutex should still be locked (autoLock2 now owns it)
+        EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
+
+        // Destroy autoLock1 (should be safe, no longer owns anything)
+        autoLock1.reset();
+        EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
+    }
+    // autoLock2 is destroyed here, mMutex should be unlocked
+    EXPECT_FALSE(mMutex.IsLockedByCurrentThread());
+    EXPECT_FALSE(mutex2.IsLockedByCurrentThread());
 }
 
 // Test AutoLockAndHoldRef will keep the mutex alive
@@ -80,34 +143,46 @@ TEST_F(MutexTest, AutoLockAndHoldRef) {
     }
 }
 
+// Name "*DeathTest" per https://google.github.io/googletest/advanced.html#death-test-naming
 using MutexDeathTest = MutexTest;
 
-// Test that Unlock() call on unlocked mutex will cause assertion failure.
-TEST_F(MutexDeathTest, UnlockWhenNotLocked) {
-    ASSERT_DEATH_IF_SUPPORTED({ mMutex.Unlock(); }, "");
-}
-
-// Double Lock() calls should be cause assertion failure
+// Double AutoLock calls should be cause assertion failure.
 TEST_F(MutexDeathTest, DoubleLockCalls) {
-    mMutex.Lock();
+    Mutex::AutoLock autoLock1(&mMutex);
     EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
-    ASSERT_DEATH_IF_SUPPORTED({ mMutex.Lock(); }, "");
-    mMutex.Unlock();
+    ASSERT_DEATH_IF_SUPPORTED({ Mutex::AutoLock autoLock2(&mMutex); }, "");
 }
 
-// Lock() then use AutoLock should cause assertion failure.
-TEST_F(MutexDeathTest, LockThenAutoLock) {
-    mMutex.Lock();
-    EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
-    ASSERT_DEATH_IF_SUPPORTED({ Mutex::AutoLock autoLock(&mMutex); }, "");
-    mMutex.Unlock();
+class RecursiveMutexTest : public ::testing::Test {
+  protected:
+    void SetUp() override {
+        // IsLockedByCurrentThread() requires DAWN_ENABLE_ASSERTS flag enabled.
+        if (!kAssertEnabled) {
+            GTEST_SKIP() << "DAWN_ENABLE_ASSERTS is not enabled";
+        }
+    }
+
+    RecursiveMutex mMutex;
+};
+
+// Test AutoLock automatically locks the mutex and unlocks it when out of scope.
+TEST_F(RecursiveMutexTest, AutoLock) {
+    {
+        RecursiveMutex::AutoLock autoLock(&mMutex);
+        EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
+    }
+    EXPECT_FALSE(mMutex.IsLockedByCurrentThread());
 }
 
-// Use AutoLock then call Lock() should cause assertion failure.
-TEST_F(MutexDeathTest, AutoLockThenLock) {
-    Mutex::AutoLock autoLock(&mMutex);
-    EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
-    ASSERT_DEATH_IF_SUPPORTED({ mMutex.Lock(); }, "");
+// Test that recursive AutoLock in same thread is valid.
+TEST_F(RecursiveMutexTest, RecursiveAutoLock) {
+    {
+        RecursiveMutex::AutoLock autoLock1(&mMutex);
+        EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
+        RecursiveMutex::AutoLock autoLock2(&mMutex);
+        EXPECT_TRUE(mMutex.IsLockedByCurrentThread());
+    }
+    EXPECT_FALSE(mMutex.IsLockedByCurrentThread());
 }
 
 }  // anonymous namespace

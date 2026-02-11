@@ -503,6 +503,146 @@ TEST_F(SpirvParserTest, BranchConditional_Hoisting) {
 )");
 }
 
+TEST_F(SpirvParserTest, BranchConditional_HoistingMultiExit) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+       %void = OpTypeVoid
+        %i32 = OpTypeInt 32 1
+       %bool = OpTypeBool
+        %one = OpConstant %i32 1
+        %two = OpConstant %i32 2
+       %true = OpConstantTrue %bool
+    %ep_type = OpTypeFunction %void
+       %main = OpFunction %void None %ep_type
+ %main_start = OpLabel
+               OpBranch %10
+         %10 = OpLabel
+               OpLoopMerge %99 %80 None
+               OpBranch %20
+         %20 = OpLabel
+        %foo = OpIAdd %i32 %one %two
+               OpSelectionMerge %50 None
+               OpBranchConditional %true %30 %40
+         %30 = OpLabel
+               OpBranch %99
+         %40 = OpLabel
+               OpBranch %99
+         %50 = OpLabel
+               OpUnreachable
+         %80 = OpLabel
+               OpBranch %10
+         %99 = OpLabel
+       %foo2 = OpCopyObject %i32 %foo
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B1: {
+    %2:i32 = loop [b: $B2, c: $B3] {  # loop_1
+      $B2: {  # body
+        %3:i32 = spirv.add<i32> 1i, 2i
+        if true [t: $B4, f: $B5] {  # if_1
+          $B4: {  # true
+            exit_loop %3  # loop_1
+          }
+          $B5: {  # false
+            exit_loop %3  # loop_1
+          }
+        }
+        unreachable
+      }
+      $B3: {  # continuing
+        next_iteration  # -> $B2
+      }
+    }
+    %4:i32 = let %2
+    ret
+  }
+}
+)");
+}
+
+TEST_F(SpirvParserTest, BranchConditional_HoistingMultiExit_FromMiddle) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+       %void = OpTypeVoid
+        %i32 = OpTypeInt 32 1
+       %bool = OpTypeBool
+        %one = OpConstant %i32 1
+        %two = OpConstant %i32 2
+       %true = OpConstantTrue %bool
+    %ep_type = OpTypeFunction %void
+       %main = OpFunction %void None %ep_type
+ %main_start = OpLabel
+               OpBranch %10
+         %10 = OpLabel
+               OpLoopMerge %99 %80 None
+               OpBranch %20
+         %20 = OpLabel
+               OpSelectionMerge %50 None
+               OpBranchConditional %true %30 %30
+         %30 = OpLabel
+        %foo = OpIAdd %i32 %one %two
+               OpSelectionMerge %60 None
+               OpBranchConditional %true %65 %70
+         %65 = OpLabel
+               OpBranch %99
+         %70 = OpLabel
+               OpBranch %99
+         %60 = OpLabel
+               OpUnreachable
+         %50 = OpLabel
+               OpUnreachable
+         %80 = OpLabel
+               OpBranch %10
+         %99 = OpLabel
+       %foo2 = OpCopyObject %i32 %foo
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B1: {
+    %2:i32 = loop [b: $B2, c: $B3] {  # loop_1
+      $B2: {  # body
+        %3:bool = or true, true
+        if %3 [t: $B4, f: $B5] {  # if_1
+          $B4: {  # true
+            %4:i32 = spirv.add<i32> 1i, 2i
+            if true [t: $B6, f: $B7] {  # if_2
+              $B6: {  # true
+                exit_loop %4  # loop_1
+              }
+              $B7: {  # false
+                exit_loop %4  # loop_1
+              }
+            }
+            unreachable
+          }
+          $B5: {  # false
+            unreachable
+          }
+        }
+        unreachable
+      }
+      $B3: {  # continuing
+        next_iteration  # -> $B2
+      }
+    }
+    %5:i32 = let %2
+    ret
+  }
+}
+)");
+}
+
 TEST_F(SpirvParserTest, BranchConditional_HoistingIntoNested) {
     EXPECT_IR(R"(
                OpCapability Shader
@@ -3732,11 +3872,10 @@ TEST_F(SpirvParserTest, Loop_Never) {
         unreachable
       }
       $B3: {  # continuing
-        %4:i32 = spirv.add<i32> 2i, 2i
         next_iteration  # -> $B2
       }
     }
-    %5:i32 = spirv.add<i32> 3i, 3i
+    %4:i32 = spirv.add<i32> 3i, 3i
     ret
   }
 }
@@ -3969,7 +4108,6 @@ TEST_F(SpirvParserTest, Loop_BodyAlwaysBreaks) {
         exit_loop  # loop_1
       }
       $B3: {  # continuing
-        %3:i32 = spirv.add<i32> 2i, 2i
         next_iteration  # -> $B2
       }
     }
@@ -4462,7 +4600,6 @@ TEST_F(SpirvParserTest, Branch_LoopBreak_MultiBlockLoop_FromBody) {
         exit_loop  # loop_1
       }
       $B3: {  # continuing
-        %3:i32 = spirv.add<i32> 2i, 2i
         next_iteration  # -> $B2
       }
     }
@@ -5509,11 +5646,10 @@ TEST_F(SpirvParserTest, BranchConditional_LoopBreak_SingleBlock_LoopBreak) {
         unreachable
       }
       $B3: {  # continuing
-        %5:i32 = spirv.add<i32> 3i, 3i
         next_iteration  # -> $B2
       }
     }
-    %6:i32 = spirv.add<i32> 1i, 3i
+    %5:i32 = spirv.add<i32> 1i, 3i
     ret
   }
 }
@@ -5573,11 +5709,10 @@ TEST_F(SpirvParserTest, BranchConditional_LoopBreak_MultiBlock_LoopBreak) {
         unreachable
       }
       $B3: {  # continuing
-        %6:i32 = spirv.add<i32> 1i, 2i
         next_iteration  # -> $B2
       }
     }
-    %7:i32 = spirv.add<i32> 1i, 3i
+    %6:i32 = spirv.add<i32> 1i, 3i
     ret
   }
 }
@@ -6986,6 +7121,198 @@ TEST_F(SpirvParserTest, FalseBranch_SwitchBreak) {
           }
         }
         exit_switch  # switch_1
+      }
+    }
+    ret
+  }
+}
+)");
+}
+TEST_F(SpirvParserTest, ConvertHoisted) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpMemoryModel Logical Simple
+               OpEntryPoint Fragment %100 "main"
+               OpExecutionMode %100 OriginUpperLeft
+       %void = OpTypeVoid
+          %2 = OpTypeFunction %void
+       %bool = OpTypeBool
+       %uint = OpTypeInt 32 0
+      %float = OpTypeFloat 32
+       %true = OpConstantTrue %bool
+   %float_50 = OpConstant %float 50
+        %100 = OpFunction %void None %2
+         %10 = OpLabel
+               OpBranch %30
+         %30 = OpLabel
+               OpLoopMerge %90 %80 None
+               OpBranchConditional %true %90 %40
+         %40 = OpLabel
+               OpSelectionMerge %50 None
+               OpBranchConditional %true %45 %50
+         %45 = OpLabel
+        %600 = OpCopyObject %float %float_50
+               OpBranch %50
+         %50 = OpLabel
+               OpBranch %90
+         %80 = OpLabel
+         %82 = OpConvertFToU %uint %600
+               OpBranch %30
+         %90 = OpLabel
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+%main = @fragment func():void {
+  $B1: {
+    loop [b: $B2, c: $B3] {  # loop_1
+      $B2: {  # body
+        if true [t: $B4, f: $B5] {  # if_1
+          $B4: {  # true
+            exit_loop  # loop_1
+          }
+          $B5: {  # false
+            if true [t: $B6, f: $B7] {  # if_2
+              $B6: {  # true
+                %2:f32 = let 50.0f
+                exit_if  # if_2
+              }
+              $B7: {  # false
+                exit_if  # if_2
+              }
+            }
+            exit_loop  # loop_1
+          }
+        }
+        unreachable
+      }
+      $B3: {  # continuing
+        next_iteration  # -> $B2
+      }
+    }
+    ret
+  }
+}
+)");
+}
+
+// https://crbug.com/440964231
+TEST_F(SpirvParserTest, SwitchWithSwitchInDefault) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %main "main"
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+       %main = OpFunction %void None %3
+          %4 = OpLabel
+               OpSelectionMerge %24 None
+               OpSwitch %int_0 %22 0 %23
+         %23 = OpLabel
+               OpBranch %24
+         %22 = OpLabel
+               OpSelectionMerge %35 None
+               OpSwitch %int_0 %33
+         %33 = OpLabel
+               OpBranch %35
+         %35 = OpLabel
+               OpBranch %24
+         %24 = OpLabel
+               OpBranch %16
+         %16 = OpLabel
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B1: {
+    switch 0i [c: (default, $B2), c: (0i, $B3)] {  # switch_1
+      $B2: {  # case
+        switch 0i [c: (default, $B4)] {  # switch_2
+          $B4: {  # case
+            exit_switch  # switch_2
+          }
+        }
+        exit_switch  # switch_1
+      }
+      $B3: {  # case
+        exit_switch  # switch_1
+      }
+    }
+    ret
+  }
+}
+)");
+}
+
+TEST_F(SpirvParserTest, LoopInContinuing) {
+    EXPECT_IR(R"(
+                 OpCapability Shader
+                 OpMemoryModel Logical GLSL450
+                 OpEntryPoint Fragment %fn "main"
+                 OpExecutionMode %fn OriginUpperLeft
+         %void = OpTypeVoid
+         %bool = OpTypeBool
+        %false = OpConstantFalse %bool
+      %void_fn = OpTypeFunction %void
+
+           %fn = OpFunction %void None %void_fn
+        %entry = OpLabel
+                 OpBranch %loop1
+        %loop1 = OpLabel
+
+                 OpLoopMerge %loop1_merge %loop2 None
+                 OpBranch %loop1_body
+   %loop1_body = OpLabel
+                 OpBranchConditional %false %loop1_merge %loop2
+        %loop2 = OpLabel
+
+                 OpLoopMerge %loop2_merge %loop2 None
+                 OpBranchConditional %false %loop2_merge %loop2
+  %loop2_merge = OpLabel
+                 OpBranch %loop1
+
+  %loop1_merge = OpLabel
+                 OpReturn
+                 OpFunctionEnd
+)",
+              R"(
+%main = @fragment func():void {
+  $B1: {
+    loop [b: $B2, c: $B3] {  # loop_1
+      $B2: {  # body
+        if false [t: $B4, f: $B5] {  # if_1
+          $B4: {  # true
+            exit_loop  # loop_1
+          }
+          $B5: {  # false
+            continue  # -> $B3
+          }
+        }
+        unreachable
+      }
+      $B3: {  # continuing
+        loop [b: $B6, c: $B7] {  # loop_2
+          $B6: {  # body
+            if false [t: $B8, f: $B9] {  # if_2
+              $B8: {  # true
+                exit_loop  # loop_2
+              }
+              $B9: {  # false
+                continue  # -> $B7
+              }
+            }
+            unreachable
+          }
+          $B7: {  # continuing
+            next_iteration  # -> $B6
+          }
+        }
+        next_iteration  # -> $B2
       }
     }
     ret

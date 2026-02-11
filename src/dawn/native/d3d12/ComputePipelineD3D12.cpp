@@ -62,6 +62,10 @@ MaybeError ComputePipeline::InitializeImpl() {
         compileFlags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
     }
 
+    if (device->IsToggleEnabled(Toggle::D3DSkipShaderOptimizations)) {
+        compileFlags |= D3DCOMPILE_SKIP_OPTIMIZATION;
+    }
+
     if (device->IsToggleEnabled(Toggle::UseDXC) &&
         ((compileFlags & D3DCOMPILE_OPTIMIZATION_LEVEL2) == 0)) {
         // DXC's default opt level is /O3, unlike FXC's /O1. Set explicitly, otherwise there's no
@@ -136,8 +140,8 @@ MaybeError ComputePipeline::InitializeImpl() {
 
 ComputePipeline::~ComputePipeline() = default;
 
-void ComputePipeline::DestroyImpl() {
-    ComputePipelineBase::DestroyImpl();
+void ComputePipeline::DestroyImpl(DestroyReason reason) {
+    ComputePipelineBase::DestroyImpl(reason);
     ToBackend(GetDevice())->ReferenceUntilUnused(mPipelineState);
 }
 

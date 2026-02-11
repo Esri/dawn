@@ -2,7 +2,7 @@
 
 layout(binding = 0, std140)
 uniform u_block_1_ubo {
-  int inner;
+  uvec4 inner[1];
 } v;
 int f() {
   return 0;
@@ -18,7 +18,8 @@ void g() {
       if ((j >= 1)) {
         break;
       }
-      j = (j + 1);
+      uint v_1 = uint(j);
+      j = int((v_1 + uint(1)));
       int k = f();
       {
         uint tint_low_inc = (tint_loop_idx.x - 1u);
@@ -32,10 +33,12 @@ void g() {
 }
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
-  switch(v.inner) {
+  uvec4 v_2 = v.inner[0u];
+  switch(int(v_2.x)) {
     case 0:
     {
-      switch(v.inner) {
+      uvec4 v_3 = v.inner[0u];
+      switch(int(v_3.x)) {
         case 0:
         {
           break;

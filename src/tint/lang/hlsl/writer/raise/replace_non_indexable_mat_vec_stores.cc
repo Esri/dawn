@@ -142,7 +142,7 @@ struct State {
 
             store->Destroy();
         });
-        TINT_ASSERT(!new_stores.IsEmpty());
+        TINT_IR_ASSERT(ir, !new_stores.IsEmpty());
         return new_stores;
     }
 
@@ -173,9 +173,9 @@ struct State {
     // Replaces the vector element store with a full vector store that masks in the indexed
     // value. Example HLSL: vec = (idx.xxx == int3(0, 1, 2)) ? val.xxx : vec;
     void ReplaceStoreVectorElement(core::ir::StoreVectorElement* store) {
-        TINT_ASSERT(!IsConstant(store->Index()));
+        TINT_IR_ASSERT(ir, !IsConstant(store->Index()));
         auto* to_ptr = store->To()->Type()->As<core::type::Pointer>();
-        TINT_ASSERT(to_ptr);
+        TINT_IR_ASSERT(ir, to_ptr);
 
         b.InsertBefore(store, [&] {
             auto* vec_param = store->Operands()[0];
@@ -192,22 +192,23 @@ struct State {
             Vector<core::ir::Value*, 4> select_indices;
             switch (vec_ty->Width()) {
                 case 2:
-                    select_indices = b.Values(0_i, 1_i);
+                    select_indices = b.Values(0_u, 1_u);
                     break;
                 case 3:
-                    select_indices = b.Values(0_i, 1_i, 2_i);
+                    select_indices = b.Values(0_u, 1_u, 2_u);
                     break;
                 case 4:
-                    select_indices = b.Values(0_i, 1_i, 2_i, 3_i);
+                    select_indices = b.Values(0_u, 1_u, 2_u, 3_u);
                     break;
             }
 
             auto* false_val = b.Load(vec_param);
             auto* true_val = b.Construct(vec_ty, value_param);
 
-            auto* lhs = b.Construct(vec_ty, index_param);
-            auto* rhs = b.Construct(vec_ty, select_indices);
-            auto* cond = b.Equal(ty.MatchWidth(ty.bool_(), vec_ty), lhs, rhs);
+            auto* uint_vec_ty = ty.MatchWidth(ty.u32(), vec_ty);
+            auto* lhs = b.Construct(uint_vec_ty, b.InsertConvertIfNeeded(ty.u32(), index_param));
+            auto* rhs = b.Construct(uint_vec_ty, select_indices);
+            auto* cond = b.Equal(lhs, rhs);
 
             // NOTE: Using Select means we depend on BuiltinPolyfill to run after this transform. We
             // could also just emit a Ternary instruction.
@@ -286,12 +287,9 @@ struct State {
 }  // namespace
 
 Result<SuccessType> ReplaceNonIndexableMatVecStores(core::ir::Module& ir) {
-    auto result = ValidateAndDumpIfNeeded(
+    TINT_CHECK_RESULT(ValidateAndDumpIfNeeded(
         ir, "hlsl.ReplaceNonIndexableMatVecStores",
-        core::ir::Capabilities{core::ir::Capability::kAllowDuplicateBindings});
-    if (result != Success) {
-        return result.Failure();
-    }
+        core::ir::Capabilities{core::ir::Capability::kAllowDuplicateBindings}));
 
     State{ir}.Process();
 

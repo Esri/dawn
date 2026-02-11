@@ -25,6 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/439062058): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "dawn/wire/client/Surface.h"
 
 #include <algorithm>
@@ -60,7 +65,7 @@ ObjectType Surface::GetObjectType() const {
     return ObjectType::Surface;
 }
 
-void Surface::Configure(const WGPUSurfaceConfiguration* config) {
+void Surface::APIConfigure(const WGPUSurfaceConfiguration* config) {
     mConfiguredDevice = FromAPI(config->device);
 
     mTextureDescriptor = {};
@@ -77,7 +82,22 @@ void Surface::Configure(const WGPUSurfaceConfiguration* config) {
     GetClient()->SerializeCommand(cmd);
 }
 
-void Surface::Unconfigure() {
+WGPUStatus Surface::APIPresent() {
+    if (mConfiguredDevice == nullptr) {
+        dawn::ErrorLog() << "Surface::Present on an unconfigured Surface.";
+        return WGPUStatus_Error;
+    }
+
+    SurfacePresentCmd cmd;
+    cmd.self = ToAPI(this);
+    GetClient()->SerializeCommand(cmd);
+
+    // The only synchronous error is if the surface isn't configured.
+    // Otherwise, we let the server report errors via the device.
+    return WGPUStatus_Success;
+}
+
+void Surface::APIUnconfigure() {
     mConfiguredDevice = nullptr;
 
     SurfaceUnconfigureCmd cmd;
@@ -85,14 +105,14 @@ void Surface::Unconfigure() {
     GetClient()->SerializeCommand(cmd);
 }
 
-WGPUTextureFormat Surface::GetPreferredFormat([[maybe_unused]] WGPUAdapter adapter) const {
-    dawn::ErrorLog() << "Surface::GetPreferrredFormat is deprecated, use "
+WGPUTextureFormat Surface::APIGetPreferredFormat([[maybe_unused]] WGPUAdapter adapter) const {
+    dawn::ErrorLog() << "Surface::GetPreferredFormat is deprecated, use "
                         "Surface::GetCapabilities().formats[0] instead.";
     return mSupportedFormats[0];
 }
 
-WGPUStatus Surface::GetCapabilities(WGPUAdapter adapter,
-                                    WGPUSurfaceCapabilities* capabilities) const {
+WGPUStatus Surface::APIGetCapabilities(WGPUAdapter adapter,
+                                       WGPUSurfaceCapabilities* capabilities) const {
     // Return the capabilities that were provided when injecting the surface.
     capabilities->nextInChain = nullptr;
     capabilities->usages = mSupportedUsages;
@@ -115,7 +135,7 @@ WGPUStatus Surface::GetCapabilities(WGPUAdapter adapter,
     return WGPUStatus_Success;
 }
 
-void Surface::GetCurrentTexture(WGPUSurfaceTexture* surfaceTexture) {
+void Surface::APIGetCurrentTexture(WGPUSurfaceTexture* surfaceTexture) {
     // Handle error cases that return no textures first.
     surfaceTexture->texture = nullptr;
 
@@ -133,23 +153,22 @@ void Surface::GetCurrentTexture(WGPUSurfaceTexture* surfaceTexture) {
 
     // Assume texture creation will work in the server and return a new texture proxy.
     Client* wireClient = GetClient();
-    Ref<Texture> texture = wireClient->Make<Texture>(&mTextureDescriptor);
+    Ref<Texture> texture = wireClient->Make<Texture>(mConfiguredDevice.Get(), &mTextureDescriptor);
 
     SurfaceGetCurrentTextureCmd cmd;
-    cmd.surfaceId = GetWireId();
-    cmd.textureHandle = texture->GetWireHandle();
-    cmd.configuredDeviceId = mConfiguredDevice->GetWireId();
+    cmd.surfaceId = GetWireHandle(wireClient).id;
+    cmd.textureHandle = texture->GetWireHandle(wireClient);
+    cmd.configuredDeviceId = mConfiguredDevice->GetWireHandle(wireClient).id;
     wireClient->SerializeCommand(cmd);
 
     surfaceTexture->status = WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal;
     surfaceTexture->texture = ReturnToAPI(std::move(texture));
 }
 
-}  // namespace dawn::wire::client
-
-DAWN_WIRE_EXPORT void wgpuDawnWireClientSurfaceCapabilitiesFreeMembers(
-    WGPUSurfaceCapabilities capabilities) {
+void APIFreeMembers(WGPUSurfaceCapabilities capabilities) {
     delete[] capabilities.presentModes;
     delete[] capabilities.formats;
     delete[] capabilities.alphaModes;
 }
+
+}  // namespace dawn::wire::client
