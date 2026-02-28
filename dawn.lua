@@ -112,6 +112,7 @@ end
 --
 
 defines {
+  "DAWN_FORCE_SYSTEM_COMPONENT_LOAD",
   "DAWN_NATIVE_IMPLEMENTATION",
   "STRIP_LOG=1", -- Prevent abseil-cpp making restricted windows calls for stack tracing
   "TINT_BUILD_WGSL_READER=1",
