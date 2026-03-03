@@ -95,8 +95,8 @@ if (_PLATFORM_WINDOWS) then
 
   enable_d3d12 = true
   enable_hlsl = true
-  enable_spirv = true
-  enable_vulkan = true
+  enable_spirv = false
+  enable_vulkan = false
   enable_win = true
 
 end
@@ -112,7 +112,7 @@ end
 --
 
 defines {
-  "DAWN_FORCE_SYSTEM_COMPONENT_LOAD",
+  -- "DAWN_FORCE_SYSTEM_COMPONENT_LOAD",
   "DAWN_NATIVE_IMPLEMENTATION",
   "STRIP_LOG=1", -- Prevent abseil-cpp making restricted windows calls for stack tracing
   "TINT_BUILD_WGSL_READER=1",
@@ -722,7 +722,7 @@ if (enable_win) then
 
   files {
     "src/dawn/common/WindowsUtils.cpp",
-    "src/dawn/native/SpirvValidation_rtc_shim_1.cpp",
+    -- "src/dawn/native/SpirvValidation_rtc_shim_1.cpp",
     "src/dawn/utils/WindowsDebugLogger.cpp",
     "src/dawn/utils/WindowsTimer.cpp",
     "src/tint/utils/command/command_windows.cc",
