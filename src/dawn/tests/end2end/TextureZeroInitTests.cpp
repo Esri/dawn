@@ -28,11 +28,13 @@
 #include <string>
 #include <vector>
 
-#include "dawn/common/Math.h"
-#include "dawn/tests/DawnTest.h"
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/TestUtils.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/common/Math.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/TestUtils.h"
+#include "src/dawn/utils/WGPUHelpers.h"
+#include "src/utils/compiler.h"
+#include "webgpu/webgpu_cpp.h"
 
 namespace dawn {
 namespace {
@@ -44,6 +46,9 @@ namespace {
         } else {                                                                         \
             size_t lazyClearsBefore = native::GetLazyClearCountForTesting(device.Get()); \
             statement;                                                                   \
+            if (HasToggleEnabled("gl_defer")) {                                          \
+                queue.Submit(0, nullptr);                                                \
+            }                                                                            \
             size_t lazyClearsAfter = native::GetLazyClearCountForTesting(device.Get());  \
             EXPECT_EQ(N, lazyClearsAfter - lazyClearsBefore);                            \
         }                                                                                \
@@ -277,6 +282,9 @@ TEST_P(TextureZeroInitTest, CopyTextureToBufferSource) {
 // This tests that the code path of CopyTextureToBuffer with multiple texture array layers clears
 // correctly to Zero after first usage
 TEST_P(TextureZeroInitTest, CopyMultipleTextureArrayLayersToBufferSource) {
+    // TODO(crbug.com/500793610): Fails on Windows 11/AMD RX 5500 XT w/ D3D11.
+    DAWN_SUPPRESS_TEST_IF(IsWindows11() && IsAMD() && IsD3D11());
+
     constexpr uint32_t kArrayLayers = 6u;
 
     const wgpu::TextureDescriptor descriptor = CreateTextureDescriptor(
@@ -303,7 +311,14 @@ TEST_P(TextureZeroInitTest, CopyMultipleTextureArrayLayersToBufferSource) {
     wgpu::CommandBuffer commandBuffer = encoder.Finish();
 
     // Expect texture to be lazy initialized.
-    EXPECT_LAZY_CLEAR(1u, queue.Submit(1, &commandBuffer));
+    // TODO(b/513631768): SetInitialized is now skipped for use_blit_for_t2b path.
+    // If blit is used for T2B, the destination buffer is NOT marked as initialized during encoding,
+    // so it will also be lazy cleared during the first usage (which is the blit itself).
+    uint32_t expectedLazyClearCount = 1u;
+    if (HasToggleEnabled("use_blit_for_t2b")) {
+        expectedLazyClearCount++;
+    }
+    EXPECT_LAZY_CLEAR(expectedLazyClearCount, queue.Submit(1, &commandBuffer));
 
     // Expect texture subresource initialized to be true
     EXPECT_TRUE(native::IsTextureSubresourceInitialized(texture.Get(), 0, 1, 0, kArrayLayers));
@@ -922,6 +937,10 @@ TEST_P(TextureZeroInitTest, StencilCopyThenDiscardAndReadBySampling) {
 // Test that a stencil texture that is written via copy, then discarded, sees
 // zero contents when it is read via copy.
 TEST_P(TextureZeroInitTest, StencilCopyThenDiscardAndReadByCopy) {
+    // TODO(crbug.com/479416037): QC's D3D11's DiscardView seems to have some bugs when backend
+    // validation is enabled.
+    DAWN_SUPPRESS_TEST_IF(IsD3D11() && IsQualcomm() && IsBackendValidationEnabled());
+
     for (wgpu::TextureFormat format :
          {wgpu::TextureFormat::Stencil8, wgpu::TextureFormat::Depth24PlusStencil8}) {
         wgpu::Texture depthStencilTexture = CreateAndFillStencilTexture(format);
@@ -952,8 +971,15 @@ TEST_P(TextureZeroInitTest, StencilCopyThenDiscardAndReadByCopy) {
 // Test that a stencil texture that is written via copy, then discarded, then copied to
 // another texture, sees zero contents when it is read via copy.
 TEST_P(TextureZeroInitTest, StencilCopyThenDiscardAndCopyToTextureThenReadByCopy) {
+    // TODO(crbug.com/479416037): QC's D3D11's DiscardView seems to have some bugs when backend
+    // validation is enabled.
+    DAWN_SUPPRESS_TEST_IF(IsD3D11() && IsQualcomm() && IsBackendValidationEnabled());
+
     // TODO(crbug.com/468047554): Fails on Win11/NVIDIA GTX 1660.
     DAWN_SUPPRESS_TEST_IF(IsWindows11() && IsNvidia() && IsD3D12() && IsBackendValidationEnabled());
+
+    // TODO(crbug.com/468047554): Fails on Win11/AMD RX 5500 XT.
+    DAWN_SUPPRESS_TEST_IF(IsWindows11() && IsAMD() && IsD3D12() && IsBackendValidationEnabled());
 
     for (wgpu::TextureFormat format :
          {wgpu::TextureFormat::Stencil8, wgpu::TextureFormat::Depth24PlusStencil8}) {
@@ -1149,6 +1175,176 @@ TEST_P(TextureZeroInitTest, RenderPassRenderable3DTextureClear) {
     DoRenderableSampledTextureClearTest(
         wgpu::TextureDimension::e3D,
         wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::RenderAttachment);
+}
+
+// This is a regression test for a bug where rendering to a single slice of a 3D texture
+// would mark the entire mip level as initialized, skipping lazy clears for other slices.
+// This test renders to a single slice of a 3d texture and then reads it back via
+// CopyTextureToBuffer.
+TEST_P(TextureZeroInitTest, RenderPass3DTextureDepthSliceClearTestViaCopy) {
+    constexpr uint32_t kNumSlices = 3;
+    for (uint32_t slice = 0; slice < kNumSlices; ++slice) {
+        wgpu::TextureDescriptor desc;
+        desc.dimension = wgpu::TextureDimension::e3D;
+        desc.size = {kSize, kSize, kNumSlices};
+        desc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+        desc.format = kColorFormat;
+
+        wgpu::Texture texture = device.CreateTexture(&desc);
+
+        // Create a view of the 3D texture.
+        wgpu::TextureViewDescriptor viewDesc;
+        viewDesc.dimension = wgpu::TextureViewDimension::e3D;
+        wgpu::TextureView view = texture.CreateView(&viewDesc);
+
+        // Render to slice at index |slice|
+        {
+            utils::ComboRenderPassDescriptor renderPassDesc({view});
+            renderPassDesc.cColorAttachments[0].depthSlice = slice;
+            renderPassDesc.cColorAttachments[0].loadOp = wgpu::LoadOp::Clear;
+            renderPassDesc.cColorAttachments[0].clearValue = {0.502, 0.502, 0.502, 0.502};
+
+            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+            wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&renderPassDesc);
+            pass.End();
+            wgpu::CommandBuffer commands = encoder.Finish();
+            queue.Submit(1, &commands);
+        }
+
+        std::vector<utils::RGBA8> expectedZeros(kSize * kSize, utils::RGBA8::kZero);
+        std::vector<utils::RGBA8> expectedCleared(kSize * kSize, {128, 128, 128, 128});
+
+        std::vector<const std::vector<utils::RGBA8>*> expectedSlices(kNumSlices, &expectedZeros);
+        expectedSlices[slice] = &expectedCleared;
+
+        for (uint32_t i = 0; i < kNumSlices; ++i) {
+            EXPECT_TEXTURE_EQ(expectedSlices[i]->data(), texture, {0, 0, i}, {kSize, kSize})
+                << "Slice " << i << " did not match expected values.";
+        }
+    }
+}
+
+// This is a regression test for a bug where rendering to a single slice of a 3D texture
+// would mark the entire mip level as initialized, skipping lazy clears for other slices.
+// This test renders to a single slice of a 3d texture and then reads it back by rendering the 3D
+// texture to a 2D array render target and sampling it in a shader.
+TEST_P(TextureZeroInitTest, RenderPass3DTextureDepthSliceClearTestViaUsage) {
+    constexpr uint32_t kNumSlices = 3;
+    for (uint32_t slice = 0; slice < kNumSlices; ++slice) {
+        wgpu::TextureDescriptor desc;
+        desc.dimension = wgpu::TextureDimension::e3D;
+        desc.size = {kSize, kSize, kNumSlices};
+        desc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+        desc.format = kColorFormat;
+
+        wgpu::Texture texture = device.CreateTexture(&desc);
+
+        // Create a view of the 3D texture.
+        wgpu::TextureViewDescriptor viewDesc;
+        viewDesc.dimension = wgpu::TextureViewDimension::e3D;
+        wgpu::TextureView view = texture.CreateView(&viewDesc);
+
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+
+        // Render to slice at index |slice|
+        {
+            utils::ComboRenderPassDescriptor renderPassDesc({view});
+            renderPassDesc.cColorAttachments[0].depthSlice = slice;
+            renderPassDesc.cColorAttachments[0].loadOp = wgpu::LoadOp::Clear;
+            renderPassDesc.cColorAttachments[0].clearValue = {0.502, 0.502, 0.502, 0.502};
+
+            wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&renderPassDesc);
+            pass.End();
+        }
+
+        wgpu::TextureDescriptor rtDesc;
+        rtDesc.dimension = wgpu::TextureDimension::e2D;
+        rtDesc.size = {kSize, kSize, 3};
+        rtDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+        rtDesc.format = kColorFormat;
+        wgpu::Texture renderTarget = device.CreateTexture(&rtDesc);
+
+        // Render the 3D slices to a 2D-array texture
+        {
+            // Make a single full clips space triangle vertex shader and a fragment shader that will
+            // use the current fragment position to sample the 3d texture.
+            wgpu::ShaderModule mod = utils::CreateShaderModule(device, R"(
+                @vertex fn vs(@builtin(vertex_index) VertexIndex : u32) -> @builtin(position) vec4<f32> {
+                    var pos = array(
+                        vec2<f32>(-1.0, -1.0),
+                        vec2<f32>(3.0, -1.0),
+                        vec2<f32>(-1.0, 3.0));
+                    return vec4f(pos[VertexIndex], 0.0, 1.0);
+                }
+
+                @group(0) @binding(0) var t : texture_3d<f32>;
+
+                struct FragmentOutput {
+                    @location(0) color0 : vec4f,
+                    @location(1) color1 : vec4f,
+                    @location(2) color2 : vec4f,
+                };
+
+                @fragment fn fs(@builtin(position) position : vec4f) -> FragmentOutput {
+                    let xy = vec2u(position.xy);
+                    return FragmentOutput(
+                        textureLoad(t, vec3u(xy, 0), 0),
+                        textureLoad(t, vec3u(xy, 1), 0),
+                        textureLoad(t, vec3u(xy, 2), 0),
+                    );
+                }
+            )");
+
+            utils::ComboRenderPipelineDescriptor renderPipelineDescriptor;
+            renderPipelineDescriptor.cTargets[0].format = kColorFormat;
+            renderPipelineDescriptor.cTargets[1].format = kColorFormat;
+            renderPipelineDescriptor.cTargets[2].format = kColorFormat;
+            renderPipelineDescriptor.vertex.module = mod;
+            renderPipelineDescriptor.cFragment.module = mod;
+            renderPipelineDescriptor.cFragment.targetCount = kNumSlices;
+            wgpu::RenderPipeline renderPipeline =
+                device.CreateRenderPipeline(&renderPipelineDescriptor);
+
+            wgpu::BindGroup bindGroup = utils::MakeBindGroup(
+                device, renderPipeline.GetBindGroupLayout(0), {{0, texture.CreateView()}});
+
+            std::vector<wgpu::TextureView> renderTargets;
+            for (uint32_t i = 0; i < kNumSlices; ++i) {
+                wgpu::TextureViewDescriptor viewDesc{
+                    .dimension = wgpu::TextureViewDimension::e2DArray,
+                    .baseArrayLayer = i,
+                    .arrayLayerCount = 1,
+                };
+                renderTargets.push_back(renderTarget.CreateView(&viewDesc));
+            }
+            utils::ComboRenderPassDescriptor renderPassDesc(renderTargets);
+            for (uint32_t i = 0; i < kNumSlices; ++i) {
+                // Clear to something completely unexpected.
+                renderPassDesc.cColorAttachments[i].clearValue = {0.25, 0.25, 0.25, 0.25};
+                renderPassDesc.cColorAttachments[i].loadOp = wgpu::LoadOp::Clear;
+            }
+
+            wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&renderPassDesc);
+            pass.SetPipeline(renderPipeline);
+            pass.SetBindGroup(0, bindGroup);
+            pass.Draw(3);
+            pass.End();
+        }
+
+        wgpu::CommandBuffer commands = encoder.Finish();
+        queue.Submit(1, &commands);
+
+        std::vector<utils::RGBA8> expectedZeros(kSize * kSize, utils::RGBA8::kZero);
+        std::vector<utils::RGBA8> expectedCleared(kSize * kSize, {128, 128, 128, 128});
+
+        std::vector<const std::vector<utils::RGBA8>*> expectedSlices(kNumSlices, &expectedZeros);
+        expectedSlices[slice] = &expectedCleared;
+
+        for (uint32_t i = 0; i < kNumSlices; ++i) {
+            EXPECT_TEXTURE_EQ(expectedSlices[i]->data(), renderTarget, {0, 0, i}, {kSize, kSize})
+                << "Slice " << i << " did not match expected values.";
+        }
+    }
 }
 
 // This is a regression test for a bug where a texture wouldn't get clear for a pass if at least
@@ -1382,6 +1578,10 @@ TEST_P(TextureZeroInitTest, NonRenderableTextureClearWithMultiArrayLayers) {
 // Then expect the render texture to not store the data from sample texture
 // because it will be lazy cleared by the EXPECT_TEXTURE_EQ call.
 TEST_P(TextureZeroInitTest, RenderPassStoreOpClear) {
+    // TODO(crbug.com/479416037): QC's D3D11's DiscardView seems to have some bugs when backend
+    // validation is enabled.
+    DAWN_SUPPRESS_TEST_IF(IsD3D11() && IsQualcomm() && IsBackendValidationEnabled());
+
     // Create needed resources
     wgpu::TextureDescriptor descriptor = CreateTextureDescriptor(
         1, 1, wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst, kColorFormat);
@@ -1526,6 +1726,10 @@ TEST_P(TextureZeroInitTest, RenderingLoadingDepthStencilStoreOpClear) {
 // Test that if one mip of a texture is initialized and another is uninitialized, lazy clearing the
 // uninitialized mip does not clear the initialized mip.
 TEST_P(TextureZeroInitTest, PreservesInitializedMip) {
+    // TODO(crbug.com/479416037): QC's D3D11's DiscardView seems to have some bugs when backend
+    // validation is enabled.
+    DAWN_SUPPRESS_TEST_IF(IsD3D11() && IsQualcomm() && IsBackendValidationEnabled());
+
     wgpu::TextureDescriptor sampleTextureDescriptor =
         CreateTextureDescriptor(2, 1,
                                 wgpu::TextureUsage::CopySrc | wgpu::TextureUsage::CopyDst |
@@ -1602,6 +1806,10 @@ TEST_P(TextureZeroInitTest, PreservesInitializedMip) {
 // Test that if one layer of a texture is initialized and another is uninitialized, lazy clearing
 // the uninitialized layer does not clear the initialized layer.
 TEST_P(TextureZeroInitTest, PreservesInitializedArrayLayer) {
+    // TODO(crbug.com/479416037): QC's D3D11's DiscardView seems to have some bugs when backend
+    // validation is enabled.
+    DAWN_SUPPRESS_TEST_IF(IsD3D11() && IsQualcomm() && IsBackendValidationEnabled());
+
     // TODO(crbug.com/346362367): Compatibility mode does not support binding a `2d-array` texture
     // to a WGSL variable of type `texture_2d`.
     DAWN_TEST_UNSUPPORTED_IF(IsCompatibilityMode());
@@ -1985,6 +2193,7 @@ DAWN_INSTANTIATE_TEST(
     D3D12Backend({"nonzero_clear_resources_on_creation_for_testing"}, {"use_d3d12_render_pass"}),
     OpenGLBackend({"nonzero_clear_resources_on_creation_for_testing"}),
     OpenGLESBackend({"nonzero_clear_resources_on_creation_for_testing"}),
+    OpenGLESBackend({"gl_defer", "nonzero_clear_resources_on_creation_for_testing"}),
     MetalBackend({"nonzero_clear_resources_on_creation_for_testing",
                   "metal_keep_multisubresource_depth_stencil_textures_initialized"}),
     MetalBackend({"nonzero_clear_resources_on_creation_for_testing"},
@@ -1993,6 +2202,222 @@ DAWN_INSTANTIATE_TEST(
                   "use_blit_for_buffer_to_depth_texture_copy",
                   "use_blit_for_buffer_to_stencil_texture_copy"}),
     VulkanBackend({"nonzero_clear_resources_on_creation_for_testing"}));
+
+// =============================================================================
+// LazyClearRenderPassAttachments must take sub-rect RenderPassRenderArea into
+// account. Tests based on a Project Fortify-produced POC.
+// =============================================================================
+class TextureZeroInitRenderAreaTest : public TextureZeroInitTest {
+  protected:
+    void SetUp() override {
+        TextureZeroInitTest::SetUp();
+        DAWN_TEST_UNSUPPORTED_IF(!mRenderAreaSupported);
+    }
+
+    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
+        mRenderAreaSupported = SupportsFeatures({wgpu::FeatureName::RenderPassRenderArea});
+        if (!mRenderAreaSupported) {
+            return {};
+        }
+        return {wgpu::FeatureName::RenderPassRenderArea};
+    }
+
+    bool mRenderAreaSupported = false;
+};
+
+// A fresh texture rendered with a sub-rect renderArea + LoadOp::Clear must be fully zero on
+// subsequent readback. If pixels outside renderArea are not properly initialized they will read
+// back as the nonzero "garbage" fill value, indicating Dawn improperly marked the whole mip
+// initialized while only clearing the sub-rect.
+TEST_P(TextureZeroInitRenderAreaTest, SubRectClearInitializesFullSubresource) {
+    // Use a large texture so that even a 32x32 render-area granularity (the
+    // common Vulkan max) cannot expand the sub-rect to cover the whole mip.
+    constexpr uint32_t kTexSize = 128;
+    constexpr uint32_t kAreaSize = 32;
+
+    wgpu::TextureDescriptor descriptor;
+    descriptor.dimension = wgpu::TextureDimension::e2D;
+    descriptor.size = {kTexSize, kTexSize, 1};
+    descriptor.format = kColorFormat;
+    descriptor.mipLevelCount = 1;
+    descriptor.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture texture = device.CreateTexture(&descriptor);
+
+    // Texture is freshly created -> uninitialized (and pre-filled with 0xFF by
+    // the nonzero_clear_resources_on_creation_for_testing toggle to simulate
+    // recycled GPU heap garbage).
+    EXPECT_FALSE(native::IsTextureSubresourceInitialized(texture.Get(), 0, 1, 0, 1));
+
+    utils::ComboRenderPassDescriptor renderPass({texture.CreateView()});
+    renderPass.cColorAttachments[0].loadOp = wgpu::LoadOp::Clear;
+    renderPass.cColorAttachments[0].storeOp = wgpu::StoreOp::Store;
+    renderPass.cColorAttachments[0].clearValue = {0.0f, 0.0f, 0.0f, 0.0f};
+
+    wgpu::RenderPassRenderAreaRect renderArea;
+    renderArea.origin = {0, 0};
+    renderArea.size = {kAreaSize, kAreaSize};
+    renderPass.nextInChain = &renderArea;
+
+    wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+    encoder.BeginRenderPass(&renderPass).End();
+    wgpu::CommandBuffer commands = encoder.Finish();
+    queue.Submit(1, &commands);
+
+    // Render target should be marked fully initialized
+    EXPECT_TRUE(native::IsTextureSubresourceInitialized(texture.Get(), 0, 1, 0, 1));
+
+    {
+        // Full subresource must be cleared
+        std::vector<utils::RGBA8> expected(kTexSize * kTexSize, {0, 0, 0, 0});
+        EXPECT_TEXTURE_EQ(expected.data(), texture, {0, 0}, {kTexSize, kTexSize}, 0);
+    }
+}
+
+TEST_P(TextureZeroInitRenderAreaTest, SubRectLoadInitializesFullSubresource) {
+    // Use a large texture so that even a 32x32 render-area granularity (the
+    // common Vulkan max) cannot expand the sub-rect to cover the whole mip.
+    constexpr uint32_t kTexSize = 128;
+    constexpr uint32_t kAreaSize = 32;
+
+    wgpu::TextureDescriptor descriptor;
+    descriptor.dimension = wgpu::TextureDimension::e2D;
+    descriptor.size = {kTexSize, kTexSize, 1};
+    descriptor.format = kColorFormat;
+    descriptor.mipLevelCount = 1;
+    descriptor.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture texture = device.CreateTexture(&descriptor);
+
+    // Texture is freshly created -> uninitialized (and pre-filled with 0xFF by
+    // the nonzero_clear_resources_on_creation_for_testing toggle to simulate
+    // recycled GPU heap garbage).
+    EXPECT_FALSE(native::IsTextureSubresourceInitialized(texture.Get(), 0, 1, 0, 1));
+
+    utils::ComboRenderPassDescriptor renderPass({texture.CreateView()});
+    renderPass.cColorAttachments[0].loadOp = wgpu::LoadOp::Load;
+    renderPass.cColorAttachments[0].storeOp = wgpu::StoreOp::Store;
+
+    wgpu::RenderPassRenderAreaRect renderArea;
+    renderArea.origin = {0, 0};
+    renderArea.size = {kAreaSize, kAreaSize};
+    renderPass.nextInChain = &renderArea;
+
+    wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+    encoder.BeginRenderPass(&renderPass).End();
+    wgpu::CommandBuffer commands = encoder.Finish();
+    queue.Submit(1, &commands);
+
+    // Render target should be marked fully initialized
+    EXPECT_TRUE(native::IsTextureSubresourceInitialized(texture.Get(), 0, 1, 0, 1));
+
+    {
+        // Full subresource must be cleared
+        std::vector<utils::RGBA8> expected(kTexSize * kTexSize, {0, 0, 0, 0});
+        EXPECT_TEXTURE_EQ(expected.data(), texture, {0, 0}, {kTexSize, kTexSize}, 0);
+    }
+}
+
+TEST_P(TextureZeroInitRenderAreaTest, SubRectDepthStencilInitializesFullSubresource) {
+    // Use a large texture so that even a 32x32 render-area granularity (the
+    // common Vulkan max) cannot expand the sub-rect to cover the whole mip.
+    constexpr uint32_t kTexSize = 128;
+    constexpr uint32_t kAreaSize = 32;
+
+    wgpu::TextureDescriptor descriptor;
+    descriptor.dimension = wgpu::TextureDimension::e2D;
+    descriptor.size = {kTexSize, kTexSize, 1};
+    descriptor.format = kDepthStencilFormat;
+    descriptor.mipLevelCount = 1;
+    descriptor.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture depthStencilTexture = device.CreateTexture(&descriptor);
+
+    // Texture is freshly created -> uninitialized (and pre-filled with 0xFF by
+    // the nonzero_clear_resources_on_creation_for_testing toggle to simulate
+    // recycled GPU heap garbage).
+    EXPECT_FALSE(native::IsTextureSubresourceInitialized(depthStencilTexture.Get(), 0, 1, 0, 1));
+
+    utils::ComboRenderPassDescriptor renderPass({}, depthStencilTexture.CreateView());
+    renderPass.cDepthStencilAttachmentInfo.depthLoadOp = wgpu::LoadOp::Clear;
+    renderPass.cDepthStencilAttachmentInfo.stencilLoadOp = wgpu::LoadOp::Clear;
+    renderPass.cDepthStencilAttachmentInfo.depthClearValue = 0.0f;
+    renderPass.cDepthStencilAttachmentInfo.stencilClearValue = 0u;
+    renderPass.cDepthStencilAttachmentInfo.depthStoreOp = wgpu::StoreOp::Store;
+    renderPass.cDepthStencilAttachmentInfo.stencilStoreOp = wgpu::StoreOp::Store;
+
+    wgpu::RenderPassRenderAreaRect renderArea;
+    renderArea.origin = {0, 0};
+    renderArea.size = {kAreaSize, kAreaSize};
+    renderPass.nextInChain = &renderArea;
+
+    wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+    encoder.BeginRenderPass(&renderPass).End();
+    wgpu::CommandBuffer commands = encoder.Finish();
+    queue.Submit(1, &commands);
+
+    // Render target should be marked fully initialized
+    EXPECT_TRUE(native::IsTextureSubresourceInitialized(depthStencilTexture.Get(), 0, 1, 0, 1));
+
+    {
+        // Full subresource must be cleared
+        std::vector<uint8_t> expected(kTexSize * kTexSize, 0);
+        EXPECT_TEXTURE_EQ(expected.data(), depthStencilTexture, {0, 0}, {kSize, kSize}, 0,
+                          wgpu::TextureAspect::StencilOnly);
+    }
+}
+
+TEST_P(TextureZeroInitRenderAreaTest, SubRectResolveInitializesFullSubresource) {
+    constexpr uint32_t kTexSize = 128;
+    constexpr uint32_t kAreaSize = 32;
+
+    wgpu::TextureDescriptor msaaDesc;
+    msaaDesc.dimension = wgpu::TextureDimension::e2D;
+    msaaDesc.size = {kTexSize, kTexSize, 1};
+    msaaDesc.format = kColorFormat;
+    msaaDesc.sampleCount = 4;
+    msaaDesc.usage = wgpu::TextureUsage::RenderAttachment;
+    wgpu::Texture msaaTex = device.CreateTexture(&msaaDesc);
+
+    wgpu::TextureDescriptor resolveDesc;
+    resolveDesc.dimension = wgpu::TextureDimension::e2D;
+    resolveDesc.size = {kTexSize, kTexSize, 1};
+    resolveDesc.format = kColorFormat;
+    resolveDesc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::CopySrc;
+    wgpu::Texture resolveTex = device.CreateTexture(&resolveDesc);
+
+    EXPECT_FALSE(native::IsTextureSubresourceInitialized(resolveTex.Get(), 0, 1, 0, 1));
+
+    utils::ComboRenderPassDescriptor renderPass({msaaTex.CreateView()});
+    renderPass.cColorAttachments[0].loadOp = wgpu::LoadOp::Clear;
+    renderPass.cColorAttachments[0].storeOp = wgpu::StoreOp::Discard;
+    renderPass.cColorAttachments[0].clearValue = {0.0f, 0.0f, 0.0f, 0.0f};
+    renderPass.cColorAttachments[0].resolveTarget = resolveTex.CreateView();
+
+    wgpu::RenderPassRenderAreaRect renderArea;
+    renderArea.origin = {0, 0};
+    renderArea.size = {kAreaSize, kAreaSize};
+    renderPass.nextInChain = &renderArea;
+
+    wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+    encoder.BeginRenderPass(&renderPass).End();
+    wgpu::CommandBuffer commands = encoder.Finish();
+    queue.Submit(1, &commands);
+
+    // Resolve target should be marked fully initialized.
+    EXPECT_TRUE(native::IsTextureSubresourceInitialized(resolveTex.Get(), 0, 1, 0, 1));
+
+    {
+        // Full subresource must be cleared
+        std::vector<utils::RGBA8> expected(kTexSize * kTexSize, {0, 0, 0, 0});
+        EXPECT_TEXTURE_EQ(expected.data(), resolveTex, {0, 0}, {kTexSize, kTexSize}, 0);
+    }
+}
+
+DAWN_INSTANTIATE_TEST(TextureZeroInitRenderAreaTest,
+                      D3D11Backend({"nonzero_clear_resources_on_creation_for_testing"}),
+                      D3D12Backend({"nonzero_clear_resources_on_creation_for_testing"}),
+                      OpenGLBackend({"nonzero_clear_resources_on_creation_for_testing"}),
+                      OpenGLESBackend({"nonzero_clear_resources_on_creation_for_testing"}),
+                      MetalBackend({"nonzero_clear_resources_on_creation_for_testing"}),
+                      VulkanBackend({"nonzero_clear_resources_on_creation_for_testing"}));
 
 class CompressedTextureZeroInitTest : public TextureZeroInitTest {
   protected:
@@ -2413,9 +2838,10 @@ TEST_P(CompressedTextureZeroInitTest, Copy2DArrayCompressedB2T2B) {
     std::vector<uint8_t> expected(data.size(), 0);
     for (uint32_t z = 0; z < copyExtent3D.depthOrArrayLayers; ++z) {
         for (uint32_t y = 0; y < copyHeightInBlock; ++y) {
-            memcpy(&expected[copyBytesPerRow * y + copyBytesPerRow * copyRowsPerImage * z],
-                   &data[copyBytesPerRow * y + copyBytesPerRow * copyRowsPerImage * z],
-                   copyWidthInBlock * utils::GetTexelBlockSizeInBytes(textureDescriptor.format));
+            DAWN_UNSAFE_TODO(memcpy(
+                &expected[copyBytesPerRow * y + copyBytesPerRow * copyRowsPerImage * z],
+                &data[copyBytesPerRow * y + copyBytesPerRow * copyRowsPerImage * z],
+                copyWidthInBlock * utils::GetTexelBlockSizeInBytes(textureDescriptor.format)));
         }
     }
     // Check final contents
@@ -2430,6 +2856,8 @@ DAWN_INSTANTIATE_TEST(CompressedTextureZeroInitTest,
                       MetalBackend({"nonzero_clear_resources_on_creation_for_testing"}),
                       OpenGLBackend({"nonzero_clear_resources_on_creation_for_testing"}),
                       OpenGLESBackend({"nonzero_clear_resources_on_creation_for_testing"}),
+                      OpenGLESBackend({"gl_defer",
+                                       "nonzero_clear_resources_on_creation_for_testing"}),
                       VulkanBackend({"nonzero_clear_resources_on_creation_for_testing"}));
 
 }  // anonymous namespace

@@ -32,19 +32,18 @@
 #include <array>
 #include <bitset>
 
-#include "dawn/common/Constants.h"
-#include "dawn/native/BindGroup.h"
-#include "dawn/native/Pipeline.h"
-#include "dawn/native/PipelineLayout.h"
 #include "partition_alloc/pointers/raw_ptr_exclusion.h"
+#include "src/dawn/common/Constants.h"
+#include "src/dawn/native/BindGroup.h"
+#include "src/dawn/native/Pipeline.h"
+#include "src/dawn/native/PipelineLayout.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native {
 
 // Keeps track of the dirty bind groups so they can be lazily applied when we know the
 // pipeline state or it changes.
-// |DynamicOffset| is a template parameter because offsets in Vulkan are uint32_t but uint64_t
-// in other backends.
-template <bool CanInheritBindGroups, typename DynamicOffset>
+template <bool CanInheritBindGroups>
 class BindGroupTrackerBase {
   public:
     void OnSetBindGroup(BindGroupIndex index,
@@ -71,7 +70,7 @@ class BindGroupTrackerBase {
 
         mBindGroups[index] = bindGroup;
         mDynamicOffsets[index].count = BindingIndex(dynamicOffsetCount);
-        std::copy(dynamicOffsets, dynamicOffsets + dynamicOffsetCount,
+        std::copy(dynamicOffsets, DAWN_UNSAFE_TODO(dynamicOffsets + dynamicOffsetCount),
                   mDynamicOffsets[index].offsets.begin());
     }
 
@@ -80,9 +79,9 @@ class BindGroupTrackerBase {
   protected:
     virtual bool AreLayoutsCompatible() { return mLastAppliedPipelineLayout == mPipelineLayout; }
 
-    ityp::span<BindingIndex, DynamicOffset> GetDynamicOffsets(BindGroupIndex index) {
-        return ityp::span<BindingIndex, DynamicOffset>(mDynamicOffsets[index].offsets.data(),
-                                                       mDynamicOffsets[index].count);
+    ityp::span<BindingIndex, uint32_t> GetDynamicOffsets(BindGroupIndex index) {
+        return ityp::span<BindingIndex, uint32_t>(mDynamicOffsets[index].offsets.data(),
+                                                  mDynamicOffsets[index].count);
     }
 
     // The Derived class should call this before it applies bind groups.
@@ -108,6 +107,7 @@ class BindGroupTrackerBase {
             mDirtyBindGroups &= mBindGroupLayoutsMask;
             mDirtyBindGroupsObjectChangedOrIsDynamic &= mBindGroupLayoutsMask;
         } else {
+            // All bind groups (in the mask) are dirty
             mDirtyBindGroups = mBindGroupLayoutsMask;
             mDirtyBindGroupsObjectChangedOrIsDynamic = mBindGroupLayoutsMask;
         }
@@ -147,7 +147,7 @@ class BindGroupTrackerBase {
         kMaxDynamicUniformBuffersPerPipelineLayout + kMaxDynamicStorageBuffersPerPipelineLayout;
 
     struct BindingDynamicOffsets {
-        ityp::array<BindingIndex, DynamicOffset, kMaxDynamicOffsetsPerBindGroup> offsets = {};
+        ityp::array<BindingIndex, uint32_t, kMaxDynamicOffsetsPerBindGroup> offsets = {};
         BindingIndex count = {};
     };
 

@@ -26,6 +26,9 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import("../../../scripts/dawn_overrides_with_defaults.gni")
+
+# Import ANGLE after overrides to ensure dawn_angle_dir is defined.
+import("${dawn_angle_dir}/gni/angle.gni")
 import("../../../scripts/tint_overrides_with_defaults.gni")
 
 import("//testing/test.gni")
@@ -53,80 +56,6 @@ group("tests") {
 }
 
 ###############################################################################
-# Gtest Gmock - Handle building inside and outside of Chromium.
-###############################################################################
-
-# When building outside of Chromium we need to define our own targets for GTest
-# and GMock. However when compiling inside of Chromium we need to reuse the
-# existing targets, both because Chromium has a special harness for swarming
-# and because otherwise the "gn check" fails.
-
-if (!build_with_chromium) {
-  # When we aren't in Chromium we define out own targets based on the location
-  # of the googletest repo.
-  googletest_dir = dawn_googletest_dir
-
-  config("gtest_config") {
-    include_dirs = [
-      "${googletest_dir}/googletest",
-      "${googletest_dir}/googletest/include",
-    ]
-  }
-
-  static_library("gtest") {
-    testonly = true
-    sources = [ "${googletest_dir}/googletest/src/gtest-all.cc" ]
-    public_configs = [ ":gtest_config" ]
-  }
-
-  config("gmock_config") {
-    include_dirs = [
-      "${googletest_dir}/googlemock",
-      "${googletest_dir}/googlemock/include",
-      "${googletest_dir}/googletest/include",
-    ]
-    if (dawn_standalone && is_clang) {
-      cflags = [
-        # gmock emits deprecated-copy-dtor warnings when using ::testing::Combine
-        "-Wno-deprecated-copy-dtor",
-      ]
-    }
-  }
-
-  static_library("gmock") {
-    testonly = true
-    sources = [ "${googletest_dir}/googlemock/src/gmock-all.cc" ]
-    public_configs = [ ":gmock_config" ]
-  }
-
-  group("gmock_and_gtest") {
-    testonly = true
-    public_deps = [
-      ":gmock",
-      ":gtest",
-    ]
-  }
-
-  static_library("gmock_main") {
-    testonly = true
-    sources = [ "${googletest_dir}/googlemock/src/gmock_main.cc" ]
-    public_deps = [ ":gmock_and_gtest" ]
-  }
-} else {
-  # When we are in Chromium we reuse its targets, and also add some deps that
-  # are needed to launch the test in swarming mode.
-  group("gmock_and_gtest") {
-    testonly = true
-    public_deps = [
-      "//base",
-      "//base/test:test_support",
-      "//testing/gmock",
-      "//testing/gtest",
-    ]
-  }
-}
-
-###############################################################################
 # Wrapping of Chromium targets
 ###############################################################################
 
@@ -136,17 +65,17 @@ if (!build_with_chromium) {
 if (build_with_chromium) {
   source_set("unittests_main") {
     testonly = true
-    deps = [ ":gmock_and_gtest" ]
+    deps = [ "${dawn_root}/src/utils:gmock_and_gtest" ]
     sources = [ "//gpu/dawn_unittests_main.cc" ]
   }
   source_set("end2end_tests_main") {
     testonly = true
-    deps = [ ":gmock_and_gtest" ]
+    deps = [ "${dawn_root}/src/utils:gmock_and_gtest" ]
     sources = [ "//gpu/dawn_end2end_tests_main.cc" ]
   }
   source_set("perf_tests_main") {
     testonly = true
-    deps = [ ":gmock_and_gtest" ]
+    deps = [ "${dawn_root}/src/utils:gmock_and_gtest" ]
     sources = [ "//gpu/dawn_perf_tests_main.cc" ]
   }
 }
@@ -212,8 +141,8 @@ template("dawn_test") {
           deps = []
         }
         deps += [
-          "$dawn_root/third_party/gn/dxc:copy_dxil_dll",
-          "$dawn_root/third_party/gn/dxc:dxcompiler",
+          "${dawn_dxc_gn_dir}:copy_dxil_dll",
+          "${dawn_dxc_gn_dir}:dxcompiler",
         ]
       } else {
         if (!defined(data_deps)) {
@@ -243,11 +172,11 @@ source_set("native_mocks_sources") {
   testonly = true
 
   deps = [
-    ":gmock_and_gtest",
     ":test_infra_sources",
     "${dawn_root}/src/dawn:proc",
     "${dawn_root}/src/dawn/native:sources",
     "${dawn_root}/src/dawn/native:static",
+    "${dawn_root}/src/utils:gmock_and_gtest",
   ]
 
   # Add internal dawn native config for internal unittests.
@@ -289,7 +218,6 @@ source_set("native_mocks_sources") {
 
 dawn_test("dawn_unittests") {
   deps = [
-    ":gmock_and_gtest",
     ":mock_webgpu_gen",
     ":native_mocks_sources",
     ":partition_alloc_support",
@@ -304,9 +232,14 @@ dawn_test("dawn_unittests") {
     "${dawn_root}/src/dawn/utils:system_utils",
     "${dawn_root}/src/dawn/utils:test_utils",
     "${dawn_root}/src/dawn/utils:wgpu_utils",
-    "${dawn_root}/src/dawn/wire",
+    "${dawn_root}/src/dawn/wire:sources",
+    "${dawn_root}/src/dawn/wire:static",
+    "${dawn_root}/src/utils:gmock_and_gtest",
     "${dawn_root}/src/utils/chromium_test_compat",
   ]
+
+  # Add the unittests for src/utils in this binary.
+  deps += [ "${dawn_root}/src/utils:unittests" ]
 
   # Add internal dawn native config for internal unittests.
   configs = [ "${dawn_root}/src/dawn/native:internal" ]
@@ -326,6 +259,7 @@ dawn_test("dawn_unittests") {
     "${dawn_root}/src/dawn/wire/server/ServerMemoryTransferService_mock.h",
     "DawnNativeTest.cpp",
     "DawnNativeTest.h",
+    "unittests/AlgebraTests.cpp",
     "unittests/AsyncTaskTests.cpp",
     "unittests/BitSetRangeIteratorTests.cpp",
     "unittests/BuddyAllocatorTests.cpp",
@@ -367,14 +301,16 @@ dawn_test("dawn_unittests") {
     "unittests/SerialQueueTests.cpp",
     "unittests/Sha3Tests.cpp",
     "unittests/SlabAllocatorTests.cpp",
+    "unittests/StringsTests.cpp",
     "unittests/SubresourceStorageTests.cpp",
     "unittests/SystemUtilsTests.cpp",
     "unittests/ToBackendTests.cpp",
     "unittests/ToggleTests.cpp",
-    "unittests/TypedIntegerTests.cpp",
     "unittests/UnicodeTests.cpp",
     "unittests/WeakRefTests.cpp",
+    "unittests/WorkerTaskPoolTests.cpp",
     "unittests/native/AllowedErrorTests.cpp",
+    "unittests/native/BlobCacheTests.cpp",
     "unittests/native/BlobTests.cpp",
     "unittests/native/BufferBaseTests.cpp",
     "unittests/native/CacheRequestTests.cpp",
@@ -384,10 +320,11 @@ dawn_test("dawn_unittests") {
     "unittests/native/DeviceAsyncTaskTests.cpp",
     "unittests/native/DeviceCreationTests.cpp",
     "unittests/native/ErrorMonadTests.cpp",
-    "unittests/native/ImmediateConstantsTrackerTests.cpp",
+    "unittests/native/ImmediatesTrackerTests.cpp",
     "unittests/native/LimitsTests.cpp",
     "unittests/native/MemoryInstrumentationTests.cpp",
     "unittests/native/ObjectContentHasherTests.cpp",
+    "unittests/native/SkipValidationTests.cpp",
     "unittests/native/StreamTests.cpp",
     "unittests/validation/BindGroupValidationTests.cpp",
     "unittests/validation/BufferValidationTests.cpp",
@@ -464,6 +401,7 @@ dawn_test("dawn_unittests") {
     "unittests/wire/WireOptionalTests.cpp",
     "unittests/wire/WireQueueTests.cpp",
     "unittests/wire/WireShaderModuleTests.cpp",
+    "unittests/wire/WireSpecificCommandTests.cpp",
     "unittests/wire/WireTest.cpp",
     "unittests/wire/WireTest.h",
   ]
@@ -483,12 +421,14 @@ dawn_test("dawn_unittests") {
     sources += [ "unittests/d3d12/CopySplitTests.cpp" ]
   }
 
-  if (dawn_enable_vulkan) {
-    sources += [
-      "unittests/validation/YCbCrInfoValidationTests.cpp",
-      "unittests/vulkan/MemoryTypeSelectorTests.cpp",
-    ]
+  if (dawn_enable_webgpu_on_webgpu) {
+    sources += [ "unittests/replay/CaptureWalkerTests.cpp" ]
   }
+
+  sources += [
+    "unittests/validation/YCbCrValidationTests.cpp",
+    "unittests/vulkan/MemoryTypeSelectorTests.cpp",
+  ]
 
   if (tint_build_spv_reader) {
     deps += [ "${dawn_spirv_tools_dir}:spvtools_opt" ]
@@ -537,7 +477,6 @@ source_set("test_infra_sources") {
     "${dawn_root}/src/dawn/utils:system_utils",
     "${dawn_root}/src/dawn/utils:test_utils",
     "${dawn_root}/src/dawn/utils:wgpu_utils",
-    "${dawn_root}/src/dawn/wire",
   ]
 
   public = [
@@ -549,8 +488,8 @@ source_set("test_infra_sources") {
     "ToggleParser.h",
   ]
   public_deps = [
-    ":gmock_and_gtest",
     "${dawn_root}/src/dawn/partition_alloc:raw_ptr",
+    "${dawn_root}/src/utils:gmock_and_gtest",
   ]
 
   if (dawn_supports_glfw_for_windowing) {
@@ -579,9 +518,9 @@ source_set("platform_mocks_sources") {
   testonly = true
 
   deps = [
-    ":gmock_and_gtest",
     "${dawn_root}/src/dawn/common",
     "${dawn_root}/src/dawn/platform",
+    "${dawn_root}/src/utils:gmock_and_gtest",
   ]
   public_deps = [ "${dawn_root}/src/dawn/partition_alloc:raw_ptr" ]
 
@@ -606,7 +545,7 @@ source_set("end2end_tests_sources") {
     "${dawn_root}/src/dawn/utils:system_utils",
     "${dawn_root}/src/dawn/utils:test_utils",
     "${dawn_root}/src/dawn/utils:wgpu_utils",
-    "${dawn_root}/src/dawn/wire",
+    "${dawn_root}/src/dawn/wire:headers",
   ]
 
   sources = [
@@ -614,6 +553,7 @@ source_set("end2end_tests_sources") {
     "end2end/AdapterEnumerationTests.cpp",
     "end2end/AdapterFormatCapabilitiesVkTests.cpp",
     "end2end/AdapterPropertiesD3DTests.cpp",
+    "end2end/AdapterPropertiesDrmTests.cpp",
     "end2end/AdapterPropertiesVkTests.cpp",
     "end2end/ArchTierLimitsExhaustive.cpp",
     "end2end/BasicTests.cpp",
@@ -621,7 +561,9 @@ source_set("end2end_tests_sources") {
     "end2end/BindingArrayTests.cpp",
     "end2end/BufferHostMappedPointerTests.cpp",
     "end2end/BufferHostMappedPointerTests.h",
+    "end2end/BufferRobustnessTests.cpp",
     "end2end/BufferTests.cpp",
+    "end2end/BufferViewTests.cpp",
     "end2end/BufferZeroInitTests.cpp",
     "end2end/ClipDistancesTests.cpp",
     "end2end/ClipSpaceTests.cpp",
@@ -640,6 +582,7 @@ source_set("end2end_tests_sources") {
     "end2end/CreateDestroyTests.cpp",
     "end2end/CreatePipelineAsyncTests.cpp",
     "end2end/CullingTests.cpp",
+    "end2end/DawnTestInfraTests.cpp",
     "end2end/DebugMarkerTests.cpp",
     "end2end/DepthBiasTests.cpp",
     "end2end/DepthStencilCopyTests.cpp",
@@ -707,6 +650,7 @@ source_set("end2end_tests_sources") {
     "end2end/ShaderAtomicTests.cpp",
     "end2end/ShaderBuiltinPartialConstArgsErrorTests.cpp",
     "end2end/ShaderF16Tests.cpp",
+    "end2end/ShaderIOPolyfillTests.cpp",
     "end2end/ShaderModuleCachingTests.cpp",
     "end2end/ShaderPrintTests.cpp",
     "end2end/ShaderTests.cpp",
@@ -716,11 +660,13 @@ source_set("end2end_tests_sources") {
     "end2end/SubgroupsTests.cpp",
     "end2end/SubresourceRenderAttachmentTests.cpp",
     "end2end/SupportedFeatureArch.cpp",
+    "end2end/TexelBufferTests.cpp",
     "end2end/Texture3DTests.cpp",
     "end2end/TextureComponentSwizzleTests.cpp",
     "end2end/TextureCorruptionTests.cpp",
     "end2end/TextureFormatTests.cpp",
     "end2end/TextureFormatsTier1Tests.cpp",
+    "end2end/TextureSampleCompare2DTests.cpp",
     "end2end/TextureShaderBuiltinTests.cpp",
     "end2end/TextureSubresourceTests.cpp",
     "end2end/TextureViewTests.cpp",
@@ -782,10 +728,7 @@ source_set("end2end_tests_sources") {
   }
 
   if (dawn_enable_vulkan) {
-    sources += [
-      "end2end/AllocatorMemoryInstrumentationTests.cpp",
-      "end2end/YCbCrInfoTests.cpp",
-    ]
+    sources += [ "end2end/AllocatorMemoryInstrumentationTests.cpp" ]
   }
 
   if (dawn_enable_webgpu_on_webgpu) {
@@ -820,17 +763,19 @@ source_set("white_box_tests_sources") {
     "${dawn_root}/src/dawn/common",
     "${dawn_root}/src/dawn/partition_alloc:raw_ptr",
 
-    # Statically linked and with sources because the end2end white_box tests use Dawn internals.
+    # Statically linked and with sources because the end2end white_box tests use
+    # Dawn internals.
     "${dawn_root}/src/dawn/native:sources",
     "${dawn_root}/src/dawn/native:static",
     "${dawn_root}/src/dawn/utils:system_utils",
     "${dawn_root}/src/dawn/utils:test_utils",
     "${dawn_root}/src/dawn/utils:wgpu_utils",
-    "${dawn_root}/src/dawn/wire",
+    "${dawn_root}/src/dawn/wire:sources",
+    "${dawn_root}/src/dawn/wire:static",
   ]
 
   sources = [
-    "white_box/ImmediateConstantOffsetTests.cpp",
+    "white_box/ImmediateOffsetTests.cpp",
     "white_box/ShaderModuleTests.cpp",
     "white_box/SharedBufferMemoryTests.cpp",
     "white_box/SharedBufferMemoryTests.h",
@@ -839,6 +784,7 @@ source_set("white_box_tests_sources") {
     "white_box/WaitListEventTests.cpp",
   ]
   libs = []
+  defines = []
 
   if (is_mac || is_ios) {
     sources += [ "white_box/SharedTextureMemoryTests_apple.mm" ]
@@ -875,7 +821,10 @@ source_set("white_box_tests_sources") {
     }
 
     if (is_android) {
-      sources += [ "white_box/SharedTextureMemoryTests_android.cpp" ]
+      sources += [
+        "white_box/SharedTextureMemoryTests_android.cpp",
+        "white_box/SharedTextureMemoryYCbCrAndroidTests.cpp",
+      ]
     }
 
     if (dawn_enable_error_injection) {
@@ -927,11 +876,12 @@ source_set("white_box_tests_sources") {
   }
 
   if (dawn_enable_opengles) {
+    defines += [ "DAWN_ANGLE_LIBS_SUFFIX=\"${angle_libs_suffix}\"" ]
     sources += [
       "white_box/EGLImageWrappingTests.cpp",
       "white_box/GLTextureWrappingTests.cpp",
     ]
-    include_dirs = [ "//third_party/khronos" ]
+    include_dirs = [ "//third_party/EGL-Registry" ]
   }
 }
 
@@ -974,7 +924,6 @@ dawn_test("dawn_perf_tests") {
     "${dawn_root}/src/dawn/utils:system_utils",
     "${dawn_root}/src/dawn/utils:test_utils",
     "${dawn_root}/src/dawn/utils:wgpu_utils",
-    "${dawn_root}/src/dawn/wire",
     "${dawn_root}/src/utils/chromium_test_compat",
   ]
 
@@ -986,6 +935,7 @@ dawn_test("dawn_perf_tests") {
     "perf_tests/DawnPerfTestPlatform.cpp",
     "perf_tests/DawnPerfTestPlatform.h",
     "perf_tests/DrawCallPerf.cpp",
+    "perf_tests/LoadStoreOpPerfTest.cpp",
     "perf_tests/MatrixVectorMultiplyPerf.cpp",
     "perf_tests/ShaderRobustnessPerf.cpp",
     "perf_tests/SubresourceTrackingPerf.cpp",

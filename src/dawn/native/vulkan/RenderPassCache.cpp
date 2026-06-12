@@ -25,20 +25,21 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/vulkan/RenderPassCache.h"
+#include "src/dawn/native/vulkan/RenderPassCache.h"
 
 #include <concepts>
 #include <vector>
 
 #include "absl/container/inlined_vector.h"
-#include "dawn/common/Enumerator.h"
-#include "dawn/common/HashUtils.h"
-#include "dawn/common/Log.h"
-#include "dawn/common/Range.h"
-#include "dawn/native/vulkan/DeviceVk.h"
-#include "dawn/native/vulkan/TextureVk.h"
-#include "dawn/native/vulkan/UtilsVulkan.h"
-#include "dawn/native/vulkan/VulkanError.h"
+#include "src/dawn/common/Enumerator.h"
+#include "src/dawn/common/HashUtils.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/native/vulkan/DeviceVk.h"
+#include "src/dawn/native/vulkan/TextureVk.h"
+#include "src/dawn/native/vulkan/UtilsVulkan.h"
+#include "src/dawn/native/vulkan/VulkanError.h"
+#include "src/utils/assert.h"
+#include "src/utils/log.h"
 
 namespace dawn::native::vulkan {
 
@@ -62,6 +63,7 @@ class RenderPassCreateInfo {
             colorAttachmentRefs[i] = defaultRef;
             resolveAttachmentRefs[i] = defaultRef;
             inputAttachmentRefs[i] = defaultRef;
+            framebufferFetchAttachmentRefs[i] = defaultRef;
         }
         depthStencilAttachmentRef = defaultRef;
 
@@ -72,7 +74,8 @@ class RenderPassCreateInfo {
     PerColorAttachment<VkAttachmentReference> colorAttachmentRefs;
     PerColorAttachment<VkAttachmentReference> resolveAttachmentRefs;
     PerColorAttachment<VkAttachmentReference> inputAttachmentRefs;
-    VkAttachmentReference depthStencilAttachmentRef;
+    PerColorAttachment<VkAttachmentReference> framebufferFetchAttachmentRefs;
+    VkAttachmentReference depthStencilAttachmentRef = {};
 
     std::array<VkAttachmentDescription, kMaxAttachmentCount> attachmentDescs = {};
     std::array<VkSubpassDescription, 2> subpassDescs = {};
@@ -98,6 +101,7 @@ class RenderPassCreateInfo2 {
             colorAttachmentRefs[i] = defaultRef;
             resolveAttachmentRefs[i] = defaultRef;
             inputAttachmentRefs[i] = defaultRef;
+            framebufferFetchAttachmentRefs[i] = defaultRef;
         }
         depthStencilAttachmentRef = defaultRef;
 
@@ -127,7 +131,8 @@ class RenderPassCreateInfo2 {
     PerColorAttachment<VkAttachmentReference2> colorAttachmentRefs;
     PerColorAttachment<VkAttachmentReference2> resolveAttachmentRefs;
     PerColorAttachment<VkAttachmentReference2> inputAttachmentRefs;
-    VkAttachmentReference2 depthStencilAttachmentRef;
+    PerColorAttachment<VkAttachmentReference2> framebufferFetchAttachmentRefs;
+    VkAttachmentReference2 depthStencilAttachmentRef = {};
 
     std::array<VkAttachmentDescription2, kMaxAttachmentCount> attachmentDescs = {};
     std::array<VkSubpassDescription2, 2> subpassDescs = {};
@@ -140,6 +145,8 @@ template <class InfoType>
 void InitializePassInfo(Device* device, const RenderPassCacheQuery& query, InfoType& passInfo) {
     VkSampleCountFlagBits vkSampleCount = VulkanSampleCount(query.sampleCount);
 
+    const bool framebufferFetchEnabled = device->HasFeature(Feature::FramebufferFetch);
+
     // The Vulkan subpasses want to know the layout of the attachments with VkAttachmentRef.
     // Precompute them as they must be pointer-chained in VkSubpassDescription.
     uint32_t attachmentCount = 0;
@@ -149,7 +156,13 @@ void InitializePassInfo(Device* device, const RenderPassCacheQuery& query, InfoT
         auto& attachmentDesc = passInfo.attachmentDescs[attachmentCount];
 
         attachmentRef.attachment = attachmentCount;
-        attachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        // If we can read from a color attachment it must use VK_IMAGE_LAYOUT_GENERAL for the color
+        // attachment description. As long as the initial/final layouts are
+        // VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, the choice of the VK_IMAGE_LAYOUT_GENERAL for
+        // the subpass layout is efficient; the few GPUs that treat VK_IMAGE_LAYOUT_GENERAL
+        // differently recognize this pattern and keep the internal layout optimal.
+        attachmentRef.layout = framebufferFetchEnabled ? VK_IMAGE_LAYOUT_GENERAL
+                                                       : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
         attachmentDesc.flags = 0;
         attachmentDesc.format = VulkanImageFormat(device, query.colorFormats[i]);
@@ -272,8 +285,30 @@ void InitializePassInfo(Device* device, const RenderPassCacheQuery& query, InfoT
     auto& subpassDesc = passInfo.subpassDescs[subpassCount];
     subpassDesc.flags = 0;
     subpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpassDesc.inputAttachmentCount = 0;
-    subpassDesc.pInputAttachments = nullptr;
+
+    if (framebufferFetchEnabled) {
+        // When framebuffer fetch is enable add a corresponding input attachment for each color
+        // attachment in case we need to read from it.
+        for (auto i : query.colorMask) {
+            auto& attachmentRef = passInfo.colorAttachmentRefs[i];
+
+            auto& inputRef = passInfo.framebufferFetchAttachmentRefs[i];
+            inputRef.attachment = attachmentRef.attachment;
+            inputRef.layout = VK_IMAGE_LAYOUT_GENERAL;
+            if constexpr (std::same_as<InfoType, RenderPassCreateInfo2>) {
+                inputRef.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            }
+        }
+
+        subpassDesc.inputAttachmentCount = static_cast<uint8_t>(highestColorAttachmentIndexPlusOne);
+        subpassDesc.pInputAttachments = passInfo.framebufferFetchAttachmentRefs.data();
+
+        subpassDesc.flags |=
+            VK_SUBPASS_DESCRIPTION_RASTERIZATION_ORDER_ATTACHMENT_COLOR_ACCESS_BIT_EXT;
+    } else {
+        subpassDesc.inputAttachmentCount = 0;
+        subpassDesc.pInputAttachments = nullptr;
+    }
     subpassDesc.colorAttachmentCount = static_cast<uint8_t>(highestColorAttachmentIndexPlusOne);
     subpassDesc.pColorAttachments = passInfo.colorAttachmentRefs.data();
 
@@ -369,62 +404,71 @@ ResultOrError<RenderPassCache::RenderPassInfo> RenderPassCache::GetRenderPass(
 
 ResultOrError<RenderPassCache::RenderPassInfo> RenderPassCache::CreateRenderPassForQuery(
     const RenderPassCacheQuery& query) {
-    if (mDevice->IsToggleEnabled(Toggle::VulkanUseCreateRenderPass2)) {
-        RenderPassCreateInfo2 passInfo2;
-        InitializePassInfo(mDevice, query, passInfo2);
+    RenderPassInfo renderPassInfo;
+    renderPassInfo.uniqueId = nextRenderPassId++;
 
-        RenderPassInfo renderPassInfo;
-        renderPassInfo.mainSubpass = passInfo2.createInfo.subpassCount - 1;
-        renderPassInfo.uniqueId = nextRenderPassId++;
+    switch (mDevice->GetRenderPassType()) {
+        case VulkanRenderPassType::CreateRenderPass2: {
+            RenderPassCreateInfo2 passInfo2;
+            InitializePassInfo(mDevice, query, passInfo2);
 
-        VkMultisampledRenderToSingleSampledInfoEXT msrtss = {};
-        VkSubpassDescriptionDepthStencilResolveKHR depthStencilResolve = {};
+            renderPassInfo.mainSubpass = passInfo2.createInfo.subpassCount - 1;
 
-        if (query.renderToSingleSampleMask.any()) {
-            VkSubpassDescription2& subpass = passInfo2.subpassDescs[renderPassInfo.mainSubpass];
-            PNextChainBuilder subpassChain(&subpass);
+            VkMultisampledRenderToSingleSampledInfoEXT msrtss = {};
+            VkSubpassDescriptionDepthStencilResolveKHR depthStencilResolve = {};
 
-            msrtss.multisampledRenderToSingleSampledEnable = VK_TRUE;
-            msrtss.rasterizationSamples = VulkanSampleCount(query.sampleCount);
+            if (query.renderToSingleSampleMask.any()) {
+                VkSubpassDescription2& subpass = passInfo2.subpassDescs[renderPassInfo.mainSubpass];
+                PNextChainBuilder subpassChain(&subpass);
 
-            subpassChain.Add(&msrtss,
-                             VK_STRUCTURE_TYPE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_INFO_EXT);
+                msrtss.multisampledRenderToSingleSampledEnable = VK_TRUE;
+                msrtss.rasterizationSamples = VulkanSampleCount(query.sampleCount);
 
-            if (subpass.pDepthStencilAttachment != nullptr) {
-                // VUID-VkSubpassDescription2-pNext-06871: If MSRTSS is used and the depth/stencil
-                // attachment is not null a depth/stencil resolve description must be chained to the
-                // subpass.
-                depthStencilResolve.depthResolveMode = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT;
-                depthStencilResolve.stencilResolveMode = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT;
-                depthStencilResolve.pDepthStencilResolveAttachment = nullptr;
+                subpassChain.Add(&msrtss,
+                                 VK_STRUCTURE_TYPE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_INFO_EXT);
 
-                subpassChain.Add(&depthStencilResolve,
-                                 VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE_KHR);
+                if (subpass.pDepthStencilAttachment != nullptr) {
+                    // VUID-VkSubpassDescription2-pNext-06871: If MSRTSS is used and the
+                    // depth/stencil attachment is not null a depth/stencil resolve description must
+                    // be chained to the subpass.
+                    depthStencilResolve.depthResolveMode = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT;
+                    depthStencilResolve.stencilResolveMode = VK_RESOLVE_MODE_SAMPLE_ZERO_BIT;
+                    depthStencilResolve.pDepthStencilResolveAttachment = nullptr;
+
+                    subpassChain.Add(
+                        &depthStencilResolve,
+                        VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE_KHR);
+                }
             }
-        }
 
-        // Create the render pass from the zillion parameters
-        DAWN_TRY(CheckVkSuccess(
-            mDevice->fn.CreateRenderPass2KHR(mDevice->GetVkDevice(), &passInfo2.createInfo, nullptr,
+            // Create the render pass from the zillion parameters
+            DAWN_TRY(CheckVkSuccess(
+                mDevice->fn.CreateRenderPass2KHR(mDevice->GetVkDevice(), &passInfo2.createInfo,
+                                                 nullptr, &*renderPassInfo.renderPass),
+                "CreateRenderPass2KHR"));
+            break;
+        }
+        case VulkanRenderPassType::CreateRenderPass: {
+            // MSAA Render To Single Sampled should not be enabled unless CreateRenderPass2 is also
+            // enabled.
+            DAWN_ASSERT(!query.renderToSingleSampleMask.any());
+
+            RenderPassCreateInfo passInfo;
+            InitializePassInfo(mDevice, query, passInfo);
+
+            // Create the render pass from the zillion parameters
+            renderPassInfo.mainSubpass = passInfo.createInfo.subpassCount - 1;
+            DAWN_TRY(CheckVkSuccess(
+                mDevice->fn.CreateRenderPass(mDevice->GetVkDevice(), &passInfo.createInfo, nullptr,
                                              &*renderPassInfo.renderPass),
-            "CreateRenderPass2KHR"));
-        return renderPassInfo;
+                "CreateRenderPass"));
+            break;
+        }
+        case VulkanRenderPassType::DynamicRendering:
+            DAWN_UNREACHABLE();
+            break;
     }
 
-    // MSAA Render To Single Sampled should not be enabled unless CreateRenderPass2 is also enabled.
-    DAWN_ASSERT(!query.renderToSingleSampleMask.any());
-
-    RenderPassCreateInfo passInfo;
-    InitializePassInfo(mDevice, query, passInfo);
-
-    // Create the render pass from the zillion parameters
-    RenderPassInfo renderPassInfo;
-    renderPassInfo.mainSubpass = passInfo.createInfo.subpassCount - 1;
-    renderPassInfo.uniqueId = nextRenderPassId++;
-    DAWN_TRY(
-        CheckVkSuccess(mDevice->fn.CreateRenderPass(mDevice->GetVkDevice(), &passInfo.createInfo,
-                                                    nullptr, &*renderPassInfo.renderPass),
-                       "CreateRenderPass"));
     return renderPassInfo;
 }
 

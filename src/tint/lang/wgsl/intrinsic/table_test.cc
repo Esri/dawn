@@ -600,8 +600,6 @@ TEST_F(WgslIntrinsicTableTest, OverloadOrderByNumberOfParameters) {
       ✗  'R' is 'read'
  • 'textureDimensions(texture: texture_storage_3d<F, R>  ✗ ) -> vec3<u32>' where:
       ✗  'R' is 'read'
- • 'textureDimensions(texture: texel_buffer<F, R>  ✗ ) -> u32' where:
-      ✗  'R' is 'read'
  • 'textureDimensions(texture: texture_storage_1d<F, W>  ✗ ) -> u32' where:
       ✗  'W' is 'write' or 'read_write'
  • 'textureDimensions(texture: texture_storage_2d<F, W>  ✗ ) -> vec2<u32>' where:
@@ -610,6 +608,8 @@ TEST_F(WgslIntrinsicTableTest, OverloadOrderByNumberOfParameters) {
       ✗  'W' is 'write' or 'read_write'
  • 'textureDimensions(texture: texture_storage_3d<F, W>  ✗ ) -> vec3<u32>' where:
       ✗  'W' is 'write' or 'read_write'
+ • 'textureDimensions(texture: texel_buffer<F, R>  ✗ ) -> u32' where:
+      ✗  'R' is 'read'
  • 'textureDimensions(texture: texel_buffer<F, W>  ✗ ) -> u32' where:
       ✗  'W' is 'write' or 'read_write'
 )");
@@ -680,8 +680,6 @@ TEST_F(WgslIntrinsicTableTest, OverloadOrderByMatchingParameter) {
       ✗  'R' is 'read'
  • 'textureDimensions(texture: texture_storage_3d<F, R>  ✗ ) -> vec3<u32>' where:
       ✗  'R' is 'read'
- • 'textureDimensions(texture: texel_buffer<F, R>  ✗ ) -> u32' where:
-      ✗  'R' is 'read'
  • 'textureDimensions(texture: texture_storage_1d<F, W>  ✗ ) -> u32' where:
       ✗  'W' is 'write' or 'read_write'
  • 'textureDimensions(texture: texture_storage_2d<F, W>  ✗ ) -> vec2<u32>' where:
@@ -690,6 +688,8 @@ TEST_F(WgslIntrinsicTableTest, OverloadOrderByMatchingParameter) {
       ✗  'W' is 'write' or 'read_write'
  • 'textureDimensions(texture: texture_storage_3d<F, W>  ✗ ) -> vec3<u32>' where:
       ✗  'W' is 'write' or 'read_write'
+ • 'textureDimensions(texture: texel_buffer<F, R>  ✗ ) -> u32' where:
+      ✗  'R' is 'read'
  • 'textureDimensions(texture: texel_buffer<F, W>  ✗ ) -> u32' where:
       ✗  'W' is 'write' or 'read_write'
 )");

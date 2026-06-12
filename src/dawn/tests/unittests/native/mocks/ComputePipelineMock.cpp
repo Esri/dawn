@@ -25,9 +25,9 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/tests/unittests/native/mocks/ComputePipelineMock.h"
+#include "src/dawn/tests/unittests/native/mocks/ComputePipelineMock.h"
 
-#include "dawn/native/ChainUtils.h"
+#include "src/dawn/native/ChainUtils.h"
 
 namespace dawn::native {
 
@@ -36,7 +36,9 @@ using ::testing::NiceMock;
 ComputePipelineMock::ComputePipelineMock(DeviceBase* device,
                                          const UnpackedPtr<ComputePipelineDescriptor>& descriptor)
     : ComputePipelineBase(device, descriptor) {
-    ON_CALL(*this, InitializeImpl).WillByDefault([]() -> MaybeError { return {}; });
+    ON_CALL(*this, InitializeImpl).WillByDefault([]() -> ResultOrError<Extent3D> {
+        return {{1, 1, 1}};
+    });
     ON_CALL(*this, DestroyImpl).WillByDefault([this](DestroyReason reason) {
         this->ComputePipelineBase::DestroyImpl(reason);
     });

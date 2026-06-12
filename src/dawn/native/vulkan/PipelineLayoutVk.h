@@ -29,11 +29,13 @@
 #define SRC_DAWN_NATIVE_VULKAN_PIPELINELAYOUTVK_H_
 
 #include <memory>
+#include <utility>
 
-#include "dawn/common/vulkan_platform.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/PipelineLayout.h"
-#include "dawn/native/vulkan/RefCountedVkHandle.h"
+#include "src/dawn/common/vulkan_platform.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/PipelineLayout.h"
+#include "src/dawn/native/vulkan/BindGroupLayoutVk.h"
+#include "src/dawn/native/vulkan/RefCountedVkHandle.h"
 
 namespace dawn::native::vulkan {
 
@@ -47,11 +49,23 @@ class PipelineLayout final : public PipelineLayoutBase {
 
     // Pipeline might use different amounts of immediate data internally which cause difference in
     // VkPipelineLayout push constant range part. Pass internalImmediateDataSize to
-    // get correct VkPipelineLayout.
-    ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> GetOrCreateVkLayoutObject(
-        const ImmediateConstantMask& immediateConstantMask);
+    // get correct VkPipelineLayout. Also allow for BindGroupLayout specialization.
+    struct Specialization {
+        PerBindGroup<BindGroupLayout::Specialization> bindGroups = {};
+        uint32_t pushConstantBytes;
+        uint32_t framebufferFetchAttachmentCount = 0;
 
-    VkShaderStageFlags GetImmediateDataRangeStage() const;
+        template <typename H>
+        friend H AbslHashValue(H h, const Specialization& s) {
+            for (auto& bg : s.bindGroups) {
+                h = H::combine(std::move(h), bg);
+            }
+            return H::combine(std::move(h), s.pushConstantBytes, s.framebufferFetchAttachmentCount);
+        }
+        bool operator==(const Specialization& other) const = default;
+    };
+    ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> GetOrCreateVkLayoutObject(
+        const Specialization& specialization);
 
     // Friend definition of StreamIn which can be found by ADL to override stream::StreamIn<T>.
     friend void StreamIn(stream::Sink* sink, const PipelineLayout& obj) {
@@ -66,7 +80,7 @@ class PipelineLayout final : public PipelineLayoutBase {
     MaybeError Initialize();
 
     ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> CreateVkPipelineLayout(
-        uint32_t immediateConstantSize);
+        const Specialization& specialization);
 
     // Dawn API
     void SetLabelImpl() override;
@@ -74,13 +88,14 @@ class PipelineLayout final : public PipelineLayoutBase {
     // Multiple VkPipelineLayouts is possible because variant internal immediate data size.
     // Using map to manage 1 PipelineLayout to N VkPipelineLayouts relationship with
     // total immediate data size as key.
-    MutexProtected<absl::flat_hash_map<uint32_t, Ref<RefCountedVkHandle<VkPipelineLayout>>>>
+    MutexProtected<absl::flat_hash_map<Specialization, Ref<RefCountedVkHandle<VkPipelineLayout>>>>
         mVkPipelineLayouts;
-
-    // Immediate data requires unique range among shader stages.
-    VkShaderStageFlags kImmediateDataRangeShaderStage =
-        VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT;
 };
+
+// Contrary to WebGPU, Vulkan sets pipelines per-shader stage. Map WebGPU immediates to all the
+// Vulkan stages.
+inline constexpr VkShaderStageFlags kImmediateShaderStages =
+    VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT;
 
 }  // namespace dawn::native::vulkan
 

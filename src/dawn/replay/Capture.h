@@ -32,24 +32,30 @@
 #include <memory>
 #include <vector>
 
-#include "dawn/replay/ReadHead.h"
 #include "dawn/replay/Replay.h"
+#include "src/dawn/replay/CaptureWalker.h"
+#include "src/dawn/replay/ReadHead.h"
 
 namespace dawn::replay {
 
 // For now we just expect to load the entire capture into memory.
 // In the future we'd expect to be able to stream it though we may
 // have to scan it once to find all the commands for a UI.
-class CaptureImpl : public Capture {
+class CaptureImpl : public Capture, public CaptureWalker {
   public:
+    using CaptureWalker::Walk;
     static std::unique_ptr<CaptureImpl> Create(CaptureStream& commandStream,
                                                size_t commandSize,
                                                CaptureStream& contentStream,
                                                size_t contentSize);
     ~CaptureImpl() override;
 
-    ReadHead GetCommandReadHead() const;
-    ReadHead GetContentReadHead() const;
+    bool Walk(RootCommandVisitor& visitor) override;
+
+    std::vector<SurfaceInfo> GetSurfaceInfos() const override;
+
+    ReadHead GetCommandReadHead() const override;
+    ReadHead GetContentReadHead() const override;
 
   private:
     CaptureImpl(std::vector<uint8_t> commands, std::vector<uint8_t> content);

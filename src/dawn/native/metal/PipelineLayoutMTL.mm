@@ -25,11 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/metal/PipelineLayoutMTL.h"
+#include "src/dawn/native/metal/PipelineLayoutMTL.h"
 
-#include "dawn/common/MatchVariant.h"
-#include "dawn/native/BindGroupLayoutInternal.h"
-#include "dawn/native/metal/DeviceMTL.h"
+#include "src/dawn/common/MatchVariant.h"
+#include "src/dawn/native/BindGroupLayoutInternal.h"
+#include "src/dawn/native/metal/DeviceMTL.h"
 
 namespace dawn::native::metal {
 
@@ -44,6 +44,7 @@ PipelineLayout::PipelineLayout(Device* device,
                                const UnpackedPtr<PipelineLayoutDescriptor>& descriptor)
     : PipelineLayoutBase(device, descriptor) {
     // Each stage has its own numbering namespace in CompilerMSL.
+    // TODO(crbug.com/363031535): This should become unnecessary once we switch to argument buffers.
     for (auto stage : IterateStages(kAllStages)) {
         uint32_t bufferIndex = 0;
         uint32_t samplerIndex = 0;
@@ -52,7 +53,7 @@ PipelineLayout::PipelineLayout(Device* device,
         for (BindGroupIndex group : GetBindGroupLayoutsMask()) {
             mIndexInfo[stage][group].resize(GetBindGroupLayout(group)->GetBindingCount());
 
-            for (BindingIndex bindingIndex{0};
+            for (BindingIndex bindingIndex{0u};
                  bindingIndex < GetBindGroupLayout(group)->GetBindingCount(); ++bindingIndex) {
                 const BindingInfo& bindingInfo =
                     GetBindGroupLayout(group)->GetBindingInfo(bindingIndex);

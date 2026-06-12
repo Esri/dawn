@@ -42,11 +42,8 @@ namespace tint::hlsl::writer {
 
 // The capabilities that might be needed due to raising.
 const core::ir::Capabilities kPrinterCapabilities{
-    core::ir::Capability::kAllowModuleScopeLets,
-    core::ir::Capability::kAllowVectorElementPointer,
-    core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector,
-    core::ir::Capability::kAllowDuplicateBindings,
-    core::ir::Capability::kAllowNonCoreTypes,
+    core::ir::Capability::kAllow8BitIntegers,
+    core::ir::Capability::kAllow16BitIntegers,
 };
 
 /// @param module the Tint IR module to generate

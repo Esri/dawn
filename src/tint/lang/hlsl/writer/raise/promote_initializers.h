@@ -40,10 +40,8 @@ namespace tint::hlsl::writer::raise {
 
 /// The capabilities that the transform can support.
 const core::ir::Capabilities kPromoteInitializersCapabilities{
-    core::ir::Capability::kAllowVectorElementPointer,
-    core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector,
-    core::ir::Capability::kAllowDuplicateBindings,
-    core::ir::Capability::kAllowNonCoreTypes,
+    core::ir::Capability::kAllow8BitIntegers,
+    core::ir::Capability::kAllow16BitIntegers,
 };
 
 /// PromoteInitializers is a transform that moves inline struct and array initializers to a `let`
@@ -51,7 +49,7 @@ const core::ir::Capabilities kPromoteInitializersCapabilities{
 /// will recursively break any array or struct initializers out of the constant into their own
 /// `let`.
 ///
-/// After this transform the `Capability::kAllowModuleScopeLets` must be enabled and any downstream
+/// After this transform the `Property::kAllowModuleScopeLets` must be enabled and any downstream
 /// transform/printer must under stand `let` and `construct` instructions at the module scope.
 /// (`construct` can just be skipped as they will be inlined, but the instruction still has to be
 /// handled.)

@@ -30,9 +30,11 @@
 
 #include <gmock/gmock.h>
 
+#include <span>
+
 #include "dawn/wire/WireServer.h"
-#include "dawn/wire/server/Server.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "src/dawn/wire/server/Server.h"
 
 namespace dawn::wire::server {
 
@@ -44,7 +46,10 @@ class MockMemoryTransferService : public MemoryTransferService {
         MOCK_METHOD(void, Destroy, ());
 
         MOCK_METHOD(size_t, SizeOfSerializeDataUpdate, (size_t, size_t), (override));
-        MOCK_METHOD(void, SerializeDataUpdate, (const void*, size_t, size_t, void*), (override));
+        MOCK_METHOD(void,
+                    SerializeDataUpdate,
+                    (std::span<const uint8_t>, size_t, std::span<char>),
+                    (override));
     };
 
     class MockWriteHandle : public WriteHandle {
@@ -52,7 +57,10 @@ class MockMemoryTransferService : public MemoryTransferService {
         ~MockWriteHandle() override;
         MOCK_METHOD(void, Destroy, ());
 
-        MOCK_METHOD(bool, DeserializeDataUpdate, (const void*, size_t, size_t, size_t), (override));
+        MOCK_METHOD(bool,
+                    DeserializeDataUpdate,
+                    (std::span<const uint8_t>, std::span<uint8_t>, size_t),
+                    (override));
     };
 
     MOCK_METHOD(bool, DeserializeReadHandle, (const void*, size_t, ReadHandle**), (override));

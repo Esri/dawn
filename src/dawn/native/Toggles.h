@@ -33,9 +33,9 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "dawn/common/ityp_bitset.h"
 #include "dawn/native/DawnNative.h"
-#include "dawn/native/Serializable.h"
+#include "src/dawn/common/ityp_bitset.h"
+#include "src/dawn/native/Serializable.h"
 
 namespace dawn::native {
 
@@ -74,6 +74,8 @@ enum class Toggle {
     DisallowSpirv,
     DumpShaders,
     DumpShadersOnFailure,
+    DumpTintIR,
+    EnableTintIRValidationAsserts,
     DisableWorkgroupInit,
     DisableDemoteToHelper,
     VulkanUseDemoteToHelperInvocationExtension,
@@ -104,8 +106,9 @@ enum class Toggle {
     MetalKeepMultisubresourceDepthStencilTexturesInitialized,
     MetalPolyfillUnpack2x16snorm,
     MetalPolyfillUnpack2x16unorm,
-    VulkanPolyfillF32Negation,
-    VulkanPolyfillF32Abs,
+    MetalPolyfillTanhF16,
+    VulkanPolyfillFloatNegation,
+    VulkanPolyfillFloatAbs,
     MetalFillEmptyOcclusionQueriesWithZero,
     UseBlitForBufferToDepthTextureCopy,
     UseBlitForBufferToStencilTextureCopy,
@@ -149,8 +152,8 @@ enum class Toggle {
     ScalarizeMaxMinClamp,
     SaturateAsMinMaxF16,
     MetalPolyfillClampFloat,
-    SubgroupShuffleClamped,
     VulkanSampleCompareDepthCubeArrayWorkaround,
+    VulkanSampleCompare2DWorkaround,
     MetalDisableModuleConstantF16,
     EnableImmediateErrorHandling,
     VulkanUseStorageInputOutput16,
@@ -174,14 +177,25 @@ enum class Toggle {
     EnableShaderPrint,
     BlobCacheHashValidation,
     DecomposeUniformBuffers,
+    D3D12DecomposeWorkgroupAccess,
+    CollapseSubgroupMinMax,
     VulkanEnableF16OnNvidia,
     EnableRenderDocProcessInjection,
     VulkanUseDynamicRendering,
     EnableSpirvValidation,
     VulkanUseCreateRenderPass2,
+    MetalReplaceWorkgroupBoolWithU32,
+    VulkanCooperativeMatrixStrideIsMatrixElements,
+    VulkanUseExtendedDynamicState,
+    VulkanForceStaticSamplersForExternalTextures,
+    D3D12UseHLSL2021,
+    MetalFixU32DivMod,
 
     // Once all backends have been updated to be thread safe for waiting, we can remove this toggle.
     WaitIsThreadSafe,
+
+    // If/when all backends support spontaneous queue events, we can then remove this toggle.
+    SpontaneousQueueEvents,
 
     // Unresolved issues.
     NoWorkaroundSampleMaskBecomesZeroForAllButLastColorTarget,
@@ -191,12 +205,15 @@ enum class Toggle {
     ClearColorWithDraw,
     VulkanSkipDraw,
 
+    D3D11DisableMapOnDefaultBuffers,
     D3D11UseUnmonitoredFence,
     D3D11DisableFence,
     D3D11DelayFlushToGPU,
+    D3D11UseDiscardView,
     IgnoreImportedAHardwareBufferVulkanImageSize,
     GLAllowContextOnMultiThreads,
     GLDefer,
+    ShadowCopyMapWrite,
     DisableTransientAttachment,
     AutoMapBackendBuffer,
 

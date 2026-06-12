@@ -47,6 +47,8 @@ tint::core::ir::Instruction::Accesses GetSideEffects(BuiltinFn fn) {
         case BuiltinFn::kThreadgroupBarrier:
         case BuiltinFn::kSimdBallot:
         case BuiltinFn::kQuadShuffleXor:
+        case BuiltinFn::kAtomicMaxExplicit:
+        case BuiltinFn::kAtomicMinExplicit:
             return core::ir::Instruction::Accesses{core::ir::Instruction::Access::kLoad, core::ir::Instruction::Access::kStore};
 
         case BuiltinFn::kAtomicLoadExplicit:
@@ -83,6 +85,7 @@ tint::core::ir::Instruction::Accesses GetSideEffects(BuiltinFn fn) {
         case BuiltinFn::kMakeFilledSimdgroupMatrix:
         case BuiltinFn::kOsLog:
         case BuiltinFn::kPointerOffset:
+        case BuiltinFn::kVolatileZero:
             break;
     }
     return core::ir::Instruction::Accesses{};

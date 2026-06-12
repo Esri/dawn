@@ -29,41 +29,17 @@
 #define SRC_DAWN_REPLAY_REPLAYIMPL_H_
 
 #include <memory>
-#include <ranges>
 #include <string>
 #include <string_view>
-#include <utility>
-#include <variant>
+#include <vector>
 
-#include "absl/container/flat_hash_map.h"
-#include "dawn/replay/BlitBufferToDepthTexture.h"
-#include "dawn/replay/Capture.h"
 #include "dawn/replay/Replay.h"
-#include "dawn/webgpu_cpp.h"
+#include "src/dawn/replay/CaptureWalker.h"
 
 namespace dawn::replay {
 
-typedef std::variant<wgpu::BindGroup,
-                     wgpu::BindGroupLayout,
-                     wgpu::Buffer,
-                     wgpu::CommandBuffer,
-                     wgpu::ComputePipeline,
-                     wgpu::Device,
-                     wgpu::ExternalTexture,
-                     wgpu::PipelineLayout,
-                     wgpu::QuerySet,
-                     wgpu::RenderBundle,
-                     wgpu::RenderPipeline,
-                     wgpu::Sampler,
-                     wgpu::ShaderModule,
-                     wgpu::Texture,
-                     wgpu::TextureView>
-    Resource;
-
-struct LabeledResource {
-    std::string label;
-    Resource resource;
-};
+class CaptureImpl;
+class DawnRootCommandVisitor;
 
 // Replays a capture. For now we only support replaying the entire capture.
 // In the future we'd like to be able to replay up to a certain point.
@@ -74,74 +50,36 @@ class ReplayImpl : public Replay {
 
     MaybeError Play();
 
+    ResultOrError<ReplayStatus> PlayFrame();
+
+    ~ReplayImpl() override;
+
+    void SetSurfaces(std::vector<wgpu::Surface> surfaces) override;
+
+    Capture* GetCapture() const override;
+
     // Gets the first object of type T with the given label, or nullptr if not
     // found. Note: We don't too much care this is slow as mostly used for
     // testing and debugging.
     template <typename T>
-    T GetObjectByLabel(std::string_view label) const {
-        auto isLabel = [label](const LabeledResource& res) { return res.label == label; };
-        auto resourcesWithMachingLabel =
-            mResources | std::views::values | std::views::filter(isLabel);
-        for (const auto& res : resourcesWithMachingLabel) {
-            const T* p = std::get_if<T>(&res.resource);
-            if (p) {
-                return *p;
-            }
-        }
-        return nullptr;
-    }
+    T GetObjectByLabel(std::string_view label) const;
 
     template <typename T>
-    T GetObjectById(schema::ObjectId id) const {
-        if (id == 0) {
-            return nullptr;
-        }
-        auto iter = mResources.find(id);
-        const T* p = std::get_if<T>(&iter->second.resource);
-        return *p;
-    }
+    T GetObjectById(schema::ObjectId id) const;
 
     template <typename T>
-    const std::string& GetLabel(const T& object) const {
-        if (object == nullptr) {
-            return kNotFound;
-        }
-
-        return GetLabel(GetObjectId(object));
-    }
+    const std::string& GetLabel(const T& object) const;
 
     const std::string& GetLabel(schema::ObjectId id) const;
 
   private:
     ReplayImpl(wgpu::Device device, std::unique_ptr<CaptureImpl> capture);
 
-    MaybeError CreateResource(wgpu::Device device, ReadHead& readHead);
-    MaybeError SetLabel(schema::ObjectId id, schema::ObjectType type, const std::string& label);
+    std::unique_ptr<DawnRootCommandVisitor> mVisitor;
+    std::unique_ptr<CaptureImpl> mCapture;
 
-    template <typename T>
-    void AddResource(schema::ObjectId id, const std::string& label, T& resource) {
-        mResources.emplace(id, LabeledResource{label, resource});
-        mResourceToIdMap.emplace(resource.Get(), id);
-    }
-
-    template <typename T>
-    schema::ObjectId GetObjectId(const T& object) const {
-        auto iter = mResourceToIdMap.find(object.Get());
-        return iter ? iter->second : 0;
-    }
-
-    wgpu::Device mDevice;
-    std::unique_ptr<const CaptureImpl> mCapture;
-
-    using IdToResourceMap = absl::flat_hash_map<schema::ObjectId, LabeledResource>;
-    IdToResourceMap mResources;
-
-    using ResourcePtrToIdMap = absl::flat_hash_map<const void*, schema::ObjectId>;
-    ResourcePtrToIdMap mResourceToIdMap;
-
-    BlitBufferToDepthTexture mBlitBufferToDepthTexture;
-
-    std::string kNotFound;
+    ReadHead mCommandReadHead;
+    ReadHead mContentReadHead;
 };
 
 }  // namespace dawn::replay

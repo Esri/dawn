@@ -29,9 +29,8 @@
 #define SRC_DAWN_TESTS_UNITTESTS_NATIVE_MOCKS_BINDGROUPLAYOUTMOCK_H_
 
 #include "gmock/gmock.h"
-
-#include "dawn/native/BindGroupLayout.h"
-#include "dawn/tests/unittests/native/mocks/DeviceMock.h"
+#include "src/dawn/native/BindGroupLayout.h"
+#include "src/dawn/tests/unittests/native/mocks/DeviceMock.h"
 
 namespace dawn::native {
 

@@ -25,11 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d/UtilsD3D.h"
+#include "src/dawn/native/d3d/UtilsD3D.h"
 
 #include <utility>
 
-#include "dawn/native/Device.h"
+#include "src/dawn/native/Device.h"
 
 namespace dawn::native::d3d {
 
@@ -258,7 +258,7 @@ DXGI_FORMAT DXGITypelessTextureFormat(const DeviceBase* device, wgpu::TextureFor
         case wgpu::TextureFormat::R10X6BG10X6Biplanar420Unorm:
         case wgpu::TextureFormat::R10X6BG10X6Biplanar422Unorm:
         case wgpu::TextureFormat::R10X6BG10X6Biplanar444Unorm:
-        case wgpu::TextureFormat::External:
+        case wgpu::TextureFormat::OpaqueYCbCrAndroid:
         case wgpu::TextureFormat::Undefined:
             DAWN_UNREACHABLE();
     }
@@ -412,7 +412,7 @@ DXGI_FORMAT DXGITextureFormat(const DeviceBase* device, wgpu::TextureFormat form
         case wgpu::TextureFormat::R8BG8A8Triplanar420Unorm:
         case wgpu::TextureFormat::R10X6BG10X6Biplanar422Unorm:
         case wgpu::TextureFormat::R10X6BG10X6Biplanar444Unorm:
-        case wgpu::TextureFormat::External:
+        case wgpu::TextureFormat::OpaqueYCbCrAndroid:
 
         case wgpu::TextureFormat::Undefined:
             DAWN_UNREACHABLE();

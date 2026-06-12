@@ -31,12 +31,12 @@
 #include <array>
 #include <memory>
 
-#include "dawn/common/SerialQueue.h"
-#include "dawn/native/BuddyMemoryAllocator.h"
-#include "dawn/native/IntegerTypes.h"
-#include "dawn/native/PooledResourceMemoryAllocator.h"
-#include "dawn/native/d3d12/d3d12_platform.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "src/dawn/common/SerialQueue.h"
+#include "src/dawn/native/BuddyMemoryAllocator.h"
+#include "src/dawn/native/IntegerTypes.h"
+#include "src/dawn/native/PooledResourceMemoryAllocator.h"
+#include "src/dawn/native/d3d12/d3d12_platform.h"
 
 namespace dawn::native::d3d12 {
 
@@ -76,7 +76,7 @@ enum ResourceHeapKind {
 // multiple allocation methods.
 class ResourceAllocatorManager {
   public:
-    explicit ResourceAllocatorManager(Device* device);
+    ResourceAllocatorManager(Device* device, QueueBase* queue);
     ~ResourceAllocatorManager();
 
     ResultOrError<ResourceHeapAllocation> AllocateMemory(
@@ -89,6 +89,9 @@ class ResourceAllocatorManager {
     void DeallocateMemory(ResourceHeapAllocation& allocation);
 
     void Tick(ExecutionSerial lastCompletedSerial);
+
+    uint64_t GetTotalAllocatedMemory() const;
+    uint64_t GetTotalUsedMemory() const;
 
   private:
     void FreeSubAllocatedMemory(ResourceHeapAllocation& allocation);
@@ -111,6 +114,9 @@ class ResourceAllocatorManager {
 
     static constexpr uint64_t kMaxHeapSize = 32ll * 1024ll * 1024ll * 1024ll;  // 32GB
     static constexpr uint64_t kMinHeapSize = 4ll * 1024ll * 1024ll;            // 4MB
+
+    Ref<AllocationSizeTracker> mAllocatedMemoryTracker;
+    Ref<AllocationSizeTracker> mUsedMemoryTracker;
 
     std::array<std::unique_ptr<BuddyMemoryAllocator>, ResourceHeapKind::EnumCount>
         mSubAllocatedResourceAllocators;

@@ -30,29 +30,22 @@
 
 #include <vector>
 
-#include "dawn/common/NonMovable.h"
-#include "dawn/common/Ref.h"
-#include "dawn/common/WeakRefSupport.h"
-#include "dawn/common/ityp_span.h"
-#include "dawn/common/ityp_vector.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/IntegerTypes.h"
-#include "dawn/native/ObjectBase.h"
-#include "dawn/native/dawn_platform.h"
+#include "partition_alloc/pointers/raw_ptr.h"
+#include "src/dawn/common/Ref.h"
+#include "src/dawn/common/WeakRefSupport.h"
+#include "src/dawn/common/ityp_vector.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/Forward.h"
+#include "src/dawn/native/IntegerTypes.h"
+#include "src/dawn/native/ObjectBase.h"
+#include "src/dawn/native/Sampler.h"
+#include "src/dawn/native/dawn_platform.h"
 
 namespace tint {
 enum class ResourceType : uint32_t;
 }  // namespace tint
 
 namespace dawn::native {
-
-// Returns the order in which we will put the default bindings at the end of the dynamic binding
-// array.
-// TODO(https://issues.chromium.org/463925499): Take the device in parameter to know if we have
-// sampling vs. full resource table.
-ityp::span<ResourceTableSlot, const tint::ResourceType> GetDefaultResourceOrder();
-ResourceTableSlot GetDefaultResourceCount();
 
 MaybeError ValidateResourceTableDescriptor(const DeviceBase* device,
                                            const ResourceTableDescriptor* descriptor);
@@ -103,6 +96,10 @@ class ResourceTableBase : public ApiObjectBase, public WeakRefSupport<ResourceTa
     wgpu::Status APIRemoveBinding(uint32_t slot);
     uint32_t APIGetSize() const;
 
+    // Computes the tint::ResourceType that should be in the metadata buffer for the resource.
+    static tint::ResourceType ComputeTypeId(
+        const std::variant<std::monostate, Ref<TextureViewBase>, Ref<SamplerBase>>& resource);
+
   protected:
     ResourceTableBase(DeviceBase* device, const ResourceTableDescriptor* descriptor);
 
@@ -127,16 +124,19 @@ class ResourceTableBase : public ApiObjectBase, public WeakRefSupport<ResourceTa
     // of the ResourceTable (since the last call to AcquireDirtySlotUpdates or creation of the
     // ResourceTable).
     struct MetadataUpdate {
-        uint32_t offset;
-        uint32_t data;
+        ResourceTableSlot slot{0u};  // Slot index to update
+        uint32_t offset = 0;        // Byte offset resource array
+        uint32_t data = 0;          // tint::ResourceType in the low 16 bits
     };
-    struct ResourceUpdate {
-        ResourceTableSlot slot;
-        TextureViewBase* textureView = nullptr;
+    struct ResourceDiff {
+        using Resource = std::variant<std::monostate, Ref<TextureViewBase>, Ref<SamplerBase>>;
+        ResourceTableSlot slot = ResourceTableSlot(0u);
+        Resource removed;  // Resource removed from 'slot', if any
+        Resource added;    // Resource added to 'slot', if any
     };
     struct Updates {
         std::vector<MetadataUpdate> metadataUpdates;
-        std::vector<ResourceUpdate> resourceUpdates;
+        std::vector<ResourceDiff> resourceDiffs;
     };
     Updates AcquireDirtySlotUpdates();
 
@@ -154,7 +154,7 @@ class ResourceTableBase : public ApiObjectBase, public WeakRefSupport<ResourceTa
     // `availableAfter`), so that the slot updates are included in the next batch of updates.
     void MarkStateDirty(ResourceTableSlot slot);
 
-    ResourceTableSlot mAPISize = ResourceTableSlot(0);
+    ResourceTableSlot mAPISize = ResourceTableSlot(0u);
     bool mDestroyed = false;
 
     // Buffer that contains a WGSL metadata struct of the following shape:
@@ -166,29 +166,24 @@ class ResourceTableBase : public ApiObjectBase, public WeakRefSupport<ResourceTa
     Ref<BufferBase> mMetadataBuffer;
 
     struct SlotState {
-        Ref<TextureViewBase> resource;
+        using Resource = std::variant<std::monostate, Ref<TextureViewBase>, Ref<SamplerBase>>;
+        // The last bound resource
+        Resource lastResource;
+        // The currently bound resource
+        Resource resource;
+
         // Matches the value of the Tint enum for type IDs but kept as u32 to keep usage of Tint
         // headers local.
         tint::ResourceType typeId = tint::ResourceType(0);
         ExecutionSerial availableAfter = kBeginningOfGPUTime;
         bool dirty = false;
         bool resourceDirty = false;  // resourceDirty implies dirty.
-        bool pinned = false;
+        bool pinned = false;         // Applies to textures
     };
     ityp::vector<ResourceTableSlot, SlotState> mSlots;
 
     // The list of slots that need to be updated before the next use of the dynamic array.
     std::vector<ResourceTableSlot> mDirtySlots;
-};
-
-// Used to cache the default resources on the device so they can be reused between resource tables.
-class ResourceTableDefaultResources : public NonMovable {
-  public:
-    ResultOrError<ityp::span<ResourceTableSlot, Ref<TextureViewBase>>>
-    GetOrCreateSampledTextureDefaults(DeviceBase* device);
-
-  private:
-    ityp::vector<ResourceTableSlot, Ref<TextureViewBase>> mSampledTextureDefaults;
 };
 
 }  // namespace dawn::native

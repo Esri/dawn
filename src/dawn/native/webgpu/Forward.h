@@ -28,7 +28,7 @@
 #ifndef SRC_DAWN_NATIVE_WEBGPU_FORWARD_H_
 #define SRC_DAWN_NATIVE_WEBGPU_FORWARD_H_
 
-#include "dawn/native/ToBackend.h"
+#include "src/dawn/native/ToBackend.h"
 
 namespace dawn::native::webgpu {
 
@@ -49,6 +49,8 @@ class RenderPipeline;
 class ResourceTable;
 class Sampler;
 class ShaderModule;
+class SharedFence;
+class SharedTextureMemory;
 class SwapChain;
 class Texture;
 class TextureView;
@@ -70,6 +72,8 @@ struct WebGPUBackendTraits {
     using ResourceTableType = ResourceTable;
     using SamplerType = Sampler;
     using ShaderModuleType = ShaderModule;
+    using SharedFenceType = SharedFence;
+    using SharedTextureMemoryType = SharedTextureMemory;
     using SwapChainType = SwapChain;
     using TextureType = Texture;
     using TextureViewType = TextureView;

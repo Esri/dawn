@@ -27,7 +27,7 @@
 
 """Chromium trybots that are exposed for use in Dawn."""
 
-load("//location_filters.star", "exclusion_filters")
+load("//location_filters.star", "exclusion_filters", "inclusion_filters")
 load("//project.star", "ACTIVE_MILESTONES")
 
 ## Templates
@@ -120,6 +120,19 @@ def manual_only_branch_verifier_chromium_trybot(*, base_builder_name, platform, 
 # Note that DEPS builders are used for branches because ToT builders do not make
 # sense on branches and the DEPS versions already exist.
 
+###############
+## Presubmit ##
+###############
+
+cq_chromium_trybot(
+    builder = "chromium:try/tricium-clang-tidy",
+    owner_whitelist = ["project-dawn-tryjob-access"],
+    experiment_percentage = 100,
+    disable_reuse = True,
+    mode_allowlist = [cq.MODE_NEW_PATCHSET_RUN],
+    location_filters = inclusion_filters.cpp_changes_only,
+)
+
 #############
 ## Android ##
 #############
@@ -176,6 +189,10 @@ cq_branch_verifier_chromium_trybot(base_builder_name = "dawn-win10-x64-deps-rel"
 
 cq_chromium_trybot(builder = "chromium:try/win11-arm64-dawn-rel")
 cq_branch_verifier_chromium_trybot(base_builder_name = "dawn-win11-arm64-deps-rel", platform = "win", min_milestone = 126)
+
+# This entry can be removed in favor of win11-arm64-dawn-rel once tests are
+# stable enough to add to that builder.
+manual_only_chromium_trybot(builder = "chromium:try/dawn-try-win11-arm64-snapdragon-x-elite-rel")
 
 manual_only_chromium_trybot(builder = "chromium:try/dawn-try-win-x64-intel-exp")
 

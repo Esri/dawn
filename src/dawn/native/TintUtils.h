@@ -31,14 +31,14 @@
 #include <functional>
 #include <unordered_map>
 
-#include "dawn/common/NonCopyable.h"
-#include "dawn/native/BindGroupLayoutInternal.h"
-#include "dawn/native/BindingInfo.h"
-#include "dawn/native/IntegerTypes.h"
-#include "dawn/native/PipelineLayout.h"
-#include "dawn/native/ShaderModule.h"
-#include "dawn/native/stream/Stream.h"
-
+#include "src/dawn/common/MatchVariant.h"
+#include "src/dawn/native/BindGroupLayoutInternal.h"
+#include "src/dawn/native/BindingInfo.h"
+#include "src/dawn/native/IntegerTypes.h"
+#include "src/dawn/native/PipelineLayout.h"
+#include "src/dawn/native/ShaderModule.h"
+#include "src/dawn/native/stream/Stream.h"
+#include "src/utils/non_copyable.h"
 #include "tint/tint.h"
 
 namespace dawn::native {
@@ -80,12 +80,12 @@ class Stream<T> {
 };
 }  // namespace stream
 
-constexpr tint::BindingPoint ToTint(const BindingSlot& slot) {
-    return {static_cast<uint32_t>(slot.group), static_cast<uint32_t>(slot.binding)};
+constexpr tint::BindingPoint ToTint(const WGSLBindPoint& b) {
+    return {static_cast<uint32_t>(b.group), static_cast<uint32_t>(b.binding)};
 }
 
-constexpr BindingSlot FromTint(const tint::BindingPoint& tintBindingPoint) {
-    return {{BindGroupIndex(tintBindingPoint.group), BindingNumber(tintBindingPoint.binding)}};
+constexpr WGSLBindPoint FromTint(const tint::BindingPoint& tintBindingPoint) {
+    return {BindGroupIndex(tintBindingPoint.group), BindingNumber(tintBindingPoint.binding)};
 }
 
 // Helper function to generate the binding remapping information for Tint compilation. Each backend
@@ -95,6 +95,7 @@ template <typename F>
 concept ConvertsBindingIndexToBindingPoint = requires(F f, BindGroupIndex group, BindingIndex i) {
     { f(group, i) } -> std::same_as<tint::BindingPoint>;
 };
+
 template <ConvertsBindingIndexToBindingPoint F>
 tint::Bindings GenerateBindingRemapping(const PipelineLayoutBase* layout,
                                         SingleShaderStage stage,
@@ -160,14 +161,18 @@ tint::Bindings GenerateBindingRemapping(const PipelineLayoutBase* layout,
                         srcBindingPoint,
                         BindingPointFor(group, bgl->AsBindingIndex(apiBindingIndex)));
                 },
-                [](const TexelBufferBindingInfo& bindingInfo) {
-                    // TODO(crbug/382544164): Prototype texel buffer feature
-                    DAWN_UNREACHABLE();
+                [&](const TexelBufferBindingInfo&) {
+                    bindings.texel_buffer.emplace(
+                        srcBindingPoint,
+                        BindingPointFor(group, bgl->AsBindingIndex(apiBindingIndex)));
                 },
                 [&](const ExternalTextureBindingInfo& bindingInfo) {
+                    // TODO(491363837): Add YCBCR texture information as tint::ExternalYCBCRTexture
+                    // data
+
                     bindings.external_texture.emplace(
                         srcBindingPoint,
-                        tint::ExternalTexture{
+                        tint::ExternalMultiplanarTexture{
                             .metadata = BindingPointFor(group, bindingInfo.metadata),
                             .plane0 = BindingPointFor(group, bindingInfo.plane0),
                             .plane1 = BindingPointFor(group, bindingInfo.plane1)});
@@ -176,6 +181,28 @@ tint::Bindings GenerateBindingRemapping(const PipelineLayoutBase* layout,
     }
 
     return bindings;
+}
+
+tint::ResourceType BindingLayoutToResourceType(const BindingInfo& bi);
+
+template <ConvertsBindingIndexToBindingPoint F>
+std::unordered_map<tint::BindingPoint, tint::ResourceType> GenerateBindingToResourceType(
+    const PipelineLayoutBase* layout,
+    F&& BindingPointFor) {
+    std::unordered_map<tint::BindingPoint, tint::ResourceType> binding_to_resource_type;
+
+    for (BindGroupIndex group : layout->GetBindGroupLayoutsMask()) {
+        const BindGroupLayoutInternalBase* bgl = layout->GetBindGroupLayout(group);
+
+        for (const auto& [_, apiBindingIndex] : bgl->GetBindingMap()) {
+            tint::BindingPoint dstBindingPoint =
+                BindingPointFor(group, bgl->AsBindingIndex(apiBindingIndex));
+            tint::ResourceType type =
+                BindingLayoutToResourceType(bgl->GetAPIBindingInfo(apiBindingIndex));
+            binding_to_resource_type.emplace(dstBindingPoint, type);
+        }
+    }
+    return binding_to_resource_type;
 }
 
 }  // namespace dawn::native

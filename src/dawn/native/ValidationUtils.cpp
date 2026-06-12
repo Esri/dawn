@@ -25,7 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/ValidationUtils.h"
+#include "src/dawn/native/ValidationUtils.h"
 
 #include <cmath>
 
@@ -39,7 +39,7 @@ MaybeError ValidateFloat(std::string_view floatName, float f) {
 MaybeError ValidateColor(std::string_view colorName, const Color& color) {
     DAWN_INVALID_IF(!std::isfinite(color.r) || !std::isfinite(color.g) || !std::isfinite(color.b) ||
                         !std::isfinite(color.a),
-                    "Color %s (%s) contains a NaN or Inf.", colorName, &color);
+                    "Color %s (%s) contains a NaN or Inf.", colorName, color);
     return {};
 }
 

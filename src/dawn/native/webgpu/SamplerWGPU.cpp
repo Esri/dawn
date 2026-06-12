@@ -25,10 +25,10 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/webgpu/SamplerWGPU.h"
+#include "src/dawn/native/webgpu/SamplerWGPU.h"
 
-#include "dawn/common/StringViewUtils.h"
-#include "dawn/native/webgpu/DeviceWGPU.h"
+#include "src/dawn/common/StringViewUtils.h"
+#include "src/dawn/native/webgpu/DeviceWGPU.h"
 
 namespace dawn::native::webgpu {
 
@@ -78,11 +78,11 @@ ResultOrError<Ref<Sampler>> Sampler::Create(Device* device, const SamplerDescrip
 Sampler::Sampler(Device* device, const SamplerDescriptor* descriptor)
     : SamplerBase(device, descriptor),
       RecordableObject(schema::ObjectType::Sampler),
-      ObjectWGPU(device->wgpu.samplerRelease),
+      ObjectWGPU(device->wgpu->samplerRelease),
       mSamplerParams(ToSchema(descriptor)) {
     WGPUSamplerDescriptor desc = ToWGPU(descriptor);
     mInnerHandle = ToBackend(GetDevice())
-                       ->wgpu.deviceCreateSampler(ToBackend(GetDevice())->GetInnerHandle(), &desc);
+                       ->wgpu->deviceCreateSampler(ToBackend(GetDevice())->GetInnerHandle(), &desc);
     DAWN_ASSERT(mInnerHandle);
 }
 

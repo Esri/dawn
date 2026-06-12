@@ -3,16 +3,16 @@
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
+//  1. Redistributions of source code must retain the above copyright notice, this
+//     list of conditions and the following disclaimer.
 //
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+//  2. Redistributions in binary form must reproduce the above copyright notice,
+//     this list of conditions and the following disclaimer in the documentation
+//     and/or other materials provided with the distribution.
 //
-// 3. Neither the name of the copyright holder nor the names of its
-//    contributors may be used to endorse or promote products derived from
-//    this software without specific prior written permission.
+//  3. Neither the name of the copyright holder nor the names of its
+//     contributors may be used to endorse or promote products derived from
+//     this software without specific prior written permission.
 //
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -62,6 +62,9 @@ const (
 	TaskModeRun TaskMode = iota
 	TaskModeCheck
 	TaskModeGenerate
+	TaskModeTriage
+	TaskModeBisect
+	TaskModeBisectStep
 )
 
 type FuzzMode int
@@ -71,19 +74,30 @@ const (
 	FuzzModeIr
 )
 
-type cmdConfig struct {
+// mainConfig represents the top-level configuration for the fuzz utility application.
+// It stores the command-line flags and parameters parsed during startup, serving as
+// the central config for deciding which tasks and modes are executed.
+type mainConfig struct {
 	verbose         bool
 	dump            bool
 	fuzzMode        FuzzMode
 	cmdMode         TaskMode // meta-task being requested by the user, may require running multiple tasks internally
+	mesaMode        bool
 	filter          string
 	inputs          string
+	triageFile      string
+	bisectFile      string
+	knownFailing    string
+	knownPassing    string
+	bisectStep      bool
+	isFix           bool
 	build           string
 	out             string
 	numProcesses    int
 	osWrapper       oswrapper.OSWrapper
 	execWrapper     execwrapper.ExecWrapper
 	progressBuilder progressbar.Build
+	exitFn          func(int)
 }
 
 func showUsage() {
@@ -91,10 +105,12 @@ func showUsage() {
 	_, _ = fmt.Fprintln(out, `
 fuzz is a helper for running the tint fuzzer executables and other related tasks
 
-fuzz has 3, mutually exclusive, tasks that it can perform:
+fuzz has 5, mutually exclusive, tasks that it can perform:
 1. Run a fuzzer locally, requires no additional flag.
 2. Check that a fuzzer successfully handles contents of -inputs, requires -check flag
 3. Generate a fuzzer corpus based on contents of -inputs, requires -generate flag
+4. Triage a specific fuzzer crash, requires -triage flag
+5. Bisect a specific fuzzer crash test case, requires -bisect flag
 
 usage:
   fuzz [flags...]`)
@@ -103,10 +119,11 @@ usage:
 }
 
 func main() {
-	c := cmdConfig{}
+	c := mainConfig{}
 	c.osWrapper = oswrapper.GetRealOSWrapper()
 	c.execWrapper = execwrapper.CreateRealExecWrapper()
 	c.progressBuilder = progressbar.New
+	c.exitFn = os.Exit
 
 	flag.Usage = showUsage
 
@@ -116,24 +133,56 @@ func main() {
 	flag.BoolVar(&generate, "generate", false, "generate fuzzing corpus based on -inputs")
 	flag.BoolVar(&c.dump, "dump", false, "dumps shader input/output from fuzzer")
 	flag.BoolVar(&irMode, "ir", false, "runs using IR fuzzer instead of WGSL fuzzer (This feature is a WIP)")
+	flag.BoolVar(&c.mesaMode, "mesa", false, "runs using Mesa fuzzer variants")
 	flag.StringVar(&c.filter, "filter", "", "filter the fuzzing passes run to those with this substring")
 	flag.StringVar(&c.inputs, "corpus", defaultWgslCorpusDir(c.osWrapper), "obsolete, use -inputs instead")
 	flag.StringVar(&c.inputs, "inputs", defaultWgslCorpusDir(c.osWrapper), "the directory that holds the files to use")
+	flag.StringVar(&c.triageFile, "triage", "", "triage a fuzzer crash")
+	flag.StringVar(&c.bisectFile, "bisect", "", "bisect a fuzzer crash")
+	flag.StringVar(&c.knownFailing, "known-failing", "", "known failing git hash or time")
+	flag.StringVar(&c.knownPassing, "known-passing", "", "known passing git hash or time")
 	flag.StringVar(&c.build, "build", defaultBuildDir(c.osWrapper), "the build directory")
 	flag.StringVar(&c.out, "out", "<tmp>", "the directory to store outputs to")
 	flag.IntVar(&c.numProcesses, "j", runtime.NumCPU(), "number of concurrent fuzzers to run")
+	flag.BoolVar(&c.bisectStep, "bisect-step", false, "internal flag used by git bisect run")
+	flag.BoolVar(&c.isFix, "is-fix", false, "internal flag used by git bisect run to indicate if we are bisecting a fix")
 	flag.Parse()
 
-	if check && generate {
-		fmt.Println("cannot set -check and -generate flags at the same time")
+	if c.mesaMode && c.filter != "" {
+		fmt.Println("cannot set -mesa and -filter flags at the same time, as Mesa fuzzers only run a single specific pass")
+		os.Exit(1)
+	}
+
+	modeCount := 0
+	if check {
+		modeCount++
+	}
+	if generate {
+		modeCount++
+	}
+	if c.triageFile != "" {
+		modeCount++
+	}
+	if c.bisectFile != "" {
+		modeCount++
+	}
+
+	if !c.bisectStep && modeCount > 1 {
+		fmt.Println("cannot set more than one of -check, -generate, -triage, and -bisect flags at the same time")
 		os.Exit(1)
 	}
 
 	switch {
+	case c.bisectStep:
+		c.cmdMode = TaskModeBisectStep
 	case check:
 		c.cmdMode = TaskModeCheck
 	case generate:
 		c.cmdMode = TaskModeGenerate
+	case c.triageFile != "":
+		c.cmdMode = TaskModeTriage
+	case c.bisectFile != "":
+		c.cmdMode = TaskModeBisect
 	default:
 		c.cmdMode = TaskModeRun
 	}
@@ -160,34 +209,64 @@ func main() {
 }
 
 type taskConfig struct {
-	cmdConfig
-	taskMode   TaskMode // specific task being run at this time, may be different from cmdConfig.cmdMode
+	mainConfig
+	taskMode   TaskMode // specific task being run at this time, may be different from mainConfig.cmdMode
 	fuzzer     string   // path to the fuzzer binary, tint_wgsl_fuzzer or tint_ir_fuzzer
 	assembler  string   // path to the test case assembler, tint_fuzz_as
 	dictionary string   // path to dictionary to use for tint_wgsl_fuzzer
 }
 
-func run(c *cmdConfig) error {
+// runCmd executes a command with standardized output capturing and logging behavior.
+func (t *taskConfig) runCmd(name string, args ...string) ([]byte, error) {
+	if t.verbose {
+		fmt.Printf("executing: %s %s\n", name, strings.Join(args, " "))
+	}
+	cmd := t.execWrapper.Command(name, args...)
+	out, err := cmd.RunWithCombinedOutput()
+	if t.verbose {
+		fmt.Printf("output:\n%s\n", string(out))
+	}
+	return out, err
+}
+
+// runCmdUnbuffered executes a command with standardized logging, mapping output directly to the terminal.
+// It does not capture the output.
+func (t *taskConfig) runCmdUnbuffered(name string, args ...string) error {
+	if t.verbose {
+		fmt.Printf("executing: %s %s\n", name, strings.Join(args, " "))
+	}
+	cmd := t.execWrapper.Command(name, args...).WithStdout(os.Stdout).WithStderr(os.Stderr)
+	return cmd.Run()
+}
+
+func run(c *mainConfig) error {
 	if !fileutils.IsDir(c.build, c.osWrapper) {
 		return fmt.Errorf("build directory '%v' does not exist", c.build)
 	}
 
 	// Verify / create the output directory
-	if c.out == "" || c.out == "<tmp>" {
-		if tmp, err := c.osWrapper.MkdirTemp("", "tint_fuzz"); err == nil {
-			defer c.osWrapper.RemoveAll(tmp)
-			c.out = tmp
+	if c.cmdMode != TaskModeTriage && c.cmdMode != TaskModeBisect && c.cmdMode != TaskModeBisectStep {
+		if c.out == "" || c.out == "<tmp>" {
+			if tmp, err := c.osWrapper.MkdirTemp("", "tint_fuzz"); err == nil {
+				defer c.osWrapper.RemoveAll(tmp)
+				c.out = tmp
+			} else {
+				return err
+			}
 		} else {
-			return err
+			err := c.osWrapper.MkdirAll(c.out, os.ModePerm)
+			if err != nil {
+				return err
+			}
 		}
-	} else {
+	} else if c.out != "" && c.out != "<tmp>" {
 		err := c.osWrapper.MkdirAll(c.out, os.ModePerm)
 		if err != nil {
 			return err
 		}
 	}
 
-	if !fileutils.IsDir(c.out, c.osWrapper) {
+	if c.out != "" && c.out != "<tmp>" && !fileutils.IsDir(c.out, c.osWrapper) {
 		return fmt.Errorf("output directory '%v' does not exist", c.out)
 	}
 
@@ -231,6 +310,12 @@ func run(c *cmdConfig) error {
 			err = checkFuzzer(t)
 		case TaskModeGenerate:
 			err = runCorpusGenerator(t)
+		case TaskModeTriage:
+			err = runTriage(t)
+		case TaskModeBisect:
+			err = runBisect(t)
+		case TaskModeBisectStep:
+			err = runBisectStep(t)
 		default:
 			err = fmt.Errorf("unknown task mode %d", t.taskMode)
 		}
@@ -241,11 +326,11 @@ func run(c *cmdConfig) error {
 	return nil
 }
 
-// generateTaskConfig produces a taskConfig based off the supplied cmdConfig and specified TaskMode.
-func generateTaskConfig(tm TaskMode, c *cmdConfig) (*taskConfig, error) {
+// generateTaskConfig produces a taskConfig based off the supplied mainConfig and specified TaskMode.
+func generateTaskConfig(tm TaskMode, c *mainConfig) (*taskConfig, error) {
 	t := taskConfig{
-		cmdConfig: *c,
-		taskMode:  tm,
+		mainConfig: *c,
+		taskMode:   tm,
 	}
 
 	type depConfig struct {
@@ -259,12 +344,23 @@ func generateTaskConfig(tm TaskMode, c *cmdConfig) (*taskConfig, error) {
 			dependencies = append(dependencies, depConfig{"dictionary.txt", &t.dictionary})
 		}
 		fallthrough
-	case TaskModeCheck:
+	case TaskModeCheck, TaskModeTriage, TaskModeBisect, TaskModeBisectStep:
 		fuzzerName := "tint_wgsl_fuzzer"
 		if c.fuzzMode == FuzzModeIr {
 			fuzzerName = "tint_ir_fuzzer"
 		}
+		if c.mesaMode {
+			fuzzerName = strings.Replace(fuzzerName, "_fuzzer", "_mesa_fuzzer", 1)
+		}
 		dependencies = append(dependencies, depConfig{fuzzerName, &t.fuzzer})
+
+		if tm == TaskModeTriage {
+			if c.fuzzMode == FuzzModeIr {
+				dependencies = append(dependencies, depConfig{"ir_fuzz_dis", &t.assembler})
+			} else {
+				dependencies = append(dependencies, depConfig{"ir_fuzz_as", &t.assembler})
+			}
+		}
 	case TaskModeGenerate:
 		if c.fuzzMode == FuzzModeIr {
 			dependencies = append(dependencies, depConfig{"ir_fuzz_as", &t.assembler})
@@ -281,7 +377,7 @@ func generateTaskConfig(tm TaskMode, c *cmdConfig) (*taskConfig, error) {
 			}
 		default:
 			*config.path = filepath.Join(t.build, config.name+fileutils.ExeExt)
-			if !fileutils.IsExe(*config.path, t.osWrapper) {
+			if tm != TaskModeBisect && tm != TaskModeBisectStep && !fileutils.IsExe(*config.path, t.osWrapper) {
 				return nil, fmt.Errorf("binary '%v' not found at '%v'. Please ensure the project has been built (e.g., with `ninja -C %s %s`)", config.name, *config.path, t.build, config.name)
 			}
 		}
@@ -328,7 +424,7 @@ func checkFuzzer(t *taskConfig) error {
 				},
 			})
 
-			if out, err := t.execWrapper.Command(t.fuzzer, file).RunWithCombinedOutput(); err != nil {
+			if out, err := t.runCmd(t.fuzzer, file); err != nil {
 				_, fuzzer := filepath.Split(t.fuzzer)
 				return fmt.Errorf("fuzzer '%s' failed to process file '%s' with error: %w\nOutput:\n%s", fuzzer, file, err, string(out))
 			}
@@ -449,6 +545,10 @@ func runCorpusGeneratorIr(t *taskConfig) error {
 	defer cancel()
 
 	args := []string{tmp, t.out}
+	if t.verbose {
+		args = append(args, "--verbose")
+	}
+
 	cmdStr := fmt.Sprintf("%s %s", t.assembler, strings.Join(args, " "))
 
 	if t.verbose {

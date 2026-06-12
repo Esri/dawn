@@ -25,17 +25,20 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/vulkan/ResourceTableVk.h"
+#include "src/dawn/native/vulkan/ResourceTableVk.h"
 
 #include <vector>
 
-#include "dawn/common/Enumerator.h"
-#include "dawn/native/DynamicUploader.h"
-#include "dawn/native/vulkan/DeviceVk.h"
-#include "dawn/native/vulkan/TextureVk.h"
-#include "dawn/native/vulkan/UtilsVulkan.h"
-#include "dawn/native/vulkan/VulkanError.h"
-
+#include "src/dawn/common/Enumerator.h"
+#include "src/dawn/common/MatchVariant.h"
+#include "src/dawn/native/DynamicUploader.h"
+#include "src/dawn/native/ResourceTableDefaultResources.h"
+#include "src/dawn/native/vulkan/DeviceVk.h"
+#include "src/dawn/native/vulkan/SamplerVk.h"
+#include "src/dawn/native/vulkan/TextureVk.h"
+#include "src/dawn/native/vulkan/UtilsVulkan.h"
+#include "src/dawn/native/vulkan/VulkanError.h"
+#include "src/utils/compiler.h"
 namespace dawn::native::vulkan {
 
 // static
@@ -62,10 +65,20 @@ ResultOrError<VkDescriptorSetLayout> ResourceTable::MakeDescriptorSetLayout(Devi
              .pImmutableSamplers = nullptr,
          },
          {
+             // To store both samplers and images together in the same descriptor set array, we use
+             // VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, and when adding a texture view to the
+             // table, we set an "unused sampler", and similarly when adding a sampler to the table,
+             // we set an "unused image".
+             //
+             // Although this method wastes descriptor memory space, since each descriptor stores
+             // both a sampler and an image, this keeps shader emission simpler (one set of arrays
+             // per resource type at the same binding, with simple indexing), and allows us to store
+             // all descriptors in one descriptor set with
+             // VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT enabled.
              .binding = 1,
-             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-             .descriptorCount = device->GetLimits().resourceTableLimits.maxResourceTableSize +
-                                uint32_t(GetDefaultResourceCount()),
+             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+             .descriptorCount =
+                 kMaxResourceTableSize + uint32_t{ResourceTableDefaultResources::GetCount()},
              .stageFlags = VulkanShaderStages(kAllStages),
              .pImmutableSamplers = nullptr,
          }}};
@@ -104,13 +117,13 @@ MaybeError ResourceTable::Initialize() {
 
     Device* device = ToBackend(GetDevice());
 
-    uint32_t sampledImageCount = uint32_t(GetSizeWithDefaultResources());
+    uint32_t sampledImageCount = uint32_t{GetSizeWithDefaultResources()};
 
     // Allocate mPool.
     {
         std::array<VkDescriptorPoolSize, 2> sizes = {
             VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1},  // The metadata buffer.
-            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, sampledImageCount},
+            VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, sampledImageCount},
         };
 
         VkDescriptorPoolCreateInfo createInfo{
@@ -182,8 +195,8 @@ MaybeError ResourceTable::ApplyPendingUpdates(CommandRecordingContext* recording
     if (!updates.metadataUpdates.empty()) {
         DAWN_TRY(UpdateMetadataBuffer(recordingContext, updates.metadataUpdates));
     }
-    if (!updates.resourceUpdates.empty()) {
-        UpdateResourceBindings(updates.resourceUpdates);
+    if (!updates.resourceDiffs.empty()) {
+        DAWN_TRY(UpdateResourceBindings(updates.resourceDiffs));
     }
 
     return {};
@@ -213,7 +226,7 @@ MaybeError ResourceTable::UpdateMetadataBuffer(CommandRecordingContext* recordin
             // Prepare the copies.
             std::vector<VkBufferCopy> copies(updates.size());
             for (auto [i, update] : Enumerate(updates)) {
-                stagedData[i] = update.data;
+                DAWN_UNSAFE_TODO(stagedData[i]) = update.data;
 
                 VkBufferCopy copy{
                     .srcOffset = reservation.offsetInBuffer + i * sizeof(uint32_t),
@@ -237,28 +250,57 @@ MaybeError ResourceTable::UpdateMetadataBuffer(CommandRecordingContext* recordin
         });
 }
 
-void ResourceTable::UpdateResourceBindings(const std::vector<ResourceUpdate>& updates) {
+MaybeError ResourceTable::UpdateResourceBindings(const std::vector<ResourceDiff>& diffs) {
+    Device* device = ToBackend(GetDevice());
+
+    ResourceTableDefaultResources* defaultResources;
+    DAWN_TRY_ASSIGN(defaultResources, device->GetOrCreateResourceTableDefaultsResource());
+
+    TextureView* placeholderTextureView =
+        ToBackend(defaultResources->GetPlaceholderSampleableTexture());
+    Sampler* placeholderSampler = ToBackend(defaultResources->GetPlaceholderSampler());
+
     std::vector<VkDescriptorImageInfo> imageWrites;
     std::vector<uint32_t> arrayElements;
 
-    for (const ResourceUpdate& update : updates) {
-        // TODO(https://issues.chromium.org/473354063): Support samplers updates.
+    for (const ResourceDiff& diff : diffs) {
         // TODO(https://issues.chromium.org/473444515): Support buffer, texel buffers and storage
         // textures.
 
-        VkImageView handle = ToBackend(update.textureView)->GetHandle();
-        if (handle == nullptr) {
-            continue;
-        }
+        MatchVariant(
+            diff.added,
+            [&](std::monostate) {
+                // Nothing to do
+            },
+            [&](Ref<TextureViewBase> textureView) {
+                VkImageView handle = ToBackend(textureView)->GetHandle();
+                if (handle == nullptr) {
+                    return;
+                }
 
-        VkDescriptorImageInfo imageWrite = {
-            .sampler = VkSampler{},
-            .imageView = handle,
-            .imageLayout = VulkanImageLayout(update.textureView->GetFormat(),
-                                             wgpu::TextureUsage::TextureBinding),
-        };
-        imageWrites.push_back(imageWrite);
-        arrayElements.push_back(uint32_t(update.slot));
+                VkDescriptorImageInfo imageWrite = {
+                    .sampler = placeholderSampler->GetHandle(),
+                    .imageView = handle,
+                    .imageLayout = ToBackend(textureView)
+                                       ->VulkanImageLayout(wgpu::TextureUsage::TextureBinding),
+                };
+                imageWrites.push_back(imageWrite);
+                arrayElements.push_back(uint32_t{diff.slot});
+            },
+            [&](Ref<SamplerBase> sampler) {
+                VkSampler handle = ToBackend(sampler)->GetHandle();
+                if (handle == nullptr) {
+                    return;
+                }
+
+                VkDescriptorImageInfo imageWrite = {
+                    .sampler = handle,
+                    .imageView = placeholderTextureView->GetHandle(),
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                };
+                imageWrites.push_back(imageWrite);
+                arrayElements.push_back(uint32_t{diff.slot});
+            });
     }
 
     std::vector<VkWriteDescriptorSet> writes;
@@ -270,7 +312,7 @@ void ResourceTable::UpdateResourceBindings(const std::vector<ResourceUpdate>& up
             .dstBinding = 1,
             .dstArrayElement = arrayElements[i],
             .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &imageWrites[i],
             .pBufferInfo = nullptr,
             .pTexelBufferView = nullptr,
@@ -278,9 +320,9 @@ void ResourceTable::UpdateResourceBindings(const std::vector<ResourceUpdate>& up
         writes.push_back(write);
     }
 
-    Device* device = ToBackend(GetDevice());
     device->fn.UpdateDescriptorSets(device->GetVkDevice(), writes.size(), writes.data(), 0,
                                     nullptr);
+    return {};
 }
 
 VkDescriptorSet ResourceTable::GetHandle() const {
@@ -293,7 +335,6 @@ void ResourceTable::DestroyImpl(DestroyReason reason) {
         mPool = VK_NULL_HANDLE;
         mSet = VK_NULL_HANDLE;
     }
-
     ResourceTableBase::DestroyImpl(reason);
 }
 

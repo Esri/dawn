@@ -25,12 +25,12 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/webgpu/ShaderModuleWGPU.h"
+#include "src/dawn/native/webgpu/ShaderModuleWGPU.h"
 
 #include <utility>
 
-#include "dawn/native/ShaderModule.h"
-#include "dawn/native/webgpu/DeviceWGPU.h"
+#include "src/dawn/native/ShaderModule.h"
+#include "src/dawn/native/webgpu/DeviceWGPU.h"
 
 namespace dawn::native::webgpu {
 
@@ -41,7 +41,7 @@ ResultOrError<Ref<ShaderModule>> ShaderModule::Create(
     const std::vector<tint::wgsl::Extension>& internalExtensions) {
     auto desc = ToAPI(*descriptor);
     WGPUShaderModule innerShaderModule =
-        device->wgpu.deviceCreateShaderModule(device->GetInnerHandle(), desc);
+        device->wgpu->deviceCreateShaderModule(device->GetInnerHandle(), desc);
     DAWN_ASSERT(innerShaderModule);
 
     Ref<ShaderModule> shader =
@@ -56,7 +56,7 @@ ShaderModule::ShaderModule(Device* device,
                            WGPUShaderModule innerShaderModule)
     : ShaderModuleBase(device, descriptor, std::move(internalExtensions)),
       RecordableObject(schema::ObjectType::ShaderModule),
-      ObjectWGPU(device->wgpu.shaderModuleRelease) {
+      ObjectWGPU(device->wgpu->shaderModuleRelease) {
     mInnerHandle = innerShaderModule;
 
     // TODO(452840621): Make this use a chain instead of hard coded to WGSL only and handle other

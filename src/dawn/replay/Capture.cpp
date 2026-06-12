@@ -25,11 +25,13 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/replay/Capture.h"
+#include "src/dawn/replay/Capture.h"
 
 #include <span>
 #include <sstream>
 #include <utility>
+
+#include "src/dawn/replay/SurfaceDiscovery.h"
 
 namespace dawn::replay {
 
@@ -61,6 +63,21 @@ CaptureImpl::CaptureImpl(std::vector<uint8_t> commands, std::vector<uint8_t> con
     : mCommands(std::move(commands)), mContent(std::move(content)) {}
 
 CaptureImpl::~CaptureImpl() {}
+
+bool CaptureImpl::Walk(RootCommandVisitor& visitor) {
+    auto result = CaptureWalker::Walk(visitor);
+    if (result.IsError()) {
+        result.AcquireError();
+        return false;
+    }
+    return true;
+}
+
+std::vector<SurfaceInfo> CaptureImpl::GetSurfaceInfos() const {
+    SurfaceDiscoveryVisitor discovery;
+    const_cast<CaptureImpl*>(this)->Walk(discovery);
+    return discovery.GetSurfaceInfos();
+}
 
 ReadHead CaptureImpl::GetCommandReadHead() const {
     return ReadHead(mCommands);

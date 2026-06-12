@@ -27,18 +27,18 @@
 
 // GEN_BUILD:CONDITION(tint_build_is_linux || tint_build_is_mac)
 
-#include "src/tint/utils/command/command.h"
-
 #include <errno.h>
 #include <limits.h>
 #include <sys/poll.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
 #include <array>
 #include <sstream>
 #include <vector>
 
+#include "src/tint/utils/command/command.h"
 #include "src/tint/utils/macros/compiler.h"
 #include "src/tint/utils/system/executable_path.h"
 
@@ -117,7 +117,7 @@ class Pipe {
 };
 
 bool ExecutableExists(const std::string& path) {
-    struct stat s {};
+    struct stat s{};
     if (stat(path.c_str(), &s) != 0) {
         return false;
     }
@@ -229,7 +229,7 @@ Command::Output Command::Exec(std::initializer_list<std::string> arguments) cons
         stdin_pipe.write.Close();
 
         // Accumulate the stdout and stderr output from the child process
-        std::array<pollfd, 2> poll_fds;
+        std::array<pollfd, 2> poll_fds{};
         poll_fds[0].fd = stdout_pipe.read;
         poll_fds[0].events = POLLIN;
         poll_fds[1].fd = stderr_pipe.read;
@@ -242,7 +242,7 @@ Command::Output Command::Exec(std::initializer_list<std::string> arguments) cons
             if (poll(poll_fds.data(), 2, -1) < 0) {
                 break;
             }
-            std::array<char, 256> buf;
+            std::array<char, 256> buf{};
             if (poll_fds[0].revents & POLLIN) {
                 auto n = read(stdout_pipe.read, buf.data(), buf.size());
                 if (n > 0) {

@@ -25,15 +25,13 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/core/ir/validator_test.h"
-
 #include <string>
 
 #include "gtest/gtest.h"
-
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/function_param.h"
 #include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator_test.h"
 #include "src/tint/lang/core/number.h"
 #include "src/tint/lang/core/type/abstract_float.h"
 #include "src/tint/lang/core/type/abstract_int.h"
@@ -673,6 +671,30 @@ TEST_F(IR_ValidatorTest, CallBuiltinFn_SubgroupBroadcast_NonConstId) {
     %3:i32 = subgroupBroadcast 2i, %a
                                    ^^
 
+)")) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, CallBuiltinFn_VectorClamp_Disallowed) {
+    mod.properties.Add(Property::kDisallowVectorMinMaxClamp);
+
+    auto* x = b.FunctionParam<vec4f>();
+    auto* lo = b.FunctionParam<vec4f>();
+    auto* hi = b.FunctionParam<vec4f>();
+    auto* func = b.Function("foo", ty.void_());
+    func->SetParams({x, lo, hi});
+    b.Append(func->Block(), [&] {
+        b.Call<vec4f>(core::BuiltinFn::kClamp, x, lo, hi);
+        b.Return(func);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(
+        res.Failure().reason,
+        testing::HasSubstr(
+            R"(:3:20 error: clamp: vector clamp disallowed by the DisallowVectorMinMaxClamp property
+    %5:vec4<f32> = clamp %2, %3, %4
+                   ^^^^^
 )")) << res.Failure();
 }
 

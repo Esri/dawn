@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 
 #include "dawn/platform/dawn_platform_export.h"
 
@@ -50,19 +51,23 @@ class DAWN_PLATFORM_EXPORT CachingInterface {
     CachingInterface();
     virtual ~CachingInterface();
 
-    // LoadData has two modes. The first mode is used to get a value which
-    // corresponds to the |key|. The |valueOut| is a caller provided buffer
-    // allocated to the size |valueSize| which is loaded with data of the
-    // size returned. The second mode is used to query for the existence of
-    // the |key| where |valueOut| is nullptr and |valueSize| must be 0.
-    // The return size is non-zero if the |key| exists.
-    virtual size_t LoadData(const void* key, size_t keySize, void* valueOut, size_t valueSize) = 0;
+    // Returns zero if there does not exist a cached entry for |key|, otherwise returns a non-zero
+    // size indicating the size of cached data
+    virtual size_t FindKey(std::span<const std::byte> key) { return 0; }
 
-    // StoreData puts a |value| in the cache which corresponds to the |key|.
-    virtual void StoreData(const void* key,
-                           size_t keySize,
-                           const void* value,
-                           size_t valueSize) = 0;
+    // Returns zero if unable to load cached entry for |key| into |dest|, otherwise returns number
+    // of bytes written to |dest|.
+    virtual size_t LoadData(std::span<const std::byte> key, std::span<std::byte> dest) { return 0; }
+
+    // Stores the data in |src| at the entry specified by |key|.
+    virtual void StoreData(std::span<const std::byte> key, std::span<const std::byte> src) {}
+
+    // TODO(503801946): Remove these outdated default implementations and make the newer API above
+    // fully virtual once users are updated.
+    virtual size_t LoadData(const void* key, size_t keySize, void* valueOut, size_t valueSize) {
+        return 0;
+    }
+    virtual void StoreData(const void* key, size_t keySize, const void* value, size_t valueSize) {}
 
   private:
     CachingInterface(const CachingInterface&) = delete;
@@ -81,7 +86,38 @@ class DAWN_PLATFORM_EXPORT WaitableEvent {
     virtual bool IsComplete() = 0;  // Non-blocking check if the event is complete
 };
 
+enum class JobStatus {
+    Continue,   // For long-running tasks, returning |Continue| will schedule the task again.
+    Cancelled,  // For long-running tasks that need to be terminated for shutdown, this may be
+                // injected when Cancel() is called.
+    Completed,  // For long-running tasks that actually finish.
+};
+
+class DAWN_PLATFORM_EXPORT JobHandle {
+  public:
+    // A job must be joined and canceled before the JobHandle is destroyed.
+    JobHandle() = default;
+    virtual ~JobHandle() = default;
+
+    JobHandle(JobHandle&& other) = default;
+    JobHandle& operator=(JobHandle&&) = default;
+
+    // Cancels the job (and all potential workers) ASAP. As an implementation
+    // note, one can imagine this forcing the callback to return |Cancelled|
+    // on its next iteration, thereby causing the job to be considered done
+    // and cancelled.
+    virtual void Cancel() = 0;
+
+    // Joins the job (and all potential workers), waiting for them to return.
+    virtual void Join() = 0;
+
+  private:
+    JobHandle(const JobHandle&) = delete;
+    JobHandle& operator=(const JobHandle&) = delete;
+};
+
 using PostWorkerTaskCallback = void (*)(void* userdata);
+using PostWorkerJobCallback = JobStatus (*)(void* userdata);
 
 class DAWN_PLATFORM_EXPORT WorkerTaskPool {
   public:
@@ -93,6 +129,11 @@ class DAWN_PLATFORM_EXPORT WorkerTaskPool {
 
     virtual std::unique_ptr<WaitableEvent> PostWorkerTask(PostWorkerTaskCallback,
                                                           void* userdata) = 0;
+
+    // This will start up to a worker which calls |cb| with |userdata| when scheduling permits while
+    // |cb| returns |Continue|. In general, |cb| should periodically yield regardless of whether it
+    // completed its work in order to allow for cancellation or reprioritization when appropriate.
+    virtual std::unique_ptr<JobHandle> PostWorkerJob(PostWorkerJobCallback cb, void* userdata);
 };
 
 // These features map to similarly named ones in src/chromium/src/gpu/config/gpu_finch_features.h
@@ -102,6 +143,7 @@ enum class Features {
     kWebGPUEnableRangeAnalysisForRobustness,
     kWebGPUUseSpirv14,
     kWebGPUDecomposeUniformBuffers,
+    kWebGPUUseHLSL2021,
 };
 
 class DAWN_PLATFORM_EXPORT Platform {
@@ -156,6 +198,10 @@ class DAWN_PLATFORM_EXPORT Platform {
 
     // Hook for querying if a Finch feature is enabled.
     virtual bool IsFeatureEnabled(Features feature);
+
+    // Report GPU process progress so that the watchdog thread won't think that a long function is
+    // stuck.
+    virtual void ReportProgress();
 
   private:
     Platform(const Platform&) = delete;

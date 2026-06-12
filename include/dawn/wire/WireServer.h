@@ -28,6 +28,8 @@
 #ifndef INCLUDE_DAWN_WIRE_WIRESERVER_H_
 #define INCLUDE_DAWN_WIRE_WIRESERVER_H_
 
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <span>
 
@@ -75,6 +77,8 @@ class DAWN_WIRE_EXPORT WireServer : public CommandHandler {
     // them periodically to ensure progress on asynchronous work is made.
     bool IsDeviceKnown(WGPUDevice device) const;
 
+    server::Server* GetImplForTesting();
+
   private:
     std::shared_ptr<server::Server> mImpl;
 };
@@ -90,6 +94,7 @@ class DAWN_WIRE_EXPORT MemoryTransferService {
 
     // Deserialize data to create Read/Write handles. These handles are for the client
     // to Read/Write data.
+    // TODO(https://issues.chromium.org/492456046): Pass as a `span<uint8_t> deseriazlizeData`.
     virtual bool DeserializeReadHandle(const void* deserializePointer,
                                        size_t deserializeSize,
                                        ReadHandle** readHandle) = 0;
@@ -106,14 +111,17 @@ class DAWN_WIRE_EXPORT MemoryTransferService {
         // SerializeDataUpdate is called with the same offset/size args
         virtual size_t SizeOfSerializeDataUpdate(size_t offset, size_t size) = 0;
 
-        // Gets called when a MapReadCallback resolves.
-        // Serialize the data update for the range (offset, offset + size) into
-        // |serializePointer| to the client There could be nothing to be serialized (if
-        // using shared memory)
-        virtual void SerializeDataUpdate(const void* data,
+        // Serializes the GPU buffer data in |data| to send to the client when a MapReadCallback
+        // resolves. There could be nothing to serialize if using shared memory.
+        //
+        // Parameters:
+        //  - `data`: The mapped GPU buffer contents for the range [offset, offset + data.size()).
+        //  - `offset`: The byte offset of data.data() within the GPU buffer.
+        //  - `serializeData`: The output buffer to write the serialized payload into.
+        //    Its size equals SizeOfSerializeDataUpdate(offset, data.size()).
+        virtual void SerializeDataUpdate(std::span<const uint8_t> data,
                                          size_t offset,
-                                         size_t size,
-                                         void* serializePointer) = 0;
+                                         std::span<char> serializeData) = 0;
 
       private:
         ReadHandle(const ReadHandle&) = delete;
@@ -125,32 +133,37 @@ class DAWN_WIRE_EXPORT MemoryTransferService {
         WriteHandle();
         virtual ~WriteHandle();
 
-        // Set the target for writes from the client. DeserializeFlush should copy data
-        // into the target.
-        void SetTarget(void* data);
-        // Set Staging data length for OOB check
-        void SetDataLength(size_t dataLength);
+        std::span<uint8_t> GetSource() const {
+            return std::span<uint8_t>(GetSourceData(), GetSourceSize());
+        }
 
-        // This function takes in the serialized result of
-        // client::MemoryTransferService::WriteHandle::SerializeDataUpdate.
-        // Needs to check potential offset/size OOB and overflow
-        virtual bool DeserializeDataUpdate(const void* deserializePointer,
-                                           size_t deserializeSize,
-                                           size_t offset,
-                                           size_t size) = 0;
-        std::span<uint8_t> GetTarget() const;
-
-        // Returns a direct pointer to the source data that will
-        // be copied into Target in DeserializeDataUpdate if accessible, nullptr
-        // otherwise.
-        virtual uint8_t* GetSourceData() const { return nullptr; }
+        // Deserialize a data update produced by
+        // `client::MemoryTransferService::WriteHandle::SerializeDataUpdate` and apply it to
+        // the mapped buffer memory.
+        //
+        // Parameters:
+        //  - `deserializeData`: The serialized payload from the client specifying the updated
+        //    buffer contents.
+        //  - `target`: The range of data that is written by the update.
+        //  - `offset`: The byte offset for target.data() in the GPU buffer, used by Chromium's
+        //    implementation to offset into the shmem.
+        //
+        // Returns true on success, or false if the deserialization is invalid (e.g. OOB access).
+        virtual bool DeserializeDataUpdate(std::span<const uint8_t> deserializeData,
+                                           std::span<uint8_t> target,
+                                           size_t offset) = 0;
 
       private:
         WriteHandle(const WriteHandle&) = delete;
         WriteHandle& operator=(const WriteHandle&) = delete;
 
-        uint8_t* mTargetData = nullptr;
-        size_t mDataLength = 0;
+        // Returns a direct pointer to the source data that will
+        // be copied into Target in DeserializeDataUpdate if accessible, nullptr
+        // otherwise.
+        // TODO(https://issues.chromium.org/492456046): Remove in favor of making GetSourceData
+        // virtual.
+        virtual uint8_t* GetSourceData() const { return nullptr; }
+        virtual size_t GetSourceSize() const { return 0; }
     };
 
   private:

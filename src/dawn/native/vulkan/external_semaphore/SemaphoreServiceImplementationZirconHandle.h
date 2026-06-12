@@ -30,6 +30,8 @@
 
 #include <memory>
 
+#include "src/dawn/common/vulkan_platform.h"
+
 namespace dawn::native::vulkan {
 class Device;
 struct VulkanDeviceInfo;

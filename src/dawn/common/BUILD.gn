@@ -31,18 +31,56 @@ import("//build_overrides/build.gni")
 import("${dawn_root}/generator/dawn_generator.gni")
 import("${dawn_root}/scripts/dawn_features.gni")
 
-# Use Chromium's dcheck_always_on when available so that we respect it when
-# running tests on the GPU builders
-if (build_with_chromium) {
-  import("//build/config/dcheck_always_on.gni")
-} else {
-  dcheck_always_on = false
+# Helper template to define clang plugins.
+#
+# Params:
+#   plugin: The name of the clang plugin to load.
+#   plugin_arguments: List of arguments to pass to the plugin.
+template("clang_plugin") {
+  config(target_name) {
+    cflags = [
+      "-Xclang",
+      "-add-plugin",
+      "-Xclang",
+      invoker.plugin,
+    ]
+
+    foreach(flag, invoker.plugin_arguments) {
+      cflags += [
+        "-Xclang",
+        "-plugin-arg-${invoker.plugin}",
+        "-Xclang",
+        flag,
+      ]
+    }
+  }
 }
 
-if (build_with_chromium) {
-  import("//build/config/sanitizers/sanitizers.gni")
-} else {
-  use_fuzzing_engine = false
+# Check struct/class member pointers are using raw_ptr<> where appropriate.
+clang_plugin("raw_ptr_check") {
+  # Defined in <chromium>/tools/clang/raw_ptr_plugin/RawPtrPlugin.cpp
+  plugin = "raw-ptr-plugin"
+
+  plugin_arguments = [
+    "check-raw-ptr-fields",
+    "check-raw-ptr-to-stack-allocated",
+    "check-raw-ref-fields",
+    "check-span-fields",
+  ]
+
+  _exclusions = [
+    "/include/",
+    "/src/tint/",
+    "/src/dawn/replay/",
+
+    # TODO(479743213): Enforce raw_ptr usage in dawn/node as well.
+    "/src/dawn/node/",
+  ]
+
+  foreach(dir, _exclusions) {
+    plugin_arguments += [ "raw-ptr-exclude-path=" +
+                          rebase_path("${dawn_root}/${dir}", root_build_dir) ]
+  }
 }
 
 ###############################################################################
@@ -50,27 +88,10 @@ if (build_with_chromium) {
 ###############################################################################
 
 config("internal_config") {
-  include_dirs = [
-    "${target_gen_dir}/../../../src",
-    "${dawn_root}/src",
-  ]
+  configs = [ "${dawn_root}/src/utils:internal_config" ]
+  include_dirs = [ "${target_gen_dir}/../../../src" ]
 
   defines = []
-  if (dawn_always_assert || dcheck_always_on || is_debug ||
-      use_fuzzing_engine) {
-    defines += [ "DAWN_ENABLE_ASSERTS" ]
-  }
-
-  if (build_with_chromium || use_fuzzing_engine) {
-    # Does a hard abort when an assertion fails so that fuzzers catch and parse the failure.
-    # Also call abort() so chrome can dump crash stach in console.
-    defines += [ "DAWN_ABORT_ON_ASSERT" ]
-  }
-
-  if (use_fuzzing_engine) {
-    # Disable logging to make fuzzing more efficient.
-    defines += [ "DAWN_DISABLE_LOGGING" ]
-  }
 
   if (dawn_enable_d3d11) {
     defines += [ "DAWN_ENABLE_BACKEND_D3D11" ]
@@ -117,6 +138,10 @@ config("internal_config") {
     defines += [ "DAWN_USE_WINDOWS_UI" ]
   }
 
+  if (dawn_supports_glfw_for_windowing) {
+    defines += [ "DAWN_SUPPORTS_GLFW_FOR_WINDOWING" ]
+  }
+
   if (dawn_enable_error_injection) {
     defines += [ "DAWN_ENABLE_ERROR_INJECTION" ]
   }
@@ -135,7 +160,8 @@ config("internal_config") {
   cflags = []
 
   if (is_clang) {
-    # We use __builtin_assume liberally in DAWN_ASSERT, allow ignoring side-effects there.
+    # We use __builtin_assume liberally in DAWN_ASSERT, allow ignoring
+    # side-effects there.
     cflags += [ "-Wno-assume" ]
 
     # Flags use of __COUNTER__, which is used in histogram macros that were
@@ -180,9 +206,14 @@ config("internal_config") {
       "-Wunused-macros",
     ]
 
+    if (!is_wasm) {
+      configs += [ ":raw_ptr_check" ]
+    }
+
     if (is_win) {
       cflags += [
-        # clang-cl doesn't know -pedantic, pass it explicitly to the clang driver
+        # clang-cl doesn't know -pedantic, pass it explicitly to the clang
+        # driver
         "/clang:-pedantic",
 
         # Allow the use of __uuidof()
@@ -198,10 +229,10 @@ config("internal_config") {
     # MSVC considers these invalid switch values. crbug.com/dawn/397.
     cflags += [ "/wd4063" ]
 
-    # MSVC things that a switch over all the enum values of an enum class is
-    # not sufficient to cover all control paths. Turn off this warning so that
-    # the respective clang warning tells us where to add switch cases
-    # (otherwise we have to add default: DAWN_UNREACHABLE() that silences clang too)
+    # MSVC things that a switch over all the enum values of an enum class is not
+    # sufficient to cover all control paths. Turn off this warning so that the
+    # respective clang warning tells us where to add switch cases (otherwise we
+    # have to add default: DAWN_UNREACHABLE() that silences clang too)
     cflags += [ "/wd4715" ]
 
     # MSVC needs a flag to enable a standard-compliant preprocessor.
@@ -224,23 +255,8 @@ config("internal_config") {
 # Common dawn library
 ###############################################################################
 
-dawn_generator("dawn_version_gen") {
-  script = "${dawn_root}/generator/dawn_version_generator.py"
-  args = [
-    "--dawn-dir",
-    rebase_path("${dawn_root}", root_build_dir),
-  ]
-
-  # We can use the explicit version file if it is generated instead of relying
-  # on the existence of git.
-  if (dawn_version_file != "") {
-    args += [
-      "--version-file",
-      rebase_path(dawn_version_file, root_build_dir),
-    ]
-  }
-
-  outputs = [ "src/dawn/common/Version_autogen.h" ]
+group("dawn_version_gen") {
+  public_deps = [ "${dawn_root}/src/dawn:dawn_version_gen" ]
 }
 
 dawn_generator("dawn_gpu_info_gen") {
@@ -253,6 +269,11 @@ dawn_generator("dawn_gpu_info_gen") {
     "src/dawn/common/GPUInfo_autogen.h",
     "src/dawn/common/GPUInfo_autogen.cpp",
   ]
+  inputs = [
+    "${dawn_root}/src/dawn/gpu_info.json",
+    "${dawn_root}/generator/templates/dawn/common/GPUInfo.h",
+    "${dawn_root}/generator/templates/dawn/common/GPUInfo.cpp",
+  ]
 }
 
 # This GN file is discovered by all Chromium builds, but common doesn't support
@@ -262,13 +283,13 @@ if (is_win || is_linux || is_chromeos || is_mac || is_fuchsia || is_android ||
     is_ios || is_wasm) {
   static_library("common") {
     sources = [
+      "Algebra.h",
       "AlignedAlloc.cpp",
       "AlignedAlloc.h",
       "Alloc.h",
-      "Assert.cpp",
-      "Assert.h",
       "Atomic.h",
       "BitSetRangeIterator.h",
+      "ColorSpace.h",
       "Compiler.h",
       "Constants.h",
       "ContentLessObjectCache.h",
@@ -287,19 +308,14 @@ if (is_win || is_linux || is_chromeos || is_mac || is_fuchsia || is_android ||
       "IOKitRef.h",
       "LRUCache.h",
       "LinkedList.h",
-      "Log.cpp",
-      "Log.h",
       "MatchVariant.h",
       "Math.cpp",
       "Math.h",
       "Mutex.h",
       "MutexProtected.h",
       "NSRef.h",
-      "NonCopyable.h",
-      "NonMovable.h",
       "Numeric.h",
       "PlacementAllocated.h",
-      "Platform.h",
       "Preprocessor.h",
       "Range.h",
       "Ref.h",
@@ -319,14 +335,13 @@ if (is_win || is_linux || is_chromeos || is_mac || is_fuchsia || is_android ||
       "StackAllocated.h",
       "StringViewUtils.cpp",
       "StringViewUtils.h",
+      "Strings.h",
       "SystemUtils.cpp",
       "SystemUtils.h",
       "ThreadLocal.cpp",
       "ThreadLocal.h",
       "Time.h",
       "TypeTraits.h",
-      "TypedInteger.h",
-      "UnderlyingType.h",
       "WGSLFeatureMapping.h",
       "WeakRef.h",
       "WeakRefSupport.cpp",
@@ -341,6 +356,15 @@ if (is_win || is_linux || is_chromeos || is_mac || is_fuchsia || is_android ||
       "xlib_with_undefs.h",
     ]
     sources += get_target_outputs(":dawn_gpu_info_gen")
+
+    if (!is_wasm) {
+      sources += [
+        "ExternalTextureParams.cpp",
+        "ExternalTextureParams.h",
+        "WGPUDeviceCallbackInfos.cpp",
+        "WGPUDeviceCallbackInfos.h",
+      ]
+    }
 
     public_deps = [
       ":dawn_gpu_info_gen",
@@ -371,7 +395,6 @@ if (is_win || is_linux || is_chromeos || is_mac || is_fuchsia || is_android ||
       sources += [
         "WindowsUtils.cpp",
         "WindowsUtils.h",
-        "windows_with_undefs.h",
       ]
     }
     if (dawn_enable_vulkan) {

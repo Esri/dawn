@@ -26,6 +26,29 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ###############################################################################
+# Dawn version
+###############################################################################
+
+DawnGenerator(
+    SCRIPT "${Dawn_SOURCE_DIR}/generator/dawn_version_generator.py"
+    PRINT_NAME "Dawn version based utilities"
+    OUTPUT_HEADERS DAWN_VERSION_AUTOGEN_HEADERS
+    EXTRA_PARAMETERS "--dawn-dir"
+         "${Dawn_SOURCE_DIR}"
+)
+
+dawn_add_library(
+    dawn_version
+    HEADER_ONLY
+    ENABLE_EMSCRIPTEN
+    UTILITY_TARGET dawn_internal_config
+    HEADERS
+        ${DAWN_VERSION_AUTOGEN_HEADERS}
+    DEPENDS
+        dawn_public_config
+)
+
+###############################################################################
 # Dawn headers
 ###############################################################################
 
@@ -80,9 +103,46 @@ dawn_add_library(
 
 if (EMSCRIPTEN)
   add_library(webgpu_cpp ALIAS emdawnwebgpu_cpp)
+  set(cpp_modules_gen_target emdawnwebgpu_modules)
+  set(cpp_modules_includes "${DAWN_BUILD_GEN_DIR}/src/emdawnwebgpu/include")
 else()
   add_library(dawncpp ALIAS dawncpp_headers)
   add_library(webgpu_cpp ALIAS dawncpp_headers)
+  set(cpp_modules_gen_target cpp_modules)
+  set(cpp_modules_includes "${DAWN_BUILD_GEN_DIR}/include")
+endif()
+
+# Dawn c++20 Module Interface
+if(DAWN_SUPPORTS_CXX_MODULES)
+  DawnJSONGenerator(
+      TARGET ${cpp_modules_gen_target}
+      PRINT_NAME "Dawn C++ module interface"
+      OUTPUT_SOURCES DAWNCPP_MODULES_GEN_SOURCES
+  )
+
+  add_library(dawncpp_module OBJECT)
+  add_library(dawn::cpp_module ALIAS dawncpp_module)
+  target_sources(dawncpp_module PUBLIC
+    FILE_SET  dawncpp_modules
+    TYPE      CXX_MODULES
+    BASE_DIRS "${DAWN_BUILD_GEN_DIR}"
+    FILES     "${DAWNCPP_MODULES_GEN_SOURCES}"
+  )
+  target_include_directories(dawncpp_module PRIVATE
+    "${cpp_modules_includes}"
+    "${DAWN_INCLUDE_DIR}"
+  )
+  add_dependencies(dawncpp_module webgpu_cpp webgpu_c)
+  get_target_property(webgpu_cpp_ALIASED webgpu_cpp ALIASED_TARGET)
+  target_link_libraries(${webgpu_cpp_ALIASED} INTERFACE dawncpp_module)
+
+  # Use toplevel compile configuration for the interface
+  # to avoid -Wmodule-file-config-mismatch
+  # See https://gitlab.kitware.com/cmake/cmake/-/work_items/27597
+  set_target_properties(dawncpp_module PROPERTIES
+    CXX_STANDARD    ${DAWN_TOPLEVEL_CXX_STANDARD}
+    CXX_EXTENSIONS  ${DAWN_TOPLEVEL_CXX_EXTENSIONS}
+  )
 endif()
 
 ###############################################################################
@@ -100,6 +160,9 @@ if (NOT EMSCRIPTEN)
   add_subdirectory(replay)
 endif()
 
+if (${DAWN_BUILD_TESTS})
+  add_subdirectory(tests)
+endif()
 if (DAWN_BUILD_BENCHMARKS)
   add_subdirectory(tests/benchmarks)
 endif()

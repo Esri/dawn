@@ -25,20 +25,20 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d12/SamplerHeapCacheD3D12.h"
+#include "src/dawn/native/d3d12/SamplerHeapCacheD3D12.h"
 
 #include <utility>
 
-#include "dawn/common/Assert.h"
-#include "dawn/common/HashUtils.h"
-#include "dawn/native/Queue.h"
-#include "dawn/native/d3d12/BindGroupD3D12.h"
-#include "dawn/native/d3d12/BindGroupLayoutD3D12.h"
-#include "dawn/native/d3d12/DeviceD3D12.h"
-#include "dawn/native/d3d12/Forward.h"
-#include "dawn/native/d3d12/SamplerD3D12.h"
-#include "dawn/native/d3d12/ShaderVisibleDescriptorAllocatorD3D12.h"
-#include "dawn/native/d3d12/StagingDescriptorAllocatorD3D12.h"
+#include "src/dawn/common/HashUtils.h"
+#include "src/dawn/native/Queue.h"
+#include "src/dawn/native/d3d12/BindGroupD3D12.h"
+#include "src/dawn/native/d3d12/BindGroupLayoutD3D12.h"
+#include "src/dawn/native/d3d12/DeviceD3D12.h"
+#include "src/dawn/native/d3d12/Forward.h"
+#include "src/dawn/native/d3d12/SamplerD3D12.h"
+#include "src/dawn/native/d3d12/ShaderVisibleDescriptorAllocatorD3D12.h"
+#include "src/dawn/native/d3d12/StagingDescriptorAllocatorD3D12.h"
+#include "src/utils/assert.h"
 
 namespace dawn::native::d3d12 {
 
@@ -48,9 +48,7 @@ SamplerHeapCacheEntry::SamplerHeapCacheEntry(std::vector<Sampler*> samplers)
 SamplerHeapCacheEntry::SamplerHeapCacheEntry(SamplerHeapCache* cache,
                                              std::vector<Sampler*> samplers,
                                              CPUDescriptorHeapAllocation allocation)
-    : mCPUAllocation(std::move(allocation)),
-      mSamplers(std::move(samplers)),
-      mCache(cache) {
+    : mCPUAllocation(std::move(allocation)), mSamplers(std::move(samplers)), mCache(cache) {
     DAWN_ASSERT(mCache != nullptr);
     DAWN_ASSERT(mCPUAllocation.IsValid());
     DAWN_ASSERT(!mSamplers.empty());
@@ -76,7 +74,7 @@ SamplerHeapCacheEntry::~SamplerHeapCacheEntry() {
     DAWN_ASSERT(!mCPUAllocation.IsValid());
 }
 
-bool SamplerHeapCacheEntry::Populate(MutexProtected<ShaderVisibleDescriptorAllocator>& allocator) {
+bool SamplerHeapCacheEntry::Populate(ShaderVisibleDescriptorAllocator* allocator) {
     if (allocator->IsAllocationStillValid(mGPUAllocation)) {
         return true;
     }
@@ -120,9 +118,15 @@ ResultOrError<Ref<SamplerHeapCacheEntry>> SamplerHeapCache::GetOrCreate(const Bi
     std::vector<Sampler*> samplers;
     samplers.reserve(samplerCount);
 
-    for (BindingIndex bindingIndex : bgl->GetSamplerIndices()) {
-        samplers.push_back(ToBackend(group->GetBindingAsSampler(bindingIndex)));
+    for (BindingIndex bindingIndex : bgl->GetNonStaticSamplerIndices()) {
+        // GetNonStaticSamplerIndices() returns indices for all samplers, including non-visible
+        // ones, so we must skip them.
+        if (bgl->GetBindingInfo(bindingIndex).visibility != wgpu::ShaderStage::None) {
+            samplers.push_back(ToBackend(group->GetBindingAsSampler(bindingIndex)));
+        }
     }
+    // All visible samplers should have been added
+    DAWN_ASSERT(samplers.size() == samplerCount);
 
     // Check the cache if there exists a sampler heap allocation that corresponds to the
     // samplers.

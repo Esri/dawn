@@ -28,21 +28,29 @@
 #ifndef SRC_DAWN_NATIVE_WEBGPU_TEXTUREWGPU_H_
 #define SRC_DAWN_NATIVE_WEBGPU_TEXTUREWGPU_H_
 
-#include "dawn/native/Error.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/Texture.h"
-#include "dawn/native/webgpu/ObjectWGPU.h"
-#include "dawn/native/webgpu/RecordableObject.h"
 #include "dawn/webgpu.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/Texture.h"
+#include "src/dawn/native/webgpu/Forward.h"
+#include "src/dawn/native/webgpu/ObjectWGPU.h"
+#include "src/dawn/native/webgpu/RecordableObject.h"
 
 namespace dawn::native::webgpu {
-
-class Device;
 
 class Texture final : public TextureBase, public RecordableObject, public ObjectWGPU<WGPUTexture> {
   public:
     static ResultOrError<Ref<Texture>> Create(Device* device,
                                               const UnpackedPtr<TextureDescriptor>& descriptor);
+    static Ref<Texture> CreateFromSharedTextureMemory(
+        const SharedTextureMemory* memory,
+        const UnpackedPtr<TextureDescriptor>& descriptor);
+    static Ref<Texture> CreateFromSurfaceTexture(Device* device,
+                                                 const UnpackedPtr<TextureDescriptor>& descriptor,
+                                                 const WGPUSurfaceTexture& surfaceTexture);
+
+    void SynchronizeTextureBeforeUse();
+
+    void SetPendingBeginAccess(bool concurrentRead, bool initialized);
 
     MaybeError AddReferenced(CaptureContext& captureContext) override;
     MaybeError CaptureCreationParameters(CaptureContext& context) override;
@@ -52,8 +60,22 @@ class Texture final : public TextureBase, public RecordableObject, public Object
 
   private:
     Texture(Device* device, const UnpackedPtr<TextureDescriptor>& descriptor);
+    Texture(Device* device,
+            const UnpackedPtr<TextureDescriptor>& descriptor,
+            const SharedTextureMemory* memory);
+    Texture(Device* device,
+            const UnpackedPtr<TextureDescriptor>& descriptor,
+            const WGPUSurfaceTexture& surfaceTexture);
+
     void DestroyImpl(DestroyReason reason) override;
     void SetLabelImpl() override;
+
+    ExecutionSerial OnEndAccess() override;
+
+    bool mIsSurfaceTexture = false;
+    bool mPendingBeginAccess = false;
+    bool mPendingConcurrentRead = false;
+    bool mPendingInitialized = false;
 };
 
 class TextureView final : public TextureViewBase,

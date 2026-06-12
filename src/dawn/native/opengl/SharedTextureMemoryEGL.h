@@ -28,12 +28,13 @@
 #ifndef SRC_DAWN_NATIVE_OPENGL_SHARED_TEXTURE_MEMORY_EGL_H_
 #define SRC_DAWN_NATIVE_OPENGL_SHARED_TEXTURE_MEMORY_EGL_H_
 
-#include "dawn/native/opengl/SharedTextureMemoryGL.h"
-#include "dawn/native/opengl/opengl_platform.h"
+#include "src/dawn/native/opengl/SharedTextureMemoryGL.h"
+#include "src/dawn/native/opengl/opengl_platform.h"
 
 namespace dawn::native::opengl {
 
 class Device;
+struct OpenGLFunctions;
 
 class SharedTextureMemoryEGL final : public SharedTextureMemory {
   public:
@@ -42,7 +43,7 @@ class SharedTextureMemoryEGL final : public SharedTextureMemory {
         StringView label,
         const SharedTextureMemoryAHardwareBufferDescriptor* descriptor);
 
-    ResultOrError<GLuint> GenerateGLTexture() override;
+    ResultOrError<GLuint> GenerateGLTexture(const OpenGLFunctions& gl) override;
 
   private:
     SharedTextureMemoryEGL(Device* device,
