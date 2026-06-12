@@ -29,13 +29,14 @@
 #include <tuple>
 #include <utility>
 
-#include "dawn/common/StringViewUtils.h"
-#include "dawn/tests/MockCallback.h"
-#include "dawn/tests/ParamGenerator.h"
-#include "dawn/tests/StringViewMatchers.h"
-#include "dawn/tests/unittests/wire/WireTest.h"
-#include "dawn/wire/client/ClientMemoryTransferService_mock.h"
-#include "dawn/wire/server/ServerMemoryTransferService_mock.h"
+#include "src/dawn/common/StringViewUtils.h"
+#include "src/dawn/tests/MockCallback.h"
+#include "src/dawn/tests/ParamGenerator.h"
+#include "src/dawn/tests/StringViewMatchers.h"
+#include "src/dawn/tests/unittests/wire/WireTest.h"
+#include "src/dawn/wire/client/ClientMemoryTransferService_mock.h"
+#include "src/dawn/wire/server/ServerMemoryTransferService_mock.h"
+#include "src/utils/compiler.h"
 
 namespace wgpu {
 // Define a stream operator for wgpu::MapMode so that it can be found on resolution for test name
@@ -138,10 +139,6 @@ class WireMemoryTransferServiceTestBase : public WireTest,
 
         // When the commands are flushed, the server should appropriately deserialize the handles.
         auto serverHandles = ExpectHandleDeserialization(true);
-        if (GetParam().mMappedAtCreation) {
-            EXPECT_CALL(api, BufferGetMappedRange(apiBuffer, 0, kBufferSize))
-                .WillOnce(Return(&mServerBufferContent));
-        }
         FlushClient();
 
         return std::make_tuple(apiBuffer, buffer, clientHandles, serverHandles);
@@ -191,7 +188,7 @@ class WireMemoryTransferServiceTestBase : public WireTest,
             }));
             EXPECT_CALL(*readHandle, SerializeCreate(_))
                 .WillOnce(WithArg<0>([&](void* serializePointer) {
-                    memcpy(serializePointer, &mSerializeCreateInfo, kDataSize);
+                    DAWN_UNSAFE_TODO(memcpy(serializePointer, &mSerializeCreateInfo, kDataSize));
                     return kDataSize;
                 }));
         }
@@ -202,7 +199,7 @@ class WireMemoryTransferServiceTestBase : public WireTest,
             }));
             EXPECT_CALL(*writeHandle, SerializeCreate(_))
                 .WillOnce(WithArg<0>([&](void* serializePointer) {
-                    memcpy(serializePointer, &mSerializeCreateInfo, kDataSize);
+                    DAWN_UNSAFE_TODO(memcpy(serializePointer, &mSerializeCreateInfo, kDataSize));
                     return kDataSize;
                 }));
         }
@@ -260,8 +257,8 @@ class WireMemoryTransferServiceTestBase : public WireTest,
 
         EXPECT_CALL(*clientHandle, SizeOfSerializeDataUpdate(_, _)).WillOnce(Return(kDataSize));
         EXPECT_CALL(*clientHandle, SerializeDataUpdate)
-            .WillOnce(WithArg<0>([&](void* serializePointer) {
-                memcpy(serializePointer, &mClientBufferContent, kBufferSize);
+            .WillOnce(WithArg<0>([&](std::span<char> serializeSpan) {
+                DAWN_UNSAFE_TODO(memcpy(serializeSpan.data(), &mClientBufferContent, kBufferSize));
             }));
     }
     void ExpectServerSerializeData(MockServerHandles& serverHandles) {
@@ -272,9 +269,8 @@ class WireMemoryTransferServiceTestBase : public WireTest,
 
         EXPECT_CALL(*serverHandle, SizeOfSerializeDataUpdate(_, _)).WillOnce(Return(kDataSize));
         EXPECT_CALL(*serverHandle, SerializeDataUpdate)
-            .WillOnce(WithArg<3>([&](void* serializePointer) {
-                memcpy(serializePointer, &mServerBufferContent, kBufferSize);
-                return kBufferSize;
+            .WillOnce(WithArg<2>([&](std::span<char> serializeSpan) {
+                DAWN_UNSAFE_TODO(memcpy(serializeSpan.data(), &mServerBufferContent, kBufferSize));
             }));
     }
 
@@ -284,11 +280,16 @@ class WireMemoryTransferServiceTestBase : public WireTest,
             return;
         }
 
-        EXPECT_CALL(*clientHandle, DeserializeDataUpdate(_, kBufferSize, 0, kBufferSize))
-            .WillOnce(WithArg<0>([&, success](const void* deserializePointer) {
+        EXPECT_CALL(*clientHandle,
+                    DeserializeDataUpdate(testing::Matcher<std::span<const uint8_t>>(
+                                              testing::Truly([](std::span<const uint8_t> arg) {
+                                                  return arg.size() == kBufferSize;
+                                              })),
+                                          static_cast<size_t>(0u)))
+            .WillOnce(WithArg<0>([&, success](std::span<const uint8_t> deserializeSpan) {
                 if (success) {
-                    // Copy the data manually here.
-                    memcpy(&mClientBufferContent, deserializePointer, kBufferSize);
+                    DAWN_UNSAFE_TODO(
+                        memcpy(&mClientBufferContent, deserializeSpan.data(), kBufferSize));
                 }
                 return success;
             }));
@@ -299,11 +300,23 @@ class WireMemoryTransferServiceTestBase : public WireTest,
             return;
         }
 
-        EXPECT_CALL(*serverHandle, DeserializeDataUpdate(_, kBufferSize, 0, kBufferSize))
-            .WillOnce(WithArg<0>([&, success](const void* deserializePointer) {
+        std::span<uint8_t> target(reinterpret_cast<uint8_t*>(&mServerBufferContent),
+                                  sizeof(mServerBufferContent));
+        EXPECT_CALL(
+            *serverHandle,
+            DeserializeDataUpdate(
+                testing::Matcher<std::span<const uint8_t>>(testing::Truly(
+                    [](std::span<const uint8_t> arg) { return arg.size() == kBufferSize; })),
+                testing::Matcher<std::span<uint8_t>>(
+                    testing::Truly([target](std::span<uint8_t> arg) {
+                        return arg.data() == target.data() && arg.size() == target.size();
+                    })),
+                static_cast<size_t>(0u)))
+            .WillOnce(WithArg<0>([&, success](std::span<const uint8_t> deserializePointer) {
                 if (success) {
                     // Copy the data manually here.
-                    memcpy(&mServerBufferContent, deserializePointer, kBufferSize);
+                    DAWN_UNSAFE_TODO(memcpy(&mServerBufferContent, deserializePointer.data(),
+                                            deserializePointer.size()));
                 }
                 return success;
             }));
@@ -374,8 +387,6 @@ class WireMemoryTransferServiceTestBase : public WireTest,
                 auto* clientHandle = std::get<MockClientWriteHandle*>(clientHandles);
                 ASSERT_THAT(clientHandle, NotNull());
                 EXPECT_CALL(*clientHandle, GetData).WillOnce(Return(&mClientBufferContent));
-                EXPECT_CALL(api, BufferGetMappedRange(apiBuffer, 0, kBufferSize))
-                    .WillOnce(Return(&mClientBufferContent));
 
                 buffer.MapAsync(mode, 0, kBufferSize, wgpu::CallbackMode::AllowSpontaneous,
                                 mMapAsyncCb.Callback());
@@ -409,6 +420,8 @@ class WireMemoryTransferServiceTestBase : public WireTest,
 
                 // The server should deserialize into its buffer when the client flushes.
                 EXPECT_CALL(api, BufferUnmap(apiBuffer)).Times(1);
+                EXPECT_CALL(api, BufferGetMappedRange(apiBuffer, 0, kBufferSize))
+                    .WillOnce(Return(&mServerBufferContent));
                 ExpectServerDeserializeData(true, serverHandles);
                 FlushClient();
 
@@ -683,8 +696,7 @@ TEST_P(WireMemoryTransferServiceBufferMapAsyncTests, DeserializeDataUpdateFailur
         }
         case wgpu::MapMode::Write: {
             EXPECT_CALL(mMapAsyncCb, Call(wgpu::MapAsyncStatus::Success, _)).Times(1);
-            EXPECT_CALL(api, BufferGetMappedRange(apiBuffer, 0, kBufferSize))
-                .WillOnce(Return(&mClientBufferContent));
+
             auto* clientHandle = std::get<MockClientWriteHandle*>(clientHandles);
             ASSERT_THAT(clientHandle, NotNull());
             EXPECT_CALL(*clientHandle, GetData).WillOnce(Return(&mClientBufferContent));
@@ -699,6 +711,8 @@ TEST_P(WireMemoryTransferServiceBufferMapAsyncTests, DeserializeDataUpdateFailur
             buffer.Unmap();
 
             // Mock that the server fails to deserialize into its buffer when the client flushes.
+            EXPECT_CALL(api, BufferGetMappedRange(apiBuffer, 0, kBufferSize))
+                .WillOnce(Return(&mServerBufferContent));
             ExpectServerDeserializeData(false, serverHandles);
             FlushClient(false);
             break;
@@ -791,6 +805,8 @@ TEST_P(WireMemoryTransferServiceBufferMappedAtCreationTests, DeserializeDataUpda
     buffer.Unmap();
 
     // Mock that the server fails to deserialize into its buffer when the client flushes.
+    EXPECT_CALL(api, BufferGetMappedRange(apiBuffer, 0, kBufferSize))
+        .WillOnce(Return(&mServerBufferContent));
     ExpectServerDeserializeData(false, serverHandles);
     FlushClient(false);
 

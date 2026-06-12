@@ -12,13 +12,13 @@ cbuffer cbuffer_a : register(b0) {
 };
 float4x2 v(uint start_byte_offset) {
   uint4 v_1 = a[(start_byte_offset / 16u)];
-  float2 v_2 = asfloat((((((start_byte_offset & 15u) >> 2u) == 2u)) ? (v_1.zw) : (v_1.xy)));
-  uint4 v_3 = a[((8u + start_byte_offset) / 16u)];
-  float2 v_4 = asfloat(((((((8u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_3.zw) : (v_3.xy)));
-  uint4 v_5 = a[((16u + start_byte_offset) / 16u)];
-  float2 v_6 = asfloat(((((((16u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_5.zw) : (v_5.xy)));
-  uint4 v_7 = a[((24u + start_byte_offset) / 16u)];
-  return float4x2(v_2, v_4, v_6, asfloat(((((((24u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_7.zw) : (v_7.xy))));
+  uint v_2 = (8u + start_byte_offset);
+  uint4 v_3 = a[(v_2 / 16u)];
+  uint v_4 = (16u + start_byte_offset);
+  uint4 v_5 = a[(v_4 / 16u)];
+  uint v_6 = (24u + start_byte_offset);
+  uint4 v_7 = a[(v_6 / 16u)];
+  return float4x2(asfloat(select((((start_byte_offset & 15u) >> 2u) == 2u), v_1.zw, v_1.xy)), asfloat(select((((v_2 & 15u) >> 2u) == 2u), v_3.zw, v_3.xy)), asfloat(select((((v_4 & 15u) >> 2u) == 2u), v_5.zw, v_5.xy)), asfloat(select((((v_6 & 15u) >> 2u) == 2u), v_7.zw, v_7.xy)));
 }
 
 Inner v_8(uint start_byte_offset) {
@@ -42,7 +42,6 @@ ary_ret v_10(uint start_byte_offset) {
       {
         v_11 = (v_12 + 1u);
       }
-      continue;
     }
   }
   Inner v_14[4] = a_2;
@@ -71,7 +70,6 @@ ary_ret_1 v_18(uint start_byte_offset) {
       {
         v_19 = (v_20 + 1u);
       }
-      continue;
     }
   }
   Outer v_22[4] = a_1;

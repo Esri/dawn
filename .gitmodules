@@ -46,6 +46,10 @@
 	path = tools/win
 	url = https://chromium.googlesource.com/chromium/src/tools/win
 	gclient-condition = checkout_win and not build_with_chromium
+[submodule "tools/code_coverage"]
+	path = tools/code_coverage
+	url = https://chromium.googlesource.com/chromium/src/tools/code_coverage
+	gclient-condition = dawn_standalone and checkout_clang_coverage_tools
 [submodule "tools/mb"]
 	path = tools/mb
 	url = https://chromium.googlesource.com/chromium/src/tools/mb
@@ -86,8 +90,8 @@
 	path = third_party/markupsafe
 	url = https://chromium.googlesource.com/chromium/src/third_party/markupsafe
 	gclient-condition = dawn_standalone
-[submodule "third_party/glfw"]
-	path = third_party/glfw
+[submodule "third_party/glfw3/src"]
+	path = third_party/glfw3/src
 	url = https://chromium.googlesource.com/external/github.com/glfw/glfw
 [submodule "third_party/vulkan_memory_allocator"]
 	path = third_party/vulkan_memory_allocator
@@ -145,18 +149,18 @@
 	path = third_party/abseil-cpp
 	url = https://chromium.googlesource.com/chromium/src/third_party/abseil-cpp
 	gclient-condition = dawn_standalone
-[submodule "third_party/dxc"]
-	path = third_party/dxc
+[submodule "third_party/directx-shader-compiler/src"]
+	path = third_party/directx-shader-compiler/src
 	url = https://chromium.googlesource.com/external/github.com/microsoft/DirectXShaderCompiler
-[submodule "third_party/dxheaders"]
-	path = third_party/dxheaders
+[submodule "third_party/directx-headers/src"]
+	path = third_party/directx-headers/src
 	url = https://chromium.googlesource.com/external/github.com/microsoft/DirectX-Headers
 	gclient-condition = host_os != "win"
-[submodule "third_party/khronos/OpenGL-Registry"]
-	path = third_party/khronos/OpenGL-Registry
+[submodule "third_party/OpenGL-Registry/src"]
+	path = third_party/OpenGL-Registry/src
 	url = https://chromium.googlesource.com/external/github.com/KhronosGroup/OpenGL-Registry
-[submodule "third_party/khronos/EGL-Registry"]
-	path = third_party/khronos/EGL-Registry
+[submodule "third_party/EGL-Registry/src"]
+	path = third_party/EGL-Registry/src
 	url = https://chromium.googlesource.com/external/github.com/KhronosGroup/EGL-Registry
 [submodule "third_party/webgpu-cts"]
 	path = third_party/webgpu-cts

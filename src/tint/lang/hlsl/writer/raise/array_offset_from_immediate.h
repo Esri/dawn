@@ -46,9 +46,8 @@ using ImmediateDataLayout = core::ir::transform::ImmediateDataLayout;
 
 /// The capabilities that the transform can support.
 const core::ir::Capabilities kArrayOffsetFromImmediateCapabilities{
-    core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector,
-    core::ir::Capability::kAllowDuplicateBindings,
-    core::ir::Capability::kAllowNonCoreTypes,
+    core::ir::Capability::kAllow8BitIntegers,
+    core::ir::Capability::kAllow16BitIntegers,
 };
 
 /// ArrayOffsetFromImmediates is a transform that adds an offset to storage buffer loads and stores

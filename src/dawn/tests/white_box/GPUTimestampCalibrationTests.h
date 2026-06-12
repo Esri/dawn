@@ -30,6 +30,8 @@
 
 #include <memory>
 
+#include "src/dawn/tests/DawnTest.h"
+
 namespace dawn {
 
 class GPUTimestampCalibrationTestBackend {

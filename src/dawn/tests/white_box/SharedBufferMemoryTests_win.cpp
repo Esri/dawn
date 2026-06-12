@@ -26,13 +26,16 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <d3d12.h>
+
 #include <vector>
+
 #include "dawn/native/D3D12Backend.h"
-#include "dawn/native/d3d12/DeviceD3D12.h"
-#include "dawn/tests/DawnTest.h"
-#include "dawn/tests/white_box/SharedBufferMemoryTests.h"
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/native/d3d12/DeviceD3D12.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/tests/white_box/SharedBufferMemoryTests.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/WGPUHelpers.h"
+#include "src/utils/compiler.h"
 
 namespace dawn {
 namespace {
@@ -49,7 +52,7 @@ void WriteD3D12UploadBuffer(ID3D12Resource* resource, uint32_t data) {
     range.Begin = 0;
     range.End = kBufferSize;
     resource->Map(0, &range, &mappedBufferBegin);
-    memcpy(mappedBufferBegin, &data, kBufferSize);
+    DAWN_UNSAFE_TODO(memcpy(mappedBufferBegin, &data, kBufferSize));
     resource->Unmap(0, &range);
 }
 
@@ -284,6 +287,52 @@ TEST_P(SharedBufferMemoryExistingD3D12ResourceTests, CustomReadbackHeapImport) {
     ASSERT_TRUE(sharedBufferMemory.CreateBuffer().Get());
 }
 
+// Validate that importing an ID3D12Resource allocated on a CUSTOM cross-adapter heap
+// is equivalent to DEFAULT works correctly.
+TEST_P(SharedBufferMemoryExistingD3D12ResourceTests, CustomCrossAdapterHeapImport) {
+    ComPtr<ID3D12Device> d3d12Device =
+        static_cast<ExistingD3D12ResourceBackend*>(GetParam().mBackend)
+            ->CreateD3D12Device(device, false);
+
+    D3D12_HEAP_PROPERTIES heapProperties = {
+        D3D12_HEAP_TYPE_CUSTOM, D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE, D3D12_MEMORY_POOL_L0, 0, 0};
+
+    D3D12_HEAP_DESC heapDesc = {kBufferSize, heapProperties,
+                                D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
+                                D3D12_HEAP_FLAG_SHARED | D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER};
+    ComPtr<ID3D12Heap> heap;
+    HRESULT hr = d3d12Device->CreateHeap(&heapDesc, IID_PPV_ARGS(&heap));
+    ASSERT_EQ(hr, S_OK);
+
+    D3D12_RESOURCE_DESC resourceDesc = {};
+    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resourceDesc.Alignment = 0;
+    resourceDesc.Width = kBufferSize;
+    resourceDesc.Height = 1;
+    resourceDesc.DepthOrArraySize = 1;
+    resourceDesc.MipLevels = 1;
+    resourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+    resourceDesc.SampleDesc.Count = 1;
+    resourceDesc.SampleDesc.Quality = 0;
+    resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    resourceDesc.Flags =
+        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER;
+
+    ComPtr<ID3D12Resource> d3d12Resource;
+    hr =
+        d3d12Device->CreatePlacedResource(heap.Get(), 0, &resourceDesc, D3D12_RESOURCE_STATE_COMMON,
+                                          nullptr, IID_PPV_ARGS(&d3d12Resource));
+    ASSERT_EQ(hr, S_OK);
+
+    wgpu::SharedBufferMemoryDescriptor desc;
+    native::d3d12::SharedBufferMemoryD3D12ResourceDescriptor sharedD3d12ResourceDesc;
+    sharedD3d12ResourceDesc.resource = d3d12Resource.Get();
+    desc.nextInChain = &sharedD3d12ResourceDesc;
+
+    wgpu::SharedBufferMemory sharedBufferMemory = device.ImportSharedBufferMemory(&desc);
+    ASSERT_TRUE(sharedBufferMemory.CreateBuffer().Get());
+}
+
 class D3D12SharedMemoryFileHandleBackend : public SharedBufferMemoryTestBackend {
   public:
     static Backend GetInstance() {
@@ -308,9 +357,8 @@ class D3D12SharedMemoryFileHandleBackend : public SharedBufferMemoryTestBackend 
                                                       wgpu::BufferUsage usages,
                                                       uint32_t bufferSize,
                                                       uint32_t initializationData = 0) override {
-        uint64_t alignedHeapSize = Align(
-            bufferSize, native::d3d12::SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor::
-                            kRequiredAlignment);
+        uint64_t alignedHeapSize =
+            Align(bufferSize, kD3D12SharedBufferMemoryFileMappingHandleSizeAlignment);
 
         LARGE_INTEGER largeSize = {};
         largeSize.QuadPart = alignedHeapSize;
@@ -325,13 +373,13 @@ class D3D12SharedMemoryFileHandleBackend : public SharedBufferMemoryTestBackend 
             void* ptr = MapViewOfFile(mSharedMemoryHandle, FILE_MAP_ALL_ACCESS, 0, 0, 0);
             EXPECT_NE(ptr, nullptr);
 
-            memcpy(ptr, &initializationData, sizeof(initializationData));
+            DAWN_UNSAFE_TODO(memcpy(ptr, &initializationData, sizeof(initializationData)));
 
             UnmapViewOfFile(ptr);
         }
 
         wgpu::SharedBufferMemoryDescriptor desc;
-        native::d3d12::SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor sharedFileHandleDesc;
+        wgpu::SharedBufferMemoryD3D12SharedMemoryFileMappingHandleDescriptor sharedFileHandleDesc;
         sharedFileHandleDesc.handle = mSharedMemoryHandle;
         sharedFileHandleDesc.size = alignedHeapSize;
         desc.nextInChain = &sharedFileHandleDesc;
@@ -349,10 +397,9 @@ class SharedBufferMemoryD3D12SharedFileHandleTests : public SharedBufferMemoryTe
 
 // Ensure that importing a nullptr handle results in error.
 TEST_P(SharedBufferMemoryD3D12SharedFileHandleTests, nullResourceFailure) {
-    native::d3d12::SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor sharedFileHandleDesc;
+    wgpu::SharedBufferMemoryD3D12SharedMemoryFileMappingHandleDescriptor sharedFileHandleDesc;
     sharedFileHandleDesc.handle = nullptr;
-    sharedFileHandleDesc.size =
-        native::d3d12::SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor::kRequiredAlignment;
+    sharedFileHandleDesc.size = kD3D12SharedBufferMemoryFileMappingHandleSizeAlignment;
     wgpu::SharedBufferMemoryDescriptor desc;
     desc.nextInChain = &sharedFileHandleDesc;
     ASSERT_DEVICE_ERROR(device.ImportSharedBufferMemory(&desc));
@@ -361,9 +408,7 @@ TEST_P(SharedBufferMemoryD3D12SharedFileHandleTests, nullResourceFailure) {
 // Ensure that heap size not being a multiple of 65536 (D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT)
 // results in error.
 TEST_P(SharedBufferMemoryD3D12SharedFileHandleTests, MemorySizeNotAlignFailure) {
-    constexpr uint32_t kUnAlignedSize =
-        native::d3d12::SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor::kRequiredAlignment /
-        2;
+    constexpr uint32_t kUnAlignedSize = kD3D12SharedBufferMemoryFileMappingHandleSizeAlignment / 2;
 
     LARGE_INTEGER largeSize = {};
     largeSize.QuadPart = kUnAlignedSize;
@@ -373,7 +418,7 @@ TEST_P(SharedBufferMemoryD3D12SharedFileHandleTests, MemorySizeNotAlignFailure) 
                                                   largeSize.HighPart, largeSize.LowPart, nullptr);
     EXPECT_NE(sharedMemoryHandle, nullptr);
 
-    native::d3d12::SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor sharedFileHandleDesc;
+    wgpu::SharedBufferMemoryD3D12SharedMemoryFileMappingHandleDescriptor sharedFileHandleDesc;
     sharedFileHandleDesc.handle = nullptr;
     sharedFileHandleDesc.size = kUnAlignedSize;
     wgpu::SharedBufferMemoryDescriptor desc;

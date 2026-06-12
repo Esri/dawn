@@ -28,7 +28,8 @@
 #ifndef SRC_DAWN_UTILS_OBJCUTILS_H_
 #define SRC_DAWN_UTILS_OBJCUTILS_H_
 
-#include "dawn/common/NonMovable.h"
+#include "src/dawn/common/StackAllocated.h"
+#include "src/utils/non_movable.h"
 
 // Contains helper function to manipulate ObjC objects. This helps having C++ files do a little bit
 // of ObjectiveC calls, when they cannot be converted to ObjectiveC++ because they are used on
@@ -37,7 +38,7 @@
 namespace dawn::utils {
 
 // The returned CALayer is autoreleased.
-class ScopedCALayer : public NonMovable {
+class ScopedCALayer : public NonMovable, public StackAllocated {
   public:
     explicit ScopedCALayer(void* layer);
     ~ScopedCALayer();

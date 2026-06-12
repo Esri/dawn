@@ -362,17 +362,11 @@ struct State {
 }  // namespace
 
 Result<SuccessType> DecomposeStridedMatrix(core::ir::Module& ir) {
-    TINT_CHECK_RESULT(
-        ValidateAndDumpIfNeeded(ir, "spirv.DecomposeStridedMatrix",
-                                core::ir::Capabilities{
-                                    core::ir::Capability::kAllowMultipleEntryPoints,
-                                    core::ir::Capability::kAllowStructMatrixDecorations,
-                                    core::ir::Capability::kAllowNonCoreTypes,
-                                    core::ir::Capability::kAllowOverrides,
-                                    core::ir::Capability::kAllowPointerToHandle,
-                                }));
+    AssertValid(ir, "before spirv.DecomposeStridedMatrix");
 
     State{ir}.Process();
+
+    ir.properties.Remove(core::ir::Property::kAllowStructMatrixDecorations);
 
     return Success;
 }

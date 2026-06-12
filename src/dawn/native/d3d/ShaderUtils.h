@@ -33,11 +33,11 @@
 #include <utility>
 #include <vector>
 
-#include "dawn/common/Sha3.h"
-#include "dawn/native/Blob.h"
-#include "dawn/native/Serializable.h"
-#include "dawn/native/d3d/D3DCompilationRequest.h"
-#include "dawn/native/d3d/d3d_platform.h"
+#include "src/dawn/common/Sha3.h"
+#include "src/dawn/native/Blob.h"
+#include "src/dawn/native/Serializable.h"
+#include "src/dawn/native/d3d/D3DCompilationRequest.h"
+#include "src/dawn/native/d3d/d3d_platform.h"
 
 namespace dawn::native::d3d {
 
@@ -48,7 +48,8 @@ class Device;
     X(std::string, hlslSource)     \
     X(Sha3_256::Output, sha3)      \
     X(bool, usesVertexIndex)       \
-    X(bool, usesInstanceIndex)
+    X(bool, usesInstanceIndex)     \
+    X(Extent3D, workgroupSize)
 
 // `CompiledShader` holds a ref to one of the various representations of shader blobs and
 // information used to emulate vertex/instance index starts. It also holds the `hlslSource` for the

@@ -25,26 +25,26 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/opengl/PipelineGL.h"
+#include "src/dawn/native/opengl/PipelineGL.h"
 
 #include <algorithm>
 #include <set>
 #include <sstream>
 #include <string>
 
-#include "dawn/common/Range.h"
-#include "dawn/native/BindGroupLayoutInternal.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/Pipeline.h"
-#include "dawn/native/opengl/BufferGL.h"
-#include "dawn/native/opengl/DeviceGL.h"
-#include "dawn/native/opengl/Forward.h"
-#include "dawn/native/opengl/OpenGLFunctions.h"
-#include "dawn/native/opengl/PipelineLayoutGL.h"
-#include "dawn/native/opengl/SamplerGL.h"
-#include "dawn/native/opengl/ShaderModuleGL.h"
-#include "dawn/native/opengl/TextureGL.h"
-#include "dawn/native/opengl/UtilsGL.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/native/BindGroupLayoutInternal.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/Pipeline.h"
+#include "src/dawn/native/opengl/BufferGL.h"
+#include "src/dawn/native/opengl/DeviceGL.h"
+#include "src/dawn/native/opengl/Forward.h"
+#include "src/dawn/native/opengl/OpenGLFunctions.h"
+#include "src/dawn/native/opengl/PipelineLayoutGL.h"
+#include "src/dawn/native/opengl/SamplerGL.h"
+#include "src/dawn/native/opengl/ShaderModuleGL.h"
+#include "src/dawn/native/opengl/TextureGL.h"
+#include "src/dawn/native/opengl/UtilsGL.h"
 
 namespace dawn::native::opengl {
 
@@ -55,10 +55,9 @@ PipelineGL::~PipelineGL() = default;
 MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
                                       const PipelineLayout* layout,
                                       const PerStage<ProgrammableStage>& stages,
-                                      bool usesVertexIndex,
-                                      bool usesInstanceIndex,
-                                      bool usesFragDepth,
-                                      VertexAttributeMask bgraSwizzleAttributes) {
+                                      ImmediateMask& pipelineImmediateMask,
+                                      VertexAttributeMask bgraSwizzleAttributes,
+                                      Extent3D* workgroupSize) {
     mProgram = DAWN_GL_TRY(gl, CreateProgram());
 
     // Compute the set of active stages.
@@ -78,12 +77,16 @@ MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
         ShaderModule* module = ToBackend(stages[stage].module.Get());
         bool needsSSBOLengthUniformBuffer = false;
         std::vector<CombinedSampler> stageCombinedSamplers;
+        Extent3D localWorkgroupSize;
         GLuint shader;
         DAWN_TRY_ASSIGN(
-            shader,
-            module->CompileShader(gl, stages[stage], stage, usesVertexIndex, usesInstanceIndex,
-                                  usesFragDepth, bgraSwizzleAttributes, &stageCombinedSamplers,
-                                  layout, &emulatedTextureBuiltins, &needsSSBOLengthUniformBuffer));
+            shader, module->CompileShader(gl, stages[stage], stage, pipelineImmediateMask,
+                                          bgraSwizzleAttributes, &stageCombinedSamplers, layout,
+                                          &emulatedTextureBuiltins, &needsSSBOLengthUniformBuffer,
+                                          &localWorkgroupSize));
+        if (stage == SingleShaderStage::Compute) {
+            *workgroupSize = localWorkgroupSize;
+        }
 
         mNeedsSSBOLengthUniformBuffer |= needsSSBOLengthUniformBuffer;
         combinedSamplers.insert(stageCombinedSamplers.begin(), stageCombinedSamplers.end());
@@ -118,7 +121,7 @@ MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
     mUnitsForTextures.resize(layout->GetNumSampledTextures());
 
     // Assign combined texture/samplers to GL texture units.
-    TextureUnit textureUnit{0};
+    TextureUnit textureUnit{0u};
     for (const auto& combined : combinedSamplers) {
         // All the texture/samplers of a binding_array are set in a single glUniform1iv, gather them
         // all in this vector.
@@ -142,7 +145,7 @@ MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
                 mUnitsForSamplers[samplerGLIndex].push_back(textureUnit);
             }
 
-            uniformsToSet.push_back(GLint(textureUnit));
+            uniformsToSet.push_back(dchecked_cast<GLint>(textureUnit));
             textureUnit++;
         }
 
@@ -162,16 +165,22 @@ MaybeError PipelineGL::InitializeBase(const OpenGLFunctions& gl,
         mPlaceholderSampler = ToBackend(std::move(sampler));
     }
 
+    // If the pipeline declares immediates but the GL driver determines that they are unused and
+    // optimizes out the uniform variable, reset the mask. This prevents a GL_INVALID_VALUE error
+    // when trying to update it via glUniform*().
+    if (pipelineImmediateMask.any()) {
+        auto location = DAWN_GL_TRY(gl, GetUniformLocation(mProgram, "tint_immediates"));
+        if (location == -1) {
+            pipelineImmediateMask.reset();
+        }
+    }
+
     for (GLuint glShader : glShaders) {
         DAWN_GL_TRY(gl, DetachShader(mProgram, glShader));
         DAWN_GL_TRY(gl, DeleteShader(glShader));
     }
 
     return {};
-}
-
-void PipelineGL::DeleteProgram(const OpenGLFunctions& gl) {
-    DAWN_GL_TRY_IGNORE_ERRORS(gl, DeleteProgram(mProgram));
 }
 
 const std::vector<TextureUnit>& PipelineGL::GetTextureUnitsForSampler(
@@ -184,10 +193,6 @@ const std::vector<TextureUnit>& PipelineGL::GetTextureUnitsForTextureView(
     FlatBindingIndex index) const {
     DAWN_ASSERT(index < mUnitsForTextures.size());
     return mUnitsForTextures[index];
-}
-
-GLuint PipelineGL::GetProgramHandle() const {
-    return mProgram;
 }
 
 MaybeError PipelineGL::ApplyNow(const OpenGLFunctions& gl, const PipelineLayout* layout) {

@@ -4,7 +4,7 @@ struct f_inputs {
 
 
 uint tint_mod_u32(uint lhs, uint rhs) {
-  uint v_1 = (((rhs == 0u)) ? (1u) : (rhs));
+  uint v_1 = select((rhs == 0u), 1u, rhs);
   return (lhs - ((lhs / v_1) * v_1));
 }
 

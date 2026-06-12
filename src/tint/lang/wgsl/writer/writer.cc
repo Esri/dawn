@@ -29,10 +29,12 @@
 
 #include <memory>
 
+#include "src/tint/lang/core/ir/validator.h"
 #include "src/tint/lang/wgsl/program/program.h"
 #include "src/tint/lang/wgsl/writer/ast_printer/ast_printer.h"
 #include "src/tint/lang/wgsl/writer/ir_to_program/ir_to_program.h"
 #include "src/tint/lang/wgsl/writer/raise/raise.h"
+#include "src/tint/utils/ice/ice.h"
 
 namespace tint::wgsl::writer {
 
@@ -55,6 +57,11 @@ Result<Output> WgslFromIR(core::ir::Module& module, const Options& options) {
 }
 
 Result<Program> ProgramFromIR(core::ir::Module& module, const Options& options) {
+    const core::ir::Properties kUnsupportedProperties{
+        core::ir::Property::kAllowNonCoreTypes,
+    };
+    AssertNoUnsupportedProperties(module, kUnsupportedProperties);
+
     // core-dialect -> WGSL-dialect
     TINT_CHECK_RESULT(Raise(module));
 

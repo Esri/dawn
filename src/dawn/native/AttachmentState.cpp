@@ -25,24 +25,25 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/AttachmentState.h"
+#include "src/dawn/native/AttachmentState.h"
 
 #include <bit>
 
-#include "dawn/common/Enumerator.h"
-#include "dawn/common/Log.h"
-#include "dawn/common/ityp_span.h"
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/ObjectContentHasher.h"
-#include "dawn/native/PipelineLayout.h"
-#include "dawn/native/Texture.h"
+#include "src/dawn/common/Enumerator.h"
+#include "src/dawn/common/ityp_span.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/ObjectContentHasher.h"
+#include "src/dawn/native/PipelineLayout.h"
+#include "src/dawn/native/Texture.h"
+#include "src/utils/compiler.h"
+#include "src/utils/log.h"
 
 namespace dawn::native {
 
 AttachmentState::AttachmentState(const RenderBundleEncoderDescriptor* descriptor)
     : mSampleCount(descriptor->sampleCount) {
-    DAWN_ASSERT(descriptor->colorFormatCount <= kMaxColorAttachments);
+    DAWN_CHECK(descriptor->colorFormatCount <= kMaxColorAttachments);
     auto colorFormats = ityp::SpanFromUntyped<ColorAttachmentIndex>(descriptor->colorFormats,
                                                                     descriptor->colorFormatCount);
 
@@ -65,7 +66,7 @@ AttachmentState::AttachmentState(const UnpackedPtr<RenderPipelineDescriptor>& de
                                  const PipelineLayoutBase* layout)
     : mSampleCount(descriptor->multisample.count) {
     if (descriptor->fragment != nullptr) {
-        DAWN_ASSERT(descriptor->fragment->targetCount <= kMaxColorAttachments);
+        DAWN_CHECK(descriptor->fragment->targetCount <= kMaxColorAttachments);
         auto targets = ityp::SpanFromUntyped<ColorAttachmentIndex>(
             descriptor->fragment->targets, descriptor->fragment->targetCount);
 
@@ -95,8 +96,8 @@ AttachmentState::AttachmentState(const UnpackedPtr<RenderPipelineDescriptor>& de
         mExpandResolveInfo.resolveTargetsMask.reset();
     }
 
-    DAWN_ASSERT(IsSubset(mExpandResolveInfo.attachmentsToExpandResolve,
-                         mExpandResolveInfo.resolveTargetsMask));
+    DAWN_CHECK(IsSubset(mExpandResolveInfo.attachmentsToExpandResolve,
+                        mExpandResolveInfo.resolveTargetsMask));
 
     if (descriptor->depthStencil != nullptr) {
         mDepthStencilFormat = descriptor->depthStencil->format;
@@ -129,28 +130,14 @@ AttachmentState::AttachmentState(const UnpackedPtr<RenderPassDescriptor>& descri
         mColorAttachmentsSet.set(i);
         mColorFormats[i] = attachment->GetFormat().format;
 
-        // TODO(crbug.com/463893793): Remove once the attachment-based MSRTSS path is disabled.
-        UnpackedPtr<RenderPassColorAttachment> unpackedColorAttachment = Unpack(&colorAttachment);
-        auto* msaaRenderToSingleSampledDesc =
-            unpackedColorAttachment.Get<DawnRenderPassColorAttachmentRenderToSingleSampled>();
-        uint32_t attachmentSampleCount;
-        if (msaaRenderToSingleSampledDesc != nullptr &&
-            msaaRenderToSingleSampledDesc->implicitSampleCount > 1) {
-            dawn::WarningLog()
-                << "Use DawnRenderPassDescriptorRenderToSingleSampled instead of "
-                   "DawnRenderPassColorAttachmentRenderToSingleSampled, which is deprecated.";
-            attachmentSampleCount = msaaRenderToSingleSampledDesc->implicitSampleCount;
-        } else {
-            attachmentSampleCount = attachment->GetTexture()->GetSampleCount();
-        }
-
+        uint32_t attachmentSampleCount = attachment->GetTexture()->GetSampleCount();
         if (mSampleCount == 0) {
             mSampleCount = attachmentSampleCount;
         } else {
             // Attachment sample counts are allowed to either match the sample count for the pass
             // or, if MSAARenderToSingleSampled is enabled, be 1.
-            DAWN_ASSERT(mSampleCount == attachmentSampleCount ||
-                        (msrtssAllowed && attachmentSampleCount == 1));
+            DAWN_CHECK(mSampleCount == attachmentSampleCount ||
+                       (msrtssAllowed && attachmentSampleCount == 1));
         }
 
         if (colorAttachment.loadOp == wgpu::LoadOp::ExpandResolveTexture) {
@@ -166,7 +153,7 @@ AttachmentState::AttachmentState(const UnpackedPtr<RenderPassDescriptor>& descri
         if (mSampleCount == 0) {
             mSampleCount = attachment->GetTexture()->GetSampleCount();
         } else {
-            DAWN_ASSERT(mSampleCount == attachment->GetTexture()->GetSampleCount());
+            DAWN_CHECK(mSampleCount == attachment->GetTexture()->GetSampleCount());
         }
     }
 
@@ -176,8 +163,8 @@ AttachmentState::AttachmentState(const UnpackedPtr<RenderPassDescriptor>& descri
         // where ExpandResolveTexture is not used.
         mExpandResolveInfo.resolveTargetsMask.reset();
     }
-    DAWN_ASSERT(IsSubset(mExpandResolveInfo.attachmentsToExpandResolve,
-                         mExpandResolveInfo.resolveTargetsMask));
+    DAWN_CHECK(IsSubset(mExpandResolveInfo.attachmentsToExpandResolve,
+                        mExpandResolveInfo.resolveTargetsMask));
 
     // Gather the PLS information.
     if (auto* pls = descriptor.Get<RenderPassPixelLocalStorage>()) {
@@ -185,19 +172,20 @@ AttachmentState::AttachmentState(const UnpackedPtr<RenderPassDescriptor>& descri
         mStorageAttachmentSlots = std::vector<wgpu::TextureFormat>(
             pls->totalPixelLocalStorageSize / kPLSSlotByteSize, wgpu::TextureFormat::Undefined);
         for (size_t i = 0; i < pls->storageAttachmentCount; i++) {
-            size_t slot = pls->storageAttachments[i].offset / kPLSSlotByteSize;
-            const TextureViewBase* attachment = pls->storageAttachments[i].storage;
+            size_t slot = DAWN_UNSAFE_TODO(pls->storageAttachments[i]).offset / kPLSSlotByteSize;
+            const TextureViewBase* attachment =
+                DAWN_UNSAFE_TODO(pls->storageAttachments[i]).storage;
             mStorageAttachmentSlots[slot] = attachment->GetFormat().format;
 
             if (mSampleCount == 0) {
                 mSampleCount = attachment->GetTexture()->GetSampleCount();
             } else {
-                DAWN_ASSERT(mSampleCount == attachment->GetTexture()->GetSampleCount());
+                DAWN_CHECK(mSampleCount == attachment->GetTexture()->GetSampleCount());
             }
         }
     }
 
-    DAWN_ASSERT(mSampleCount > 0);
+    DAWN_CHECK(mSampleCount > 0);
     SetContentHash(ComputeContentHash());
 }
 
@@ -209,8 +197,8 @@ AttachmentState::AttachmentState(const AttachmentState& blueprint) {
     mExpandResolveInfo = blueprint.mExpandResolveInfo;
     mHasPLS = blueprint.mHasPLS;
     mStorageAttachmentSlots = blueprint.mStorageAttachmentSlots;
-    DAWN_ASSERT(IsSubset(mExpandResolveInfo.attachmentsToExpandResolve,
-                         mExpandResolveInfo.resolveTargetsMask));
+    DAWN_CHECK(IsSubset(mExpandResolveInfo.attachmentsToExpandResolve,
+                        mExpandResolveInfo.resolveTargetsMask));
     SetContentHash(blueprint.GetContentHash());
 }
 
@@ -302,7 +290,7 @@ ColorAttachmentMask AttachmentState::GetColorAttachmentsMask() const {
 }
 
 wgpu::TextureFormat AttachmentState::GetColorAttachmentFormat(ColorAttachmentIndex index) const {
-    DAWN_ASSERT(mColorAttachmentsSet[index]);
+    DAWN_CHECK(mColorAttachmentsSet[index]);
     return mColorFormats[index];
 }
 
@@ -311,7 +299,7 @@ bool AttachmentState::HasDepthStencilAttachment() const {
 }
 
 wgpu::TextureFormat AttachmentState::GetDepthStencilFormat() const {
-    DAWN_ASSERT(HasDepthStencilAttachment());
+    DAWN_CHECK(HasDepthStencilAttachment());
     return mDepthStencilFormat;
 }
 
@@ -342,7 +330,7 @@ AttachmentState::ComputeStorageAttachmentPackingInColorAttachments() const {
     // Iterate over the empty bits of mColorAttachmentsSet to pack storage attachment in them.
     auto availableSlots = ~mColorAttachmentsSet;
     for (size_t i = 0; i < mStorageAttachmentSlots.size(); i++) {
-        DAWN_ASSERT(!availableSlots.none());
+        DAWN_CHECK(!availableSlots.none());
         auto slot = ColorAttachmentIndex(static_cast<uint8_t>(
             std::countr_zero(static_cast<uint32_t>(availableSlots.to_ulong()))));
         availableSlots.reset(slot);

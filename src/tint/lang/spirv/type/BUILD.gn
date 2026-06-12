@@ -49,6 +49,8 @@ libtint_source_set("type") {
     "explicit_layout_array.h",
     "image.cc",
     "image.h",
+    "literal.cc",
+    "literal.h",
     "sampled_image.cc",
     "sampled_image.h",
   ]
@@ -65,6 +67,7 @@ libtint_source_set("type") {
     "${tint_src_dir}/utils/macros",
     "${tint_src_dir}/utils/math",
     "${tint_src_dir}/utils/memory",
+    "${tint_src_dir}/utils/reflection",
     "${tint_src_dir}/utils/rtti",
     "${tint_src_dir}/utils/symbol",
     "${tint_src_dir}/utils/text",
@@ -75,6 +78,7 @@ if (tint_build_unittests) {
     sources = [
       "explicit_layout_array_test.cc",
       "image_test.cc",
+      "literal_test.cc",
       "sampled_image_test.cc",
     ]
     deps = [
@@ -93,6 +97,7 @@ if (tint_build_unittests) {
       "${tint_src_dir}/utils/macros",
       "${tint_src_dir}/utils/math",
       "${tint_src_dir}/utils/memory",
+      "${tint_src_dir}/utils/reflection",
       "${tint_src_dir}/utils/rtti",
       "${tint_src_dir}/utils/symbol",
       "${tint_src_dir}/utils/text",

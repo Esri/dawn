@@ -35,17 +35,15 @@
 #include <utility>
 #include <vector>
 
-#include "dawn/common/FutureUtils.h"
-#include "dawn/tests/DawnTest.h"
-#include "dawn/utils/SystemUtils.h"
-#include "dawn/utils/WGPUHelpers.h"
-#include "dawn/utils/WireHelper.h"
+#include "src/dawn/common/FutureUtils.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/utils/SystemUtils.h"
+#include "src/dawn/utils/WGPUHelpers.h"
+#include "src/dawn/utils/WireHelper.h"
 
 namespace dawn {
 namespace {
 
-using testing::AnyOf;
-using testing::Eq;
 
 wgpu::Device CreateExtraDevice(utils::WireHelper* wireHelper, wgpu::Instance instance) {
     // IMPORTANT: DawnTest overrides RequestAdapter and RequestDevice and mixes
@@ -148,10 +146,7 @@ class EventCompletionTests : public DawnTestWithParams<EventCompletionTestParams
     void SetUp() override {
         DawnTestWithParams::SetUp();
         WaitTypeAndCallbackMode mode = GetParam().mWaitTypeAndCallbackMode;
-        // TODO(crbug.com/412761228): Once spontaneous events are supported in the other
-        // backends, enable relevant tests for them as well.
-        if (!IsMetal()) {
-            // Spontaneous is only supported on Metal at the moment.
+        if (!HasToggleEnabled("spontaneous_queue_events")) {
             DAWN_TEST_UNSUPPORTED_IF(mode == WaitTypeAndCallbackMode::Spin_AllowSpontaneous);
             if (UsesWire()) {
                 // Timed wait any is only supported on the wire if the native backend supports
@@ -171,11 +166,11 @@ class EventCompletionTests : public DawnTestWithParams<EventCompletionTestParams
 
     void UseSecondInstance() {
         wgpu::InstanceDescriptor desc;
-            static constexpr auto kTimedWaitAny = wgpu::InstanceFeatureName::TimedWaitAny;
-            desc.requiredFeatureCount = 1;
-            desc.requiredFeatures = &kTimedWaitAny;
-            std::tie(testInstance, testDevice) = CreateExtraInstance(GetWireHelper(), &desc);
-            testQueue = testDevice.GetQueue();
+        static constexpr auto kTimedWaitAny = wgpu::InstanceFeatureName::TimedWaitAny;
+        desc.requiredFeatureCount = 1;
+        desc.requiredFeatures = &kTimedWaitAny;
+        std::tie(testInstance, testDevice) = CreateExtraInstance(GetWireHelper(), &desc);
+        testQueue = testDevice.GetQueue();
     }
 
     void LoseTestDevice() {
@@ -568,6 +563,12 @@ TEST_P(WaitAnyTests, UnsupportedMixedSources) {
             // Wire supports mixed source waiting.
             ASSERT_TRUE(status == wgpu::WaitStatus::Success ||
                         status == wgpu::WaitStatus::TimedOut);
+        } else if (HasToggleEnabled("spontaneous_queue_events", device1) &&
+                   HasToggleEnabled("spontaneous_queue_events", device2)) {
+            // Mixed sources across different devices are supported if spontaneous queue events is
+            // enabled on both devices.
+            ASSERT_TRUE(status == wgpu::WaitStatus::Success ||
+                        status == wgpu::WaitStatus::TimedOut);
         } else {
             ASSERT_EQ(status, wgpu::WaitStatus::Error);
         }
@@ -580,7 +581,7 @@ TEST_P(WaitAnyTests, WaitHeavyWorksOneByOne) {
     // Wire doesn't support timeouts unless its the Metal backend.
     // TODO(crbug.com/412761228): Once spontaneous events are supported in the other backends,
     // enable this test for them as well.
-    DAWN_TEST_UNSUPPORTED_IF(UsesWire() && !IsMetal());
+    DAWN_TEST_UNSUPPORTED_IF(UsesWire() && !HasToggleEnabled("spontaneous_queue_events"));
 
     wgpu::Buffer countBuffer;
     wgpu::Buffer ssbo;

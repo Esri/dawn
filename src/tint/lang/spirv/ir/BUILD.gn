@@ -51,8 +51,6 @@ libtint_source_set("ir") {
     "builtin_call.h",
     "copy_logical.cc",
     "copy_logical.h",
-    "literal_operand.cc",
-    "literal_operand.h",
   ]
   deps = [
     "${dawn_root}/src/utils",
@@ -71,6 +69,7 @@ libtint_source_set("ir") {
     "${tint_src_dir}/utils/macros",
     "${tint_src_dir}/utils/math",
     "${tint_src_dir}/utils/memory",
+    "${tint_src_dir}/utils/reflection",
     "${tint_src_dir}/utils/rtti",
     "${tint_src_dir}/utils/symbol",
     "${tint_src_dir}/utils/text",
@@ -102,6 +101,7 @@ if (tint_build_unittests) {
       "${tint_src_dir}/utils/macros",
       "${tint_src_dir}/utils/math",
       "${tint_src_dir}/utils/memory",
+      "${tint_src_dir}/utils/reflection",
       "${tint_src_dir}/utils/rtti",
       "${tint_src_dir}/utils/symbol",
       "${tint_src_dir}/utils/text",

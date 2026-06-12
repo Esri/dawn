@@ -36,6 +36,7 @@
 #include "src/tint/lang/core/ir/transform/rename_conflicts.h"
 #include "src/tint/lang/core/type/pointer.h"
 #include "src/tint/lang/wgsl/enums.h"
+#include "src/tint/lang/wgsl/ir/atomic_vec2u_to_from_u64.h"
 #include "src/tint/lang/wgsl/ir/builtin_call.h"
 #include "src/tint/lang/wgsl/writer/raise/ptr_to_ref.h"
 #include "src/tint/lang/wgsl/writer/raise/value_to_let.h"
@@ -60,6 +61,7 @@ wgsl::BuiltinFn Convert(core::BuiltinFn fn) {
         CASE(kAtan)
         CASE(kAtan2)
         CASE(kAtanh)
+        CASE(kBitcast)
         CASE(kCeil)
         CASE(kClamp)
         CASE(kCos)
@@ -168,6 +170,8 @@ wgsl::BuiltinFn Convert(core::BuiltinFn fn) {
         CASE(kAtomicXor)
         CASE(kAtomicExchange)
         CASE(kAtomicCompareExchangeWeak)
+        CASE(kAtomicStoreMin)
+        CASE(kAtomicStoreMax)
         CASE(kSubgroupBallot)
         CASE(kSubgroupElect)
         CASE(kSubgroupBroadcast)
@@ -206,6 +210,8 @@ wgsl::BuiltinFn Convert(core::BuiltinFn fn) {
         CASE(kGetResource)
         CASE(kBufferView)
         CASE(kBufferLength)
+        CASE(kBufferArrayView)
+        case core::BuiltinFn::kAddSat:  // lowered below
         case core::BuiltinFn::kNone:
             break;
     }
@@ -261,9 +267,25 @@ void ReplaceWorkgroupBarrier(core::ir::Builder& b, core::ir::CoreBuiltinCall* ca
     load->Destroy();
 }
 
+void ReplaceAddSat(core::ir::Builder& b, core::ir::CoreBuiltinCall* call) {
+    auto* lhs = call->Args()[0];
+    auto* rhs = call->Args()[1];
+    b.InsertBefore(call, [&] {
+        auto* add = b.Add(lhs, rhs);
+        auto* lt = b.LessThan(add, lhs);
+        auto* splat = b.Splat(call->Result()->Type(), b.Constant(core::u32(0xffffffff)));
+        b.CallWithResult<wgsl::ir::BuiltinCall>(call->DetachResult(), wgsl::BuiltinFn::kSelect, add,
+                                                splat, lt);
+    });
+    call->Destroy();
+}
+
 }  // namespace
 
 Result<SuccessType> Raise(core::ir::Module& mod) {
+    TINT_CHECK_RESULT(tint::wgsl::ir::transform::AtomicVec2uToFromU64(
+        mod, tint::wgsl::ir::transform::AtomicVec2uU64Direction::kFromU64));
+
     TINT_CHECK_RESULT(core::ir::transform::RenameConflicts(mod));
 
     core::ir::Builder b{mod};
@@ -272,6 +294,9 @@ Result<SuccessType> Raise(core::ir::Module& mod) {
             switch (call->Func()) {
                 case core::BuiltinFn::kWorkgroupBarrier:
                     ReplaceWorkgroupBarrier(b, call);
+                    break;
+                case core::BuiltinFn::kAddSat:
+                    ReplaceAddSat(b, call);
                     break;
                 default:
                     ReplaceBuiltinFnCall(b, call);

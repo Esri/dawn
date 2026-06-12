@@ -28,10 +28,9 @@
 #ifndef SRC_DAWN_NATIVE_D3D12_COMPUTEPIPELINED3D12_H_
 #define SRC_DAWN_NATIVE_D3D12_COMPUTEPIPELINED3D12_H_
 
-#include "dawn/native/ComputePipeline.h"
-#include "dawn/native/CreatePipelineAsyncEvent.h"
-
-#include "dawn/native/d3d12/d3d12_platform.h"
+#include "src/dawn/native/ComputePipeline.h"
+#include "src/dawn/native/CreatePipelineAsyncEvent.h"
+#include "src/dawn/native/d3d12/d3d12_platform.h"
 
 namespace dawn::native::d3d12 {
 
@@ -46,8 +45,6 @@ class ComputePipeline final : public ComputePipelineBase {
 
     ID3D12PipelineState* GetPipelineState() const;
 
-    MaybeError InitializeImpl() override;
-
     // Dawn API
     void SetLabelImpl() override;
 
@@ -58,6 +55,7 @@ class ComputePipeline final : public ComputePipelineBase {
   private:
     ~ComputePipeline() override;
 
+    ResultOrError<Extent3D> InitializeImpl() override;
     void DestroyImpl(DestroyReason reason) override;
 
     using ComputePipelineBase::ComputePipelineBase;

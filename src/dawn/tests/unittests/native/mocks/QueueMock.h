@@ -29,8 +29,7 @@
 #define SRC_DAWN_TESTS_UNITTESTS_NATIVE_MOCKS_QUEUEMOCK_H_
 
 #include "gmock/gmock.h"
-
-#include "dawn/native/Queue.h"
+#include "src/dawn/native/Queue.h"
 
 namespace dawn::native {
 

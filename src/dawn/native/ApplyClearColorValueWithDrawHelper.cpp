@@ -25,43 +25,46 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/ApplyClearColorValueWithDrawHelper.h"
+#include "src/dawn/native/ApplyClearColorValueWithDrawHelper.h"
 
 #include <limits>
 #include <string>
 #include <utility>
 
-#include "dawn/common/Enumerator.h"
-#include "dawn/common/Range.h"
-#include "dawn/native/BindGroup.h"
-#include "dawn/native/BindGroupLayout.h"
-#include "dawn/native/Buffer.h"
-#include "dawn/native/CommandEncoder.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/InternalPipelineStore.h"
-#include "dawn/native/ObjectContentHasher.h"
-#include "dawn/native/RenderPassEncoder.h"
-#include "dawn/native/RenderPipeline.h"
-#include "dawn/native/utils/WGPUHelpers.h"
-#include "dawn/native/webgpu_absl_format.h"
+#include "src/dawn/common/Enumerator.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/common/Strings.h"
+#include "src/dawn/native/BindGroup.h"
+#include "src/dawn/native/BindGroupLayout.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/CommandEncoder.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/InternalPipelineStore.h"
+#include "src/dawn/native/ObjectContentHasher.h"
+#include "src/dawn/native/RenderPassEncoder.h"
+#include "src/dawn/native/RenderPipeline.h"
+#include "src/dawn/native/utils/WGPUHelpers.h"
+#include "src/dawn/native/webgpu_absl_format.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native {
 
 namespace {
 
 // General helper functions and data structures for applying clear values with draw
-static const char kVSSource[] = R"(
-@vertex
-fn main(@builtin(vertex_index) vertexIndex : u32) -> @builtin(position) vec4f {
-    var pos = array(
-        vec2f(-1.0, -1.0),
-        vec2f( 3.0, -1.0),
-        vec2f(-1.0,  3.0));
-    return vec4f(pos[vertexIndex], 0.0, 1.0);
-})";
+static const char kVSSource[] = DAWN_MULTILINE(
+    @vertex
+    fn main(@builtin(vertex_index) vertexIndex : u32) -> @builtin(position) vec4f {
+        var pos = array(
+            vec2f(-1.0, -1.0),
+            vec2f( 3.0, -1.0),
+            vec2f(-1.0,  3.0));
+        return vec4f(pos[vertexIndex], 0.0, 1.0);
+    }
+);
 
 const char* GetTextureComponentTypeString(DeviceBase* device, wgpu::TextureFormat format) {
-    DAWN_ASSERT(format != wgpu::TextureFormat::Undefined);
+    DAWN_CHECK(format != wgpu::TextureFormat::Undefined);
 
     const Format& formatInfo = device->GetValidInternalFormat(format);
     switch (formatInfo.GetAspectInfo(Aspect::Color).baseType) {
@@ -117,7 +120,7 @@ std::string ConstructFragmentShader(DeviceBase* device,
     // Only generate the assignments we need.
     for (auto i : key.colorTargetsToApplyClearColorValue) {
         wgpu::TextureFormat currentFormat = key.colorTargetFormats[i];
-        DAWN_ASSERT(currentFormat != wgpu::TextureFormat::Undefined);
+        DAWN_CHECK(currentFormat != wgpu::TextureFormat::Undefined);
 
         const char* type = GetTextureComponentTypeString(device, currentFormat);
 
@@ -152,9 +155,7 @@ std::string ConstructFragmentShader(DeviceBase* device,
             }
         }
 
-        fragmentShaderStream << R"(
-enable chromium_experimental_pixel_local;
-)";
+        fragmentShaderStream << "enable chromium_experimental_pixel_local;";
         std::ostringstream plsDeclarationStream;
         plsDeclarationStream << "struct PLS {\n";
         for (size_t i = 0; i < plsSlotCount; ++i) {
@@ -164,27 +165,26 @@ enable chromium_experimental_pixel_local;
         if (plsSlotCount) {
             // Read the PLS with a phony-assignment to mark the PLS as statically used for
             // compatibility with the render pass.
-            assignOutputColorStream << R"(
-    _ = pls.a0;
-)";
+            assignOutputColorStream << "_ = pls.a0;";
         }
 
-        fragmentShaderStream << plsDeclarationStream.str() << R"(
-var<pixel_local> pls : PLS;
-)";
+        fragmentShaderStream << plsDeclarationStream.str() << "var<pixel_local> pls : PLS;";
     }
 
     fragmentShaderStream << outputColorDeclarationStream.str()
-                         << clearValueUniformBufferDeclarationStream.str() << R"(
-@group(0) @binding(0) var<uniform> clearColors : ClearColors;
+                         << clearValueUniformBufferDeclarationStream.str();
+    fragmentShaderStream << DAWN_MULTILINE(
+        @group(0) @binding(0) var<uniform> clearColors : ClearColors;
 
-@fragment
-fn main() -> OutputColor {
-    var outputColor : OutputColor;
-)" << assignOutputColorStream.str()
-                         << R"(
-    return outputColor;
-})";
+        @fragment
+        fn main() -> OutputColor {
+            var outputColor : OutputColor;
+    );
+    fragmentShaderStream << assignOutputColorStream.str();
+    fragmentShaderStream << DAWN_MULTILINE(
+            return outputColor;
+        }
+    );
     return fragmentShaderStream.str();
 }
 
@@ -291,34 +291,37 @@ ResultOrError<Ref<BufferBase>> CreateUniformBufferWithClearValues(
         Color clearValue = ClampClearColorValueToLegalRange(initialClearValue, format);
         switch (baseType) {
             case TextureComponentType::Uint: {
-                uint32_t* clearValuePtr = reinterpret_cast<uint32_t*>(clearValues.data() + offset);
+                uint32_t* clearValuePtr =
+                    reinterpret_cast<uint32_t*>(DAWN_UNSAFE_TODO(clearValues.data() + offset));
                 clearValuePtr[0] = static_cast<uint32_t>(clearValue.r);
-                clearValuePtr[1] = static_cast<uint32_t>(clearValue.g);
-                clearValuePtr[2] = static_cast<uint32_t>(clearValue.b);
-                clearValuePtr[3] = static_cast<uint32_t>(clearValue.a);
+                DAWN_UNSAFE_TODO(clearValuePtr[1]) = static_cast<uint32_t>(clearValue.g);
+                DAWN_UNSAFE_TODO(clearValuePtr[2]) = static_cast<uint32_t>(clearValue.b);
+                DAWN_UNSAFE_TODO(clearValuePtr[3]) = static_cast<uint32_t>(clearValue.a);
                 break;
             }
             case TextureComponentType::Sint: {
-                int32_t* clearValuePtr = reinterpret_cast<int32_t*>(clearValues.data() + offset);
+                int32_t* clearValuePtr =
+                    reinterpret_cast<int32_t*>(DAWN_UNSAFE_TODO(clearValues.data() + offset));
                 clearValuePtr[0] = static_cast<int32_t>(clearValue.r);
-                clearValuePtr[1] = static_cast<int32_t>(clearValue.g);
-                clearValuePtr[2] = static_cast<int32_t>(clearValue.b);
-                clearValuePtr[3] = static_cast<int32_t>(clearValue.a);
+                DAWN_UNSAFE_TODO(clearValuePtr[1]) = static_cast<int32_t>(clearValue.g);
+                DAWN_UNSAFE_TODO(clearValuePtr[2]) = static_cast<int32_t>(clearValue.b);
+                DAWN_UNSAFE_TODO(clearValuePtr[3]) = static_cast<int32_t>(clearValue.a);
                 break;
             }
             case TextureComponentType::Float: {
-                float* clearValuePtr = reinterpret_cast<float*>(clearValues.data() + offset);
+                float* clearValuePtr =
+                    reinterpret_cast<float*>(DAWN_UNSAFE_TODO(clearValues.data() + offset));
                 clearValuePtr[0] = static_cast<float>(clearValue.r);
-                clearValuePtr[1] = static_cast<float>(clearValue.g);
-                clearValuePtr[2] = static_cast<float>(clearValue.b);
-                clearValuePtr[3] = static_cast<float>(clearValue.a);
+                DAWN_UNSAFE_TODO(clearValuePtr[1]) = static_cast<float>(clearValue.g);
+                DAWN_UNSAFE_TODO(clearValuePtr[2]) = static_cast<float>(clearValue.b);
+                DAWN_UNSAFE_TODO(clearValuePtr[3]) = static_cast<float>(clearValue.a);
                 break;
             }
         }
         offset += sizeof(uint32_t) * 4;
     }
 
-    DAWN_ASSERT(offset > 0);
+    DAWN_CHECK(offset > 0);
 
     Ref<BufferBase> buffer;
     DAWN_TRY_ASSIGN(buffer, encoder->GetDevice()->GetOrCreateTemporaryUniformBuffer(offset));
@@ -450,8 +453,9 @@ bool GetKeyOfApplyClearColorValueWithDrawPipelines(
         key->totalPixelLocalStorageSize = pls->totalPixelLocalStorageSize;
         for (size_t i = 0; i < pls->storageAttachmentCount; ++i) {
             wgpu::PipelineLayoutStorageAttachment attachment{};
-            attachment.format = pls->storageAttachments[i].storage->GetFormat().format;
-            attachment.offset = pls->storageAttachments[i].offset;
+            attachment.format =
+                DAWN_UNSAFE_TODO(pls->storageAttachments[i]).storage->GetFormat().format;
+            attachment.offset = DAWN_UNSAFE_TODO(pls->storageAttachments[i]).offset;
             key->plsAttachments.push_back(std::move(attachment));
         }
         // Sort the PLS attachments by offset to make sure the order is deterministic.

@@ -29,8 +29,8 @@
 
 #include <memory>
 
-#include "dawn/common/Assert.h"
-#include "dawn/platform/WorkerThread.h"
+#include "src/dawn/platform/WorkerThread.h"
+#include "src/utils/assert.h"
 
 namespace dawn::platform {
 
@@ -91,6 +91,12 @@ std::unique_ptr<dawn::platform::WorkerTaskPool> Platform::CreateWorkerTaskPool()
     return std::make_unique<AsyncWorkerThreadPool>();
 }
 
+std::unique_ptr<dawn::platform::JobHandle> WorkerTaskPool::PostWorkerJob(PostWorkerJobCallback cb,
+                                                                         void* userdata) {
+    DAWN_UNREACHABLE();
+    return nullptr;
+}
+
 bool Platform::IsFeatureEnabled(Features feature) {
     switch (feature) {
         case Features::kWebGPUUseDXC:
@@ -105,8 +111,12 @@ bool Platform::IsFeatureEnabled(Features feature) {
             return true;
         case Features::kWebGPUDecomposeUniformBuffers:
             return true;
+        case Features::kWebGPUUseHLSL2021:
+            return true;
     }
     return false;
 }
+
+void Platform::ReportProgress() {}
 
 }  // namespace dawn::platform

@@ -25,6 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "gmock/gmock.h"
 #include "src/tint/lang/core/type/multisampled_texture.h"
 #include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/lang/core/type/texture_dimension.h"
@@ -33,8 +34,7 @@
 #include "src/tint/lang/wgsl/ast/stage_attribute.h"
 #include "src/tint/lang/wgsl/resolver/resolver.h"
 #include "src/tint/lang/wgsl/resolver/resolver_helper_test.h"
-
-#include "gmock/gmock.h"
+#include "src/tint/utils/internal_limits.h"
 
 namespace tint::resolver {
 namespace {
@@ -277,10 +277,8 @@ TEST_F(ResolverTypeValidationTest, ArraySize_FloatLiteral) {
     // var<private> a : array<f32, 10.0>;
     GlobalVar("a", ty.array(ty.f32(), Expr(Source{{12, 34}}, 10_f)), core::AddressSpace::kPrivate);
     EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(
-        r()->error(),
-        "12:34 error: array count must evaluate to a constant integer expression, but is type "
-        "'f32'");
+    EXPECT_EQ(r()->error(),
+              "12:34 error: array count must evaluate to an integer expression, but is type 'f32'");
 }
 
 TEST_F(ResolverTypeValidationTest, ArraySize_IVecLiteral) {
@@ -290,8 +288,7 @@ TEST_F(ResolverTypeValidationTest, ArraySize_IVecLiteral) {
     EXPECT_FALSE(r()->Resolve());
     EXPECT_EQ(
         r()->error(),
-        "12:34 error: array count must evaluate to a constant integer expression, but is type "
-        "'vec2<i32>'");
+        "12:34 error: array count must evaluate to an integer expression, but is type 'vec2<i32>'");
 }
 
 TEST_F(ResolverTypeValidationTest, ArraySize_FloatConst) {
@@ -301,10 +298,8 @@ TEST_F(ResolverTypeValidationTest, ArraySize_FloatConst) {
     GlobalVar("a", ty.array(ty.f32(), Expr(Source{{12, 34}}, "size")),
               core::AddressSpace::kPrivate);
     EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(
-        r()->error(),
-        "12:34 error: array count must evaluate to a constant integer expression, but is type "
-        "'f32'");
+    EXPECT_EQ(r()->error(),
+              "12:34 error: array count must evaluate to an integer expression, but is type 'f32'");
 }
 
 TEST_F(ResolverTypeValidationTest, ArraySize_IVecConst) {
@@ -316,8 +311,19 @@ TEST_F(ResolverTypeValidationTest, ArraySize_IVecConst) {
     EXPECT_FALSE(r()->Resolve());
     EXPECT_EQ(
         r()->error(),
-        "12:34 error: array count must evaluate to a constant integer expression, but is type "
-        "'vec2<i32>'");
+        "12:34 error: array count must evaluate to an integer expression, but is type 'vec2<i32>'");
+}
+
+TEST_F(ResolverTypeValidationTest, ArraySize_FloatOverride) {
+    EXPECT_ERROR(
+        R"(
+override size = 10.0;
+var<private> a : array<f32, size>;
+)",
+        R"(input.wgsl:3:29 error: array count must evaluate to an integer expression, but is type 'f32'
+var<private> a : array<f32, size>;
+                            ^^^^
+)");
 }
 
 TEST_F(ResolverTypeValidationTest, ArraySize_UnderElementCountLimit) {
@@ -615,9 +621,7 @@ TEST_F(ResolverTypeValidationTest, RuntimeArrayInFunction_Fail) {
          });
 
     EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(r()->error(),
-              R"(12:34 error: runtime-sized arrays can only be used in the <storage> address space
-56:78 note: while instantiating 'var' a)");
+    EXPECT_EQ(r()->error(), R"(12:34 error: function-scope 'var' must have a constructible type)");
 }
 
 TEST_F(ResolverTypeValidationTest, PtrType_ArrayIncomplete) {
@@ -782,8 +786,7 @@ TEST_F(ResolverTypeValidationTest, RuntimeArrayAsGlobalVariable) {
     ASSERT_FALSE(r()->Resolve());
 
     EXPECT_EQ(r()->error(),
-              R"(12:34 error: runtime-sized arrays can only be used in the <storage> address space
-56:78 note: while instantiating 'var' g)");
+              R"(56:78 error: variables in 'private' address space must have a fixed footprint)");
 }
 
 TEST_F(ResolverTypeValidationTest, RuntimeArrayAsLocalVariable) {
@@ -792,9 +795,7 @@ TEST_F(ResolverTypeValidationTest, RuntimeArrayAsLocalVariable) {
 
     ASSERT_FALSE(r()->Resolve());
 
-    EXPECT_EQ(r()->error(),
-              R"(12:34 error: runtime-sized arrays can only be used in the <storage> address space
-56:78 note: while instantiating 'var' g)");
+    EXPECT_EQ(r()->error(), R"(12:34 error: function-scope 'var' must have a constructible type)");
 }
 
 TEST_F(ResolverTypeValidationTest, RuntimeArrayAsParameter_Fail) {
@@ -808,18 +809,8 @@ TEST_F(ResolverTypeValidationTest, RuntimeArrayAsParameter_Fail) {
              Return(),
          });
 
-    Func("main", tint::Empty, ty.void_(),
-         Vector{
-             Return(),
-         },
-         Vector{
-             Stage(ast::PipelineStage::kVertex),
-         });
-
     EXPECT_FALSE(r()->Resolve()) << r()->error();
-    EXPECT_EQ(r()->error(),
-              R"(12:34 error: runtime-sized arrays can only be used in the <storage> address space
-56:78 note: while instantiating parameter a)");
+    EXPECT_EQ(r()->error(), R"(12:34 error: type of function parameter must be constructible)");
 }
 
 TEST_F(ResolverTypeValidationTest, PtrToPtr_Fail) {
@@ -848,26 +839,7 @@ TEST_F(ResolverTypeValidationTest, PtrToRuntimeArrayAsPointerParameter_Fail) {
              Return(),
          });
 
-    EXPECT_FALSE(r()->Resolve()) << r()->error();
-    EXPECT_EQ(r()->error(),
-              R"(12:34 error: runtime-sized arrays can only be used in the <storage> address space
-56:78 note: while instantiating ptr<workgroup, array<i32>, read_write>)");
-}
-
-TEST_F(ResolverTypeValidationTest, PtrToRuntimeArrayAsParameter_Fail) {
-    // fn func(a : ptr<workgroup, array<u32>>) {}
-
-    auto* param = Param(Source{{56, 78}}, "a", ty.array(Source{{12, 34}}, ty.i32()));
-
-    Func("func", Vector{param}, ty.void_(),
-         Vector{
-             Return(),
-         });
-
-    EXPECT_FALSE(r()->Resolve()) << r()->error();
-    EXPECT_EQ(r()->error(),
-              R"(12:34 error: runtime-sized arrays can only be used in the <storage> address space
-56:78 note: while instantiating parameter a)");
+    EXPECT_TRUE(r()->Resolve()) << r()->error();
 }
 
 TEST_F(ResolverTypeValidationTest, AliasRuntimeArrayIsNotLast_Fail) {
@@ -989,49 +961,6 @@ INSTANTIATE_TEST_SUITE_P(ResolverTypeValidationTest,
                              core::type::TextureDimension::k3d,
                              core::type::TextureDimension::kCube,
                              core::type::TextureDimension::kCubeArray));
-
-using SampledTextureFilterabilityTest = ResolverTestWithParam<core::TextureFilterable>;
-TEST_P(SampledTextureFilterabilityTest, All) {
-    auto& params = GetParam();
-    GlobalVar(Source{{12, 34}}, "a",
-              ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32(), params), Group(0_a),
-              Binding(0_a));
-
-    EXPECT_TRUE(r()->Resolve()) << r()->error();
-}
-INSTANTIATE_TEST_SUITE_P(ResolverTypeValidationTest,
-                         SampledTextureFilterabilityTest,
-                         testing::Values(  //
-                             core::TextureFilterable::kFilterable,
-                             core::TextureFilterable::kUnfilterable));
-
-TEST_F(ResolverTypeValidationTest, SampledTextureNonFloatFilterability) {
-    GlobalVar(Source{{12, 34}}, "a",
-              ty.sampled_texture(core::type::TextureDimension::k2d, ty.i32(),
-                                 core::TextureFilterable::kFilterable),
-              Group(0_a), Binding(0_a));
-
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(r()->error(),
-              R"(error: texture filterability only applies to float textures, got 'i32')");
-}
-
-TEST_F(ResolverTypeValidationTest, SampledTextureInvalidFilterability) {
-    GlobalVar(Source{{12, 34}}, "a", ty.AsType("texture_1d", "f32", "other"), Group(0_a),
-              Binding(0_a));
-
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(r()->error(), R"(error: unresolved texture filterable 'other'
-note: Possible values: 'filterable', 'unfilterable')");
-}
-
-TEST_F(ResolverTypeValidationTest, SampledTextureInvalidFilterabilityOrder) {
-    GlobalVar(Source{{12, 34}}, "a", ty.AsType("texture_1d", "filterable", "f32"), Group(0_a),
-              Binding(0_a));
-
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(r()->error(), R"(error: cannot use texture filterable 'filterable' as type)");
-}
 
 using MultisampledTextureDimensionTest = ResolverTestWithParam<core::type::TextureDimension>;
 TEST_P(MultisampledTextureDimensionTest, All) {
@@ -1290,23 +1219,6 @@ TEST_F(StorageTextureAccessTest, ReadOnlyAccess_Pass) {
     EXPECT_TRUE(r()->Resolve()) << r()->error();
 }
 
-TEST_F(StorageTextureAccessTest, ReadOnlyAccess_FeatureDisallowed) {
-    // @group(0) @binding(0)
-    // var a : texture_storage_1d<r32uint, read>;
-
-    auto st = ty.storage_texture(Source{{12, 34}}, core::type::TextureDimension::k1d,
-                                 core::TexelFormat::kR32Uint, core::Access::kRead);
-
-    GlobalVar("a", st, Group(0_a), Binding(0_a));
-
-    auto resolver = Resolver{this, wgsl::AllowedFeatures{}};
-    EXPECT_FALSE(resolver.Resolve());
-    EXPECT_EQ(resolver.error(),
-              "12:34 error: read-only storage textures require the "
-              "readonly_and_readwrite_storage_textures language feature, which is not allowed in "
-              "the current environment");
-}
-
 TEST_F(StorageTextureAccessTest, RWAccess_Pass) {
     // @group(0) @binding(0)
     // var a : texture_storage_1d<r32uint, read_write>;
@@ -1319,49 +1231,7 @@ TEST_F(StorageTextureAccessTest, RWAccess_Pass) {
     EXPECT_TRUE(r()->Resolve()) << r()->error();
 }
 
-TEST_F(StorageTextureAccessTest, RWAccess_FeatureDisallowed) {
-    // @group(0) @binding(0)
-    // var a : texture_storage_1d<r32uint, read_write>;
-
-    auto st = ty.storage_texture(Source{{12, 34}}, core::type::TextureDimension::k1d,
-                                 core::TexelFormat::kR32Uint, core::Access::kReadWrite);
-
-    GlobalVar("a", st, Group(0_a), Binding(0_a));
-
-    Resolver resolver{this, wgsl::AllowedFeatures{}};
-    EXPECT_FALSE(resolver.Resolve());
-    EXPECT_EQ(resolver.error(),
-              "12:34 error: read-write storage textures require the "
-              "readonly_and_readwrite_storage_textures language feature, which is not allowed in "
-              "the current environment");
-}
-
 }  // namespace StorageTextureTests
-
-namespace SamplerTests {
-
-using SamplerFilteringTest = ResolverTestWithParam<core::SamplerFiltering>;
-TEST_P(SamplerFilteringTest, All) {
-    auto& params = GetParam();
-    GlobalVar(Source{{12, 34}}, "a", ty.sampler(params), Group(0_a), Binding(0_a));
-
-    EXPECT_TRUE(r()->Resolve()) << r()->error();
-}
-INSTANTIATE_TEST_SUITE_P(ResolverTypeValidationTest,
-                         SamplerFilteringTest,
-                         testing::Values(  //
-                             core::SamplerFiltering::kFiltering,
-                             core::SamplerFiltering::kNonFiltering));
-
-TEST_F(ResolverTypeValidationTest, SamplerInvalidFilterability) {
-    GlobalVar(Source{{12, 34}}, "a", ty.AsType("sampler", "other"), Group(0_a), Binding(0_a));
-
-    EXPECT_FALSE(r()->Resolve());
-    EXPECT_EQ(r()->error(), R"(error: unresolved sampler filtering 'other'
-note: Possible values: 'filtering', 'non_filtering')");
-}
-
-}  // namespace SamplerTests
 
 namespace MatrixTests {
 struct Params {

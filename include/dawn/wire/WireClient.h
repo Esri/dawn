@@ -29,6 +29,7 @@
 #define INCLUDE_DAWN_WIRE_WIRECLIENT_H_
 
 #include <memory>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -96,6 +97,8 @@ class DAWN_WIRE_EXPORT WireClient : public CommandHandler {
     // Commands allocated after this point will not be sent.
     void Disconnect();
 
+    client::Client* GetImplForTesting();
+
   private:
     std::unique_ptr<client::Client> mImpl;
 };
@@ -126,22 +129,23 @@ class DAWN_WIRE_EXPORT MemoryTransferService {
         virtual size_t SerializeCreateSize() = 0;
 
         // Serialize the handle into |serializePointer| so it can be received by the server.
+        // TODO(https://issues.chromium.org/492456046): Pass as a span with the size from
+        // SerializeCreateSize.
         virtual void SerializeCreate(void* serializePointer) = 0;
 
         // Simply return the base address of the allocation (without applying any offset)
         // Returns nullptr if the allocation failed.
         // The data must live at least until the ReadHandle is destructued
+        // TODO(https://issues.chromium.org/492456046): Return as a span.
         virtual const void* GetData() = 0;
 
         // Gets called when a MapReadCallback resolves.
-        // deserialize the data update and apply
-        // it to the range (offset, offset + size) of allocation
-        // There could be nothing to be deserialized (if using shared memory)
-        // Needs to check potential offset/size OOB and overflow
-        virtual bool DeserializeDataUpdate(const void* deserializePointer,
-                                           size_t deserializeSize,
-                                           size_t offset,
-                                           size_t size) = 0;
+        // Deserializes |deserializeData| and applies it starting at |offset| in the allocation.
+        // |deserializeData.size()| gives the number of bytes to update.
+        // There could be nothing to be deserialized (if using shared memory).
+        // Needs to check potential offset OOB.
+        virtual bool DeserializeDataUpdate(std::span<const uint8_t> deserializeData,
+                                           size_t offset) = 0;
 
       private:
         ReadHandle(const ReadHandle&) = delete;
@@ -157,22 +161,24 @@ class DAWN_WIRE_EXPORT MemoryTransferService {
         virtual size_t SerializeCreateSize() = 0;
 
         // Serialize the handle into |serializePointer| so it can be received by the server.
+        // TODO(https://issues.chromium.org/492456046): Pass as a span with the size from
+        // SerializeCreateSize.
         virtual void SerializeCreate(void* serializePointer) = 0;
 
         // Simply return the base address of the allocation (without applying any offset)
         // The data returned should be zero-initialized.
         // The data returned must live at least until the WriteHandle is destructed.
         // On failure, the pointer returned should be null.
+        // TODO(https://issues.chromium.org/492456046): Return as a span.
         virtual void* GetData() = 0;
 
         // Get the required serialization size for SerializeDataUpdate
         virtual size_t SizeOfSerializeDataUpdate(size_t offset, size_t size) = 0;
 
-        // Serialize a command to send the modified contents of
-        // the subrange (offset, offset + size) of the allocation at buffer unmap
-        // This subrange is always the whole mapped region for now
-        // There could be nothing to be serialized (if using shared memory)
-        virtual void SerializeDataUpdate(void* serializePointer, size_t offset, size_t size) = 0;
+        // Serializes the modified contents starting at |offset| in the allocation into
+        // |serializeData| at buffer unmap. |serializeData.size()| gives the number of bytes to
+        // serialize. There could be nothing to be serialized (if using shared memory).
+        virtual void SerializeDataUpdate(std::span<char> serializeData, size_t offset) = 0;
 
       private:
         WriteHandle(const WriteHandle&) = delete;

@@ -25,9 +25,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/wgsl/resolver/eval_test.h"
-
 #include "src/tint/lang/wgsl/enums.h"
+#include "src/tint/lang/wgsl/resolver/eval_test.h"
 #include "src/tint/utils/result.h"
 
 #if TINT_BUILD_WGSL_READER
@@ -36,7 +35,6 @@
 
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
-using ::testing::HasSubstr;
 
 namespace tint::core::constant::test {
 namespace {
@@ -65,8 +63,10 @@ Case C(Value lhs, Value rhs, Value expected) {
 }
 
 /// Convenience overload that creates a Case with just scalars
-template <typename T, typename U, typename V, typename = std::enable_if_t<!IsValue<T>>>
-Case C(T lhs, U rhs, V expected) {
+template <typename T, typename U, typename V>
+Case C(T lhs, U rhs, V expected)
+    requires(!IsValue<T>)
+{
     return Case{Val(lhs), Val(rhs), Case::Success{Val(expected)}};
 }
 
@@ -76,8 +76,10 @@ Case E(Value lhs, Value rhs, std::string error) {
 }
 
 /// Convenience overload that creates an error Case with just scalars
-template <typename T, typename U, typename = std::enable_if_t<!IsValue<T>>>
-Case E(T lhs, U rhs, std::string error) {
+template <typename T, typename U>
+Case E(T lhs, U rhs, std::string error)
+    requires(!IsValue<T>)
+{
     return Case{Val(lhs), Val(rhs), Case::Failure{std::move(error)}};
 }
 

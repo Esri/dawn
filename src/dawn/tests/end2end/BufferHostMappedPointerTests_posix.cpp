@@ -27,12 +27,13 @@
 
 #include <sys/mman.h>
 #include <unistd.h>
+
 #include <utility>
 #include <vector>
 
-#include "dawn/common/MutexProtected.h"
-#include "dawn/tests/MockCallback.h"
-#include "dawn/tests/end2end/BufferHostMappedPointerTests.h"
+#include "src/dawn/common/MutexProtected.h"
+#include "src/dawn/tests/MockCallback.h"
+#include "src/dawn/tests/end2end/BufferHostMappedPointerTests.h"
 
 namespace dawn {
 namespace {

@@ -25,12 +25,12 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/opengl/QuerySetGL.h"
+#include "src/dawn/native/opengl/QuerySetGL.h"
 
 #include <utility>
 
-#include "dawn/native/opengl/DeviceGL.h"
-#include "dawn/native/opengl/UtilsGL.h"
+#include "src/dawn/native/opengl/DeviceGL.h"
+#include "src/dawn/native/opengl/UtilsGL.h"
 
 namespace dawn::native::opengl {
 
@@ -39,29 +39,44 @@ ResultOrError<Ref<QuerySet>> QuerySet::Create(Device* device,
                                               const QuerySetDescriptor* descriptor) {
     Ref<QuerySet> querySet = AcquireRef(new QuerySet(device, descriptor));
 
-    if (querySet->mQueries.size() > 0) {
-        const OpenGLFunctions& gl = device->GetGL();
-        DAWN_GL_TRY(gl, GenQueries(descriptor->count, querySet->mQueries.data()));
+    if (!querySet->mQueries.empty()) {
+        DAWN_TRY(device->EnqueueGL(
+            [querySet, count = descriptor->count](const OpenGLFunctions& gl) -> MaybeError {
+                DAWN_GL_TRY(gl, GenQueries(count, querySet->mQueries.data()));
+                return {};
+            }));
     }
 
     return std::move(querySet);
 }
 
 QuerySet::QuerySet(Device* device, const QuerySetDescriptor* descriptor)
-    : QuerySetBase(device, descriptor), mQueries(descriptor->count) {}
+    : QuerySetBase(device, descriptor), mQueries(GetQueryCount()) {}
 
 QuerySet::~QuerySet() = default;
 
 void QuerySet::DestroyImpl(DestroyReason reason) {
-    const OpenGLFunctions& gl = ToBackend(GetDevice())->GetGL();
-    if (mQueries.size() > 0) {
-        DAWN_GL_TRY_IGNORE_ERRORS(gl, DeleteQueries(mQueries.size(), mQueries.data()));
+    auto device = ToBackend(GetDevice());
+
+    if (!mQueries.empty()) {
+        IgnoreErrors(device->EnqueueDestroyGL(
+            this, &QuerySet::GetQueries, reason,
+            [](const OpenGLFunctions& gl,
+               const ityp::vector<QueryIndex, GLuint>& queries) -> MaybeError {
+                DAWN_GL_TRY_IGNORE_ERRORS(gl,
+                                          DeleteQueries(uint32_t{queries.size()}, queries.data()));
+                return {};
+            }));
     }
     QuerySetBase::DestroyImpl(reason);
 }
 
-GLuint QuerySet::Get(uint32_t index) const {
+GLuint QuerySet::Get(QueryIndex index) const {
     return mQueries[index];
+}
+
+const ityp::vector<QueryIndex, GLuint>& QuerySet::GetQueries() const {
+    return mQueries;
 }
 
 }  // namespace dawn::native::opengl

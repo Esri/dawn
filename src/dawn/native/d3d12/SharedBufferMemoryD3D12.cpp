@@ -25,21 +25,22 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d12/SharedBufferMemoryD3D12.h"
+#include "src/dawn/native/d3d12/SharedBufferMemoryD3D12.h"
 
 #include <memory>
 #include <utility>
 
-#include "dawn/native/Buffer.h"
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/d3d/D3DError.h"
-#include "dawn/native/d3d/SharedFenceD3D.h"
-#include "dawn/native/d3d/UtilsD3D.h"
-#include "dawn/native/d3d12/BufferD3D12.h"
-#include "dawn/native/d3d12/DeviceD3D12.h"
-#include "dawn/native/d3d12/HeapD3D12.h"
-#include "dawn/native/d3d12/QueueD3D12.h"
-#include "dawn/native/d3d12/ResidencyManagerD3D12.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/d3d/D3DError.h"
+#include "src/dawn/native/d3d/SharedFenceD3D.h"
+#include "src/dawn/native/d3d/UtilsD3D.h"
+#include "src/dawn/native/d3d12/BufferD3D12.h"
+#include "src/dawn/native/d3d12/DeviceD3D12.h"
+#include "src/dawn/native/d3d12/HeapD3D12.h"
+#include "src/dawn/native/d3d12/QueueD3D12.h"
+#include "src/dawn/native/d3d12/ResidencyManagerD3D12.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native::d3d12 {
 
@@ -52,6 +53,7 @@ enum class HeapAccessType {
 };
 
 ResultOrError<HeapAccessType> MapToHeapAccessType(const D3D12_HEAP_PROPERTIES& heapProperties,
+                                                  const D3D12_HEAP_FLAGS& heapFlags,
                                                   const Device* device) {
     switch (heapProperties.Type) {
         case D3D12_HEAP_TYPE_UPLOAD:
@@ -61,6 +63,12 @@ ResultOrError<HeapAccessType> MapToHeapAccessType(const D3D12_HEAP_PROPERTIES& h
         case D3D12_HEAP_TYPE_DEFAULT:
             return HeapAccessType::GPUQueueAccessible;
         case D3D12_HEAP_TYPE_CUSTOM:
+            if (heapFlags & D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER) {
+                // A CUSTOM shared cross-adapter heap is equivalent to a DEFAULT heap.
+                // https://learn.microsoft.com/en-us/windows/win32/direct3d12/shared-heaps
+                return HeapAccessType::GPUQueueAccessible;
+            }
+
             if (device->GetDeviceInfo().isUMA) {
                 // On UMA systems, all heaps are always GPU accessible.
                 return HeapAccessType::GPUQueueAccessible;
@@ -92,10 +100,11 @@ ResultOrError<HeapAccessType> MapToHeapAccessType(const D3D12_HEAP_PROPERTIES& h
 ResultOrError<SharedBufferMemoryProperties> GetSharedBufferMemoryProperties(
     Device* device,
     D3D12_HEAP_PROPERTIES heapProperties,
+    D3D12_HEAP_FLAGS heapFlags,
     bool allowUAV,
     uint64_t size) {
     HeapAccessType heapType;
-    DAWN_TRY_ASSIGN(heapType, MapToHeapAccessType(heapProperties, device));
+    DAWN_TRY_ASSIGN(heapType, MapToHeapAccessType(heapProperties, heapFlags, device));
 
     wgpu::BufferUsage usages = wgpu::BufferUsage::None;
 
@@ -115,8 +124,7 @@ ResultOrError<SharedBufferMemoryProperties> GetSharedBufferMemoryProperties(
                 usages |= wgpu::BufferUsage::Storage;
             }
 
-            if (device->GetDeviceInfo().isUMA &&
-                device->HasFeature(Feature::BufferMapExtendedUsages)) {
+            if (device->GetDeviceInfo().isUMA) {
                 // On UMA systems, buffers with WRITE_COMBINE or WRITE_BACK heaps can also be
                 // mapped.
                 if (heapProperties.CPUPageProperty == D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE) {
@@ -188,8 +196,8 @@ ResultOrError<Ref<SharedBufferMemory>> SharedBufferMemory::Create(
     bool allowUAV = desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
     SharedBufferMemoryProperties properties;
-    DAWN_TRY_ASSIGN(properties,
-                    GetSharedBufferMemoryProperties(device, heapProperties, allowUAV, desc.Width));
+    DAWN_TRY_ASSIGN(properties, GetSharedBufferMemoryProperties(device, heapProperties, heapFlags,
+                                                                allowUAV, desc.Width));
 
     auto result =
         AcquireRef(new SharedBufferMemory(device, label, properties, std::move(d3d12Resource)));
@@ -201,12 +209,11 @@ ResultOrError<Ref<SharedBufferMemory>> SharedBufferMemory::Create(
 ResultOrError<Ref<SharedBufferMemory>> SharedBufferMemory::Create(
     Device* device,
     StringView label,
-    const SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor* descriptor) {
+    const SharedBufferMemoryD3D12SharedMemoryFileMappingHandleDescriptor* descriptor) {
     HANDLE sharedMemoryFileHandle = descriptor->handle;
     DAWN_INVALID_IF(sharedMemoryFileHandle == nullptr, "shared HANDLE is missing.");
 
-    constexpr uint32_t kAlignment =
-        SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor::kRequiredAlignment;
+    constexpr uint32_t kAlignment = kD3D12SharedBufferMemoryFileMappingHandleSizeAlignment;
     DAWN_INVALID_IF(descriptor->size % kAlignment != 0,
                     "shared buffer memory size is not a multiple of (%d).", kAlignment);
 
@@ -221,9 +228,10 @@ ResultOrError<Ref<SharedBufferMemory>> SharedBufferMemory::Create(
 
     D3D12_HEAP_DESC heapDesc = d3d12Heap->GetDesc();
     D3D12_HEAP_PROPERTIES heapProperties = heapDesc.Properties;
+    D3D12_HEAP_FLAGS heapFlags = heapDesc.Flags;
     SharedBufferMemoryProperties properties;
-    DAWN_TRY_ASSIGN(properties, GetSharedBufferMemoryProperties(device, heapProperties, true,
-                                                                descriptor->size));
+    DAWN_TRY_ASSIGN(properties, GetSharedBufferMemoryProperties(device, heapProperties, heapFlags,
+                                                                true, descriptor->size));
 
     D3D12_RESOURCE_DESC resourceDescriptor;
     resourceDescriptor.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -286,7 +294,7 @@ MaybeError SharedBufferMemory::BeginAccessImpl(
     const UnpackedPtr<BeginAccessDescriptor>& descriptor) {
     DAWN_TRY(descriptor.ValidateSubset<>());
     for (size_t i = 0; i < descriptor->fenceCount; ++i) {
-        SharedFenceBase* fence = descriptor->fences[i];
+        SharedFenceBase* fence = DAWN_UNSAFE_TODO(descriptor->fences[i]);
 
         SharedFenceExportInfo exportInfo;
         DAWN_TRY(fence->ExportInfo(&exportInfo));

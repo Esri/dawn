@@ -25,11 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/core/type/helper_test.h"
+#include "src/tint/lang/core/type/binding_array.h"
 
 #include "src/tint/lang/core/type/array_count.h"
-#include "src/tint/lang/core/type/binding_array.h"
 #include "src/tint/lang/core/type/f32.h"
+#include "src/tint/lang/core/type/helper_test.h"
 #include "src/tint/lang/core/type/manager.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/u32.h"
@@ -94,6 +94,28 @@ TEST_F(BindingArrayTest, Elements) {
     auto* a = ty.binding_array(t, 3u);
     EXPECT_EQ(a->Elements().type, t);
     EXPECT_EQ(a->Elements().count, 3u);
+}
+
+TEST_F(BindingArrayTest, RuntimeCount_Element) {
+    Manager ty;
+    auto* t = ty.sampled_texture(TextureDimension::k2d, ty.f32());
+    auto* a = ty.Get<BindingArray>(t, ty.Get<RuntimeArrayCount>());
+    EXPECT_EQ(a->Element(2), t);
+}
+
+TEST_F(BindingArrayTest, RuntimeCount_Elements) {
+    Manager ty;
+    auto* t = ty.sampled_texture(TextureDimension::k2d, ty.f32());
+    auto* a = ty.Get<BindingArray>(t, ty.Get<RuntimeArrayCount>());
+    EXPECT_EQ(a->Elements(nullptr, 10).type, t);
+    EXPECT_EQ(a->Elements(nullptr, 10).count, 10u);
+}
+
+TEST_F(BindingArrayTest, RuntimeCount_FriendlyName) {
+    Manager ty;
+    auto* t = ty.sampled_texture(TextureDimension::k2d, ty.f32());
+    auto* a = ty.Get<BindingArray>(t, ty.Get<RuntimeArrayCount>());
+    EXPECT_EQ(a->FriendlyName(), "binding_array<texture_2d<f32>, >");
 }
 
 TEST_F(BindingArrayTest, Clone) {

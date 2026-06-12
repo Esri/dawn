@@ -33,13 +33,12 @@
 #include <utility>
 #include <vector>
 
-#include "dawn/common/FutureUtils.h"
-#include "dawn/tests/MockCallback.h"
-#include "dawn/tests/ParamGenerator.h"
-#include "dawn/tests/unittests/wire/WireTest.h"
 #include "dawn/wire/WireServer.h"
-
 #include "gtest/gtest.h"
+#include "src/dawn/common/FutureUtils.h"
+#include "src/dawn/tests/MockCallback.h"
+#include "src/dawn/tests/ParamGenerator.h"
+#include "src/dawn/tests/unittests/wire/WireTest.h"
 
 namespace dawn::wire {
 
@@ -47,7 +46,7 @@ struct WireFutureTestParam {
     wgpu::CallbackMode callbackMode;
 };
 std::ostream& operator<<(std::ostream& os, const WireFutureTestParam& param);
-static constexpr std::array kWgpuCallbackModes = {
+inline constexpr std::array kWgpuCallbackModes = {
     WireFutureTestParam{wgpu::CallbackMode::WaitAnyOnly},
     WireFutureTestParam{wgpu::CallbackMode::AllowProcessEvents},
     WireFutureTestParam{wgpu::CallbackMode::AllowSpontaneous}};

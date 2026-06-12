@@ -30,14 +30,19 @@
 
 #include <vector>
 
-#include "dawn/common/PlacementAllocated.h"
-#include "dawn/common/vulkan_platform.h"
-#include "dawn/native/BindGroup.h"
-#include "dawn/native/vulkan/DescriptorSetAllocation.h"
+#include "src/dawn/common/PlacementAllocated.h"
+#include "src/dawn/common/vulkan_platform.h"
+#include "src/dawn/native/BindGroup.h"
+#include "src/dawn/native/vulkan/DescriptorSetAllocation.h"
 
 namespace dawn::native::vulkan {
 
 class Device;
+
+// The sampled texture bindings in Vulkan need to be moved from whatever the binding was going to
+// be, to instead use the same slot as the static sampler they will be co-written with in the
+// VkDescriptorSet.
+using TextureToStaticSamplerMap = absl::flat_hash_map<BindingIndex, BindingIndex>;
 
 class BindGroup final : public BindGroupBase, public PlacementAllocated {
   public:
@@ -47,6 +52,11 @@ class BindGroup final : public BindGroupBase, public PlacementAllocated {
     BindGroup(Device* device,
               const UnpackedPtr<BindGroupDescriptor>& descriptor,
               DescriptorSetAllocation descriptorSetAllocation);
+
+    // Write the descriptors to the provided VkDescriptorSet, this is also used to write to new
+    // allocation from specific vulkan::BindGroupLayout specializations.
+    void WriteDescriptorSet(VkDescriptorSet dsSet,
+                            const TextureToStaticSamplerMap& textureToStaticSampler) const;
 
     VkDescriptorSet GetHandle() const;
 

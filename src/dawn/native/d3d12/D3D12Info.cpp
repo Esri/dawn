@@ -25,15 +25,15 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d12/D3D12Info.h"
+#include "src/dawn/native/d3d12/D3D12Info.h"
 
 #include <utility>
 
-#include "dawn/common/GPUInfo.h"
-#include "dawn/native/d3d/D3DError.h"
-#include "dawn/native/d3d12/BackendD3D12.h"
-#include "dawn/native/d3d12/PhysicalDeviceD3D12.h"
-#include "dawn/native/d3d12/PlatformFunctionsD3D12.h"
+#include "src/dawn/common/GPUInfo.h"
+#include "src/dawn/native/d3d/D3DError.h"
+#include "src/dawn/native/d3d12/BackendD3D12.h"
+#include "src/dawn/native/d3d12/PhysicalDeviceD3D12.h"
+#include "src/dawn/native/d3d12/PlatformFunctionsD3D12.h"
 
 typedef struct D3D12_FEATURE_DATA_D3D12_OPTIONS13 {
     BOOL UnrestrictedBufferTextureCopyPitchSupported;
@@ -145,10 +145,17 @@ ResultOrError<D3D12DeviceInfo> GatherDeviceInfo(const PhysicalDevice& physicalDe
         info.supportsExistingHeap = existingHeapInfo.Supported;
     }
 
+    // D3D_SHADER_MODEL_6_10 is only defined in the Agility SDK headers; guard it
+    // so builds that fall back to the Windows SDK header still compile.
     D3D12_FEATURE_DATA_SHADER_MODEL knownShaderModels[] = {
-        {D3D_SHADER_MODEL_6_6}, {D3D_SHADER_MODEL_6_5}, {D3D_SHADER_MODEL_6_4},
-        {D3D_SHADER_MODEL_6_3}, {D3D_SHADER_MODEL_6_2}, {D3D_SHADER_MODEL_6_1},
-        {D3D_SHADER_MODEL_6_0}, {D3D_SHADER_MODEL_5_1}};
+#ifdef DAWN_USE_AGILITY_SDK
+        {D3D_SHADER_MODEL_6_10},
+#endif
+        {D3D_SHADER_MODEL_6_9},  {D3D_SHADER_MODEL_6_8}, {D3D_SHADER_MODEL_6_7},
+        {D3D_SHADER_MODEL_6_6},  {D3D_SHADER_MODEL_6_5}, {D3D_SHADER_MODEL_6_4},
+        {D3D_SHADER_MODEL_6_3},  {D3D_SHADER_MODEL_6_2}, {D3D_SHADER_MODEL_6_1},
+        {D3D_SHADER_MODEL_6_0},  {D3D_SHADER_MODEL_5_1}};
+
     uint32_t driverShaderModel = 0;
     for (D3D12_FEATURE_DATA_SHADER_MODEL shaderModel : knownShaderModels) {
         if (SUCCEEDED(physicalDevice.GetDevice()->CheckFeatureSupport(
@@ -163,12 +170,13 @@ ResultOrError<D3D12DeviceInfo> GatherDeviceInfo(const PhysicalDevice& physicalDe
     }
 
     // D3D_SHADER_MODEL is encoded as 0xMm with M the major version and m the minor version
+
     DAWN_ASSERT(driverShaderModel <= 0xFF);
     uint32_t shaderModelMajor = (driverShaderModel & 0xF0) >> 4;
     uint32_t shaderModelMinor = (driverShaderModel & 0xF);
 
     DAWN_ASSERT(shaderModelMajor < 10);
-    DAWN_ASSERT(shaderModelMinor < 10);
+    DAWN_ASSERT(shaderModelMinor < 16);
     info.highestSupportedShaderModel = 10 * shaderModelMajor + shaderModelMinor;
 
     // Device support wave intrinsics if shader model >= SM6.0 and capabilities flag WaveOps is set.
@@ -183,16 +191,25 @@ ResultOrError<D3D12DeviceInfo> GatherDeviceInfo(const PhysicalDevice& physicalDe
             // is unclear. The result is recorded into D3D12DeviceInfo, but is not intended to be
             // used now.
             info.waveLaneCountMax = featureOptions1.WaveLaneCountMax;
+
+            if (driverShaderModel >= D3D_SHADER_MODEL_6_6 && featureOptions1.Int64ShaderOps) {
+                D3D12_FEATURE_DATA_D3D12_OPTIONS9 featureOptions9 = {};
+                if (SUCCEEDED(physicalDevice.GetDevice()->CheckFeatureSupport(
+                        D3D12_FEATURE_D3D12_OPTIONS9, &featureOptions9, sizeof(featureOptions9)))) {
+                    info.supportsInt64Atomics = featureOptions9.AtomicInt64OnTypedResourceSupported;
+                }
+            }
         }
     }
+    {
+        DXGI_ADAPTER_DESC adapterDesc;
+        DAWN_TRY(CheckHRESULT(physicalDevice.GetHardwareAdapter()->GetDesc(&adapterDesc),
+                              "IDXGIAdapter3::GetDesc"));
+        info.dedicatedVideoMemory = adapterDesc.DedicatedVideoMemory;
+        info.sharedSystemMemory = adapterDesc.SharedSystemMemory;
 
-    DXGI_ADAPTER_DESC adapterDesc;
-    DAWN_TRY(CheckHRESULT(physicalDevice.GetHardwareAdapter()->GetDesc(&adapterDesc),
-                          "IDXGIAdapter3::GetDesc"));
-    info.dedicatedVideoMemory = adapterDesc.DedicatedVideoMemory;
-    info.sharedSystemMemory = adapterDesc.SharedSystemMemory;
-
-    return std::move(info);
+        return std::move(info);
+    }
 }
 
 }  // namespace dawn::native::d3d12

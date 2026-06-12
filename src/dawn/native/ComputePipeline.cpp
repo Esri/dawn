@@ -25,12 +25,12 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/ComputePipeline.h"
+#include "src/dawn/native/ComputePipeline.h"
 
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/ObjectContentHasher.h"
 #include "dawn/native/ObjectType_autogen.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/ObjectContentHasher.h"
 
 namespace dawn::native {
 
@@ -61,11 +61,20 @@ ComputePipelineBase::ComputePipelineBase(DeviceBase* device,
           descriptor->label,
           {{SingleShaderStage::Compute, descriptor->compute.module, descriptor->compute.entryPoint,
             descriptor->compute.constantCount, descriptor->compute.constants}}) {
+    const EntryPointMetadata& metadata = *GetStage(SingleShaderStage::Compute).metadata;
+    mUsesLinearIndex = metadata.usesGlobalInvocationIndex || metadata.usesWorkgroupIndex;
+    mUsesGlobalInvocationIndex = metadata.usesGlobalInvocationIndex;
+
     SetContentHash(ComputeContentHash());
     GetObjectTrackingList()->Track(this);
 
     // Initialize the cache key to include the cache type and device information.
     StreamIn(&mCacheKey, CacheKey::Type::ComputePipeline, device->GetCacheKey());
+}
+
+MaybeError ComputePipelineBase::InitializeWithShaders() {
+    DAWN_TRY_ASSIGN(mWorkgroupSize, InitializeImpl());
+    return {};
 }
 
 ComputePipelineBase::ComputePipelineBase(DeviceBase* device,
@@ -79,6 +88,21 @@ void ComputePipelineBase::DestroyImpl(DestroyReason reason) {
     Uncache();
 }
 
+Extent3D ComputePipelineBase::GetWorkgroupSize() const {
+    DAWN_CHECK(!IsError());
+    return mWorkgroupSize;
+}
+
+bool ComputePipelineBase::UsesLinearIndexing() const {
+    DAWN_CHECK(!IsError());
+    return mUsesLinearIndex;
+}
+
+bool ComputePipelineBase::UsesGlobalInvocationIndex() const {
+    DAWN_CHECK(!IsError());
+    return mUsesGlobalInvocationIndex;
+}
+
 // static
 Ref<ComputePipelineBase> ComputePipelineBase::MakeError(DeviceBase* device, StringView label) {
     class ErrorComputePipeline final : public ComputePipelineBase {
@@ -86,10 +110,8 @@ Ref<ComputePipelineBase> ComputePipelineBase::MakeError(DeviceBase* device, Stri
         explicit ErrorComputePipeline(DeviceBase* device, StringView label)
             : ComputePipelineBase(device, ObjectBase::kError, label) {}
 
-        MaybeError InitializeImpl() override {
-            DAWN_UNREACHABLE();
-            return {};
-        }
+      private:
+        ResultOrError<Extent3D> InitializeImpl() override { DAWN_UNREACHABLE(); }
     };
 
     return AcquireRef(new ErrorComputePipeline(device, label));

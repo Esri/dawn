@@ -25,20 +25,20 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d12/BindGroupD3D12.h"
+#include "src/dawn/native/d3d12/BindGroupD3D12.h"
 
 #include <utility>
 
-#include "dawn/common/MatchVariant.h"
-#include "dawn/common/Range.h"
-#include "dawn/native/ExternalTexture.h"
-#include "dawn/native/Queue.h"
-#include "dawn/native/d3d12/BindGroupLayoutD3D12.h"
-#include "dawn/native/d3d12/BufferD3D12.h"
-#include "dawn/native/d3d12/DeviceD3D12.h"
-#include "dawn/native/d3d12/SamplerHeapCacheD3D12.h"
-#include "dawn/native/d3d12/ShaderVisibleDescriptorAllocatorD3D12.h"
-#include "dawn/native/d3d12/TextureD3D12.h"
+#include "src/dawn/common/MatchVariant.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/native/ExternalTexture.h"
+#include "src/dawn/native/Queue.h"
+#include "src/dawn/native/d3d12/BindGroupLayoutD3D12.h"
+#include "src/dawn/native/d3d12/BufferD3D12.h"
+#include "src/dawn/native/d3d12/DeviceD3D12.h"
+#include "src/dawn/native/d3d12/SamplerHeapCacheD3D12.h"
+#include "src/dawn/native/d3d12/ShaderVisibleDescriptorAllocatorD3D12.h"
+#include "src/dawn/native/d3d12/TextureD3D12.h"
 
 namespace dawn::native::d3d12 {
 
@@ -71,6 +71,13 @@ MaybeError BindGroup::InitializeImpl() {
     // create descriptors for dynamic storage buffers.
     for (BindingIndex bindingIndex : Range(bgl->GetBindingCount())) {
         const BindingInfo& bindingInfo = bgl->GetBindingInfo(bindingIndex);
+
+        // Skip over bindings that cannot be seen by any shaders as they could cause us to create
+        // bindgroups much larger than what the rest of the backend expects (like 1000 samplers at
+        // once).
+        if (bindingInfo.visibility == wgpu::ShaderStage::None) {
+            continue;
+        }
 
         // Skip dynamic uniform buffers. Since dynamic buffers are packed at the front, we know the
         // binding is dynamic if the index is less than the number of dynamic buffers.
@@ -266,7 +273,7 @@ void BindGroup::DeleteThis() {
     layout->DeallocateBindGroup(this);
 }
 
-bool BindGroup::PopulateViews(MutexProtected<ShaderVisibleDescriptorAllocator>& viewAllocator) {
+bool BindGroup::PopulateViews(ShaderVisibleDescriptorAllocator* viewAllocator) {
     const BindGroupLayout* bgl = ToBackend(GetLayout());
 
     const uint32_t descriptorCount = bgl->GetCbvUavSrvDescriptorCount();
@@ -275,7 +282,8 @@ bool BindGroup::PopulateViews(MutexProtected<ShaderVisibleDescriptorAllocator>& 
     }
 
     // Attempt to allocate descriptors for the currently bound shader-visible heaps.
-    // If either failed, return early to re-allocate and switch the heaps.
+    // Return false if allocation fails to indicate that AllocateAndSwitchShaderVisibleHeap should
+    // be called.
     Device* device = ToBackend(GetDevice());
 
     D3D12_CPU_DESCRIPTOR_HANDLE baseCPUDescriptor;
@@ -304,8 +312,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE BindGroup::GetBaseSamplerDescriptor() const {
     return mSamplerAllocationEntry->GetBaseDescriptor();
 }
 
-bool BindGroup::PopulateSamplers(
-    MutexProtected<ShaderVisibleDescriptorAllocator>& samplerAllocator) {
+bool BindGroup::PopulateSamplers(ShaderVisibleDescriptorAllocator* samplerAllocator) {
     if (mSamplerAllocationEntry == nullptr) {
         return true;
     }

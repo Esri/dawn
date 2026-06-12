@@ -24,19 +24,19 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#include "dawn/tests/PartitionAllocSupport.h"
+#include "src/dawn/tests/PartitionAllocSupport.h"
 
-#include "dawn/common/Assert.h"
-#include "dawn/common/Log.h"
+#include "src/utils/assert.h"
+#include "src/utils/log.h"
 
 #if defined(DAWN_ENABLE_PARTITION_ALLOC)
-#include "partition_alloc/dangling_raw_ptr_checks.h"
+#include "partition_alloc/dangling_raw_ptr_checks.h"  // nogncheck
 // TODO(https://crbug.com/1505382): Enforce those warning inside PartitionAlloc.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wgnu-statement-expression-from-macro-expansion"
 #pragma GCC diagnostic ignored "-Wzero-length-array"
-#include "partition_alloc/shim/allocator_shim.h"
-#include "partition_alloc/shim/allocator_shim_default_dispatch_to_partition_alloc.h"
+#include "partition_alloc/shim/allocator_shim.h"                                      // nogncheck
+#include "partition_alloc/shim/allocator_shim_default_dispatch_to_partition_alloc.h"  // nogncheck
 #pragma GCC diagnostic pop
 #endif
 
@@ -64,7 +64,7 @@ void InitializeDanglingPointerDetectorForTesting() {
         ErrorLog() << "                         Documentation: "
                       "https://source.chromium.org/chromium/chromium/src/+/main:third_party/dawn/"
                       "docs/dangling-pointer-detector.md";
-        DAWN_CHECK(false);
+        DAWN_UNREACHABLE();
     });
 #endif
 }

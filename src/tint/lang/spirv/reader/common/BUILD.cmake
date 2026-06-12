@@ -47,16 +47,14 @@ tint_add_target(tint_lang_spirv_reader_common lib
 
 tint_target_add_dependencies(tint_lang_spirv_reader_common lib
   tint_api_common
-  tint_lang_wgsl
   tint_utils
   tint_utils_containers
-  tint_utils_diagnostic
   tint_utils_ice
   tint_utils_macros
   tint_utils_math
   tint_utils_memory
+  tint_utils_reflection
   tint_utils_rtti
-  tint_utils_text
 )
 
 tint_target_add_external_dependencies(tint_lang_spirv_reader_common lib
@@ -82,13 +80,8 @@ tint_target_add_dependencies(tint_lang_spirv_reader_common_test test
 )
 
 tint_target_add_external_dependencies(tint_lang_spirv_reader_common_test test
+  "spirv-tools"
   "src_utils"
 )
-
-if(TINT_BUILD_SPV_READER OR TINT_BUILD_SPV_WRITER)
-  tint_target_add_external_dependencies(tint_lang_spirv_reader_common_test test
-    "spirv-tools"
-  )
-endif(TINT_BUILD_SPV_READER OR TINT_BUILD_SPV_WRITER)
 
 endif(TINT_BUILD_SPV_READER)

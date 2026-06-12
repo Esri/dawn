@@ -29,6 +29,7 @@
 #define SRC_TINT_LANG_WGSL_READER_PARSER_PARSER_H_
 
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -262,7 +263,7 @@ class Parser {
         /// Parsed header source
         Source source;
         /// Function name
-        const ast::Identifier* name;
+        const ast::Identifier* name = nullptr;
         /// Function parameters
         Vector<const ast::Parameter*, 8> params;
         /// Function return type
@@ -890,7 +891,7 @@ class Parser {
     template <typename ENUM>
     Expect<ENUM> expect_enum(std::string_view name,
                              ENUM (*parse)(std::string_view str),
-                             Slice<const std::string_view> strings,
+                             std::span<const std::string_view> strings,
                              std::string_view use = "");
 
     Expect<ast::Type> expect_type(std::string_view use);

@@ -27,9 +27,8 @@
 
 // GEN_BUILD:CONDITION(tint_build_wgsl_reader)
 
+#include "src/tint/cmd/fuzz/common/wgsl_fuzzer.h"
 #include "src/tint/lang/wgsl/writer/writer.h"
-
-#include "src/tint/cmd/fuzz/wgsl/fuzz.h"
 
 namespace tint::wgsl::writer {
 namespace {

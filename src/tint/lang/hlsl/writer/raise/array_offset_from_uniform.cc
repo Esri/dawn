@@ -120,6 +120,8 @@ struct State {
                         case BuiltinFn::kInterlockedAdd:
                         case BuiltinFn::kInterlockedMax:
                         case BuiltinFn::kInterlockedMin:
+                        case BuiltinFn::kInterlockedMax64:
+                        case BuiltinFn::kInterlockedMin64:
                         case BuiltinFn::kInterlockedAnd:
                         case BuiltinFn::kInterlockedOr:
                         case BuiltinFn::kInterlockedXor:
@@ -131,6 +133,10 @@ struct State {
                         case BuiltinFn::kLoad2F16:
                         case BuiltinFn::kLoad3F16:
                         case BuiltinFn::kLoad4F16:
+                        case BuiltinFn::kLoadU16:
+                        case BuiltinFn::kLoad2U16:
+                        case BuiltinFn::kLoad3U16:
+                        case BuiltinFn::kLoad4U16:
                         case BuiltinFn::kStore:
                         case BuiltinFn::kStore2:
                         case BuiltinFn::kStore3:
@@ -139,17 +145,27 @@ struct State {
                         case BuiltinFn::kStore2F16:
                         case BuiltinFn::kStore3F16:
                         case BuiltinFn::kStore4F16:
+                        case BuiltinFn::kStoreU16:
+                        case BuiltinFn::kStore2U16:
+                        case BuiltinFn::kStore3U16:
+                        case BuiltinFn::kStore4U16:
                             add_offset_to_arg(0);
                             break;
                         // Ignore the functions below
                         case BuiltinFn::kAsint:
                         case BuiltinFn::kAsuint:
                         case BuiltinFn::kAsfloat:
+                        case BuiltinFn::kAsuint16:
+                        case BuiltinFn::kAsfloat16:
                         case BuiltinFn::kDot4AddI8Packed:
                         case BuiltinFn::kDot4AddU8Packed:
                         case BuiltinFn::kF32Tof16:
                         case BuiltinFn::kF16Tof32:
                         case BuiltinFn::kMul:
+                        case BuiltinFn::kMultiply:
+                        case BuiltinFn::kMultiplyAccumulate:
+                        case BuiltinFn::kGet:
+                        case BuiltinFn::kSet:
                         case BuiltinFn::kPackU8:
                         case BuiltinFn::kPackS8:
                         case BuiltinFn::kPackClampS8:
@@ -163,6 +179,7 @@ struct State {
                         case BuiltinFn::kWaveReadLaneAt:
                         case BuiltinFn::kModf:
                         case BuiltinFn::kFrexp:
+                        case BuiltinFn::kSelect:
                         case BuiltinFn::kGatherCmp:
                         case BuiltinFn::kGather:
                         case BuiltinFn::kGatherAlpha:
@@ -176,6 +193,7 @@ struct State {
                         case BuiltinFn::kSampleCmpLevelZero:
                         case BuiltinFn::kSampleGrad:
                         case BuiltinFn::kSampleLevel:
+                        case BuiltinFn::kSplat:
                         case BuiltinFn::kNone:
                             break;
                     }
@@ -220,8 +238,7 @@ Result<SuccessType> ArrayOffsetFromUniform(
     core::ir::Module& ir,
     BindingPoint ubo_binding,
     const std::unordered_map<BindingPoint, uint32_t>& bindpoint_to_offset_index) {
-    TINT_CHECK_RESULT(ValidateAndDumpIfNeeded(ir, "hlsl.ArrayOffsetFromUniform",
-                                              kArrayOffsetFromUniformCapabilities));
+    AssertValid(ir, kArrayOffsetFromUniformCapabilities, "before hlsl.ArrayOffsetFromUniform");
 
     State state{ir, ubo_binding, bindpoint_to_offset_index};
     state.Process();

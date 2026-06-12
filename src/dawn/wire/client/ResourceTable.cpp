@@ -25,21 +25,25 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/wire/client/ResourceTable.h"
+#include "src/dawn/wire/client/ResourceTable.h"
 
 #include <limits>
 #include <utility>
 
-#include "dawn/wire/client/Client.h"
-#include "dawn/wire/client/Device.h"
-#include "dawn/wire/client/LimitsAndFeatures.h"
-#include "dawn/wire/client/Queue.h"
+#include "src/dawn/wire/client/Client.h"
+#include "src/dawn/wire/client/Device.h"
+#include "src/dawn/wire/client/LimitsAndFeatures.h"
+#include "src/dawn/wire/client/Queue.h"
 
 namespace dawn::wire::client {
 
 // static
 WGPUResourceTable ResourceTable::Create(Device* device,
                                         const WGPUResourceTableDescriptor* descriptor) {
+    if (descriptor->size > kMaxResourceTableSize) {
+        return nullptr;
+    }
+
     Client* wireClient = device->GetClient();
 
     DeviceCreateResourceTableCmd cmd;
@@ -62,7 +66,7 @@ ResourceTable::ResourceTable(const ObjectBaseParams& params,
 
     uint32_t sizeLimit = 0;
     if (limitsAndFeatures.HasFeature(WGPUFeatureName_ChromiumExperimentalSamplingResourceTable)) {
-        sizeLimit = limitsAndFeatures.GetResourceTableLimits().maxResourceTableSize;
+        sizeLimit = kMaxResourceTableSize;
     }
 
     if (descriptor->size <= sizeLimit) {

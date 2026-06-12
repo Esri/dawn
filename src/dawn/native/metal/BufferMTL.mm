@@ -25,19 +25,20 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/metal/BufferMTL.h"
-
-#include "dawn/common/Math.h"
-#include "dawn/common/Platform.h"
-#include "dawn/native/CallbackTaskManager.h"
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/CommandBuffer.h"
-#include "dawn/native/metal/CommandRecordingContext.h"
-#include "dawn/native/metal/DeviceMTL.h"
-#include "dawn/native/metal/QueueMTL.h"
-#include "dawn/native/metal/UtilsMetal.h"
+#include "src/dawn/native/metal/BufferMTL.h"
 
 #include <limits>
+
+#include "src/dawn/common/Math.h"
+#include "src/dawn/native/CallbackTaskManager.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/CommandBuffer.h"
+#include "src/dawn/native/metal/CommandRecordingContext.h"
+#include "src/dawn/native/metal/DeviceMTL.h"
+#include "src/dawn/native/metal/QueueMTL.h"
+#include "src/dawn/native/metal/UtilsMetal.h"
+#include "src/utils/compiler.h"
+#include "src/utils/platform.h"
 
 namespace dawn::native::metal {
 // The size of uniform buffer and storage buffer need to be aligned to 16 bytes which is the
@@ -59,7 +60,7 @@ ResultOrError<Ref<Buffer>> Buffer::Create(Device* device,
 
 // static
 uint64_t Buffer::QueryMaxBufferLength(id<MTLDevice> mtlDevice) {
-        return [mtlDevice maxBufferLength];
+    return [mtlDevice maxBufferLength];
 }
 
 Buffer::Buffer(DeviceBase* dev, const UnpackedPtr<BufferDescriptor>& desc)
@@ -89,8 +90,8 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
     }
 
     // The vertex pulling transform requires at least 4 bytes in the buffer.
-    // 0-sized vertex buffer bindings are allowed, so we always need an additional 4 bytes
-    // after the end.
+    // Zero-sized vertex buffer bindings at the very end of the buffer are
+    // allowed, so we always need an additional 4 bytes after the end.
     NSUInteger extraBytes = 0u;
     if ((GetInternalUsage() & wgpu::BufferUsage::Vertex) != 0) {
         extraBytes = 4u;
@@ -103,13 +104,19 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
         std::max(static_cast<NSUInteger>(GetSize()) + extraBytes, NSUInteger(4));
 
     if (currentSize > std::numeric_limits<NSUInteger>::max() - alignment) {
-        // Alignment would overlow.
+        // Alignment would overflow.
         return DAWN_OUT_OF_MEMORY_ERROR("Buffer allocation is too large");
     }
     currentSize = Align(currentSize, alignment);
 
     uint64_t maxBufferSize = QueryMaxBufferLength(ToBackend(GetDevice())->GetMTLDevice());
     if (currentSize > maxBufferSize) {
+        // Note if this is a vertex buffer, this will result in an OutOfMemory error even when there
+        // is otherwise enough memory (e.g. a storage buffer of the same size would succeed).
+        // TODO(crbug.com/488400770): Find some way to avoid falsely signalling to the app that
+        // there is high memory pressure. (Note, this won't happen if Metal's max buffer size is
+        // greater than maxBufferSize+4, as it is on M1+ when limit tiering is enabled.)
+
         return DAWN_OUT_OF_MEMORY_ERROR("Buffer allocation is too large");
     }
 
@@ -203,7 +210,7 @@ MaybeError Buffer::FinalizeMapImpl(BufferState newState) {
     // The real mapped pointer is never returned for zero sized buffers. MappedAtCreation buffers
     // are initialized in BufferBase already.
     if (NeedsInitialization() && GetSize() > 0 && newState == BufferState::Mapped) {
-        std::memset(GetMappedPointerImpl(), 0, GetAllocatedSize());
+        DAWN_UNSAFE_TODO(std::memset(GetMappedPointerImpl(), 0, GetAllocatedSize()));
         GetDevice()->IncrementLazyClearCountForTesting();
         SetInitialized(true);
     }

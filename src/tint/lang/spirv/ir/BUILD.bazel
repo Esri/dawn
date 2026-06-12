@@ -34,21 +34,23 @@
 #                       Do not modify this file directly
 ################################################################################
 
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("//src/tint:flags.bzl", "COPTS")
 load("@bazel_skylib//lib:selects.bzl", "selects")
+
+exports_files(glob(["*.def", "*.tmpl"], allow_empty = True))
+
 cc_library(
   name = "ir",
   srcs = [
     "binary.cc",
     "builtin_call.cc",
     "copy_logical.cc",
-    "literal_operand.cc",
   ],
   hdrs = [
     "binary.h",
     "builtin_call.h",
     "copy_logical.h",
-    "literal_operand.h",
   ],
   deps = [
     "//src/tint/api/common",
@@ -66,6 +68,7 @@ cc_library(
     "//src/tint/utils/macros",
     "//src/tint/utils/math",
     "//src/tint/utils/memory",
+    "//src/tint/utils/reflection",
     "//src/tint/utils/rtti",
     "//src/tint/utils/symbol",
     "//src/tint/utils/text",
@@ -99,6 +102,7 @@ cc_library(
     "//src/tint/utils/macros",
     "//src/tint/utils/math",
     "//src/tint/utils/memory",
+    "//src/tint/utils/reflection",
     "//src/tint/utils/rtti",
     "//src/tint/utils/symbol",
     "//src/tint/utils/text",

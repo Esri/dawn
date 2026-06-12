@@ -32,19 +32,21 @@
 #include <type_traits>
 #include <vector>
 
-#include "dawn/native/dawn_platform.h"
-
-#include "dawn/native/CommandAllocator.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/IndirectDrawMetadata.h"
-#include "dawn/native/ObjectBase.h"
-#include "dawn/native/PassResourceUsage.h"
-#include "dawn/native/Texture.h"
+#include "src/dawn/native/CommandAllocator.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/Forward.h"
+#include "src/dawn/native/IndirectDrawMetadata.h"
+#include "src/dawn/native/ObjectBase.h"
+#include "src/dawn/native/PassResourceUsage.h"
+#include "src/dawn/native/Texture.h"
+#include "src/dawn/native/dawn_platform.h"
 
 namespace dawn::native {
 
+struct BeginComputePassCmd;
 struct BeginRenderPassCmd;
+struct EndOcclusionQueryCmd;
+struct WriteTimestampCmd;
 struct CopyTextureToBufferCmd;
 struct BufferCopy;
 struct TextureCopy;
@@ -65,7 +67,7 @@ class CommandBufferBase : public ApiObjectBase {
 
     const CommandBufferResourceUsage& GetResourceUsages() const;
 
-    const std::vector<IndirectDrawMetadata>& GetIndirectDrawMetadata();
+    const ityp::vector<PassIndex, IndirectDrawMetadata>& GetIndirectDrawMetadata();
 
     CommandIterator* GetCommandIteratorForTesting();
 
@@ -78,7 +80,7 @@ class CommandBufferBase : public ApiObjectBase {
     CommandBufferBase(DeviceBase* device, ObjectBase::ErrorTag tag, StringView label);
 
     CommandBufferResourceUsage mResourceUsages;
-    std::vector<IndirectDrawMetadata> mIndirectDrawMetadata;
+    ityp::vector<PassIndex, IndirectDrawMetadata> mIndirectDrawMetadata;
     std::string mEncoderLabel;
 };
 
@@ -93,7 +95,10 @@ bool IsCompleteSubresourceCopiedTo(const TextureBase* texture,
 SubresourceRange GetSubresourcesAffectedByCopy(const TextureCopy& copy,
                                                const TexelExtent3D& copySize);
 
-void LazyClearRenderPassAttachments(DeviceBase* device, BeginRenderPassCmd* renderPass);
+using LazyClearTextureHelper = std::function<MaybeError(TextureBase*, const SubresourceRange&)>;
+MaybeError LazyClearRenderPassAttachments(DeviceBase* device,
+                                          BeginRenderPassCmd* renderPass,
+                                          LazyClearTextureHelper clearTexture);
 
 bool IsFullBufferOverwrittenInTextureToBufferCopy(const CopyTextureToBufferCmd* copy);
 bool IsFullBufferOverwrittenInTextureToBufferCopy(const TextureCopy& source,
@@ -103,6 +108,12 @@ bool IsFullBufferOverwrittenInTextureToBufferCopy(const TextureCopy& source,
 std::array<float, 4> ConvertToFloatColor(dawn::native::Color color);
 std::array<int32_t, 4> ConvertToSignedIntegerColor(dawn::native::Color color);
 std::array<uint32_t, 4> ConvertToUnsignedIntegerColor(dawn::native::Color color);
+
+// Helper functions that must be called by backends to update the tracking of available queries in
+// QuerySets.
+void UpdateQueryAvailability(const WriteTimestampCmd* cmd);
+void UpdateQueryAvailability(const EndOcclusionQueryCmd* cmd);
+void UpdateQueryAvailability(const TimestampWrites& writes);
 
 }  // namespace dawn::native
 

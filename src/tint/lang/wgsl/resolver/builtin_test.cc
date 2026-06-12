@@ -25,34 +25,18 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/wgsl/resolver/resolver.h"
-
 #include "gmock/gmock.h"
-#include "src/tint/lang/core/type/helper_test.h"
-#include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/texture_dimension.h"
-#include "src/tint/lang/wgsl/ast/assignment_statement.h"
-#include "src/tint/lang/wgsl/ast/break_statement.h"
 #include "src/tint/lang/wgsl/ast/builtin_texture_helper_test.h"
-#include "src/tint/lang/wgsl/ast/call_statement.h"
-#include "src/tint/lang/wgsl/ast/continue_statement.h"
-#include "src/tint/lang/wgsl/ast/if_statement.h"
-#include "src/tint/lang/wgsl/ast/loop_statement.h"
-#include "src/tint/lang/wgsl/ast/return_statement.h"
 #include "src/tint/lang/wgsl/ast/stage_attribute.h"
-#include "src/tint/lang/wgsl/ast/switch_statement.h"
-#include "src/tint/lang/wgsl/ast/unary_op_expression.h"
-#include "src/tint/lang/wgsl/ast/variable_decl_statement.h"
+#include "src/tint/lang/wgsl/resolver/resolver.h"
 #include "src/tint/lang/wgsl/resolver/resolver_helper_test.h"
 #include "src/tint/lang/wgsl/sem/call.h"
-#include "src/tint/lang/wgsl/sem/function.h"
 #include "src/tint/lang/wgsl/sem/member_accessor_expression.h"
 #include "src/tint/lang/wgsl/sem/statement.h"
 #include "src/tint/lang/wgsl/sem/variable.h"
-#include "src/tint/utils/text/string.h"
 #include "src/tint/utils/text/string_stream.h"
 
-using ::testing::ElementsAre;
 using ::testing::HasSubstr;
 
 namespace tint::resolver {
@@ -70,7 +54,7 @@ struct BuiltinData {
     wgsl::BuiltinFn builtin;
 };
 
-inline std::ostream& operator<<(std::ostream& out, BuiltinData data) {
+[[maybe_unused]] inline std::ostream& operator<<(std::ostream& out, BuiltinData data) {
     out << data.name;
     return out;
 }
@@ -275,6 +259,26 @@ TEST_F(ResolverBuiltinArrayTest, ArrayLength_Vector) {
     EXPECT_TRUE(TypeOf(call)->Is<core::type::U32>());
 }
 
+TEST_F(ResolverBuiltinArrayTest, ArrayLength_Buffer_Workgroup) {
+    EXPECT_SUCCESS(R"(
+fn bar(p : ptr<workgroup, buffer>) -> u32 {
+  return arrayLength(bufferView<array<u32>>(p, 0));
+}
+fn foo(p : ptr<workgroup, buffer<128>>) -> u32 {
+  return arrayLength(bufferArrayView<array<u32>>(p, 0, 128));
+})");
+}
+
+TEST_F(ResolverBuiltinArrayTest, ArrayLength_Buffer_Uniform) {
+    EXPECT_SUCCESS(R"(
+fn bar(p : ptr<uniform, buffer>) -> u32 {
+  return arrayLength(bufferView<array<u32>>(p, 0));
+}
+fn foo(p : ptr<uniform, buffer<128>>) -> u32 {
+  return arrayLength(bufferArrayView<array<u32>>(p, 0, 128));
+})");
+}
+
 TEST_F(ResolverBuiltinArrayTest, ArrayLength_Error_ArraySized) {
     GlobalVar("arr", ty.array<i32, 4>(), core::AddressSpace::kPrivate);
     auto* call = Call("arrayLength", AddressOf("arr"));
@@ -285,11 +289,14 @@ TEST_F(ResolverBuiltinArrayTest, ArrayLength_Error_ArraySized) {
     EXPECT_EQ(r()->error(),
               R"(error: no matching call to 'arrayLength(ptr<private, array<i32, 4>, read_write>)'
 
-2 candidate functions:
- • 'arrayLength(ptr<storage, array<T>, R>  ✗ ) -> u32' where:
-      ✗  'R' is 'read'
+3 candidate functions:
  • 'arrayLength(ptr<storage, array<T>, W>  ✗ ) -> u32' where:
       ✗  'W' is 'write' or 'read_write'
+ • 'arrayLength(ptr<workgroup, array<T>, W>  ✗ ) -> u32' where:
+      ✗  'W' is 'write' or 'read_write'
+ • 'arrayLength(ptr<AS, array<T>, R>  ✗ ) -> u32' where:
+      ✗  'AS' is 'uniform' or 'storage'
+      ✗  'R' is 'read'
 )");
 }
 

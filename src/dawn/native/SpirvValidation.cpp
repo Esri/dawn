@@ -25,11 +25,10 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/SpirvValidation.h"
-
-#include <spirv-tools/libspirv.hpp>
+#include "src/dawn/native/SpirvValidation.h"
 
 #include <memory>
+#include <spirv-tools/libspirv.hpp>
 #include <sstream>
 #include <string>
 

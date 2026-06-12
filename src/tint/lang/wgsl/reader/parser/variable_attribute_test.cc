@@ -32,8 +32,8 @@
 namespace tint::wgsl::reader {
 namespace {
 
-const core::BuiltinDepthMode kDepthModes[] = {
-    core::BuiltinDepthMode::kAny, core::BuiltinDepthMode::kGreater, core::BuiltinDepthMode::kLess};
+const core::BuiltinDepthMode kDepthModes[] = {core::BuiltinDepthMode::kGreater,
+                                              core::BuiltinDepthMode::kLess};
 
 TEST_F(WGSLParserTest, Attribute_Id) {
     auto p = parser("id(4)");
@@ -298,7 +298,7 @@ TEST_P(BuiltinTest, Attribute_Builtin_DepthMode_First) {
         EXPECT_EQ(attr.value, nullptr);
         EXPECT_TRUE(p->has_error());
         EXPECT_EQ(p->error(), R"(1:9: expected builtin value name
-Possible values: 'barycentric_coord', 'clip_distances', 'frag_depth', 'front_facing', 'global_invocation_id', 'instance_index', 'local_invocation_id', 'local_invocation_index', 'num_subgroups', 'num_workgroups', 'position', 'primitive_index', 'sample_index', 'sample_mask', 'subgroup_id', 'subgroup_invocation_id', 'subgroup_size', 'vertex_index', 'workgroup_id')");
+Possible values: 'barycentric_coord', 'clip_distances', 'frag_depth', 'front_facing', 'global_invocation_id', 'global_invocation_index', 'instance_index', 'local_invocation_id', 'local_invocation_index', 'num_subgroups', 'num_workgroups', 'position', 'primitive_index', 'sample_index', 'sample_mask', 'subgroup_id', 'subgroup_invocation_id', 'subgroup_size', 'vertex_index', 'workgroup_id', 'workgroup_index')");
     }
 }
 INSTANTIATE_TEST_SUITE_P(WGSLParserTest,
@@ -311,7 +311,9 @@ INSTANTIATE_TEST_SUITE_P(WGSLParserTest,
                                          core::BuiltinValue::kLocalInvocationId,
                                          core::BuiltinValue::kLocalInvocationIndex,
                                          core::BuiltinValue::kGlobalInvocationId,
+                                         core::BuiltinValue::kGlobalInvocationIndex,
                                          core::BuiltinValue::kWorkgroupId,
+                                         core::BuiltinValue::kWorkgroupIndex,
                                          core::BuiltinValue::kNumWorkgroups,
                                          core::BuiltinValue::kSampleIndex,
                                          core::BuiltinValue::kSampleMask));
@@ -328,7 +330,7 @@ TEST_P(BuiltinDepthModeTest, Attribute_Builtin_DepthModeOnly) {
     EXPECT_EQ(attr.value, nullptr);
     EXPECT_TRUE(p->has_error());
     EXPECT_EQ(p->error(), R"(1:9: expected builtin value name
-Possible values: 'barycentric_coord', 'clip_distances', 'frag_depth', 'front_facing', 'global_invocation_id', 'instance_index', 'local_invocation_id', 'local_invocation_index', 'num_subgroups', 'num_workgroups', 'position', 'primitive_index', 'sample_index', 'sample_mask', 'subgroup_id', 'subgroup_invocation_id', 'subgroup_size', 'vertex_index', 'workgroup_id')");
+Possible values: 'barycentric_coord', 'clip_distances', 'frag_depth', 'front_facing', 'global_invocation_id', 'global_invocation_index', 'instance_index', 'local_invocation_id', 'local_invocation_index', 'num_subgroups', 'num_workgroups', 'position', 'primitive_index', 'sample_index', 'sample_mask', 'subgroup_id', 'subgroup_invocation_id', 'subgroup_size', 'vertex_index', 'workgroup_id', 'workgroup_index')");
 }
 TEST_P(BuiltinDepthModeTest, Attribute_Builtin_DepthMode_Twice) {
     auto param = GetParam();
@@ -346,20 +348,41 @@ TEST_P(BuiltinDepthModeTest, Attribute_Builtin_DepthMode_Twice) {
 }
 INSTANTIATE_TEST_SUITE_P(WGSLParserTest, BuiltinDepthModeTest, testing::ValuesIn(kDepthModes));
 
-TEST_F(WGSLParserTest, Attribute_Builtin_DepthModeInvalid) {
-    for (auto invalid_string : {"42", "position", "<"}) {
-        auto p = parser(std::string("builtin(frag_depth, ") + invalid_string + ")");
-        auto attr = p->attribute();
-        EXPECT_FALSE(attr.matched);
-        EXPECT_TRUE(attr.errored);
-        EXPECT_EQ(attr.value, nullptr);
-        EXPECT_TRUE(p->has_error());
-        EXPECT_TRUE(p->error() == R"(1:21: expected builtin depth mode name
-Possible values: 'any', 'greater', 'less')" ||
-                    p->error() == R"(1:21: expected builtin depth mode name
-Did you mean 'any'?
-Possible values: 'any', 'greater', 'less')");
-    }
+TEST_F(WGSLParserTest, Attribute_Builtin_DepthModeInvalid_Numeric) {
+    auto p = parser(std::string("builtin(frag_depth, 42)"));
+    auto attr = p->attribute();
+    EXPECT_FALSE(attr.matched);
+    EXPECT_TRUE(attr.errored);
+    EXPECT_EQ(attr.value, nullptr);
+    EXPECT_TRUE(p->has_error());
+    EXPECT_EQ(p->error(), R"(1:21: expected builtin depth mode name
+Did you mean 'less'?
+Possible values: 'greater', 'less')")
+        << p->error();
+}
+
+TEST_F(WGSLParserTest, Attribute_Builtin_DepthModeInvalid_position) {
+    auto p = parser(std::string("builtin(frag_depth, position)"));
+    auto attr = p->attribute();
+    EXPECT_FALSE(attr.matched);
+    EXPECT_TRUE(attr.errored);
+    EXPECT_EQ(attr.value, nullptr);
+    EXPECT_TRUE(p->has_error());
+    EXPECT_EQ(p->error(), R"(1:21: expected builtin depth mode name
+Possible values: 'greater', 'less')")
+        << p->error();
+}
+
+TEST_F(WGSLParserTest, Attribute_Builtin_DepthModeInvalid_symbol) {
+    auto p = parser(std::string("builtin(frag_depth, <)"));
+    auto attr = p->attribute();
+    EXPECT_FALSE(attr.matched);
+    EXPECT_TRUE(attr.errored);
+    EXPECT_EQ(attr.value, nullptr);
+    EXPECT_TRUE(p->has_error());
+    EXPECT_EQ(p->error(), R"(1:21: expected builtin depth mode name
+Possible values: 'greater', 'less')")
+        << p->error();
 }
 
 TEST_F(WGSLParserTest, Attribute_Builtin_MissingLeftParen) {
@@ -390,7 +413,7 @@ TEST_F(WGSLParserTest, Attribute_Builtin_MissingValue) {
     EXPECT_EQ(attr.value, nullptr);
     EXPECT_TRUE(p->has_error());
     EXPECT_EQ(p->error(), R"(1:9: expected builtin value name
-Possible values: 'barycentric_coord', 'clip_distances', 'frag_depth', 'front_facing', 'global_invocation_id', 'instance_index', 'local_invocation_id', 'local_invocation_index', 'num_subgroups', 'num_workgroups', 'position', 'primitive_index', 'sample_index', 'sample_mask', 'subgroup_id', 'subgroup_invocation_id', 'subgroup_size', 'vertex_index', 'workgroup_id')");
+Possible values: 'barycentric_coord', 'clip_distances', 'frag_depth', 'front_facing', 'global_invocation_id', 'global_invocation_index', 'instance_index', 'local_invocation_id', 'local_invocation_index', 'num_subgroups', 'num_workgroups', 'position', 'primitive_index', 'sample_index', 'sample_mask', 'subgroup_id', 'subgroup_invocation_id', 'subgroup_size', 'vertex_index', 'workgroup_id', 'workgroup_index')");
 }
 
 TEST_F(WGSLParserTest, Attribute_Builtin_MisspelledValue) {
@@ -402,7 +425,7 @@ TEST_F(WGSLParserTest, Attribute_Builtin_MisspelledValue) {
     EXPECT_TRUE(p->has_error());
     EXPECT_EQ(p->error(), R"(1:9: expected builtin value name
 Did you mean 'position'?
-Possible values: 'barycentric_coord', 'clip_distances', 'frag_depth', 'front_facing', 'global_invocation_id', 'instance_index', 'local_invocation_id', 'local_invocation_index', 'num_subgroups', 'num_workgroups', 'position', 'primitive_index', 'sample_index', 'sample_mask', 'subgroup_id', 'subgroup_invocation_id', 'subgroup_size', 'vertex_index', 'workgroup_id')");
+Possible values: 'barycentric_coord', 'clip_distances', 'frag_depth', 'front_facing', 'global_invocation_id', 'global_invocation_index', 'instance_index', 'local_invocation_id', 'local_invocation_index', 'num_subgroups', 'num_workgroups', 'position', 'primitive_index', 'sample_index', 'sample_mask', 'subgroup_id', 'subgroup_invocation_id', 'subgroup_size', 'vertex_index', 'workgroup_id', 'workgroup_index')");
 }
 
 TEST_F(WGSLParserTest, Attribute_Interpolate_Flat) {

@@ -388,7 +388,6 @@ void main_1(tint_module_vars_struct tint_module_vars) {
         int const x_441 = i;
         i = as_type<int>((as_type<uint>(x_441) + as_type<uint>(1)));
       }
-      continue;
     }
   }
   float2 const x_444 = vCurrOffset;
@@ -468,7 +467,7 @@ main_out main_inner(float2 vMainuv_param, float4 v_output1_param, bool gl_FrontF
   (*tint_module_vars.gl_FrontFacing) = gl_FrontFacing_param;
   (*tint_module_vars.v_uv) = v_uv_param;
   (*tint_module_vars.v_output2) = v_output2_param;
-  main_1(tint_module_vars);
+  (main_1(tint_module_vars));
   return main_out{.glFragColor_1=(*tint_module_vars.glFragColor)};
 }
 

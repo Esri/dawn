@@ -46,7 +46,6 @@ list(INSERT CMAKE_MODULE_PATH 0 "${Dawn_SOURCE_DIR}/src/cmake")
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_DEBUG_POSTFIX "")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -102,7 +101,6 @@ elseif (WIN32)
     # Enable Vulkan in win32 compilation only
     # since UWP only supports d3d
     set(ENABLE_VULKAN ON)
-    set(ENABLE_SPIRV_VALIDATION ON)
   endif()
 elseif(APPLE)
   set(ENABLE_METAL ON)
@@ -112,12 +110,11 @@ elseif(APPLE)
 elseif(ANDROID)
   set(ENABLE_VULKAN ON)
   set(ENABLE_OPENGLES ON)
-  set(ENABLE_SPIRV_VALIDATION ON)
 elseif(UNIX)
   set(ENABLE_OPENGLES ON)
   set(ENABLE_DESKTOP_GL ON)
   set(ENABLE_VULKAN ON)
-  set(ENABLE_SPIRV_VALIDATION ON)
+  set(USE_WAYLAND ON)
   set(USE_X11 ON)
 endif()
 
@@ -152,6 +149,9 @@ option(DAWN_ENABLE_WEBGPU_ON_WEBGPU "Enable compilation of the WebGPU backend" $
 option(DAWN_ENABLE_DESKTOP_GL "Enable compilation of the OpenGL backend" ${ENABLE_DESKTOP_GL})
 option(DAWN_ENABLE_OPENGLES "Enable compilation of the OpenGL ES backend" ${ENABLE_OPENGLES})
 option(DAWN_ENABLE_VULKAN "Enable compilation of the Vulkan backend" ${ENABLE_VULKAN})
+if (DAWN_ENABLE_VULKAN OR DAWN_ENABLE_OPENGLES OR DAWN_ENABLE_DESKTOP_GL)
+set(ENABLE_SPIRV_VALIDATION ON)
+endif()
 option(DAWN_ENABLE_SPIRV_VALIDATION "Enable validation of SPIR-V" ${ENABLE_SPIRV_VALIDATION})
 option(DAWN_FORCE_SYSTEM_COMPONENT_LOAD "Allow system component fallback" ${FORCE_SYSTEM_COMPONENT_LOAD})
 
@@ -174,7 +174,7 @@ option(DAWN_BUILD_FUZZERS "Build Dawn fuzzers" OFF)
 
 option(DAWN_WERROR "Build with -Werror (or equivalent)" OFF)
 option(DAWN_WEVERYTHING "Build with -Weverything if using Clang" OFF)
-option(DAWN_ENABLE_PIC "Build with Position-Independent-Code enabled" OFF)
+option(DAWN_ENABLE_PIC "Build with Position-Independent-Code enabled" ON)
 
 option(DAWN_EMIT_COVERAGE "Emit code coverage information" OFF)
 set_if_not_defined(LLVM_SOURCE_DIR "${Dawn_LLVM_SOURCE_DIR}" "Directory to an LLVM source checkout. Required to build turbo-cov")
@@ -182,7 +182,7 @@ set_if_not_defined(LLVM_SOURCE_DIR "${Dawn_LLVM_SOURCE_DIR}" "Directory to an LL
 set_if_not_defined(DAWN_THIRD_PARTY_DIR "${Dawn_SOURCE_DIR}/third_party" "Directory in which to find third-party dependencies.")
 
 set_if_not_defined(DAWN_ABSEIL_DIR "${DAWN_THIRD_PARTY_DIR}/abseil-cpp" "Directory in which to find Abseil")
-set_if_not_defined(DAWN_GLFW_DIR "${DAWN_THIRD_PARTY_DIR}/glfw" "Directory in which to find GLFW")
+set_if_not_defined(DAWN_GLFW_DIR "${DAWN_THIRD_PARTY_DIR}/glfw3/src" "Directory in which to find GLFW")
 set_if_not_defined(DAWN_JINJA2_DIR "${DAWN_THIRD_PARTY_DIR}/jinja2" "Directory in which to find Jinja2")
 set_if_not_defined(DAWN_MARKUPSAFE_DIR "${DAWN_THIRD_PARTY_DIR}/markupsafe" "Directory in which to find MarkupSafe")
 set_if_not_defined(DAWN_KHRONOS_DIR "${DAWN_THIRD_PARTY_DIR}/khronos" "Directory in which to find Khronos GL headers")
@@ -191,8 +191,8 @@ set_if_not_defined(DAWN_PROTOBUF_DIR "${DAWN_THIRD_PARTY_DIR}/protobuf" "Directo
 set_if_not_defined(DAWN_LPM_DIR "${DAWN_THIRD_PARTY_DIR}/libprotobuf-mutator/src" "Directory in which to find libprotobuf")
 set_if_not_defined(DAWN_EMDAWNWEBGPU_DIR "${DAWN_THIRD_PARTY_DIR}/emdawnwebgpu" "Directory in which to find Dawn specific Emscripten bindings")
 set_if_not_defined(DAWN_GOOGLETEST_DIR "${DAWN_THIRD_PARTY_DIR}/googletest" "Directory in which to find googletest")
-set_if_not_defined(DAWN_EGL_REGISTRY_DIR "${DAWN_THIRD_PARTY_DIR}/khronos/EGL-Registry" "Directory in which to find EGL-Registry")
-set_if_not_defined(DAWN_OPENGL_REGISTRY_DIR "${DAWN_THIRD_PARTY_DIR}/khronos/OpenGL-Registry" "Directory in which to find OpenGL-Registry")
+set_if_not_defined(DAWN_EGL_REGISTRY_DIR "${DAWN_THIRD_PARTY_DIR}/EGL-Registry/src" "Directory in which to find EGL-Registry")
+set_if_not_defined(DAWN_OPENGL_REGISTRY_DIR "${DAWN_THIRD_PARTY_DIR}/OpenGL-Registry/src" "Directory in which to find OpenGL-Registry")
 set_if_not_defined(DAWN_SPIRV_TOOLS_DIR "${DAWN_THIRD_PARTY_DIR}/spirv-tools/src" "Directory in which to find SPIRV-Tools")
 set_if_not_defined(DAWN_SPIRV_HEADERS_DIR "${DAWN_THIRD_PARTY_DIR}/spirv-headers/src" "Directory in which to find SPIRV-Headers")
 set_if_not_defined(DAWN_GLSLANG_DIR "${DAWN_THIRD_PARTY_DIR}/glslang/src" "Directory in which to find GLSLang")
@@ -248,6 +248,7 @@ option(TINT_BUILD_FUZZER_VULKAN_SUPPORT "Build fuzzing Vulkan drivers" OFF)
 option(TINT_BUILD_BENCHMARKS "Build Tint benchmarks" OFF)
 option(TINT_BUILD_TESTS "Build tests" ON)
 option(TINT_BUILD_AS_OTHER_OS "Override OS detection to force building of *_other.cc files" OFF)
+option(TINT_BUILD_MESA "Build Mesa" OFF)
 
 if (EMSCRIPTEN)
   # Skip tint tests in emscripten build
@@ -258,7 +259,8 @@ endif()
 
 option(TINT_BUILD_TINTD "Build the WGSL language server" OFF)
 
-option(TINT_ENABLE_IR_VALIDATION "Enable IR validation for backend codegen" ${IS_DEBUG_BUILD})
+option(TINT_ENABLE_IR_DUMPING "Enable runtime control for dumping IR" ON)
+option(TINT_ENABLE_IR_VALIDATION_ASSERTS "Enable runtime control for IR validation assertions" ON)
 option(TINT_ENABLE_BREAK_IN_DEBUGGER "Enable tint::debugger::Break()" OFF)
 option(TINT_CHECK_CHROMIUM_STYLE "Check for [chromium-style] issues during build" OFF)
 option(TINT_RANDOMIZE_HASHES "Randomize the hash seed value to detect non-deterministic output" OFF)
@@ -333,10 +335,12 @@ message(STATUS "Tint build fuzzing vulkan drivers: ${TINT_BUILD_FUZZER_VULKAN_SU
 message(STATUS "Tint build benchmarks: ${TINT_BUILD_BENCHMARKS}")
 message(STATUS "Tint build tests: ${TINT_BUILD_TESTS}")
 message(STATUS "Tint build tintd: ${TINT_BUILD_TINTD}")
-message(STATUS "Tint enable IR validation: ${TINT_ENABLE_IR_VALIDATION}")
+message(STATUS "Tint enable IR dumping: ${TINT_ENABLE_IR_DUMPING}")
+message(STATUS "Tint enable IR validation assertions: ${TINT_ENABLE_IR_VALIDATION_ASSERTS}")
 message(STATUS "Tint enable break in debugger: ${TINT_ENABLE_BREAK_IN_DEBUGGER}")
 message(STATUS "Tint build checking [chromium-style]: ${TINT_CHECK_CHROMIUM_STYLE}")
 message(STATUS "Tint randomize hashes: ${TINT_RANDOMIZE_HASHES}")
+message(STATUS "Tint build Mesa: ${TINT_BUILD_MESA}")
 message(STATUS "")
 
 message(STATUS "Dawn third_party dir: ${DAWN_THIRD_PARTY_DIR}")
@@ -388,7 +392,6 @@ target_include_directories(dawn_public_config INTERFACE
 add_library(dawn_internal_config INTERFACE)
 target_include_directories(dawn_internal_config INTERFACE
     "${PROJECT_SOURCE_DIR}"
-    "${DAWN_SRC_DIR}"
     "${DAWN_BUILD_GEN_DIR}/src"
 )
 target_link_libraries(dawn_internal_config INTERFACE dawn_public_config)
@@ -444,6 +447,9 @@ if (DAWN_ENABLE_VULKAN)
 endif()
 if (DAWN_USE_WAYLAND)
     target_compile_definitions(dawn_internal_config INTERFACE "DAWN_USE_WAYLAND")
+endif()
+if (DAWN_SUPPORTS_GLFW_FOR_WINDOWING)
+    target_compile_definitions(dawn_internal_config INTERFACE "DAWN_SUPPORTS_GLFW_FOR_WINDOWING")
 endif()
 if (DAWN_USE_X11)
     target_compile_definitions(dawn_internal_config INTERFACE "DAWN_USE_X11")
@@ -518,7 +524,8 @@ if (DAWN_EMIT_COVERAGE)
   get_filename_component(CLANG_BIN_DIR ${CMAKE_C_COMPILER} DIRECTORY)
   set(PATH_WITH_CLANG "${CLANG_BIN_DIR}:$ENV{PATH}")
   add_custom_target(tint-generate-coverage
-    COMMAND ${CMAKE_COMMAND} -E env PATH=${PATH_WITH_CLANG} ./tools/tint-generate-coverage $<TARGET_FILE:tint_unittests>
+    COMMAND ${CMAKE_COMMAND} -E env PATH=${PATH_WITH_CLANG} vpython3 ./tools/code_coverage/coverage.py tint_unittests -b ${CMAKE_BINARY_DIR} -o ${TINT_ROOT_SOURCE_DIR}/coverage_report --format lcov --no-compile -c "$<TARGET_FILE:tint_unittests>"
+    COMMAND ${CMAKE_COMMAND} -E copy ${TINT_ROOT_SOURCE_DIR}/coverage_report/linux/coverage.lcov ${TINT_ROOT_SOURCE_DIR}/lcov.info
     DEPENDS tint_unittests
     WORKING_DIRECTORY ${TINT_ROOT_SOURCE_DIR}
     COMMENT "Generating tint coverage data"

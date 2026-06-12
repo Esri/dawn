@@ -30,10 +30,9 @@
 
 #include <vector>
 
-#include "dawn/native/RenderPipeline.h"
-
-#include "dawn/native/opengl/PipelineGL.h"
-#include "dawn/native/opengl/opengl_platform.h"
+#include "src/dawn/native/RenderPipeline.h"
+#include "src/dawn/native/opengl/PipelineGL.h"
+#include "src/dawn/native/opengl/opengl_platform.h"
 
 namespace dawn::native::opengl {
 
@@ -47,6 +46,9 @@ class RenderPipeline final : public RenderPipelineBase, public PipelineGL {
         const UnpackedPtr<RenderPipelineDescriptor>& descriptor);
 
     GLenum GetGLPrimitiveTopology() const;
+    GLuint GetVertexArrayObject() const;
+    GLuint GetProgramHandle() const;
+
     VertexAttributeMask GetAttributesUsingVertexBuffer(VertexBufferSlot slot) const;
 
     MaybeError ApplyNow(const OpenGLFunctions& gl,

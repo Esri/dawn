@@ -25,194 +25,194 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/CopyTextureForBrowserHelper.h"
+#include "src/dawn/native/CopyTextureForBrowserHelper.h"
 
 #include <utility>
 
-#include "dawn/native/BindGroup.h"
-#include "dawn/native/BindGroupLayout.h"
-#include "dawn/native/Buffer.h"
-#include "dawn/native/CommandBuffer.h"
-#include "dawn/native/CommandEncoder.h"
-#include "dawn/native/CommandValidation.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/ExternalTexture.h"
-#include "dawn/native/InternalPipelineStore.h"
-#include "dawn/native/Queue.h"
-#include "dawn/native/RenderPassEncoder.h"
-#include "dawn/native/RenderPipeline.h"
-#include "dawn/native/Sampler.h"
-#include "dawn/native/Texture.h"
 #include "dawn/native/ValidationUtils_autogen.h"
-#include "dawn/native/utils/WGPUHelpers.h"
+#include "src/dawn/common/Strings.h"
+#include "src/dawn/native/BindGroup.h"
+#include "src/dawn/native/BindGroupLayout.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/CommandBuffer.h"
+#include "src/dawn/native/CommandEncoder.h"
+#include "src/dawn/native/CommandValidation.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/ExternalTexture.h"
+#include "src/dawn/native/InternalPipelineStore.h"
+#include "src/dawn/native/Queue.h"
+#include "src/dawn/native/RenderPassEncoder.h"
+#include "src/dawn/native/RenderPipeline.h"
+#include "src/dawn/native/Sampler.h"
+#include "src/dawn/native/Texture.h"
+#include "src/dawn/native/utils/WGPUHelpers.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native {
 namespace {
-static const char sCopyForBrowserShader[] = R"(
-                struct GammaTransferParamsInternal {
-                G: f32,
-                A: f32,
-                B: f32,
-                C: f32,
-                D: f32,
-                E: f32,
-                F: f32,
-                padding: u32,
-            };
+static const char sCopyForBrowserShader[] = DAWN_MULTILINE(
+    struct GammaTransferParamsInternal {
+        G: f32,
+        A: f32,
+        B: f32,
+        C: f32,
+        D: f32,
+        E: f32,
+        F: f32,
+        padding: u32,
+    };
 
-            struct Uniforms {                                                    // offset   align   size
-                scale: vec2f,                                                // 0        8       8
-                offset: vec2f,                                               // 8        8       8
-                steps_mask: u32,                                                 // 16       4       4
-                // implicit padding;                                             // 20               12
-                conversion_matrix: mat3x3<f32>,                                  // 32       16      48
-                gamma_decoding_params: GammaTransferParamsInternal,              // 80       4       32
-                gamma_encoding_params: GammaTransferParamsInternal,              // 112      4       32
-                gamma_decoding_for_dst_srgb_params: GammaTransferParamsInternal, // 144      4       32
-            };
+    struct Uniforms {                                                     // offset   align   size
+        scale: vec2f,                                                     // 0        8       8
+        offset: vec2f,                                                    // 8        8       8
+        steps_mask: u32,                                                  // 16       4       4
+        // implicit padding;                                              // 20               12
+        conversion_matrix: mat3x3<f32>,                                   // 32       16      48
+        gamma_decoding_params: GammaTransferParamsInternal,               // 80       4       32
+        gamma_encoding_params: GammaTransferParamsInternal,               // 112      4       32
+        gamma_decoding_for_dst_srgb_params: GammaTransferParamsInternal,  // 144      4       32
+    };
 
-            @binding(0) @group(0) var<uniform> uniforms : Uniforms;
+    @binding(0) @group(0) var<uniform> uniforms : Uniforms;
 
-            struct VertexOutputs {
-                @location(0) texcoords : vec2f,
-                @builtin(position) position : vec4f,
-            };
+    struct VertexOutputs {
+        @location(0) texcoords : vec2f,
+        @builtin(position) position : vec4f,
+    };
 
-            // Chromium uses unified equation to construct gamma decoding function
-            // and gamma encoding function.
-            // The logic is:
-            //  if x < D
-            //      linear = C * x + F
-            //  nonlinear = pow(A * x + B, G) + E
-            // (https://source.chromium.org/chromium/chromium/src/+/main:ui/gfx/color_transform.cc;l=541)
-            // Expand the equation with sign() to make it handle all gamma conversions.
-            fn gamma_conversion(v: f32, params: GammaTransferParamsInternal) -> f32 {
-                // Linear part: C * x + F
-                if (abs(v) < params.D) {
-                    return sign(v) * (params.C * abs(v) + params.F);
-                }
+    // Chromium uses unified equation to construct gamma decoding function
+    // and gamma encoding function.
+    // The logic is:
+    //  if x < D
+    //      linear = C * x + F
+    //  nonlinear = pow(A * x + B, G) + E
+    // (https://source.chromium.org/chromium/chromium/src/+/main:ui/gfx/color_transform.cc;l=541)
+    // Expand the equation with sign() to make it handle all gamma conversions.
+    fn gamma_conversion(v: f32, params: GammaTransferParamsInternal) -> f32 {
+        // Linear part: C * x + F
+        if (abs(v) < params.D) {
+            return sign(v) * (params.C * abs(v) + params.F);
+        }
 
-                // Gamma part: pow(A * x + B, G) + E
-                return sign(v) * (pow(params.A * abs(v) + params.B, params.G) + params.E);
+        // Gamma part: pow(A * x + B, G) + E
+        return sign(v) * (pow(params.A * abs(v) + params.B, params.G) + params.E);
+    }
+
+    @vertex
+    fn vs_main(
+        @builtin(vertex_index) VertexIndex : u32
+    ) -> VertexOutputs {
+        var texcoord = array(
+            vec2f(-0.5, 0.0),
+            vec2f( 1.5, 0.0),
+            vec2f( 0.5, 2.0));
+
+        var output : VertexOutputs;
+        output.position = vec4f((texcoord[VertexIndex] * 2.0 - vec2f(1.0, 1.0)), 0.0, 1.0);
+        output.texcoords = texcoord[VertexIndex] * uniforms.scale + uniforms.offset;
+
+        return output;
+    }
+
+    @binding(1) @group(0) var mySampler: sampler;
+
+    // Resource used in copyTexture entry point only.
+    @binding(2) @group(0) var mySourceTexture: texture_2d<f32>;
+
+    // Resource used in copyExternalTexture entry point only.
+    @binding(2) @group(0) var mySourceExternalTexture: texture_external;
+
+    fn discardIfOutsideOfCopy(texcoord : vec2f) {
+        var clampedTexcoord =
+            clamp(texcoord, vec2f(0.0, 0.0), vec2f(1.0, 1.0));
+        if (!all(clampedTexcoord == texcoord)) {
+            discard;
+        }
+    }
+
+    fn transform(srcColor : vec4f) -> vec4f {
+        var color = srcColor;
+        let kUnpremultiplyStep = 0x01u;
+        let kDecodeToLinearStep = 0x02u;
+        let kConvertToDstGamutStep = 0x04u;
+        let kEncodeToGammaStep = 0x08u;
+        let kPremultiplyStep = 0x10u;
+        let kDecodeForSrgbDstFormat = 0x20u;
+        let kClearSrcAlphaToOne = 0x40u;
+
+        // Unpremultiply step. Applying color space conversion op on premultiplied source texture
+        // also needs to unpremultiply first.
+        // This step is exclusive with clear src alpha to one step.
+        if (bool(uniforms.steps_mask & kUnpremultiplyStep)) {
+            if (color.a != 0.0) {
+                color = vec4f(color.rgb / color.a, color.a);
             }
+        }
 
-            @vertex
-            fn vs_main(
-                @builtin(vertex_index) VertexIndex : u32
-            ) -> VertexOutputs {
-                var texcoord = array(
-                    vec2f(-0.5, 0.0),
-                    vec2f( 1.5, 0.0),
-                    vec2f( 0.5, 2.0));
+        // Linearize the source color using the source color space’s
+        // transfer function if it is non-linear.
+        if (bool(uniforms.steps_mask & kDecodeToLinearStep)) {
+            color = vec4f(gamma_conversion(color.r, uniforms.gamma_decoding_params),
+                                gamma_conversion(color.g, uniforms.gamma_decoding_params),
+                                gamma_conversion(color.b, uniforms.gamma_decoding_params),
+                                color.a);
+        }
 
-                var output : VertexOutputs;
-                output.position = vec4f((texcoord[VertexIndex] * 2.0 - vec2f(1.0, 1.0)), 0.0, 1.0);
-                output.texcoords = texcoord[VertexIndex] * uniforms.scale + uniforms.offset;
+        // Convert unpremultiplied, linear source colors to the destination gamut by
+        // multiplying by a 3x3 matrix. Calculate transformFromXYZD50 * transformToXYZD50
+        // in CPU side and upload the final result in uniforms.
+        if (bool(uniforms.steps_mask & kConvertToDstGamutStep)) {
+            color = vec4f(uniforms.conversion_matrix * color.rgb, color.a);
+        }
 
-                return output;
-            }
+        // Encode that color using the inverse of the destination color
+        // space’s transfer function if it is non-linear.
+        if (bool(uniforms.steps_mask & kEncodeToGammaStep)) {
+            color = vec4f(gamma_conversion(color.r, uniforms.gamma_encoding_params),
+                                gamma_conversion(color.g, uniforms.gamma_encoding_params),
+                                gamma_conversion(color.b, uniforms.gamma_encoding_params),
+                                color.a);
+        }
 
-            @binding(1) @group(0) var mySampler: sampler;
+        // Premultiply step.
+        // This step is exclusive with clear src alpha to one step.
+        if (bool(uniforms.steps_mask & kPremultiplyStep)) {
+            color = vec4f(color.rgb * color.a, color.a);
+        }
 
-            // Resource used in copyTexture entry point only.
-            @binding(2) @group(0) var mySourceTexture: texture_2d<f32>;
+        // Decode for copying from non-srgb formats to srgb formats
+        if (bool(uniforms.steps_mask & kDecodeForSrgbDstFormat)) {
+            color = vec4f(gamma_conversion(color.r, uniforms.gamma_decoding_for_dst_srgb_params),
+                                gamma_conversion(color.g, uniforms.gamma_decoding_for_dst_srgb_params),
+                                gamma_conversion(color.b, uniforms.gamma_decoding_for_dst_srgb_params),
+                                color.a);
+        }
 
-            // Resource used in copyExternalTexture entry point only.
-            @binding(2) @group(0) var mySourceExternalTexture: texture_external;
+        // Clear alpha to one step.
+        // This step is exclusive with premultiply/unpremultiply step.
+        if (bool(uniforms.steps_mask & kClearSrcAlphaToOne)) {
+            color.a = 1.0;
+        }
 
-            fn discardIfOutsideOfCopy(texcoord : vec2f) {
-                var clampedTexcoord =
-                    clamp(texcoord, vec2f(0.0, 0.0), vec2f(1.0, 1.0));
-                if (!all(clampedTexcoord == texcoord)) {
-                    discard;
-                }
-            }
+        return color;
+    }
 
-            fn transform(srcColor : vec4f) -> vec4f {
-                var color = srcColor;
-                let kUnpremultiplyStep = 0x01u;
-                let kDecodeToLinearStep = 0x02u;
-                let kConvertToDstGamutStep = 0x04u;
-                let kEncodeToGammaStep = 0x08u;
-                let kPremultiplyStep = 0x10u;
-                let kDecodeForSrgbDstFormat = 0x20u;
-                let kClearSrcAlphaToOne = 0x40u;
+    @fragment
+    fn copyTexture(@location(0) texcoord : vec2f) -> @location(0) vec4f {
+        discardIfOutsideOfCopy(texcoord);
 
-                // Unpremultiply step. Appling color space conversion op on premultiplied source texture
-                // also needs to unpremultiply first.
-                // This step is exclusive with clear src alpha to one step.
-                if (bool(uniforms.steps_mask & kUnpremultiplyStep)) {
-                    if (color.a != 0.0) {
-                        color = vec4f(color.rgb / color.a, color.a);
-                    }
-                }
+        var color = textureSample(mySourceTexture, mySampler, texcoord);
+        return transform(color);
+    }
 
-                // Linearize the source color using the source color space’s
-                // transfer function if it is non-linear.
-                if (bool(uniforms.steps_mask & kDecodeToLinearStep)) {
-                    color = vec4f(gamma_conversion(color.r, uniforms.gamma_decoding_params),
-                                      gamma_conversion(color.g, uniforms.gamma_decoding_params),
-                                      gamma_conversion(color.b, uniforms.gamma_decoding_params),
-                                      color.a);
-                }
+    @fragment
+    fn copyExternalTexture(@location(0) texcoord : vec2f) -> @location(0) vec4f {
+        discardIfOutsideOfCopy(texcoord);
 
-                // Convert unpremultiplied, linear source colors to the destination gamut by
-                // multiplying by a 3x3 matrix. Calculate transformFromXYZD50 * transformToXYZD50
-                // in CPU side and upload the final result in uniforms.
-                if (bool(uniforms.steps_mask & kConvertToDstGamutStep)) {
-                    color = vec4f(uniforms.conversion_matrix * color.rgb, color.a);
-                }
-
-                // Encode that color using the inverse of the destination color
-                // space’s transfer function if it is non-linear.
-                if (bool(uniforms.steps_mask & kEncodeToGammaStep)) {
-                    color = vec4f(gamma_conversion(color.r, uniforms.gamma_encoding_params),
-                                      gamma_conversion(color.g, uniforms.gamma_encoding_params),
-                                      gamma_conversion(color.b, uniforms.gamma_encoding_params),
-                                      color.a);
-                }
-
-                // Premultiply step.
-                // This step is exclusive with clear src alpha to one step.
-                if (bool(uniforms.steps_mask & kPremultiplyStep)) {
-                    color = vec4f(color.rgb * color.a, color.a);
-                }
-
-                // Decode for copying from non-srgb formats to srgb formats
-                if (bool(uniforms.steps_mask & kDecodeForSrgbDstFormat)) {
-                    color = vec4f(gamma_conversion(color.r, uniforms.gamma_decoding_for_dst_srgb_params),
-                                      gamma_conversion(color.g, uniforms.gamma_decoding_for_dst_srgb_params),
-                                      gamma_conversion(color.b, uniforms.gamma_decoding_for_dst_srgb_params),
-                                      color.a);
-                }
-
-                // Clear alpha to one step.
-                // This step is exclusive with premultiply/unpremultiply step.
-                if (bool(uniforms.steps_mask & kClearSrcAlphaToOne)) {
-                    color.a = 1.0;
-                }
-
-                return color;
-            }
-
-            @fragment
-            fn copyTexture(@location(0) texcoord : vec2f
-            ) -> @location(0) vec4f {
-                discardIfOutsideOfCopy(texcoord);
-
-                var color = textureSample(mySourceTexture, mySampler, texcoord);
-                return transform(color);
-            }
-
-            @fragment
-            fn copyExternalTexture(@location(0) texcoord : vec2f
-            ) -> @location(0) vec4f {
-                discardIfOutsideOfCopy(texcoord);
-
-                var color = textureSampleBaseClampToEdge(mySourceExternalTexture, mySampler, texcoord);
-                return transform(color);
-            }
-        )";
+        var color = textureSampleBaseClampToEdge(mySourceExternalTexture, mySampler, texcoord);
+        return transform(color);  // NOLINT(build/include_what_you_use)
+    }
+);
 
 // Follow the same order of skcms_TransferFunction
 // https://source.chromium.org/chromium/chromium/src/+/main:third_party/skia/include/third_party/skcms/skcms.h;l=46;
@@ -446,33 +446,41 @@ MaybeError DoCopyForBrowser(DeviceBase* device,
         stepsMask |= kDecodeToLinearStep;
         const float* decodingParams = options->srcTransferFunctionParameters;
 
-        uniformData.gammaDecodingParams = {decodingParams[0], decodingParams[1], decodingParams[2],
-                                           decodingParams[3], decodingParams[4], decodingParams[5],
-                                           decodingParams[6]};
+        uniformData.gammaDecodingParams = {decodingParams[0],
+                                           DAWN_UNSAFE_TODO(decodingParams[1]),
+                                           DAWN_UNSAFE_TODO(decodingParams[2]),
+                                           DAWN_UNSAFE_TODO(decodingParams[3]),
+                                           DAWN_UNSAFE_TODO(decodingParams[4]),
+                                           DAWN_UNSAFE_TODO(decodingParams[5]),
+                                           DAWN_UNSAFE_TODO(decodingParams[6])};
 
         stepsMask |= kConvertToDstGamutStep;
         const float* matrix = options->conversionMatrix;
         uniformData.conversionMatrix = {{
             matrix[0],
-            matrix[1],
-            matrix[2],
+            DAWN_UNSAFE_TODO(matrix[1]),
+            DAWN_UNSAFE_TODO(matrix[2]),
             0.0,
-            matrix[3],
-            matrix[4],
-            matrix[5],
+            DAWN_UNSAFE_TODO(matrix[3]),
+            DAWN_UNSAFE_TODO(matrix[4]),
+            DAWN_UNSAFE_TODO(matrix[5]),
             0.0,
-            matrix[6],
-            matrix[7],
-            matrix[8],
+            DAWN_UNSAFE_TODO(matrix[6]),
+            DAWN_UNSAFE_TODO(matrix[7]),
+            DAWN_UNSAFE_TODO(matrix[8]),
             0.0,
         }};
 
         stepsMask |= kEncodeToGammaStep;
         const float* encodingParams = options->dstTransferFunctionParameters;
 
-        uniformData.gammaEncodingParams = {encodingParams[0], encodingParams[1], encodingParams[2],
-                                           encodingParams[3], encodingParams[4], encodingParams[5],
-                                           encodingParams[6]};
+        uniformData.gammaEncodingParams = {encodingParams[0],
+                                           DAWN_UNSAFE_TODO(encodingParams[1]),
+                                           DAWN_UNSAFE_TODO(encodingParams[2]),
+                                           DAWN_UNSAFE_TODO(encodingParams[3]),
+                                           DAWN_UNSAFE_TODO(encodingParams[4]),
+                                           DAWN_UNSAFE_TODO(encodingParams[5]),
+                                           DAWN_UNSAFE_TODO(encodingParams[6])};
     }
 
     if (options->dstAlphaMode == wgpu::AlphaMode::Premultiplied) {
@@ -679,7 +687,7 @@ MaybeError ValidateCopyExternalTextureForBrowser(DeviceBase* device,
     DAWN_TRY(device->ValidateObject(source->externalTexture));
     DAWN_TRY(source->externalTexture->ValidateCanUseInSubmitNow());
 
-    Extent2D sourceSize;
+    Extent2D sourceSize = {};
     sourceSize.width = source->naturalSize.width;
     sourceSize.height = source->naturalSize.height;
 
@@ -692,7 +700,7 @@ MaybeError ValidateCopyExternalTextureForBrowser(DeviceBase* device,
                 static_cast<uint64_t>(sourceSize.height) ||
             static_cast<uint64_t>(source->origin.z) > 0,
         "Texture copy range (origin: %s, copySize: %s) touches outside of %s source size (%s).",
-        &source->origin, copySize, source->externalTexture, &sourceSize);
+        source->origin, *copySize, source->externalTexture, sourceSize);
     DAWN_INVALID_IF(source->origin.z > 0, "Source has a non-zero z origin (%u).", source->origin.z);
     DAWN_INVALID_IF(
         options->internalUsage && !device->HasFeature(Feature::DawnInternalUsages),
