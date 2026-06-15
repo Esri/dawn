@@ -34,6 +34,7 @@
 #include "src/dawn/native/d3d12/BackendD3D12.h"
 #include "src/dawn/native/d3d12/PhysicalDeviceD3D12.h"
 #include "src/dawn/native/d3d12/PlatformFunctionsD3D12.h"
+#include <d3d12.h>
 
 typedef struct D3D12_FEATURE_DATA_D3D12_OPTIONS13 {
     BOOL UnrestrictedBufferTextureCopyPitchSupported;
@@ -43,6 +44,20 @@ typedef struct D3D12_FEATURE_DATA_D3D12_OPTIONS13 {
     BOOL TextureCopyBetweenDimensionsSupported;
     BOOL AlphaBlendFactorSupported;
   } D3D12_FEATURE_DATA_D3D12_OPTIONS13;
+
+typedef enum D3D12_WAVE_MMA_TIER {
+  D3D12_WAVE_MMA_TIER_NOT_SUPPORTED = 0,
+  D3D12_WAVE_MMA_TIER_1_0 = 10
+} ;
+
+typedef struct D3D12_FEATURE_DATA_D3D12_OPTIONS9 {
+  BOOL                MeshShaderPipelineStatsSupported;
+  BOOL                MeshShaderSupportsFullRangeRenderTargetArrayIndex;
+  BOOL                AtomicInt64OnTypedResourceSupported;
+  BOOL                AtomicInt64OnGroupSharedSupported;
+  BOOL                DerivativesInMeshAndAmplificationShadersSupported;
+  D3D12_WAVE_MMA_TIER WaveMMATier;
+} D3D12_FEATURE_DATA_D3D12_OPTIONS9;
 
 auto D3D12_FEATURE_D3D12_OPTIONS13 = static_cast<D3D12_FEATURE>(42);
 
@@ -151,7 +166,7 @@ ResultOrError<D3D12DeviceInfo> GatherDeviceInfo(const PhysicalDevice& physicalDe
 #ifdef DAWN_USE_AGILITY_SDK
         {D3D_SHADER_MODEL_6_10},
 #endif
-        {D3D_SHADER_MODEL_6_9},  {D3D_SHADER_MODEL_6_8}, {D3D_SHADER_MODEL_6_7},
+        {static_cast<D3D_SHADER_MODEL>(D3D_SHADER_MODEL_6_9)},  {static_cast<D3D_SHADER_MODEL>(D3D_SHADER_MODEL_6_8)}, {static_cast<D3D_SHADER_MODEL>(D3D_SHADER_MODEL_6_7)},
         {D3D_SHADER_MODEL_6_6},  {D3D_SHADER_MODEL_6_5}, {D3D_SHADER_MODEL_6_4},
         {D3D_SHADER_MODEL_6_3},  {D3D_SHADER_MODEL_6_2}, {D3D_SHADER_MODEL_6_1},
         {D3D_SHADER_MODEL_6_0},  {D3D_SHADER_MODEL_5_1}};
@@ -195,7 +210,7 @@ ResultOrError<D3D12DeviceInfo> GatherDeviceInfo(const PhysicalDevice& physicalDe
             if (driverShaderModel >= D3D_SHADER_MODEL_6_6 && featureOptions1.Int64ShaderOps) {
                 D3D12_FEATURE_DATA_D3D12_OPTIONS9 featureOptions9 = {};
                 if (SUCCEEDED(physicalDevice.GetDevice()->CheckFeatureSupport(
-                        D3D12_FEATURE_D3D12_OPTIONS9, &featureOptions9, sizeof(featureOptions9)))) {
+                        static_cast<D3D12_FEATURE>(D3D12_FEATURE_D3D12_OPTIONS9), &featureOptions9, sizeof(featureOptions9)))) {
                     info.supportsInt64Atomics = featureOptions9.AtomicInt64OnTypedResourceSupported;
                 }
             }
