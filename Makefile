@@ -20,11 +20,11 @@ ifndef AR
 endif
 
 ifndef CCACHE_HOME
-  CCACHE_HOME = /Users/mark8487/dev/rtc/3rdparty/architecture/premake/macos/ccache
+  CCACHE_HOME = /home/linux/dev/rtc/3rdparty/architecture/premake/linux/ccache
 endif
 
 ifndef CCACHE_BASEDIR
-  export CCACHE_BASEDIR=/Users/mark8487/dev/rtc
+  export CCACHE_BASEDIR=/home/linux/dev/rtc
 endif
 ifndef CCACHE_COMPILERCHECK
   export CCACHE_COMPILERCHECK=content
@@ -36,7 +36,7 @@ ifndef CCACHE_SLOPPINESS
   export CCACHE_SLOPPINESS=time_macros
 endif
 ifndef CCACHE_TEMPDIR
-  export CCACHE_TEMPDIR=/tmp/mark8487/ccache
+  export CCACHE_TEMPDIR=/tmp/linux/ccache
 endif
 ifndef CCACHE_UMASK
   export CCACHE_UMASK=002
@@ -51,18 +51,18 @@ ifndef RESCOMP
 endif
 
 ifeq ($(config),debugarm64)
-  OBJDIR     = ../../output/intermediate/3rdparty/dawn/macos_arm64_debug/ARM64
-  TARGETDIR  = ../../output/macos_arm64_debug/staticlib
+  OBJDIR     = ../../output/intermediate/3rdparty/dawn/linux_arm64_debug/ARM64
+  TARGETDIR  = ../../output/linux_arm64_debug/staticlib
   TARGET     = $(TARGETDIR)/libdawn.a
-  DEFINES   += -DRTC -DRTC_COCOA_FAMILY -DRTC_COCOA_OSX -DOSX -DMAC -DRTC_ARM64 -DDEBUG -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DTINT_BUILD_IS_MAC=1 -DTINT_BUILD_MSL_WRITER=1 -DTINT_BUILD_SPV_READER=0 -DDAWN_ENABLE_BACKEND_METAL
-  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp
+  DEFINES   += -DRTC -DRTC_LINUX_FAMILY -DRTC_LINUX_DESKTOP -D_GNU_SOURCE -DRTC_ARM64 -DDEBUG -DDAWN_DISABLE_LOGGING -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DDAWN_USE_X11 -DTINT_BUILD_IS_LINUX=1 -DDAWN_ENABLE_SPIRV_VALIDATION -DTINT_BUILD_SPV_READER=1 -DTINT_BUILD_SPV_WRITER=1 -DDAWN_ENABLE_BACKEND_VULKAN
+  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp -I../SPIRV-Headers/include -I../SPIRV-Tools/include -I../SPIRV-Tools/out/gen -I../SPIRV-Tools -I../Vulkan-Headers/include -I../Vulkan-Utility-Libraries/include
   CPPFLAGS    += -MMD -MP $(DEFINES) $(INCLUDES)
-  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -g -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -target arm64-apple-macos14.0
+  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -g -m64 -fPIC -fcolor-diagnostics -pipe -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden --target=aarch64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/aarch64 -fstandalone-debug
   CFLAGS      += $(COMMONFLAGS) -std=c11
-  CXXFLAGS    += $(COMMONFLAGS) -std=c++20
-  LDFLAGS   += -L../../output/macos_arm64_debug/bin -L../../output/macos_arm64_debug/staticlib -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -dead_strip -dead_strip_dylibs -target arm64-apple-macos14.0
+  CXXFLAGS    += $(COMMONFLAGS) -stdlib=libc++ -std=c++20
+  LDFLAGS   += -L../../output/linux_arm64_debug/bin -L../../output/linux_arm64_debug/staticlib -m64 -Wl,--as-needed -Wl,--no-undefined -fuse-ld=lld -rtlib=compiler-rt --target=aarch64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/aarch64
   RESFLAGS  += $(DEFINES) $(INCLUDES) 
-  LIBS      += -ldl -lpthread
+  LIBS      += -Wl,--start-group -ldl -lpthread -Wl,--end-group
   LDDEPS    += 
   LINKCMD    = $(AR) rcs $(TARGET) $(OBJECTS)
   define PREBUILDCMDS
@@ -74,18 +74,18 @@ ifeq ($(config),debugarm64)
 endif
 
 ifeq ($(config),releasearm64)
-  OBJDIR     = ../../output/intermediate/3rdparty/dawn/macos_arm64_release/ARM64
-  TARGETDIR  = ../../output/macos_arm64_release/staticlib
+  OBJDIR     = ../../output/intermediate/3rdparty/dawn/linux_arm64_release/ARM64
+  TARGETDIR  = ../../output/linux_arm64_release/staticlib
   TARGET     = $(TARGETDIR)/libdawn.a
-  DEFINES   += -DRTC -DRTC_COCOA_FAMILY -DRTC_COCOA_OSX -DOSX -DMAC -DRTC_ARM64 -DNDEBUG -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DTINT_BUILD_IS_MAC=1 -DTINT_BUILD_MSL_WRITER=1 -DTINT_BUILD_SPV_READER=0 -DDAWN_ENABLE_BACKEND_METAL
-  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp
+  DEFINES   += -DRTC -DRTC_LINUX_FAMILY -DRTC_LINUX_DESKTOP -D_GNU_SOURCE -DRTC_ARM64 -DNDEBUG -DDAWN_DISABLE_LOGGING -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DDAWN_USE_X11 -DTINT_BUILD_IS_LINUX=1 -DDAWN_ENABLE_SPIRV_VALIDATION -DTINT_BUILD_SPV_READER=1 -DTINT_BUILD_SPV_WRITER=1 -DDAWN_ENABLE_BACKEND_VULKAN
+  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp -I../SPIRV-Headers/include -I../SPIRV-Tools/include -I../SPIRV-Tools/out/gen -I../SPIRV-Tools -I../Vulkan-Headers/include -I../Vulkan-Utility-Libraries/include
   CPPFLAGS    += -MMD -MP $(DEFINES) $(INCLUDES)
-  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -O3 -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -target arm64-apple-macos14.0 -flto=thin
+  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -O3 -m64 -fPIC -fcolor-diagnostics -pipe -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden --target=aarch64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/aarch64 -fdata-sections -ffunction-sections -flto=thin
   CFLAGS      += $(COMMONFLAGS) -std=c11
-  CXXFLAGS    += $(COMMONFLAGS) -std=c++20
-  LDFLAGS   += -L../../output/macos_arm64_release/bin -L../../output/macos_arm64_release/staticlib -Wl,-S -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -dead_strip -dead_strip_dylibs -target arm64-apple-macos14.0 -flto=thin -Wl,-cache_path_lto,/Users/mark8487/.thinLTO -Wl,-prune_after_lto,604800
+  CXXFLAGS    += $(COMMONFLAGS) -stdlib=libc++ -std=c++20
+  LDFLAGS   += -L../../output/linux_arm64_release/bin -L../../output/linux_arm64_release/staticlib -s -m64 -Wl,--as-needed -Wl,--no-undefined -fuse-ld=lld -rtlib=compiler-rt --target=aarch64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/aarch64 -Wl,--gc-sections -Wl,--icf=all -flto=thin -Wl,--thinlto-cache-dir=/home/linux/.thinLTO -Wl,--thinlto-cache-policy,cache_size_bytes=5g
   RESFLAGS  += $(DEFINES) $(INCLUDES) 
-  LIBS      += -ldl -lpthread
+  LIBS      += -Wl,--start-group -ldl -lpthread -Wl,--end-group
   LDDEPS    += 
   LINKCMD    = $(AR) rcs $(TARGET) $(OBJECTS)
   define PREBUILDCMDS
@@ -97,18 +97,18 @@ ifeq ($(config),releasearm64)
 endif
 
 ifeq ($(config),testarm64)
-  OBJDIR     = ../../output/intermediate/3rdparty/dawn/macos_arm64_test/ARM64
-  TARGETDIR  = ../../output/macos_arm64_test/staticlib
+  OBJDIR     = ../../output/intermediate/3rdparty/dawn/linux_arm64_test/ARM64
+  TARGETDIR  = ../../output/linux_arm64_test/staticlib
   TARGET     = $(TARGETDIR)/libdawn.a
-  DEFINES   += -DRTC -DRTC_COCOA_FAMILY -DRTC_COCOA_OSX -DOSX -DMAC -DRTC_ARM64 -DNDEBUG -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DTINT_BUILD_IS_MAC=1 -DTINT_BUILD_MSL_WRITER=1 -DTINT_BUILD_SPV_READER=0 -DDAWN_ENABLE_BACKEND_METAL
-  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp
+  DEFINES   += -DRTC -DRTC_LINUX_FAMILY -DRTC_LINUX_DESKTOP -D_GNU_SOURCE -DRTC_ARM64 -DNDEBUG -DDAWN_DISABLE_LOGGING -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DDAWN_USE_X11 -DTINT_BUILD_IS_LINUX=1 -DDAWN_ENABLE_SPIRV_VALIDATION -DTINT_BUILD_SPV_READER=1 -DTINT_BUILD_SPV_WRITER=1 -DDAWN_ENABLE_BACKEND_VULKAN
+  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp -I../SPIRV-Headers/include -I../SPIRV-Tools/include -I../SPIRV-Tools/out/gen -I../SPIRV-Tools -I../Vulkan-Headers/include -I../Vulkan-Utility-Libraries/include
   CPPFLAGS    += -MMD -MP $(DEFINES) $(INCLUDES)
-  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -O3 -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -target arm64-apple-macos14.0
+  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -O3 -m64 -fPIC -fcolor-diagnostics -pipe -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden --target=aarch64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/aarch64
   CFLAGS      += $(COMMONFLAGS) -std=c11
-  CXXFLAGS    += $(COMMONFLAGS) -std=c++20
-  LDFLAGS   += -L../../output/macos_arm64_test/bin -L../../output/macos_arm64_test/staticlib -Wl,-S -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -dead_strip -dead_strip_dylibs -target arm64-apple-macos14.0
+  CXXFLAGS    += $(COMMONFLAGS) -stdlib=libc++ -std=c++20
+  LDFLAGS   += -L../../output/linux_arm64_test/bin -L../../output/linux_arm64_test/staticlib -s -m64 -Wl,--as-needed -Wl,--no-undefined -fuse-ld=lld -rtlib=compiler-rt --target=aarch64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/aarch64
   RESFLAGS  += $(DEFINES) $(INCLUDES) 
-  LIBS      += -ldl -lpthread
+  LIBS      += -Wl,--start-group -ldl -lpthread -Wl,--end-group
   LDDEPS    += 
   LINKCMD    = $(AR) rcs $(TARGET) $(OBJECTS)
   define PREBUILDCMDS
@@ -120,18 +120,18 @@ ifeq ($(config),testarm64)
 endif
 
 ifeq ($(config),debug64)
-  OBJDIR     = ../../output/intermediate/3rdparty/dawn/macos_x64_debug/x64
-  TARGETDIR  = ../../output/macos_x64_debug/staticlib
+  OBJDIR     = ../../output/intermediate/3rdparty/dawn/linux_x64_debug/x64
+  TARGETDIR  = ../../output/linux_x64_debug/staticlib
   TARGET     = $(TARGETDIR)/libdawn.a
-  DEFINES   += -DRTC -DRTC_COCOA_FAMILY -DRTC_COCOA_OSX -DOSX -DMAC -DRTC_X64 -DDEBUG -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DTINT_BUILD_IS_MAC=1 -DTINT_BUILD_MSL_WRITER=1 -DTINT_BUILD_SPV_READER=0 -DDAWN_ENABLE_BACKEND_METAL
-  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp
+  DEFINES   += -DRTC -DRTC_LINUX_FAMILY -DRTC_LINUX_DESKTOP -D_GNU_SOURCE -DRTC_X64 -DDEBUG -DDAWN_DISABLE_LOGGING -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DDAWN_USE_X11 -DTINT_BUILD_IS_LINUX=1 -DDAWN_ENABLE_SPIRV_VALIDATION -DTINT_BUILD_SPV_READER=1 -DTINT_BUILD_SPV_WRITER=1 -DDAWN_ENABLE_BACKEND_VULKAN
+  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp -I../SPIRV-Headers/include -I../SPIRV-Tools/include -I../SPIRV-Tools/out/gen -I../SPIRV-Tools -I../Vulkan-Headers/include -I../Vulkan-Utility-Libraries/include
   CPPFLAGS    += -MMD -MP $(DEFINES) $(INCLUDES)
-  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -g -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -target x86_64-apple-macos14.0 -mssse3
+  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -g -m64 -fPIC -fcolor-diagnostics -pipe -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -mssse3 --target=x86_64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/x86_64 -fstandalone-debug
   CFLAGS      += $(COMMONFLAGS) -std=c11
-  CXXFLAGS    += $(COMMONFLAGS) -std=c++20
-  LDFLAGS   += -L../../output/macos_x64_debug/bin -L../../output/macos_x64_debug/staticlib -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -dead_strip -dead_strip_dylibs -target x86_64-apple-macos14.0 -mssse3
+  CXXFLAGS    += $(COMMONFLAGS) -stdlib=libc++ -std=c++20
+  LDFLAGS   += -L../../output/linux_x64_debug/bin -L../../output/linux_x64_debug/staticlib -m64 -Wl,--as-needed -Wl,--no-undefined -fuse-ld=lld -rtlib=compiler-rt --target=x86_64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/x86_64
   RESFLAGS  += $(DEFINES) $(INCLUDES) 
-  LIBS      += -ldl -lpthread
+  LIBS      += -Wl,--start-group -ldl -lpthread -Wl,--end-group
   LDDEPS    += 
   LINKCMD    = $(AR) rcs $(TARGET) $(OBJECTS)
   define PREBUILDCMDS
@@ -143,18 +143,18 @@ ifeq ($(config),debug64)
 endif
 
 ifeq ($(config),release64)
-  OBJDIR     = ../../output/intermediate/3rdparty/dawn/macos_x64_release/x64
-  TARGETDIR  = ../../output/macos_x64_release/staticlib
+  OBJDIR     = ../../output/intermediate/3rdparty/dawn/linux_x64_release/x64
+  TARGETDIR  = ../../output/linux_x64_release/staticlib
   TARGET     = $(TARGETDIR)/libdawn.a
-  DEFINES   += -DRTC -DRTC_COCOA_FAMILY -DRTC_COCOA_OSX -DOSX -DMAC -DRTC_X64 -DNDEBUG -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DTINT_BUILD_IS_MAC=1 -DTINT_BUILD_MSL_WRITER=1 -DTINT_BUILD_SPV_READER=0 -DDAWN_ENABLE_BACKEND_METAL
-  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp
+  DEFINES   += -DRTC -DRTC_LINUX_FAMILY -DRTC_LINUX_DESKTOP -D_GNU_SOURCE -DRTC_X64 -DNDEBUG -DDAWN_DISABLE_LOGGING -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DDAWN_USE_X11 -DTINT_BUILD_IS_LINUX=1 -DDAWN_ENABLE_SPIRV_VALIDATION -DTINT_BUILD_SPV_READER=1 -DTINT_BUILD_SPV_WRITER=1 -DDAWN_ENABLE_BACKEND_VULKAN
+  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp -I../SPIRV-Headers/include -I../SPIRV-Tools/include -I../SPIRV-Tools/out/gen -I../SPIRV-Tools -I../Vulkan-Headers/include -I../Vulkan-Utility-Libraries/include
   CPPFLAGS    += -MMD -MP $(DEFINES) $(INCLUDES)
-  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -O3 -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -target x86_64-apple-macos14.0 -mssse3 -flto=thin
+  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -O3 -m64 -fPIC -fcolor-diagnostics -pipe -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -mssse3 --target=x86_64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/x86_64 -fdata-sections -ffunction-sections -flto=thin
   CFLAGS      += $(COMMONFLAGS) -std=c11
-  CXXFLAGS    += $(COMMONFLAGS) -std=c++20
-  LDFLAGS   += -L../../output/macos_x64_release/bin -L../../output/macos_x64_release/staticlib -Wl,-S -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -dead_strip -dead_strip_dylibs -target x86_64-apple-macos14.0 -mssse3 -flto=thin -Wl,-cache_path_lto,/Users/mark8487/.thinLTO -Wl,-prune_after_lto,604800
+  CXXFLAGS    += $(COMMONFLAGS) -stdlib=libc++ -std=c++20
+  LDFLAGS   += -L../../output/linux_x64_release/bin -L../../output/linux_x64_release/staticlib -s -m64 -Wl,--as-needed -Wl,--no-undefined -fuse-ld=lld -rtlib=compiler-rt --target=x86_64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/x86_64 -Wl,--gc-sections -Wl,--icf=all -flto=thin -Wl,--thinlto-cache-dir=/home/linux/.thinLTO -Wl,--thinlto-cache-policy,cache_size_bytes=5g
   RESFLAGS  += $(DEFINES) $(INCLUDES) 
-  LIBS      += -ldl -lpthread
+  LIBS      += -Wl,--start-group -ldl -lpthread -Wl,--end-group
   LDDEPS    += 
   LINKCMD    = $(AR) rcs $(TARGET) $(OBJECTS)
   define PREBUILDCMDS
@@ -166,18 +166,18 @@ ifeq ($(config),release64)
 endif
 
 ifeq ($(config),test64)
-  OBJDIR     = ../../output/intermediate/3rdparty/dawn/macos_x64_test/x64
-  TARGETDIR  = ../../output/macos_x64_test/staticlib
+  OBJDIR     = ../../output/intermediate/3rdparty/dawn/linux_x64_test/x64
+  TARGETDIR  = ../../output/linux_x64_test/staticlib
   TARGET     = $(TARGETDIR)/libdawn.a
-  DEFINES   += -DRTC -DRTC_COCOA_FAMILY -DRTC_COCOA_OSX -DOSX -DMAC -DRTC_X64 -DNDEBUG -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DTINT_BUILD_IS_MAC=1 -DTINT_BUILD_MSL_WRITER=1 -DTINT_BUILD_SPV_READER=0 -DDAWN_ENABLE_BACKEND_METAL
-  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp
+  DEFINES   += -DRTC -DRTC_LINUX_FAMILY -DRTC_LINUX_DESKTOP -D_GNU_SOURCE -DRTC_X64 -DNDEBUG -DDAWN_DISABLE_LOGGING -DDAWN_FORCE_SYSTEM_COMPONENT_LOAD -DDAWN_NATIVE_IMPLEMENTATION -DSTRIP_LOG=1 -DTINT_BUILD_WGSL_READER=1 -DTINT_BUILD_WGSL_WRITER=1 -DTINT_BUILD_NULL_WRITER=1 -DDAWN_USE_X11 -DTINT_BUILD_IS_LINUX=1 -DDAWN_ENABLE_SPIRV_VALIDATION -DTINT_BUILD_SPV_READER=1 -DTINT_BUILD_SPV_WRITER=1 -DDAWN_ENABLE_BACKEND_VULKAN
+  INCLUDES  += -I. -Iout/gen/include -Iinclude -Iout/gen/src -Isrc -Isrc/dawn/partition_alloc -Isrc/dawn/utils -I../abseil-cpp -I../SPIRV-Headers/include -I../SPIRV-Tools/include -I../SPIRV-Tools/out/gen -I../SPIRV-Tools -I../Vulkan-Headers/include -I../Vulkan-Utility-Libraries/include
   CPPFLAGS    += -MMD -MP $(DEFINES) $(INCLUDES)
-  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -O3 -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -target x86_64-apple-macos14.0 -mssse3
+  COMMONFLAGS += $(CPPFLAGS) $(ARCH) -O3 -m64 -fPIC -fcolor-diagnostics -pipe -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -mssse3 --target=x86_64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/x86_64
   CFLAGS      += $(COMMONFLAGS) -std=c11
-  CXXFLAGS    += $(COMMONFLAGS) -std=c++20
-  LDFLAGS   += -L../../output/macos_x64_test/bin -L../../output/macos_x64_test/staticlib -Wl,-S -m64 -isysroot /Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -F/Applications/Xcode_16.2.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks -F/Library/Frameworks -ffp-model=precise -ffp-contract=off -fvisibility=hidden -fvisibility-inlines-hidden -fcolor-diagnostics -dead_strip -dead_strip_dylibs -target x86_64-apple-macos14.0 -mssse3
+  CXXFLAGS    += $(COMMONFLAGS) -stdlib=libc++ -std=c++20
+  LDFLAGS   += -L../../output/linux_x64_test/bin -L../../output/linux_x64_test/staticlib -s -m64 -Wl,--as-needed -Wl,--no-undefined -fuse-ld=lld -rtlib=compiler-rt --target=x86_64-unknown-linux-gnu --sysroot=/usr/local/rtc/sysroot/redhat8.4/x86_64
   RESFLAGS  += $(DEFINES) $(INCLUDES) 
-  LIBS      += -ldl -lpthread
+  LIBS      += -Wl,--start-group -ldl -lpthread -Wl,--end-group
   LDDEPS    += 
   LINKCMD    = $(AR) rcs $(TARGET) $(OBJECTS)
   define PREBUILDCMDS
@@ -204,7 +204,6 @@ OBJECTS := \
 	$(OBJDIR)/src/dawn/common/ExternalTextureParams.cpp.o \
 	$(OBJDIR)/src/dawn/common/FutureUtils.cpp.o \
 	$(OBJDIR)/src/dawn/common/GPUInfo.cpp.o \
-	$(OBJDIR)/src/dawn/common/IOSurfaceUtils.cpp.o \
 	$(OBJDIR)/src/dawn/common/Math.cpp.o \
 	$(OBJDIR)/src/dawn/common/RefCounted.cpp.o \
 	$(OBJDIR)/src/dawn/common/Result.cpp.o \
@@ -212,7 +211,6 @@ OBJECTS := \
 	$(OBJDIR)/src/dawn/common/SlabAllocator.cpp.o \
 	$(OBJDIR)/src/dawn/common/StringViewUtils.cpp.o \
 	$(OBJDIR)/src/dawn/common/SystemUtils.cpp.o \
-	$(OBJDIR)/src/dawn/common/SystemUtils_mac.mm.o \
 	$(OBJDIR)/src/dawn/common/ThreadLocal.cpp.o \
 	$(OBJDIR)/src/dawn/common/WGPUDeviceCallbackInfos.cpp.o \
 	$(OBJDIR)/src/dawn/common/WeakRefSupport.cpp.o \
@@ -301,9 +299,9 @@ OBJECTS := \
 	$(OBJDIR)/src/dawn/native/SharedFence.cpp.o \
 	$(OBJDIR)/src/dawn/native/SharedResourceMemory.cpp.o \
 	$(OBJDIR)/src/dawn/native/SharedTextureMemory.cpp.o \
+	$(OBJDIR)/src/dawn/native/SpirvValidation_rtc_shim_1.cpp.o \
 	$(OBJDIR)/src/dawn/native/Subresource.cpp.o \
 	$(OBJDIR)/src/dawn/native/Surface.cpp.o \
-	$(OBJDIR)/src/dawn/native/Surface_metal.mm.o \
 	$(OBJDIR)/src/dawn/native/SwapChain.cpp.o \
 	$(OBJDIR)/src/dawn/native/SystemEvent.cpp.o \
 	$(OBJDIR)/src/dawn/native/TexelBufferView.cpp.o \
@@ -312,35 +310,59 @@ OBJECTS := \
 	$(OBJDIR)/src/dawn/native/Toggles.cpp.o \
 	$(OBJDIR)/src/dawn/native/ValidationUtils.cpp.o \
 	$(OBJDIR)/src/dawn/native/WaitListEvent.cpp.o \
+	$(OBJDIR)/src/dawn/native/X11Functions.cpp.o \
 	$(OBJDIR)/src/dawn/native/dawn_platform.cpp.o \
-	$(OBJDIR)/src/dawn/native/metal/BackendMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/BindGroupLayoutMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/BindGroupMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/BufferMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/CommandBufferMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/CommandRecordingContext.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/ComputePipelineMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/DeviceMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/MetalBackend.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/MultiDrawEncoder.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/PhysicalDeviceMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/PipelineLayoutMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/QuerySetMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/QueueMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/RenderPipelineMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/SamplerMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/ShaderModuleMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/SharedFenceMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/SharedTextureMemoryMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/SwapChainMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/TextureMTL.mm.o \
-	$(OBJDIR)/src/dawn/native/metal/UtilsMetal.mm.o \
 	$(OBJDIR)/src/dawn/native/null/DeviceNull_rtc_shim_1.cpp.o \
 	$(OBJDIR)/src/dawn/native/null/NullBackend_rtc_shim_1.cpp.o \
 	$(OBJDIR)/src/dawn/native/stream/BlobSource.cpp.o \
 	$(OBJDIR)/src/dawn/native/stream/ByteVectorSink.cpp.o \
 	$(OBJDIR)/src/dawn/native/utils/RenderDoc.cpp.o \
 	$(OBJDIR)/src/dawn/native/utils/WGPUHelpers.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/BackendVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/BindGroupLayoutVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/BindGroupVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/BufferVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/CommandBufferVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/CommandRecordingContextVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/ComputePipelineVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/DescriptorSetAllocator.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/DeviceVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/FencedDeleter.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/FramebufferCache.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/FramebufferFetchHelper.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/MemoryTypeSelector.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/PhysicalDeviceVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/PipelineCacheVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/PipelineLayoutVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/QuerySetVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/QueueVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/RenderPassCache.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/RenderPipelineVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/ResolveTextureLoadingUtilsVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/ResourceHeapVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/ResourceMemoryAllocatorVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/ResourceTableVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/SamplerVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/ShaderModuleVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/SharedFenceVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/SharedTextureMemoryVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/StreamImplVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/SwapChainVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/TexelBufferViewVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/TextureVk.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/UtilsVulkan.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/VulkanBackend.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/VulkanError.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/VulkanExtensions.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/VulkanFunctions.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/VulkanInfo.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/external_memory/MemoryService.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/external_memory/MemoryServiceImplementation.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/external_semaphore/SemaphoreService.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementation.cpp.o \
+	$(OBJDIR)/src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD_rtc_shim_1.cpp.o \
 	$(OBJDIR)/src/dawn/native/webgpu_absl_format.cpp.o \
 	$(OBJDIR)/src/dawn/platform/DawnPlatform.cpp.o \
 	$(OBJDIR)/src/dawn/platform/WorkerThread.cpp.o \
@@ -525,39 +547,56 @@ OBJECTS := \
 	$(OBJDIR)/src/tint/lang/core/type/vector.cc.o \
 	$(OBJDIR)/src/tint/lang/core/type/void.cc.o \
 	$(OBJDIR)/src/tint/lang/core/unary_op.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/builtin_fn_rtc_shim_1.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/intrinsic/data_rtc_shim_2.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/ir/builtin_call_rtc_shim_2.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/ir/component.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/ir/member_builtin_call_rtc_shim_1.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/ir/memory_order.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/type/bias.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/type/gradient.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/type/level.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/validate/validate.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/validate/validate_metal.mm.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/common/option_helpers.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/common/options_rtc_shim_1.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/common/output_rtc_shim_2.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/common/printer_support.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/printer/printer.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/argument_buffers.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/binary_polyfill_rtc_shim_1.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/builtin_polyfill_rtc_shim_1.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/convert_print_to_log.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/decompose_buffer.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/fix_type_layout.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/module_constant.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/module_scope_vars.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/raise_rtc_shim_2.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/shader_io_rtc_shim_1.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/simd_ballot.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/raise/validate_subgroup_matrix.cc.o \
-	$(OBJDIR)/src/tint/lang/msl/writer/writer_rtc_shim_2.cc.o \
 	$(OBJDIR)/src/tint/lang/null/writer/common/options.cc.o \
 	$(OBJDIR)/src/tint/lang/null/writer/common/output.cc.o \
 	$(OBJDIR)/src/tint/lang/null/writer/raise/raise.cc.o \
 	$(OBJDIR)/src/tint/lang/null/writer/writer.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/builtin_fn_rtc_shim_3.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/intrinsic/data_rtc_shim_4.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/ir/binary_rtc_shim_1.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/ir/builtin_call_rtc_shim_4.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/ir/copy_logical.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/common/common_rtc_shim_1.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/lower/atomics.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/lower/builtins.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/lower/decompose_strided_array.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/lower/decompose_strided_matrix.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/lower/lower_rtc_shim_1.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/lower/shader_io_rtc_shim_3.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/lower/texture_rtc_shim_2.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/lower/transpose_row_major.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/lower/vector_element_pointer.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/parser/parser_rtc_shim_1.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/reader/reader_rtc_shim_2.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/type/explicit_layout_array.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/type/image.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/type/literal.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/type/sampled_image.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/validate/validate_rtc_shim_2.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/analysis/relaxed_precision_decorations.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/common/binary_writer.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/common/function_rtc_shim_4.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/common/instruction_rtc_shim_1.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/common/module_rtc_shim_3.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/common/operand.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/common/option_helper.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/common/output_rtc_shim_4.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/printer/printer_rtc_shim_2.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/builtin_polyfill_rtc_shim_3.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/case_switch_to_if_else.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/expand_implicit_splats.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/fork_explicit_layout_types.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/handle_matrix_arithmetic.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/keep_binding_array_as_pointer.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/merge_return.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/raise_rtc_shim_4.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/resource_table_helper_rtc_shim_2.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_4.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/unary_polyfill.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/raise/var_for_dynamic_index.cc.o \
+	$(OBJDIR)/src/tint/lang/spirv/writer/writer_rtc_shim_4.cc.o \
 	$(OBJDIR)/src/tint/lang/wgsl/ast/accessor_expression.cc.o \
 	$(OBJDIR)/src/tint/lang/wgsl/ast/alias.cc.o \
 	$(OBJDIR)/src/tint/lang/wgsl/ast/assignment_statement.cc.o \
@@ -725,7 +764,7 @@ OBJECTS := \
 	$(OBJDIR)/src/tint/utils/symbol/symbol.cc.o \
 	$(OBJDIR)/src/tint/utils/symbol/symbol_table.cc.o \
 	$(OBJDIR)/src/tint/utils/system/env_other.cc.o \
-	$(OBJDIR)/src/tint/utils/system/executable_file_mac.cc.o \
+	$(OBJDIR)/src/tint/utils/system/executable_path_linux.cc.o \
 	$(OBJDIR)/src/tint/utils/system/terminal_posix_rtc_shim_1.cc.o \
 	$(OBJDIR)/src/tint/utils/text/base64.cc.o \
 	$(OBJDIR)/src/tint/utils/text/color_mode.cc.o \
@@ -737,7 +776,8 @@ OBJECTS := \
 	$(OBJDIR)/src/tint/utils/text/styled_text_printer_posix_rtc_shim_1.cc.o \
 	$(OBJDIR)/src/tint/utils/text/styled_text_theme.cc.o \
 	$(OBJDIR)/src/tint/utils/text/unicode.cc.o \
-	$(OBJDIR)/src/tint/utils/text_generator/text_generator.cc.o 
+	$(OBJDIR)/src/tint/utils/text_generator/text_generator.cc.o \
+	$(OBJDIR)/src/utils/log.cc.o 
 
 RESOURCES := \
 
@@ -791,2199 +831,2359 @@ prebuild:
 prelink:
 	$(PRELINKCMDS)
 
-$(OBJDIR)/out/gen/src/dawn/common/GPUInfo_autogen.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/out/gen/src/dawn/common/GPUInfo_autogen.cpp $(GCH)
+$(OBJDIR)/out/gen/src/dawn/common/GPUInfo_autogen.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/out/gen/src/dawn/common/GPUInfo_autogen.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/out/gen/src/dawn/native/ChainUtils_autogen.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/ChainUtils_autogen.cpp $(GCH)
+$(OBJDIR)/out/gen/src/dawn/native/ChainUtils_autogen.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/ChainUtils_autogen.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/out/gen/src/dawn/native/ObjectType_autogen.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/ObjectType_autogen.cpp $(GCH)
+$(OBJDIR)/out/gen/src/dawn/native/ObjectType_autogen.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/ObjectType_autogen.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/out/gen/src/dawn/native/ProcTable.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/ProcTable.cpp $(GCH)
+$(OBJDIR)/out/gen/src/dawn/native/ProcTable.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/ProcTable.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/out/gen/src/dawn/native/ValidationUtils_autogen.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/ValidationUtils_autogen.cpp $(GCH)
+$(OBJDIR)/out/gen/src/dawn/native/ValidationUtils_autogen.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/ValidationUtils_autogen.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/out/gen/src/dawn/native/webgpu_StreamImpl_autogen.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/webgpu_StreamImpl_autogen.cpp $(GCH)
+$(OBJDIR)/out/gen/src/dawn/native/webgpu_StreamImpl_autogen.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/webgpu_StreamImpl_autogen.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/out/gen/src/dawn/native/webgpu_absl_format_autogen.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/webgpu_absl_format_autogen.cpp $(GCH)
+$(OBJDIR)/out/gen/src/dawn/native/webgpu_absl_format_autogen.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/webgpu_absl_format_autogen.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/out/gen/src/dawn/native/webgpu_dawn_native_proc.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/webgpu_dawn_native_proc.cpp $(GCH)
+$(OBJDIR)/out/gen/src/dawn/native/webgpu_dawn_native_proc.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/webgpu_dawn_native_proc.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/out/gen/src/dawn/native/wgpu_structs_autogen.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/wgpu_structs_autogen.cpp $(GCH)
+$(OBJDIR)/out/gen/src/dawn/native/wgpu_structs_autogen.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/out/gen/src/dawn/native/wgpu_structs_autogen.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/AlignedAlloc.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/AlignedAlloc.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/AlignedAlloc.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/AlignedAlloc.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/Defer.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/Defer.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/Defer.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/Defer.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/DynamicLib.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/DynamicLib.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/DynamicLib.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/DynamicLib.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/ExternalTextureParams.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/ExternalTextureParams.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/ExternalTextureParams.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/ExternalTextureParams.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/FutureUtils.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/FutureUtils.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/FutureUtils.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/FutureUtils.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/GPUInfo.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/GPUInfo.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/GPUInfo.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/GPUInfo.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/IOSurfaceUtils.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/IOSurfaceUtils.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/Math.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/Math.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/Math.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/Math.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/RefCounted.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/RefCounted.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/RefCounted.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/RefCounted.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/Result.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/Result.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/Result.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/Result.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/Sha3.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/Sha3.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/Sha3.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/Sha3.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/SlabAllocator.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/SlabAllocator.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/SlabAllocator.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/SlabAllocator.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/StringViewUtils.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/StringViewUtils.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/StringViewUtils.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/StringViewUtils.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/SystemUtils.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/SystemUtils.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/SystemUtils.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/SystemUtils.cpp $(GCH)
+$(OBJDIR)/src/dawn/common/ThreadLocal.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/ThreadLocal.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/SystemUtils_mac.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/SystemUtils_mac.mm $(GCH)
+$(OBJDIR)/src/dawn/common/WGPUDeviceCallbackInfos.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/WGPUDeviceCallbackInfos.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/common/ThreadLocal.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/ThreadLocal.cpp $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/common/WeakRefSupport.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/common/WeakRefSupport.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/Adapter.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Adapter.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/ApplyClearColorValueWithDrawHelper.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ApplyClearColorValueWithDrawHelper.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/AsyncTask.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/AsyncTask.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/AttachmentState.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/AttachmentState.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BackendConnection.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BackendConnection.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BindGroup.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BindGroup.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BindGroupLayout.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BindGroupLayout.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BindGroupLayoutInternal.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BindGroupLayoutInternal.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BindingInfo.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BindingInfo.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BlitBufferToDepthStencil.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BlitBufferToDepthStencil.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BlitBufferToTexture.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BlitBufferToTexture.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BlitColorToColorWithDraw.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BlitColorToColorWithDraw.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BlitDepthToDepth.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BlitDepthToDepth.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BlitTextureToBuffer.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BlitTextureToBuffer.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/Blob.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Blob.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BlobCache.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BlobCache.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BuddyAllocator.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BuddyAllocator.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/BuddyMemoryAllocator.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/BuddyMemoryAllocator.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/Buffer.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Buffer.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CacheKey.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CacheKey.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CacheRequest.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CacheRequest.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CachedObject.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CachedObject.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CallbackTaskManager.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CallbackTaskManager.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CommandAllocator.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CommandAllocator.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CommandBuffer.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CommandBuffer.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CommandBufferStateTracker.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CommandBufferStateTracker.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CommandEncoder.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CommandEncoder.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CommandValidation.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CommandValidation.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/Commands.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Commands.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CompilationMessages.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CompilationMessages.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/ComputePassEncoder.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ComputePassEncoder.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/ComputePipeline.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ComputePipeline.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CopyTextureForBrowserHelper.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CopyTextureForBrowserHelper.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/CreatePipelineAsyncEvent.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/CreatePipelineAsyncEvent.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/DawnNative.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/DawnNative.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/Device.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Device.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/DeviceGuard.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/DeviceGuard.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/DynamicUploader.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/DynamicUploader.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/EncodingContext.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/EncodingContext.cpp $(GCH)
+	@echo $(notdir $<)
+	$(SILENT) mkdir -p $(@D)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/Error.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Error.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/WGPUDeviceCallbackInfos.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/WGPUDeviceCallbackInfos.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ErrorData.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ErrorData.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/common/WeakRefSupport.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/common/WeakRefSupport.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ErrorInjector.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ErrorInjector.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Adapter.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Adapter.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ErrorScope.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ErrorScope.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ApplyClearColorValueWithDrawHelper.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ApplyClearColorValueWithDrawHelper.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/EventManager.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/EventManager.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/AsyncTask.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/AsyncTask.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ExecutionQueue.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ExecutionQueue.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/AttachmentState.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/AttachmentState.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ExternalTexture.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ExternalTexture.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BackendConnection.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BackendConnection.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/Features.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Features.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BindGroup.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BindGroup.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/Format.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Format.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BindGroupLayout.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BindGroupLayout.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ImmediatesLayout.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ImmediatesLayout.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BindGroupLayoutInternal.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BindGroupLayoutInternal.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/IndirectDrawMetadata.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/IndirectDrawMetadata.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BindingInfo.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BindingInfo.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/IndirectDrawValidationEncoder.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/IndirectDrawValidationEncoder.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BlitBufferToDepthStencil.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BlitBufferToDepthStencil.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/Instance.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Instance.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BlitBufferToTexture.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BlitBufferToTexture.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/InternalPipelineStore.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/InternalPipelineStore.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BlitColorToColorWithDraw.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BlitColorToColorWithDraw.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/Limits.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Limits.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BlitDepthToDepth.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BlitDepthToDepth.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ObjectBase.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ObjectBase.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BlitTextureToBuffer.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BlitTextureToBuffer.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ObjectContentHasher.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ObjectContentHasher.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Blob.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Blob.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/PassResourceUsageTracker.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/PassResourceUsageTracker.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BlobCache.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BlobCache.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/PerStage.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/PerStage.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BuddyAllocator.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BuddyAllocator.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/PhysicalDevice.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/PhysicalDevice.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/BuddyMemoryAllocator.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/BuddyMemoryAllocator.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/Pipeline.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Pipeline.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Buffer.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Buffer.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/PipelineCache.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/PipelineCache.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CacheKey.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CacheKey.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/PipelineLayout.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/PipelineLayout.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CacheRequest.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CacheRequest.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/PooledResourceMemoryAllocator.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/PooledResourceMemoryAllocator.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CachedObject.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CachedObject.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ProgrammableEncoder.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ProgrammableEncoder.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CallbackTaskManager.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CallbackTaskManager.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/QueryHelper.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/QueryHelper.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CommandAllocator.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CommandAllocator.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/QuerySet.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/QuerySet.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CommandBuffer.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CommandBuffer.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/Queue.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Queue.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CommandBufferStateTracker.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CommandBufferStateTracker.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/RenderBundle.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/RenderBundle.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CommandEncoder.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CommandEncoder.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/RenderBundleEncoder.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/RenderBundleEncoder.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CommandValidation.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CommandValidation.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/RenderEncoderBase.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/RenderEncoderBase.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Commands.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Commands.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/RenderPassEncoder.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/RenderPassEncoder.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CompilationMessages.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CompilationMessages.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/RenderPassWorkaroundsHelper.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/RenderPassWorkaroundsHelper.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ComputePassEncoder.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ComputePassEncoder.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/RenderPipeline.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/RenderPipeline.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ComputePipeline.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ComputePipeline.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ResourceMemoryAllocation.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ResourceMemoryAllocation.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CopyTextureForBrowserHelper.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CopyTextureForBrowserHelper.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ResourceTable.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ResourceTable.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/CreatePipelineAsyncEvent.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/CreatePipelineAsyncEvent.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ResourceTableDefaultResources.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ResourceTableDefaultResources.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/DawnNative.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/DawnNative.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/RingBufferAllocator.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/RingBufferAllocator.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Device.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Device.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/Sampler.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Sampler.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/DeviceGuard.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/DeviceGuard.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ScratchBuffer.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ScratchBuffer.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/DynamicUploader.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/DynamicUploader.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ShaderModule.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ShaderModule.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/EncodingContext.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/EncodingContext.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ShaderModuleParseRequest.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ShaderModuleParseRequest.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Error.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Error.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/SharedBufferMemory.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/SharedBufferMemory.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ErrorData.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ErrorData.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/SharedFence.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/SharedFence.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ErrorInjector.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ErrorInjector.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/SharedResourceMemory.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/SharedResourceMemory.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ErrorScope.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ErrorScope.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/SharedTextureMemory.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/SharedTextureMemory.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/EventManager.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/EventManager.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/SpirvValidation_rtc_shim_1.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/SpirvValidation_rtc_shim_1.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ExecutionQueue.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ExecutionQueue.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/Subresource.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Subresource.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ExternalTexture.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ExternalTexture.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/Surface.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Surface.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Features.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Features.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/SwapChain.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/SwapChain.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Format.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Format.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/SystemEvent.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/SystemEvent.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ImmediatesLayout.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ImmediatesLayout.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/TexelBufferView.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/TexelBufferView.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/IndirectDrawMetadata.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/IndirectDrawMetadata.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/Texture.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Texture.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/IndirectDrawValidationEncoder.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/IndirectDrawValidationEncoder.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/TintUtils.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/TintUtils.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Instance.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Instance.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/Toggles.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/Toggles.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/InternalPipelineStore.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/InternalPipelineStore.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/ValidationUtils.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/ValidationUtils.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Limits.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Limits.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/WaitListEvent.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/WaitListEvent.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ObjectBase.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ObjectBase.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/X11Functions.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/X11Functions.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ObjectContentHasher.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ObjectContentHasher.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/dawn_platform.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/dawn_platform.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/PassResourceUsageTracker.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/PassResourceUsageTracker.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/null/DeviceNull_rtc_shim_1.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/null/DeviceNull_rtc_shim_1.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/PerStage.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/PerStage.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/null/NullBackend_rtc_shim_1.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/null/NullBackend_rtc_shim_1.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/PhysicalDevice.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/PhysicalDevice.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/stream/BlobSource.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/stream/BlobSource.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Pipeline.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Pipeline.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/stream/ByteVectorSink.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/stream/ByteVectorSink.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/PipelineCache.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/PipelineCache.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/utils/RenderDoc.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/utils/RenderDoc.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/PipelineLayout.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/PipelineLayout.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/utils/WGPUHelpers.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/utils/WGPUHelpers.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/PooledResourceMemoryAllocator.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/PooledResourceMemoryAllocator.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/BackendVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/BackendVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ProgrammableEncoder.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ProgrammableEncoder.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/BindGroupLayoutVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/BindGroupLayoutVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/QueryHelper.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/QueryHelper.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/BindGroupVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/BindGroupVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/QuerySet.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/QuerySet.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/BufferVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/BufferVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Queue.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Queue.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/CommandBufferVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/CommandBufferVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/RenderBundle.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/RenderBundle.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/CommandRecordingContextVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/CommandRecordingContextVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/RenderBundleEncoder.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/RenderBundleEncoder.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/ComputePipelineVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/ComputePipelineVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/RenderEncoderBase.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/RenderEncoderBase.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/DescriptorSetAllocator.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/DescriptorSetAllocator.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/RenderPassEncoder.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/RenderPassEncoder.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/DeviceVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/DeviceVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/RenderPassWorkaroundsHelper.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/RenderPassWorkaroundsHelper.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/FencedDeleter.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/FencedDeleter.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/RenderPipeline.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/RenderPipeline.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/FramebufferCache.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/FramebufferCache.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ResourceMemoryAllocation.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ResourceMemoryAllocation.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/FramebufferFetchHelper.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/FramebufferFetchHelper.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ResourceTable.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ResourceTable.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/MemoryTypeSelector.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/MemoryTypeSelector.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ResourceTableDefaultResources.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ResourceTableDefaultResources.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/PhysicalDeviceVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/PhysicalDeviceVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/RingBufferAllocator.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/RingBufferAllocator.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/PipelineCacheVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/PipelineCacheVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Sampler.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Sampler.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/PipelineLayoutVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/PipelineLayoutVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ScratchBuffer.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ScratchBuffer.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/QuerySetVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/QuerySetVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ShaderModule.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ShaderModule.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/QueueVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/QueueVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ShaderModuleParseRequest.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ShaderModuleParseRequest.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/RenderPassCache.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/RenderPassCache.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/SharedBufferMemory.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/SharedBufferMemory.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/RenderPipelineVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/RenderPipelineVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/SharedFence.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/SharedFence.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/ResolveTextureLoadingUtilsVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/ResolveTextureLoadingUtilsVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/SharedResourceMemory.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/SharedResourceMemory.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/ResourceHeapVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/ResourceHeapVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/SharedTextureMemory.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/SharedTextureMemory.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/ResourceMemoryAllocatorVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/ResourceMemoryAllocatorVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Subresource.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Subresource.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/ResourceTableVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/ResourceTableVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Surface.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Surface.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/SamplerVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/SamplerVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Surface_metal.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Surface_metal.mm $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/ShaderModuleVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/ShaderModuleVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/SwapChain.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/SwapChain.cpp $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/vulkan/SharedFenceVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/SharedFenceVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/SystemEvent.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/SystemEvent.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/SharedTextureMemoryVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/SharedTextureMemoryVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/TexelBufferView.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/TexelBufferView.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/StreamImplVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/StreamImplVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Texture.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Texture.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/SwapChainVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/SwapChainVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/TintUtils.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/TintUtils.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/TexelBufferViewVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/TexelBufferViewVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/Toggles.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/Toggles.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/TextureVk.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/TextureVk.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/ValidationUtils.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/ValidationUtils.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/UtilsVulkan.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/UtilsVulkan.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/WaitListEvent.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/WaitListEvent.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/VulkanBackend.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/VulkanBackend.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/dawn_platform.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/dawn_platform.cpp $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/VulkanError.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/VulkanError.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/metal/BackendMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/BackendMTL.mm $(GCH)
+$(OBJDIR)/src/dawn/native/vulkan/VulkanExtensions.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/VulkanExtensions.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/BindGroupLayoutMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/BindGroupLayoutMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/vulkan/VulkanFunctions.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/VulkanFunctions.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/BindGroupMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/BindGroupMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/vulkan/VulkanInfo.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/VulkanInfo.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/BufferMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/BufferMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/vulkan/external_memory/MemoryService.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/external_memory/MemoryService.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/CommandBufferMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/CommandBufferMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/vulkan/external_memory/MemoryServiceImplementation.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/external_memory/MemoryServiceImplementation.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/CommandRecordingContext.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/CommandRecordingContext.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/ComputePipelineMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/ComputePipelineMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/DeviceMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/DeviceMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/vulkan/external_semaphore/SemaphoreService.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/external_semaphore/SemaphoreService.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/MetalBackend.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/MetalBackend.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementation.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementation.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/MultiDrawEncoder.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/MultiDrawEncoder.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD_rtc_shim_1.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD_rtc_shim_1.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/PhysicalDeviceMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/PhysicalDeviceMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/native/webgpu_absl_format.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/native/webgpu_absl_format.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/PipelineLayoutMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/PipelineLayoutMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/platform/DawnPlatform.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/platform/DawnPlatform.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/QuerySetMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/QuerySetMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/platform/WorkerThread.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/platform/WorkerThread.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/QueueMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/QueueMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/platform/metrics/HistogramMacros.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/platform/metrics/HistogramMacros.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/RenderPipelineMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/RenderPipelineMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/platform/tracing/EventTracer.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/platform/tracing/EventTracer.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/SamplerMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/SamplerMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/replay/BlitBufferToDepthTexture.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/replay/BlitBufferToDepthTexture.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/ShaderModuleMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/ShaderModuleMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/replay/Capture.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/replay/Capture.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/SharedFenceMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/SharedFenceMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/replay/CaptureWalker.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/replay/CaptureWalker.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/SharedTextureMemoryMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/SharedTextureMemoryMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/replay/Deserialization.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/replay/Deserialization.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/SwapChainMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/SwapChainMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/replay/Error_rtc_shim_1.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/replay/Error_rtc_shim_1.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/TextureMTL.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/TextureMTL.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/replay/ReadHead.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/replay/ReadHead.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/metal/UtilsMetal.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/metal/UtilsMetal.mm $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/replay/Replay.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/replay/Replay.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/dawn/native/null/DeviceNull_rtc_shim_1.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/null/DeviceNull_rtc_shim_1.cpp $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/dawn/replay/SurfaceDiscovery.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/replay/SurfaceDiscovery.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/null/NullBackend_rtc_shim_1.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/null/NullBackend_rtc_shim_1.cpp $(GCH)
+$(OBJDIR)/src/dawn/utils/SystemHandle.cpp.o: /home/linux/dev/rtc/3rdparty/dawn/src/dawn/utils/SystemHandle.cpp $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/stream/BlobSource.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/stream/BlobSource.cpp $(GCH)
+$(OBJDIR)/src/tint/api/common/vertex_pulling_config.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/api/common/vertex_pulling_config.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/stream/ByteVectorSink.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/stream/ByteVectorSink.cpp $(GCH)
+$(OBJDIR)/src/tint/api/helpers/generate_bindings.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/api/helpers/generate_bindings.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/utils/RenderDoc.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/utils/RenderDoc.cpp $(GCH)
+$(OBJDIR)/src/tint/api/tint.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/api/tint.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/utils/WGPUHelpers.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/utils/WGPUHelpers.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/binary_op.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/binary_op.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/native/webgpu_absl_format.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/native/webgpu_absl_format.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/constant/composite.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/composite.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/platform/DawnPlatform.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/platform/DawnPlatform.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/constant/eval.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/eval.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/platform/WorkerThread.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/platform/WorkerThread.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/constant/invalid.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/invalid.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/platform/metrics/HistogramMacros.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/platform/metrics/HistogramMacros.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/constant/manager.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/manager.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/platform/tracing/EventTracer.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/platform/tracing/EventTracer.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/constant/node.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/node.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/replay/BlitBufferToDepthTexture.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/replay/BlitBufferToDepthTexture.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/constant/scalar.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/scalar.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/replay/Capture.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/replay/Capture.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/constant/splat.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/splat.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/replay/CaptureWalker.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/replay/CaptureWalker.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/constant/string.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/string.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/replay/Deserialization.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/replay/Deserialization.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/constant/value.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/value.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/replay/Error_rtc_shim_1.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/replay/Error_rtc_shim_1.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/enums.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/enums.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/replay/ReadHead.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/replay/ReadHead.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/intrinsic/ctor_conv.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/intrinsic/ctor_conv.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/replay/Replay.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/replay/Replay.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/intrinsic/data.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/intrinsic/data.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/replay/SurfaceDiscovery.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/replay/SurfaceDiscovery.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/intrinsic/table.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/intrinsic/table.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/dawn/utils/SystemHandle.cpp.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/dawn/utils/SystemHandle.cpp $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/access.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/access.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/api/common/vertex_pulling_config.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/api/common/vertex_pulling_config.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/analysis/for_loop_analysis.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/analysis/for_loop_analysis.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/api/helpers/generate_bindings.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/api/helpers/generate_bindings.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/analysis/integer_range_analysis.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/analysis/integer_range_analysis.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/api/tint.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/api/tint.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/analysis/loop_analysis.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/analysis/loop_analysis.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/binary_op.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/binary_op.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/analysis/subgroup_matrix.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/analysis/subgroup_matrix.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/constant/composite.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/composite.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/binary.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/binary.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/constant/eval.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/eval.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/block.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/block.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/constant/invalid.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/invalid.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/block_param.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/block_param.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/constant/manager.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/manager.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/break_if.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/break_if.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/constant/node.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/node.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/builder.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/builder.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/constant/scalar.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/scalar.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/builtin_call.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/builtin_call.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/constant/splat.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/splat.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/call.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/call.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/constant/string.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/string.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/clone_context.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/clone_context.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/constant/value.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/constant/value.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/const_param_validator.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/const_param_validator.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/enums.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/enums.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/constant.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/constant.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/intrinsic/ctor_conv.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/intrinsic/ctor_conv.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/constexpr_if.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/constexpr_if.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/intrinsic/data.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/intrinsic/data.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/construct.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/construct.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/intrinsic/table.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/intrinsic/table.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/continue.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/continue.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/access.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/access.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/control_instruction.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/control_instruction.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/analysis/for_loop_analysis.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/analysis/for_loop_analysis.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/convert.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/convert.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/analysis/integer_range_analysis.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/analysis/integer_range_analysis.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/core_binary.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/core_binary.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/analysis/loop_analysis.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/analysis/loop_analysis.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/core_builtin_call.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/core_builtin_call.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/analysis/subgroup_matrix.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/analysis/subgroup_matrix.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/core_unary.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/core_unary.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/binary.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/binary.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/disassembler.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/disassembler.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/block.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/block.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/discard.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/discard.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/block_param.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/block_param.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/evaluator.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/evaluator.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/break_if.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/break_if.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/exit.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/exit.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/builder.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/builder.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/exit_if.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/exit_if.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/builtin_call.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/builtin_call.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/exit_loop.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/exit_loop.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/call.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/call.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/exit_switch.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/exit_switch.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/clone_context.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/clone_context.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/function.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/function.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/const_param_validator.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/const_param_validator.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/function_param.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/function_param.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/constant.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/constant.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/functional_validator.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/functional_validator.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/constexpr_if.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/constexpr_if.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/if.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/if.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/construct.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/construct.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/instruction.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/instruction.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/continue.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/continue.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/instruction_result.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/instruction_result.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/control_instruction.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/control_instruction.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/io_attribute_validator.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/io_attribute_validator.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/convert.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/convert.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/let.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/let.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/core_binary.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/core_binary.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/load.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/load.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/core_builtin_call.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/core_builtin_call.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/load_vector_element.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/load_vector_element.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/core_unary.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/core_unary.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/loop.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/loop.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/disassembler.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/disassembler.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/member_builtin_call.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/member_builtin_call.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/discard.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/discard.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/module.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/module.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/evaluator.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/evaluator.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/multi_in_block.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/multi_in_block.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/exit.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/exit.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/next_iteration.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/next_iteration.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/exit_if.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/exit_if.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/operand_instruction.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/operand_instruction.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/exit_loop.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/exit_loop.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/override.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/override.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/exit_switch.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/exit_switch.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/phony.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/phony.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/function.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/function.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/reflection.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/reflection.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/function_param.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/function_param.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/return.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/return.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/functional_validator.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/functional_validator.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/store.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/store.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/if.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/if.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/store_vector_element.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/store_vector_element.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/instruction.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/instruction.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/structural_validator.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/structural_validator.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/instruction_result.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/instruction_result.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/switch.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/switch.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/io_attribute_validator.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/io_attribute_validator.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/swizzle.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/swizzle.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/let.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/let.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/terminate_invocation.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/terminate_invocation.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/load.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/load.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/terminator.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/terminator.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/load_vector_element.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/load_vector_element.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/array_length_from.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/array_length_from.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/loop.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/loop.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/bgra8unorm_polyfill.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/bgra8unorm_polyfill.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/member_builtin_call.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/member_builtin_call.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/binary_polyfill.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/binary_polyfill.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/module.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/module.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/binding_remapper.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/binding_remapper.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/multi_in_block.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/multi_in_block.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/block_decorated_structs.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/block_decorated_structs.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/next_iteration.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/next_iteration.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/builtin_polyfill.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/builtin_polyfill.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/operand_instruction.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/operand_instruction.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/builtin_scalarize.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/builtin_scalarize.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/override.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/override.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/change_immediate_to_uniform.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/change_immediate_to_uniform.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/phony.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/phony.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/collapse_subgroup_min_max.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/collapse_subgroup_min_max.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/reflection.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/reflection.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/combine_access_instructions.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/combine_access_instructions.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/return.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/return.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/conversion_polyfill.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/conversion_polyfill.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/store.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/store.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/dead_code_elimination.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/dead_code_elimination.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/store_vector_element.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/store_vector_element.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/decompose_access.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/decompose_access.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/structural_validator.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/structural_validator.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/demote_to_helper.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/demote_to_helper.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/switch.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/switch.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/direct_variable_access.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/direct_variable_access.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/swizzle.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/swizzle.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/multiplanar_external_texture.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/multiplanar_external_texture.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/terminate_invocation.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/terminate_invocation.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/prepare_immediate_data.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/prepare_immediate_data.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/terminator.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/terminator.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/preserve_padding.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/preserve_padding.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/array_length_from.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/array_length_from.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/prevent_infinite_loops.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/prevent_infinite_loops.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/bgra8unorm_polyfill.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/bgra8unorm_polyfill.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/propagate_buffer_sizes.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/propagate_buffer_sizes.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/binary_polyfill.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/binary_polyfill.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/remove_continue_in_switch.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/remove_continue_in_switch.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/binding_remapper.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/binding_remapper.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/remove_terminator_args.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/remove_terminator_args.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/block_decorated_structs.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/block_decorated_structs.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/remove_uniform_vector_component_loads.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/remove_uniform_vector_component_loads.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/builtin_polyfill.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/builtin_polyfill.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/rename_conflicts.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/rename_conflicts.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/builtin_scalarize.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/builtin_scalarize.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/resource_table.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/resource_table.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/change_immediate_to_uniform.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/change_immediate_to_uniform.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/resource_table_helper.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/resource_table_helper.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/collapse_subgroup_min_max.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/collapse_subgroup_min_max.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/robustness.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/robustness.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/combine_access_instructions.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/combine_access_instructions.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/shader_io.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/shader_io.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/conversion_polyfill.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/conversion_polyfill.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/signed_integer_polyfill.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/signed_integer_polyfill.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/dead_code_elimination.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/dead_code_elimination.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/single_entry_point.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/single_entry_point.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/decompose_access.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/decompose_access.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/std140.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/std140.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/demote_to_helper.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/demote_to_helper.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/substitute_overrides.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/substitute_overrides.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/direct_variable_access.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/direct_variable_access.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/value_to_let.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/value_to_let.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/multiplanar_external_texture.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/multiplanar_external_texture.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/vectorize_scalar_matrix_constructors.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/vectorize_scalar_matrix_constructors.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/prepare_immediate_data.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/prepare_immediate_data.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/vertex_pulling.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/vertex_pulling.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/preserve_padding.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/preserve_padding.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/transform/zero_init_workgroup_memory.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/zero_init_workgroup_memory.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/prevent_infinite_loops.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/prevent_infinite_loops.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/type/array_count.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/type/array_count.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/propagate_buffer_sizes.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/propagate_buffer_sizes.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/unary.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/unary.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/remove_continue_in_switch.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/remove_continue_in_switch.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/unreachable.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/unreachable.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/remove_terminator_args.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/remove_terminator_args.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/unused.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/unused.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/remove_uniform_vector_component_loads.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/remove_uniform_vector_component_loads.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/user_call.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/user_call.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/rename_conflicts.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/rename_conflicts.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/validator.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/validator.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/resource_table.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/resource_table.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/value_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/value_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/resource_table_helper.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/resource_table_helper.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/ir/var.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/var.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/robustness.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/robustness.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/number.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/number.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/shader_io.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/shader_io.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/abstract_float.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/abstract_float.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/signed_integer_polyfill.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/signed_integer_polyfill.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/abstract_int.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/abstract_int.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/single_entry_point.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/single_entry_point.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/abstract_numeric.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/abstract_numeric.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/std140.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/std140.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/array.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/array.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/substitute_overrides.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/substitute_overrides.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/array_count_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/array_count_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/value_to_let.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/value_to_let.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/atomic.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/atomic.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/vectorize_scalar_matrix_constructors.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/vectorize_scalar_matrix_constructors.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/binding_array.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/binding_array.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/vertex_pulling.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/vertex_pulling.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/bool.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/bool.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/transform/zero_init_workgroup_memory.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/transform/zero_init_workgroup_memory.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/buffer_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/buffer_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/type/array_count.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/type/array_count.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/builtin_structs.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/builtin_structs.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/unary.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/unary.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/depth_multisampled_texture.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/depth_multisampled_texture.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/unreachable.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/unreachable.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/depth_texture.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/depth_texture.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/unused.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/unused.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/external_texture.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/external_texture.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/user_call.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/user_call.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/f16.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/f16.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/validator.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/validator.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/f32.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/f32.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/value_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/value_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/function_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/function_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/ir/var.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/ir/var.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/i32.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/i32.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/number.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/number.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/i8.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/i8.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/abstract_float.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/abstract_float.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/input_attachment.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/input_attachment.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/abstract_int.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/abstract_int.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/invalid_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/invalid_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/abstract_numeric.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/abstract_numeric.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/manager_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/manager_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/array.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/array.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/matrix.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/matrix.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/array_count_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/array_count_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/memory_view.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/memory_view.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/atomic.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/atomic.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/multisampled_texture.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/multisampled_texture.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/binding_array.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/binding_array.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/node_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/node_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/bool.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/bool.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/numeric_scalar.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/numeric_scalar.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/buffer_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/buffer_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/pointer.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/pointer.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/builtin_structs.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/builtin_structs.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/reference.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/reference.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/depth_multisampled_texture.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/depth_multisampled_texture.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/resource_table_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/resource_table_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/depth_texture.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/depth_texture.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/resource_type.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/resource_type.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/external_texture.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/external_texture.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/sampled_texture.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/sampled_texture.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/f16.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/f16.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/sampler_kind.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/sampler_kind.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/f32.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/f32.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/sampler_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/sampler_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/function_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/function_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/scalar_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/scalar_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/i32.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/i32.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/storage_texture.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/storage_texture.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/i8.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/i8.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/string_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/string_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/input_attachment.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/input_attachment.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/struct.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/struct.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/invalid_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/invalid_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/subgroup_matrix_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/subgroup_matrix_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/manager_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/manager_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/swizzle_view.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/swizzle_view.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/matrix.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/matrix.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/texel_buffer.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/texel_buffer.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/memory_view.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/memory_view.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/texture_dimension.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/texture_dimension.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/multisampled_texture.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/multisampled_texture.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/texture_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/texture_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/node_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/node_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/type.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/type.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/numeric_scalar.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/numeric_scalar.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/u16.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/u16.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/pointer.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/pointer.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/u32.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/u32.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/reference.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/reference.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/u64.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/u64.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/resource_table_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/resource_table_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/u8.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/u8.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/resource_type.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/resource_type.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/unique_node.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/unique_node.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/sampled_texture.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/sampled_texture.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/vector.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/vector.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/sampler_kind.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/sampler_kind.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/type/void.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/void.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/sampler_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/sampler_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/core/unary_op.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/core/unary_op.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/scalar_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/scalar_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/null/writer/common/options.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/null/writer/common/options.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/storage_texture.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/storage_texture.cc $(GCH)
+$(OBJDIR)/src/tint/lang/null/writer/common/output.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/null/writer/common/output.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/string_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/string_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/null/writer/raise/raise.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/null/writer/raise/raise.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/struct.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/struct.cc $(GCH)
+$(OBJDIR)/src/tint/lang/null/writer/writer.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/null/writer/writer.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/subgroup_matrix_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/subgroup_matrix_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/builtin_fn_rtc_shim_3.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/builtin_fn_rtc_shim_3.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/swizzle_view.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/swizzle_view.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/intrinsic/data_rtc_shim_4.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/intrinsic/data_rtc_shim_4.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/texel_buffer.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/texel_buffer.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/ir/binary_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/ir/binary_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/texture_dimension.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/texture_dimension.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/ir/builtin_call_rtc_shim_4.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/ir/builtin_call_rtc_shim_4.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/texture_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/texture_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/ir/copy_logical.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/ir/copy_logical.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/type.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/type.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/common/common_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/common/common_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/u16.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/u16.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/lower/atomics.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/lower/atomics.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/u32.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/u32.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/lower/builtins.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/lower/builtins.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/u64.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/u64.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/lower/decompose_strided_array.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/lower/decompose_strided_array.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/u8.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/u8.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/lower/decompose_strided_matrix.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/lower/decompose_strided_matrix.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/unique_node.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/unique_node.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/lower/lower_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/lower/lower_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/vector.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/vector.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/lower/shader_io_rtc_shim_3.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/lower/shader_io_rtc_shim_3.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/type/void.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/type/void.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/lower/texture_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/lower/texture_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/core/unary_op.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/core/unary_op.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/lower/transpose_row_major.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/lower/transpose_row_major.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/builtin_fn_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/builtin_fn_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/lower/vector_element_pointer.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/lower/vector_element_pointer.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/intrinsic/data_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/intrinsic/data_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/parser/parser_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/parser/parser_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/ir/builtin_call_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/ir/builtin_call_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/reader/reader_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/reader/reader_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/ir/component.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/ir/component.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/type/explicit_layout_array.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/type/explicit_layout_array.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/ir/member_builtin_call_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/ir/member_builtin_call_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/type/image.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/type/image.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/ir/memory_order.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/ir/memory_order.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/type/literal.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/type/literal.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/type/bias.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/type/bias.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/type/sampled_image.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/type/sampled_image.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/type/gradient.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/type/gradient.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/validate/validate_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/validate/validate_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/type/level.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/type/level.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/analysis/relaxed_precision_decorations.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/analysis/relaxed_precision_decorations.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/validate/validate.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/validate/validate.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/common/binary_writer.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/common/binary_writer.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/validate/validate_metal.mm.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/validate/validate_metal.mm $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/common/function_rtc_shim_4.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/common/function_rtc_shim_4.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
-	$(SILENT) $(CCACHE_HOME) $(CXX) -ObjC++ $(CXXFLAGS) -fobjc-abi-version=2 -o "$@" -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/common/option_helpers.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/common/option_helpers.cc $(GCH)
+	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
+$(OBJDIR)/src/tint/lang/spirv/writer/common/instruction_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/common/instruction_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/common/options_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/common/options_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/common/module_rtc_shim_3.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/common/module_rtc_shim_3.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/common/output_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/common/output_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/common/operand.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/common/operand.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/common/printer_support.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/common/printer_support.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/common/option_helper.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/common/option_helper.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/printer/printer.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/printer/printer.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/common/output_rtc_shim_4.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/common/output_rtc_shim_4.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/argument_buffers.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/argument_buffers.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/printer/printer_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/printer/printer_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/binary_polyfill_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/binary_polyfill_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/builtin_polyfill_rtc_shim_3.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/builtin_polyfill_rtc_shim_3.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/builtin_polyfill_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/builtin_polyfill_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/case_switch_to_if_else.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/case_switch_to_if_else.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/convert_print_to_log.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/convert_print_to_log.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/expand_implicit_splats.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/expand_implicit_splats.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/decompose_buffer.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/decompose_buffer.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/fork_explicit_layout_types.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/fork_explicit_layout_types.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/fix_type_layout.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/fix_type_layout.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/handle_matrix_arithmetic.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/handle_matrix_arithmetic.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/module_constant.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/module_constant.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/keep_binding_array_as_pointer.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/keep_binding_array_as_pointer.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/module_scope_vars.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/module_scope_vars.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/merge_return.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/merge_return.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/raise_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/raise_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/shader_io_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/shader_io_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/raise_rtc_shim_4.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/raise_rtc_shim_4.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/simd_ballot.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/simd_ballot.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/raise/validate_subgroup_matrix.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/raise/validate_subgroup_matrix.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/resource_table_helper_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/resource_table_helper_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/msl/writer/writer_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/msl/writer/writer_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_4.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_4.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/null/writer/common/options.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/null/writer/common/options.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/unary_polyfill.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/unary_polyfill.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/null/writer/common/output.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/null/writer/common/output.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/raise/var_for_dynamic_index.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/raise/var_for_dynamic_index.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/null/writer/raise/raise.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/null/writer/raise/raise.cc $(GCH)
+$(OBJDIR)/src/tint/lang/spirv/writer/writer_rtc_shim_4.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/spirv/writer/writer_rtc_shim_4.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/null/writer/writer.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/null/writer/writer.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/accessor_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/accessor_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/accessor_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/accessor_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/alias.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/alias.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/alias.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/alias.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/assignment_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/assignment_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/assignment_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/assignment_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/binary_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/binary_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/binary_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/binary_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/binding_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/binding_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/binding_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/binding_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/blend_src_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/blend_src_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/blend_src_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/blend_src_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/block_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/block_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/block_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/block_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/bool_literal_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/bool_literal_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/bool_literal_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/bool_literal_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/break_if_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/break_if_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/break_if_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/break_if_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/break_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/break_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/break_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/break_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/builder_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/builder_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/builder_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/builder_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/builtin_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/builtin_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/builtin_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/builtin_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/call_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/call_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/call_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/call_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/call_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/call_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/call_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/call_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/case_selector.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/case_selector.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/case_selector.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/case_selector.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/case_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/case_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/case_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/case_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/color_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/color_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/color_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/color_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/compound_assignment_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/compound_assignment_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/compound_assignment_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/compound_assignment_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/const.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/const.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/const.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/const.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/const_assert.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/const_assert.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/const_assert.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/const_assert.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/continue_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/continue_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/continue_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/continue_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/diagnostic_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/diagnostic_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/diagnostic_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/diagnostic_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/diagnostic_control.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/diagnostic_control.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/diagnostic_control.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/diagnostic_control.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/diagnostic_directive.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/diagnostic_directive.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/diagnostic_directive.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/diagnostic_directive.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/diagnostic_rule_name.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/diagnostic_rule_name.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/diagnostic_rule_name.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/diagnostic_rule_name.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/discard_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/discard_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/discard_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/discard_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/enable.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/enable.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/enable.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/enable.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/extension.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/extension.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/extension.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/extension.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/float_literal_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/float_literal_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/float_literal_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/float_literal_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/for_loop_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/for_loop_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/for_loop_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/for_loop_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/function_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/function_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/function_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/function_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/group_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/group_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/group_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/group_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/id_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/id_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/id_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/id_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/identifier.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/identifier.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/identifier.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/identifier.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/identifier_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/identifier_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/identifier_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/identifier_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/if_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/if_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/if_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/if_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/increment_decrement_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/increment_decrement_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/increment_decrement_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/increment_decrement_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/index_accessor_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/index_accessor_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/index_accessor_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/index_accessor_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/input_attachment_index_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/input_attachment_index_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/input_attachment_index_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/input_attachment_index_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/int_literal_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/int_literal_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/int_literal_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/int_literal_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/interpolate_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/interpolate_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/interpolate_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/interpolate_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/invariant_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/invariant_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/invariant_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/invariant_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/let_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/let_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/let_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/let_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/literal_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/literal_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/literal_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/literal_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/location_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/location_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/location_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/location_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/loop_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/loop_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/loop_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/loop_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/member_accessor_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/member_accessor_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/member_accessor_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/member_accessor_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/module_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/module_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/module_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/module_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/must_use_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/must_use_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/must_use_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/must_use_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/node_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/node_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/node_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/node_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/override_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/override_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/override_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/override_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/parameter.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/parameter.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/parameter.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/parameter.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/phony_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/phony_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/phony_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/phony_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/pipeline_stage.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/pipeline_stage.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/pipeline_stage.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/pipeline_stage.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/requires.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/requires.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/requires.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/requires.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/return_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/return_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/return_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/return_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/stage_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/stage_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/stage_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/stage_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/struct_member.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/struct_member.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/struct_member.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/struct_member.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/struct_member_align_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/struct_member_align_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/struct_member_align_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/struct_member_align_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/struct_member_size_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/struct_member_size_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/struct_member_size_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/struct_member_size_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/struct_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/struct_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/struct_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/struct_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/subgroup_size_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/subgroup_size_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/subgroup_size_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/subgroup_size_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/switch_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/switch_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/switch_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/switch_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/templated_identifier.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/templated_identifier.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/templated_identifier.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/templated_identifier.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/type_decl.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/type_decl.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/type_decl.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/type_decl.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/unary_op_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/unary_op_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/unary_op_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/unary_op_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/var_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/var_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/var_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/var_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/variable.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/variable.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/variable.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/variable.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/variable_decl_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/variable_decl_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/variable_decl_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/variable_decl_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/while_statement.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/while_statement.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/while_statement.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/while_statement.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ast/workgroup_attribute.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/workgroup_attribute.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ast/workgroup_attribute.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ast/workgroup_attribute.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/enums_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/enums_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/enums_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/enums_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/feature_status.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/feature_status.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/feature_status.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/feature_status.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/inspector/entry_point.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/inspector/entry_point.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/inspector/entry_point.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/inspector/entry_point.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/inspector/inspector.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/inspector/inspector.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/inspector/inspector.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/inspector/inspector.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/inspector/resource_binding.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/inspector/resource_binding.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/inspector/resource_binding.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/inspector/resource_binding.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/inspector/scalar_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/inspector/scalar_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/inspector/scalar_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/inspector/scalar_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/intrinsic/ctor_conv_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/intrinsic/ctor_conv_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/intrinsic/ctor_conv_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/intrinsic/ctor_conv_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/intrinsic/data_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/intrinsic/data_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/intrinsic/data_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/intrinsic/data_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ir/atomic_vec2u_to_from_u64.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ir/atomic_vec2u_to_from_u64.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ir/atomic_vec2u_to_from_u64.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ir/atomic_vec2u_to_from_u64.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ir/builtin_call_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ir/builtin_call_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ir/builtin_call_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ir/builtin_call_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/ir/unary_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ir/unary_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/ir/unary_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/ir/unary_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/program/program.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/program/program.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/program/program.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/program/program.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/program/program_builder.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/program/program_builder.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/program/program_builder.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/program/program_builder.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/reader/lower/lower.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/lower/lower.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/reader/lower/lower.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/lower/lower.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/reader/parser/lexer.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/parser/lexer.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/reader/parser/lexer.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/parser/lexer.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/reader/parser/parser.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/parser/parser.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/reader/parser/parser.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/parser/parser.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/reader/parser/token.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/parser/token.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/reader/parser/token.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/parser/token.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/reader/program_to_ir/program_to_ir.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/program_to_ir/program_to_ir.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/reader/program_to_ir/program_to_ir.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/program_to_ir/program_to_ir.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/reader/reader.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/reader.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/reader/reader.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reader/reader.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/reserved_words.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reserved_words.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/reserved_words.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/reserved_words.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/resolver/dependency_graph.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/dependency_graph.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/resolver/dependency_graph.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/dependency_graph.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/resolver/incomplete_type.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/incomplete_type.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/resolver/incomplete_type.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/incomplete_type.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/resolver/resolve.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/resolve.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/resolver/resolve.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/resolve.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/resolver/resolver.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/resolver.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/resolver/resolver.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/resolver.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/resolver/sem_helper.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/sem_helper.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/resolver/sem_helper.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/sem_helper.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/resolver/uniformity.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/uniformity.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/resolver/uniformity.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/uniformity.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/resolver/unresolved_identifier.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/unresolved_identifier.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/resolver/unresolved_identifier.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/unresolved_identifier.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/resolver/validator_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/validator_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/resolver/validator_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/resolver/validator_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/accessor_expression_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/accessor_expression_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/accessor_expression_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/accessor_expression_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/array_count_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/array_count_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/array_count_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/array_count_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/array_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/array_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/array_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/array_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/behavior.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/behavior.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/behavior.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/behavior.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/block_statement_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/block_statement_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/block_statement_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/block_statement_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/break_if_statement_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/break_if_statement_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/break_if_statement_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/break_if_statement_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/builtin_enum_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/builtin_enum_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/builtin_enum_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/builtin_enum_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/builtin_fn.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/builtin_fn.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/builtin_fn.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/builtin_fn.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/call_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/call_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/call_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/call_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/call_target.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/call_target.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/call_target.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/call_target.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/expression_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/expression_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/expression_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/expression_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/for_loop_statement_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/for_loop_statement_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/for_loop_statement_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/for_loop_statement_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/function_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/function_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/function_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/function_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/function_rtc_shim_3.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/function_rtc_shim_3.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/function_rtc_shim_3.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/function_rtc_shim_3.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/if_statement_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/if_statement_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/if_statement_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/if_statement_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/index_accessor_expression_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/index_accessor_expression_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/index_accessor_expression_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/index_accessor_expression_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/info.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/info.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/info.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/info.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/load_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/load_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/load_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/load_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/loop_statement_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/loop_statement_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/loop_statement_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/loop_statement_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/materialize.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/materialize.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/materialize.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/materialize.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/member_accessor_expression_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/member_accessor_expression_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/member_accessor_expression_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/member_accessor_expression_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/module_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/module_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/module_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/module_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/node_rtc_shim_3.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/node_rtc_shim_3.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/node_rtc_shim_3.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/node_rtc_shim_3.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/statement_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/statement_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/statement_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/statement_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/struct_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/struct_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/struct_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/struct_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/switch_statement_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/switch_statement_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/switch_statement_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/switch_statement_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/type_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/type_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/type_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/type_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/value_constructor.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/value_constructor.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/value_constructor.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/value_constructor.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/value_conversion.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/value_conversion.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/value_conversion.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/value_conversion.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/value_expression.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/value_expression.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/value_expression.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/value_expression.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/variable_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/variable_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/variable_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/variable_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/sem/while_statement_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/while_statement_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/sem/while_statement_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/sem/while_statement_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/writer/ast_printer/ast_printer.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/ast_printer/ast_printer.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/writer/ast_printer/ast_printer.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/ast_printer/ast_printer.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/writer/common/common.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/common/common.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/writer/common/common.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/common/common.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/writer/ir_to_program/ir_to_program.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/ir_to_program/ir_to_program.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/writer/ir_to_program/ir_to_program.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/ir_to_program/ir_to_program.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/writer/output_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/output_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/writer/output_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/output_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/writer/raise/ptr_to_ref.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/raise/ptr_to_ref.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/writer/raise/ptr_to_ref.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/raise/ptr_to_ref.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/writer/raise/raise_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/raise/raise_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/writer/raise/raise_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/raise/raise_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/writer/raise/value_to_let_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/raise/value_to_let_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/writer/raise/value_to_let_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/raise/value_to_let_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/lang/wgsl/writer/writer_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/writer_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/lang/wgsl/writer/writer_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/lang/wgsl/writer/writer_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/utils/bytes/buffer_reader.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/bytes/buffer_reader.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/bytes/buffer_reader.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/bytes/buffer_reader.cc $(GCH)
+$(OBJDIR)/src/tint/utils/bytes/reader_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/bytes/reader_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/bytes/reader_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/bytes/reader_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/utils/command/args.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/command/args.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/command/args.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/command/args.cc $(GCH)
+$(OBJDIR)/src/tint/utils/command/cli.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/command/cli.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/command/cli.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/command/cli.cc $(GCH)
+$(OBJDIR)/src/tint/utils/command/command_posix_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/command/command_posix_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/command/command_posix_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/command/command_posix_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/utils/containers/containers.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/containers/containers.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/containers/containers.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/containers/containers.cc $(GCH)
+$(OBJDIR)/src/tint/utils/diagnostic/diagnostic.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/diagnostic/diagnostic.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/diagnostic/diagnostic.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/diagnostic/diagnostic.cc $(GCH)
+$(OBJDIR)/src/tint/utils/diagnostic/formatter.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/diagnostic/formatter.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/diagnostic/formatter.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/diagnostic/formatter.cc $(GCH)
+$(OBJDIR)/src/tint/utils/diagnostic/source.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/diagnostic/source.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/diagnostic/source.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/diagnostic/source.cc $(GCH)
+$(OBJDIR)/src/tint/utils/file/tmpfile_posix_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/file/tmpfile_posix_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/file/tmpfile_posix_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/file/tmpfile_posix_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/utils/ice/debugger.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/ice/debugger.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/ice/debugger.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/ice/debugger.cc $(GCH)
+$(OBJDIR)/src/tint/utils/ice/ice.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/ice/ice.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/ice/ice.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/ice/ice.cc $(GCH)
+$(OBJDIR)/src/tint/utils/macros/macros.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/macros/macros.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/macros/macros.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/macros/macros.cc $(GCH)
+$(OBJDIR)/src/tint/utils/math/math_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/math/math_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/math/math_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/math/math_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/utils/memory/memory.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/memory/memory.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/memory/memory.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/memory/memory.cc $(GCH)
+$(OBJDIR)/src/tint/utils/reflection/reflection_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/reflection/reflection_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/reflection/reflection_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/reflection/reflection_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/utils/result_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/result_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/result_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/result_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/utils/rtti/castable_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/rtti/castable_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/rtti/castable_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/rtti/castable_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/utils/rtti/switch_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/rtti/switch_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/rtti/switch_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/rtti/switch_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/utils/strconv/float_to_string.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/strconv/float_to_string.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/strconv/float_to_string.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/strconv/float_to_string.cc $(GCH)
+$(OBJDIR)/src/tint/utils/strconv/parse_num.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/strconv/parse_num.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/strconv/parse_num.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/strconv/parse_num.cc $(GCH)
+$(OBJDIR)/src/tint/utils/symbol/generation_id.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/symbol/generation_id.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/symbol/generation_id.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/symbol/generation_id.cc $(GCH)
+$(OBJDIR)/src/tint/utils/symbol/symbol.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/symbol/symbol.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/symbol/symbol.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/symbol/symbol.cc $(GCH)
+$(OBJDIR)/src/tint/utils/symbol/symbol_table.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/symbol/symbol_table.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/symbol/symbol_table.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/symbol/symbol_table.cc $(GCH)
+$(OBJDIR)/src/tint/utils/system/env_other.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/system/env_other.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/system/env_other.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/system/env_other.cc $(GCH)
+$(OBJDIR)/src/tint/utils/system/executable_path_linux.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/system/executable_path_linux.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/system/executable_file_mac.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/system/executable_file_mac.cc $(GCH)
+$(OBJDIR)/src/tint/utils/system/terminal_posix_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/system/terminal_posix_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/system/terminal_posix_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/system/terminal_posix_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/utils/text/base64.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/text/base64.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/text/base64.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/text/base64.cc $(GCH)
+$(OBJDIR)/src/tint/utils/text/color_mode.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/text/color_mode.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/text/color_mode.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/text/color_mode.cc $(GCH)
+$(OBJDIR)/src/tint/utils/text/string_rtc_shim_2.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/text/string_rtc_shim_2.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/text/string_rtc_shim_2.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/text/string_rtc_shim_2.cc $(GCH)
+$(OBJDIR)/src/tint/utils/text/string_stream.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/text/string_stream.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/text/string_stream.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/text/string_stream.cc $(GCH)
+$(OBJDIR)/src/tint/utils/text/styled_text.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/text/styled_text.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/text/styled_text.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/text/styled_text.cc $(GCH)
+$(OBJDIR)/src/tint/utils/text/styled_text_printer.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/text/styled_text_printer.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/text/styled_text_printer.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/text/styled_text_printer.cc $(GCH)
+$(OBJDIR)/src/tint/utils/text/styled_text_printer_ansi.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/text/styled_text_printer_ansi.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/text/styled_text_printer_ansi.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/text/styled_text_printer_ansi.cc $(GCH)
+$(OBJDIR)/src/tint/utils/text/styled_text_printer_posix_rtc_shim_1.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/text/styled_text_printer_posix_rtc_shim_1.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/text/styled_text_printer_posix_rtc_shim_1.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/text/styled_text_printer_posix_rtc_shim_1.cc $(GCH)
+$(OBJDIR)/src/tint/utils/text/styled_text_theme.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/text/styled_text_theme.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/text/styled_text_theme.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/text/styled_text_theme.cc $(GCH)
+$(OBJDIR)/src/tint/utils/text/unicode.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/text/unicode.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/text/unicode.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/text/unicode.cc $(GCH)
+$(OBJDIR)/src/tint/utils/text_generator/text_generator.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/tint/utils/text_generator/text_generator.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"
-$(OBJDIR)/src/tint/utils/text_generator/text_generator.cc.o: /Users/mark8487/dev/rtc/3rdparty/dawn/src/tint/utils/text_generator/text_generator.cc $(GCH)
+$(OBJDIR)/src/utils/log.cc.o: /home/linux/dev/rtc/3rdparty/dawn/src/utils/log.cc $(GCH)
 	@echo $(notdir $<)
 	$(SILENT) mkdir -p $(@D)
 	$(SILENT) $(CCACHE_HOME) $(CXX) $(CXXFLAGS) -o "$@" -MF $(@:%.o=%.d) -c "$<"

@@ -665,7 +665,7 @@ files {
   "src/tint/utils/text/unicode.cc",
   "src/tint/utils/text_generator/text_generator.cc",
   "src/utils/log.cc",
-  
+
 }
 
 --
