@@ -96,7 +96,6 @@ if (_PLATFORM_WINDOWS) then
   enable_d3d12 = true
   enable_hlsl = true
   enable_spirv = true
-  enable_vulkan = true
   enable_win = true
 
 end
