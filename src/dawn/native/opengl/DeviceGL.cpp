@@ -25,38 +25,38 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/opengl/DeviceGL.h"
+#include "src/dawn/native/opengl/DeviceGL.h"
 
 #include <utility>
 
-#include "dawn/common/Log.h"
-#include "dawn/native/BackendConnection.h"
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/ErrorData.h"
-#include "dawn/native/Instance.h"
-#include "dawn/native/opengl/BindGroupGL.h"
-#include "dawn/native/opengl/BindGroupLayoutGL.h"
-#include "dawn/native/opengl/BufferGL.h"
-#include "dawn/native/opengl/CommandBufferGL.h"
-#include "dawn/native/opengl/ComputePipelineGL.h"
-#include "dawn/native/opengl/ContextEGL.h"
-#include "dawn/native/opengl/DisplayEGL.h"
-#include "dawn/native/opengl/PhysicalDeviceGL.h"
-#include "dawn/native/opengl/PipelineLayoutGL.h"
-#include "dawn/native/opengl/QuerySetGL.h"
-#include "dawn/native/opengl/QueueGL.h"
-#include "dawn/native/opengl/RenderPipelineGL.h"
-#include "dawn/native/opengl/SamplerGL.h"
-#include "dawn/native/opengl/ShaderModuleGL.h"
-#include "dawn/native/opengl/SharedFenceEGL.h"
-#include "dawn/native/opengl/SharedTextureMemoryEGL.h"
-#include "dawn/native/opengl/SwapChainEGL.h"
-#include "dawn/native/opengl/TextureGL.h"
-#include "dawn/native/opengl/UtilsGL.h"
-#include "dawn/native/opengl/opengl_platform.h"
+#include "src/dawn/native/BackendConnection.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/ErrorData.h"
+#include "src/dawn/native/Instance.h"
+#include "src/dawn/native/opengl/BindGroupGL.h"
+#include "src/dawn/native/opengl/BindGroupLayoutGL.h"
+#include "src/dawn/native/opengl/BufferGL.h"
+#include "src/dawn/native/opengl/CommandBufferGL.h"
+#include "src/dawn/native/opengl/ComputePipelineGL.h"
+#include "src/dawn/native/opengl/ContextEGL.h"
+#include "src/dawn/native/opengl/DisplayEGL.h"
+#include "src/dawn/native/opengl/PhysicalDeviceGL.h"
+#include "src/dawn/native/opengl/PipelineLayoutGL.h"
+#include "src/dawn/native/opengl/QuerySetGL.h"
+#include "src/dawn/native/opengl/QueueGL.h"
+#include "src/dawn/native/opengl/RenderPipelineGL.h"
+#include "src/dawn/native/opengl/SamplerGL.h"
+#include "src/dawn/native/opengl/ShaderModuleGL.h"
+#include "src/dawn/native/opengl/SharedFenceEGL.h"
+#include "src/dawn/native/opengl/SharedTextureMemoryEGL.h"
+#include "src/dawn/native/opengl/SwapChainEGL.h"
+#include "src/dawn/native/opengl/TextureGL.h"
+#include "src/dawn/native/opengl/UtilsGL.h"
+#include "src/dawn/native/opengl/opengl_platform.h"
+#include "src/utils/log.h"
 
 #if DAWN_PLATFORM_IS(ANDROID)
-#include "dawn/native/AHBFunctions.h"
+#include "src/dawn/native/AHBFunctions.h"
 #endif  // DAWN_PLATFORM_IS(ANDROID)
 
 namespace {
@@ -420,7 +420,7 @@ ResultOrError<Ref<TextureBase>> Device::CreateTextureWrappingEGLImageImpl(
 
         return DAWN_VALIDATION_ERROR(
             "EGLImage size (width: %u, height: %u, depth: 1) doesn't match descriptor size %s.",
-            width, height, &textureDescriptor->size);
+            width, height, textureDescriptor->size);
     }
 
     // TODO(dawn:803): Validate the OpenGL texture format from the EGLImage against the format
@@ -475,7 +475,7 @@ ResultOrError<Ref<TextureBase>> Device::CreateTextureWrappingGLTextureImpl(
         textureDescriptor->size.depthOrArrayLayers != 1) {
         return DAWN_VALIDATION_ERROR(
             "GL texture size (width: %u, height: %u, depth: 1) doesn't match descriptor size %s.",
-            width, height, &textureDescriptor->size);
+            width, height, textureDescriptor->size);
     }
 
     auto result = AcquireRef(new Texture(this, textureDescriptor, texture, OwnsHandle::No));
@@ -502,9 +502,9 @@ MaybeError Device::FlushPendingGLCommands() {
 
     ContextEGL::ScopedMakeCurrent scopedCurrentContext;
     DAWN_TRY_ASSIGN(scopedCurrentContext, mContext->MakeCurrent());
-    const OpenGLFunctions& gl = GetGL(/*makeCurrent=*/false);
+    MarkGLUsed(ExecutionQueueBase::SubmitMode::Normal);
     for (auto& work : workList) {
-        DAWN_TRY(work(gl));
+        DAWN_TRY(work(mGL));
     }
     return scopedCurrentContext.End();
 }
@@ -589,7 +589,7 @@ const EGLFunctions& Device::GetEGL(bool makeCurrent) const {
         mContext->DeprecatedMakeCurrent();
         MarkGLUsed(ExecutionQueueBase::SubmitMode::Normal);
     }
-    return ToBackend(GetPhysicalDevice())->GetDisplay()->egl;
+    return ToBackend(GetPhysicalDevice())->GetDisplay()->egl.get();
 }
 
 EGLDisplay Device::GetEGLDisplay() const {

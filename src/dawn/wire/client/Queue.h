@@ -29,10 +29,11 @@
 #define SRC_DAWN_WIRE_CLIENT_QUEUE_H_
 
 #include <webgpu/webgpu.h>
+
 #include <atomic>
 
 #include "dawn/wire/WireClient.h"
-#include "dawn/wire/client/ObjectBase.h"
+#include "src/dawn/wire/client/ObjectBase.h"
 
 namespace dawn::wire::client {
 

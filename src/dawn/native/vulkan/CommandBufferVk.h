@@ -30,10 +30,9 @@
 
 #include <set>
 
-#include "dawn/native/CommandBuffer.h"
-#include "dawn/native/Error.h"
-
-#include "dawn/common/vulkan_platform.h"
+#include "src/dawn/common/vulkan_platform.h"
+#include "src/dawn/native/CommandBuffer.h"
+#include "src/dawn/native/Error.h"
 
 namespace dawn::native {
 struct BeginComputePassCmd;
@@ -65,11 +64,11 @@ class CommandBuffer final : public CommandBufferBase {
 
     MaybeError RecordComputePass(CommandRecordingContext* recordingContext,
                                  BeginComputePassCmd* computePass,
-                                 const ComputePassResourceUsage& resourceUsages,
-                                 ResourceTable* resourceTable);
+                                 const ComputePassResourceUsage& resourceUsages);
     MaybeError RecordRenderPass(CommandRecordingContext* recordingContext,
                                 BeginRenderPassCmd* renderPass,
-                                ResourceTable* resourceTable);
+                                const RenderPassResourceUsage& usage,
+                                PassIndex renderPassIndex);
     MaybeError RecordCopyImageWithTemporaryBuffer(CommandRecordingContext* recordingContext,
                                                   const TextureCopy& srcCopy,
                                                   const TextureCopy& dstCopy,

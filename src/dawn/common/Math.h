@@ -29,16 +29,17 @@
 #define SRC_DAWN_COMMON_MATH_H_
 
 #include <climits>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-
 #include <limits>
 #include <optional>
 
-#include "dawn/common/Assert.h"
-#include "dawn/common/Platform.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "src/dawn/common/Compiler.h"
+#include "src/utils/assert.h"
+#include "src/utils/platform.h"
 
 #if DAWN_COMPILER_IS(MSVC)
 #include <intrin.h>
@@ -50,6 +51,16 @@ namespace dawn {
 uint32_t Log2(uint32_t value);
 uint32_t Log2(uint64_t value);
 bool IsPowerOfTwo(uint64_t n);
+
+// Returns 2^exp for integrals
+template <std::integral T>
+T Pow2(T exp) {
+    return (T{1} << exp);
+}
+
+// Rounds n to the nearest multiple of m
+// e.g. RoundUp(7, 3) rounds 7 to 9 (3*3)
+// while RoundUp(6,3) rounds 6 to 6 (3*2).
 uint64_t RoundUp(uint64_t n, uint64_t m);
 
 constexpr uint32_t ConstexprLog2(uint64_t v) {
@@ -74,17 +85,17 @@ bool IsAligned(uint32_t value, size_t alignment);
 
 template <typename T>
 T Align(T value, size_t alignment) {
-    DAWN_ASSERT(value <= std::numeric_limits<T>::max() - (alignment - 1));
-    DAWN_ASSERT(IsPowerOfTwo(alignment));
-    DAWN_ASSERT(alignment != 0);
+    DAWN_RELEASE_ASSUME(value <= std::numeric_limits<T>::max() - (alignment - 1));
+    DAWN_RELEASE_ASSUME(IsPowerOfTwo(alignment));
+    DAWN_RELEASE_ASSUME(alignment != 0);
     T alignmentT = static_cast<T>(alignment);
     return (value + (alignmentT - 1)) & ~(alignmentT - 1);
 }
 
 template <typename T>
 T AlignDown(T value, size_t alignment) {
-    DAWN_ASSERT(IsPowerOfTwo(alignment));
-    DAWN_ASSERT(alignment != 0);
+    DAWN_RELEASE_ASSUME(IsPowerOfTwo(alignment));
+    DAWN_RELEASE_ASSUME(alignment != 0);
     T alignmentT = static_cast<T>(alignment);
     return value & ~(alignmentT - 1);
 }
@@ -111,8 +122,8 @@ std::optional<size_t> AlignSizeofN(uint64_t n) {
 
 template <typename T>
 DAWN_FORCE_INLINE T* AlignPtr(T* ptr, size_t alignment) {
-    DAWN_ASSERT(IsPowerOfTwo(alignment));
-    DAWN_ASSERT(alignment != 0);
+    DAWN_RELEASE_ASSUME(IsPowerOfTwo(alignment));
+    DAWN_RELEASE_ASSUME(alignment != 0);
     return reinterpret_cast<T*>((reinterpret_cast<size_t>(ptr) + (alignment - 1)) &
                                 ~(alignment - 1));
 }
@@ -124,8 +135,8 @@ DAWN_FORCE_INLINE T* AlignPtr(raw_ptr<T, Traits> ptr, size_t alignment) {
 
 template <typename T>
 DAWN_FORCE_INLINE const T* AlignPtr(const T* ptr, size_t alignment) {
-    DAWN_ASSERT(IsPowerOfTwo(alignment));
-    DAWN_ASSERT(alignment != 0);
+    DAWN_RELEASE_ASSUME(IsPowerOfTwo(alignment));
+    DAWN_RELEASE_ASSUME(alignment != 0);
     return reinterpret_cast<const T*>((reinterpret_cast<size_t>(ptr) + (alignment - 1)) &
                                       ~(alignment - 1));
 }

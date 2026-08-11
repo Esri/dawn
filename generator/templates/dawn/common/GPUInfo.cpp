@@ -32,7 +32,7 @@
 
 #include "dawn/common/GPUInfo_autogen.h"
 
-#include "dawn/common/Assert.h"
+#include "src/utils/assert.h"
 
 namespace dawn::gpu_info {
 

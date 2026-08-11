@@ -25,9 +25,10 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/spirv/writer/common/helper_test.h"
-
 #include "gmock/gmock.h"
+#include "src/tint/lang/core/type/struct.h"
+#include "src/tint/lang/spirv/writer/common/helper_test.h"
+#include "src/tint/utils/internal_limits.h"
 
 namespace tint::spirv::writer {
 namespace {
@@ -39,7 +40,8 @@ TEST_F(SpirvWriterTest, ModuleHeader) {
     auto* eb = b.ComputeFunction("main");
     b.Append(eb->Block(), [&] { b.Return(eb); });
 
-    ASSERT_TRUE(Generate()) << Error() << output_;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST("OpCapability Shader");
     EXPECT_INST("OpMemoryModel Logical GLSL450");
 }
@@ -51,7 +53,8 @@ TEST_F(SpirvWriterTest, ModuleHeader_VulkanMemoryModel) {
     auto* eb = b.ComputeFunction("main");
     b.Append(eb->Block(), [&] { b.Return(eb); });
 
-    ASSERT_TRUE(Generate(opts)) << Error() << output_;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST("OpExtension \"SPV_KHR_vulkan_memory_model\"");
     EXPECT_INST("OpCapability VulkanMemoryModel");
     EXPECT_INST("OpCapability VulkanMemoryModelDeviceScope");
@@ -72,10 +75,38 @@ TEST_F(SpirvWriterTest, CanGenerate_SubgroupMatrixRequiresVulkanMemoryModel) {
     Options options;
     options.extensions.use_vulkan_memory_model = false;
     options.entry_point_name = "main";
-    auto result = CanGenerate(mod, options);
+    auto result = Generate(options);
     ASSERT_NE(result, Success);
     EXPECT_THAT(result.Failure().reason,
                 testing::HasSubstr("using subgroup matrices requires the Vulkan Memory Model"));
+}
+
+TEST_F(SpirvWriterTest, EntryPoint_InputLocation_ExceedsMax) {
+    auto* f = b.FragmentFunction("my_func", ty.void_());
+    auto* p = b.FunctionParam("p", ty.f32());
+    p->SetLocation(4096);
+    f->SetParams({p});
+
+    b.Append(f->Block(), [&] { b.Return(f); });
+
+    Options options;
+    options.entry_point_name = "my_func";
+    auto res = Generate(options);
+    ASSERT_NE(res, Success);
+    EXPECT_EQ(res.Failure().reason, "location(4096) exceeds the maximum allowed value of '4095'");
+}
+
+TEST_F(SpirvWriterTest, EntryPoint_OutputLocation_ExceedsMax) {
+    auto* f = b.FragmentFunction("my_func", ty.f32());
+    f->SetReturnLocation(4096);
+
+    b.Append(f->Block(), [&] { b.Return(f, 1.0_f); });
+
+    Options options;
+    options.entry_point_name = "my_func";
+    auto res = Generate(options);
+    ASSERT_NE(res, Success);
+    EXPECT_EQ(res.Failure().reason, "location(4096) exceeds the maximum allowed value of '4095'");
 }
 
 TEST_F(SpirvWriterTest, Unreachable) {
@@ -101,7 +132,8 @@ TEST_F(SpirvWriterTest, Unreachable) {
 
     Options options;
     options.disable_robustness = true;
-    ASSERT_TRUE(Generate(options)) << Error() << output_;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST(R"(
        %main = OpFunction %void None %3
           %4 = OpLabel
@@ -147,8 +179,9 @@ TEST_F(SpirvWriterTest, TooManyFunctionParameters) {
         b.Return(ep);
     });
 
-    EXPECT_FALSE(Generate());
-    EXPECT_THAT(Error(),
+    auto result = Generate();
+    ASSERT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
                 testing::HasSubstr(
                     "Function 'foo' has more than 255 parameters after running Tint transforms"));
 }
@@ -161,7 +194,8 @@ TEST_F(SpirvWriterTest, EntryPointName_Remapped) {
 
     Options options;
     options.remapped_entry_point_name = "my_entry_point";
-    ASSERT_TRUE(Generate(options)) << Error() << output_;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST("OpEntryPoint GLCompute %main \"my_entry_point\"");
 }
 
@@ -173,7 +207,8 @@ TEST_F(SpirvWriterTest, EntryPointName_NotRemapped) {
 
     Options options;
     options.remapped_entry_point_name = "";
-    ASSERT_TRUE(Generate(options)) << Error() << output_;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST("OpEntryPoint GLCompute %main \"main\"");
 }
 
@@ -186,7 +221,8 @@ TEST_F(SpirvWriterTest, EntryPoint_FunctionVar_Spirv1p3) {
 
     Options options;
     options.remapped_entry_point_name = "";
-    ASSERT_TRUE(Generate(options)) << Error() << output_;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST("OpEntryPoint GLCompute %main \"main\"\n");
 }
 
@@ -200,7 +236,8 @@ TEST_F(SpirvWriterTest, EntryPoint_FunctionVar_Spirv1p4) {
     Options options;
     options.remapped_entry_point_name = "";
     options.spirv_version = SpvVersion::kSpv14;
-    ASSERT_TRUE(Generate(options)) << Error() << output_;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST("OpEntryPoint GLCompute %main \"main\"\n");
 }
 
@@ -216,7 +253,8 @@ TEST_F(SpirvWriterTest, EntryPoint_StorageVar_Spirv1p3) {
 
     Options options;
     options.remapped_entry_point_name = "";
-    ASSERT_TRUE(Generate(options)) << Error() << output_;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST("OpEntryPoint GLCompute %main \"main\"\n");
 }
 
@@ -233,7 +271,8 @@ TEST_F(SpirvWriterTest, EntryPoint_StorageVar_Spirv1p4) {
     Options options;
     options.remapped_entry_point_name = "";
     options.spirv_version = SpvVersion::kSpv14;
-    ASSERT_TRUE(Generate(options)) << Error() << output_;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST("OpEntryPoint GLCompute %main \"main\" %1");
 }
 
@@ -255,7 +294,8 @@ TEST_F(SpirvWriterTest, EntryPoint_StorageVar_CalledFunction_Spirv1p4) {
     Options options;
     options.remapped_entry_point_name = "";
     options.spirv_version = SpvVersion::kSpv14;
-    ASSERT_TRUE(Generate(options)) << Error() << output_;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST("OpEntryPoint GLCompute %main \"main\" %1");
 }
 
@@ -277,7 +317,8 @@ TEST_F(SpirvWriterTest, Spv14_CopyLogical) {
     Options options;
     options.remapped_entry_point_name = "";
     options.spirv_version = SpvVersion::kSpv14;
-    ASSERT_TRUE(Generate(options)) << Error() << output_;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST(R"(
                ; Annotations
                OpDecorate %_arr_uint_uint_4 ArrayStride 4
@@ -329,7 +370,8 @@ TEST_F(SpirvWriterTest, StripAllNames) {
     Options options;
     options.strip_all_names = true;
     options.remapped_entry_point_name = "tint_entry_point";
-    ASSERT_TRUE(Generate(options)) << Error() << output_;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST(R"(
                OpEntryPoint GLCompute %16 "tint_entry_point" %gl_LocalInvocationIndex
                OpExecutionMode %16 LocalSize 1 1 1
@@ -364,6 +406,74 @@ TEST_F(SpirvWriterTest, StripAllNames) {
          %18 = OpLabel
          %19 = OpLoad %uint %gl_LocalInvocationIndex None
          %20 = OpFunctionCall %void %4 %19
+               OpReturn
+               OpFunctionEnd
+)");
+}
+
+TEST_F(SpirvWriterTest, WorkgroupStorageSize_OverflowAfterAlign) {
+    auto* var = mod.root_block->Append(b.Var<workgroup, array<u32, 0x3FFFFFFFu>>("a"));
+    auto* foo = b.ComputeFunction("main", 64_u, 1_u, 1_u);
+    b.Append(foo->Block(), [&] {  //
+        b.Load(b.Access<ptr<workgroup, u32>>(var, 0_u));
+        b.Return(foo);
+    });
+
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
+    EXPECT_EQ(workgroup_info.storage_size, 0x100000000ull);
+}
+
+TEST_F(SpirvWriterTest, CanGenerate_StructMemberPadding_TooLarge) {
+    ty.Get<core::type::Struct>(
+        mod.symbols.New("S"),
+        tint::Vector{ty.Get<core::type::StructMember>(mod.symbols.New("a"), ty.i32(), 0u, 0u, 4u,
+                                                      4u, core::IOAttributes{}),
+                     ty.Get<core::type::StructMember>(
+                         mod.symbols.New("b"), ty.i32(), 1u,
+                         static_cast<uint32_t>(tint::internal_limits::kMaxStructMemberPadding + 4),
+                         4u, 4u, core::IOAttributes{})},
+        8u /* size */);
+
+    auto* ep = b.ComputeFunction("main");
+    b.Append(ep->Block(), [&] { b.Return(ep); });
+
+    Options options;
+    auto result = Generate(options);
+    ASSERT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason, testing::HasSubstr("is larger than the maximum"));
+}
+
+TEST_F(SpirvWriterTest, PolyfillPixelCenter) {
+    auto* position = b.FunctionParam("position", ty.vec4f());
+    position->SetBuiltin(core::BuiltinValue::kPosition);
+
+    auto* ep = b.FragmentFunction("main", ty.void_());
+    ep->SetParams({position});
+
+    b.Append(ep->Block(), [&] {
+        b.Let("p", position);
+        b.Return(ep);
+    });
+
+    Options options;
+    options.polyfill_pixel_center = 0;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_;
+    EXPECT_INST(R"(
+       %main = OpFunction %void None %12
+         %13 = OpLabel
+         %14 = OpLoad %v4float %main_position_Input None
+         %15 = OpVectorShuffle %v2float %14 %14 0 1
+         %17 = OpExtInst %v2float %18 Floor %15
+         %19 = OpFAdd %v2float %17 %20
+         %22 = OpExtInst %v4float %18 InterpolateAtOffset %main_loc0_Input %23
+         %24 = OpCompositeExtract %float %22 2
+         %25 = OpCompositeExtract %float %22 3
+         %26 = OpFDiv %float %24 %25
+         %27 = OpFDiv %float %float_1 %25
+         %29 = OpCompositeConstruct %v4float %19 %26 %27
+         %30 = OpFunctionCall %void %main_inner %29
                OpReturn
                OpFunctionEnd
 )");

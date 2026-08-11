@@ -25,13 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/core/ir/validator_test.h"
-
 #include <string>
 
 #include "gtest/gtest.h"
-
 #include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator_test.h"
 #include "src/tint/lang/core/number.h"
 #include "src/tint/lang/core/type/abstract_float.h"
 #include "src/tint/lang/core/type/abstract_int.h"
@@ -43,6 +41,54 @@ namespace tint::core::ir {
 
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
+
+TEST_F(IR_ValidatorTest, Builtin_DuplicateOnNonEntryPoint_Allowed) {
+    auto* str_ty =
+        ty.Struct(mod.symbols.New("S"),
+                  {{mod.symbols.New("pos"), ty.vec4f(), {.builtin = BuiltinValue::kPosition}}});
+
+    auto* foo = b.Function("foo", ty.void_());
+    foo->AppendParam(b.FunctionParam("s0", str_ty));
+    foo->AppendParam(b.FunctionParam("s1", str_ty));
+
+    b.Append(foo->Block(), [&] { b.Return(foo); });
+
+    auto* main = ComputeEntryPoint("main");
+    b.Append(main->Block(), [&] { b.Return(main); });
+
+    auto res = ir::Validate(mod);
+    ASSERT_EQ(res, Success) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Builtin_OnNonEntryPoint_AnyStageAllowed) {
+    auto* str_ty =
+        ty.Struct(mod.symbols.New("S"),
+                  {{mod.symbols.New("i"), ty.u32(), {.builtin = BuiltinValue::kVertexIndex}}});
+
+    auto* f = b.Function("f", ty.void_());
+    f->AppendParam(b.FunctionParam("p", str_ty));
+
+    b.Append(f->Block(), [&] { b.Return(f); });
+
+    auto res = ir::Validate(mod);
+    ASSERT_EQ(res, Success) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Builtin_OnNonEntryPoint_StructuralTypeCheckStillApplies) {
+    auto* str_ty =
+        ty.Struct(mod.symbols.New("S"),
+                  {{mod.symbols.New("i"), ty.f32(), {.builtin = BuiltinValue::kVertexIndex}}});
+
+    auto* f = b.Function("f", ty.void_());
+    f->AppendParam(b.FunctionParam("p", str_ty));
+
+    b.Append(f->Block(), [&] { b.Return(f); });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason, testing::HasSubstr("vertex_index must be an u32"))
+        << res.Failure();
+}
 
 TEST_F(IR_ValidatorTest, Builtin_DuplicateInput) {
     auto* f = FragmentEntryPoint();
@@ -136,7 +182,7 @@ TEST_F(IR_ValidatorTest, Builtin_ClipDistance_Duplicate) {
 )")) << res.Failure();
 }
 
-TEST_F(IR_ValidatorTest, Builtin_ClipDistance_Duplicate_WithCapability) {
+TEST_F(IR_ValidatorTest, Builtin_ClipDistance_Duplicate_WithProperty) {
     const auto attr = IOAttributes{.builtin = BuiltinValue::kClipDistances};
     auto* str_ty = ty.Struct(mod.symbols.New("OutputStruct"),
                              {{mod.symbols.New("cd1"), ty.array<f32, 2>(), attr},
@@ -154,11 +200,12 @@ TEST_F(IR_ValidatorTest, Builtin_ClipDistance_Duplicate_WithCapability) {
         b.Unreachable();
     });
 
-    auto res = ir::Validate(mod, Capabilities{Capability::kAllowClipDistancesOnF32ScalarAndVector});
+    mod.properties.Add(Property::kAllowClipDistancesOnF32ScalarAndVector);
+    auto res = ir::Validate(mod);
     ASSERT_EQ(res, Success) << res.Failure();
 }
 
-TEST_F(IR_ValidatorTest, Builtin_ClipDistance_Triple_WithCapability) {
+TEST_F(IR_ValidatorTest, Builtin_ClipDistance_Triple_WithProperty) {
     const auto attr = IOAttributes{.builtin = BuiltinValue::kClipDistances};
     auto* str_ty = ty.Struct(mod.symbols.New("OutputStruct"),
                              {{mod.symbols.New("cd1"), ty.array<f32, 2>(), attr},
@@ -179,12 +226,13 @@ TEST_F(IR_ValidatorTest, Builtin_ClipDistance_Triple_WithCapability) {
         b.Unreachable();
     });
 
-    auto res = ir::Validate(mod, Capabilities{Capability::kAllowClipDistancesOnF32ScalarAndVector});
+    mod.properties.Add(Property::kAllowClipDistancesOnF32ScalarAndVector);
+    auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_THAT(
         res.Failure().reason,
         testing::HasSubstr(
-            R"(:8:48 error: var: too many instances of builtin 'clip_distances' on entry point output, only two allowed with 'kAllowClipDistancesOnF32ScalarAndVector' capability enabled
+            R"(:8:48 error: var: too many instances of builtin 'clip_distances' on entry point output, only two allowed with 'kAllowClipDistancesOnF32ScalarAndVector' property enabled
   %outs:ptr<__out, OutputStruct, read_write> = var undef
                                                ^^^
 )")) << res.Failure();
@@ -443,7 +491,7 @@ TEST_F(IR_ValidatorTest, Builtin_FragDepth_WrongType) {
 
 TEST_F(IR_ValidatorTest, Builtin_NonFragDepth_NonUndefinedDepthMode) {
     auto* f = VertexEntryPoint();
-    f->SetReturnDepthMode(BuiltinDepthMode::kAny);
+    f->SetReturnDepthMode(BuiltinDepthMode::kGreater);
 
     b.Append(f->Block(), [&] { b.Unreachable(); });
 
@@ -452,7 +500,7 @@ TEST_F(IR_ValidatorTest, Builtin_NonFragDepth_NonUndefinedDepthMode) {
     EXPECT_THAT(
         res.Failure().reason,
         testing::HasSubstr(
-            R"(:1:1 error: position cannot have a depth mode of any. It can only be undefined.
+            R"(:1:1 error: position cannot have a depth mode of greater. It can only be undefined.
 %f = @vertex func():vec4<f32> [@position] {
 ^^
 )")) << res.Failure();
@@ -461,7 +509,7 @@ TEST_F(IR_ValidatorTest, Builtin_NonFragDepth_NonUndefinedDepthMode) {
 TEST_F(IR_ValidatorTest, MissingBuiltin_WithFragDepth) {
     auto* f = ComputeEntryPoint();
     AddReturn(f, "pos", ty.vec4f());
-    f->SetReturnDepthMode(BuiltinDepthMode::kAny);
+    f->SetReturnDepthMode(BuiltinDepthMode::kGreater);
 
     b.Append(f->Block(), [&] { b.Unreachable(); });
 
@@ -483,17 +531,6 @@ TEST_F(IR_ValidatorTest, Builtin_FragDepth_UndefinedDepthMode) {
 
     auto res = ir::Validate(mod);
     ASSERT_EQ(res, Success);
-}
-
-TEST_F(IR_ValidatorTest, Builtin_FragDepth_AnyDepthMode) {
-    auto* f = FragmentEntryPoint();
-    AddBuiltinReturn(f, "depth", BuiltinValue::kFragDepth, ty.f32());
-    f->SetReturnDepthMode(BuiltinDepthMode::kAny);
-
-    b.Append(f->Block(), [&] { b.Unreachable(); });
-
-    auto res = ir::Validate(mod);
-    ASSERT_EQ(res, Success) << res.Failure();
 }
 
 TEST_F(IR_ValidatorTest, Builtin_FragDepth_GreaterDepthMode) {
@@ -616,6 +653,21 @@ TEST_F(IR_ValidatorTest, Builtin_GlobalInvocationId_WrongType) {
 )")) << res.Failure();
 }
 
+TEST_F(IR_ValidatorTest, Builtin_GlobalInvocationId_WrongType_i32) {
+    auto* f = ComputeEntryPoint();
+    AddBuiltinParam(f, "invocation", BuiltinValue::kGlobalInvocationId, ty.vec3i());
+
+    b.Append(f->Block(), [&] { b.Unreachable(); });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason, testing::HasSubstr(
+                                          R"(:1:48 error: global_invocation_id must be an vec3<u32>
+%f = @compute @workgroup_size(1u, 1u, 1u) func(%invocation:vec3<i32> [@global_invocation_id]):void {
+                                               ^^^^^^^^^^^^^^^^^^^^^
+)")) << res.Failure();
+}
+
 TEST_F(IR_ValidatorTest, Builtin_InstanceIndex_WrongStage) {
     auto* f = FragmentEntryPoint();
     AddBuiltinParam(f, "instance", BuiltinValue::kInstanceIndex, ty.u32());
@@ -712,6 +764,21 @@ TEST_F(IR_ValidatorTest, Builtin_LocalInvocationId_WrongType) {
                 testing::HasSubstr(R"(:1:48 error: local_invocation_id must be an vec3<u32>
 %f = @compute @workgroup_size(1u, 1u, 1u) func(%id:u32 [@local_invocation_id]):void {
                                                ^^^^^^^
+)")) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Builtin_LocalInvocationId_WrongType_i32) {
+    auto* f = ComputeEntryPoint();
+    AddBuiltinParam(f, "id", BuiltinValue::kLocalInvocationId, ty.vec3i());
+
+    b.Append(f->Block(), [&] { b.Unreachable(); });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(R"(:1:48 error: local_invocation_id must be an vec3<u32>
+%f = @compute @workgroup_size(1u, 1u, 1u) func(%id:vec3<i32> [@local_invocation_id]):void {
+                                               ^^^^^^^^^^^^^
 )")) << res.Failure();
 }
 
@@ -812,6 +879,21 @@ TEST_F(IR_ValidatorTest, Builtin_NumWorkgroups_WrongType) {
                 testing::HasSubstr(R"(:1:48 error: num_workgroups must be an vec3<u32>
 %f = @compute @workgroup_size(1u, 1u, 1u) func(%num:u32 [@num_workgroups]):void {
                                                ^^^^^^^^
+)")) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Builtin_NumWorkgroups_WrongType_i32) {
+    auto* f = ComputeEntryPoint();
+    AddBuiltinParam(f, "num", BuiltinValue::kNumWorkgroups, ty.vec3i());
+
+    b.Append(f->Block(), [&] { b.Unreachable(); });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(R"(:1:48 error: num_workgroups must be an vec3<u32>
+%f = @compute @workgroup_size(1u, 1u, 1u) func(%num:vec3<i32> [@num_workgroups]):void {
+                                               ^^^^^^^^^^^^^^
 )")) << res.Failure();
 }
 
@@ -961,6 +1043,21 @@ TEST_F(IR_ValidatorTest, Builtin_WorkgroupId_WrongType) {
 )")) << res.Failure();
 }
 
+TEST_F(IR_ValidatorTest, Builtin_WorkgroupId_WrongType_i32) {
+    auto* f = ComputeEntryPoint();
+    AddBuiltinParam(f, "id", BuiltinValue::kWorkgroupId, ty.vec3i());
+
+    b.Append(f->Block(), [&] { b.Unreachable(); });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(R"(:1:48 error: workgroup_id must be an vec3<u32>
+%f = @compute @workgroup_size(1u, 1u, 1u) func(%id:vec3<i32> [@workgroup_id]):void {
+                                               ^^^^^^^^^^^^^
+)")) << res.Failure();
+}
+
 TEST_F(IR_ValidatorTest, Builtin_Position_WrongStage) {
     auto* f = ComputeEntryPoint();
     AddBuiltinParam(f, "pos", BuiltinValue::kPosition, ty.vec4f());
@@ -1024,6 +1121,36 @@ TEST_F(IR_ValidatorTest, Builtin_Position_WrongType) {
                 testing::HasSubstr(R"(:1:21 error: position must be an vec4<f32>
 %f = @fragment func(%pos:f32 [@position]):void {
                     ^^^^^^^^
+)")) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Builtin_Position_WrongType_f16) {
+    auto* f = FragmentEntryPoint();
+    AddBuiltinParam(f, "pos", BuiltinValue::kPosition, ty.vec4<f16>());
+
+    b.Append(f->Block(), [&] { b.Unreachable(); });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(R"(:1:21 error: position must be an vec4<f32>
+%f = @fragment func(%pos:vec4<f16> [@position]):void {
+                    ^^^^^^^^^^^^^^
+)")) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Builtin_BarycentricCoord_WrongType_f16) {
+    auto* f = FragmentEntryPoint();
+    AddBuiltinParam(f, "barycentric", BuiltinValue::kBarycentricCoord, ty.vec3<f16>());
+
+    b.Append(f->Block(), [&] { b.Unreachable(); });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(R"(:1:21 error: barycentric_coord must be an vec3<f32>
+%f = @fragment func(%barycentric:vec3<f16> [@barycentric_coord]):void {
+                    ^^^^^^^^^^^^^^^^^^^^^^
 )")) << res.Failure();
 }
 
@@ -1300,7 +1427,7 @@ TEST_F(IR_ValidatorTest, Builtin_PointSize_WithoutCapability) {
 )")) << res.Failure();
 }
 
-TEST_F(IR_ValidatorTest, Builtin_PointSize_WithCapability) {
+TEST_F(IR_ValidatorTest, Builtin_PointSize_WithProperty) {
     const auto position_attr = IOAttributes{.builtin = core::BuiltinValue::kPosition};
     const auto point_size_attr = IOAttributes{.builtin = core::BuiltinValue::kPointSize};
     auto* str_ty = ty.Struct(mod.symbols.New("OutputStruct"),
@@ -1317,74 +1444,9 @@ TEST_F(IR_ValidatorTest, Builtin_PointSize_WithCapability) {
         b.Return(f, b.Zero(str_ty));
     });
 
-    auto res = ir::Validate(mod, Capabilities{Capability::kAllowPointSizeBuiltin});
+    mod.properties.Add(Property::kAllowPointSizeBuiltin);
+    auto res = ir::Validate(mod);
     ASSERT_EQ(res, Success) << res.Failure();
-}
-
-TEST_F(IR_ValidatorTest, Bitcast_MissingArg) {
-    auto* f = b.Function("f", ty.void_());
-    b.Append(f->Block(), [&] {
-        auto* bitcast = b.Bitcast(ty.i32(), 1_u);
-        bitcast->ClearOperands();
-        b.Return(f);
-    });
-
-    auto res = ir::Validate(mod);
-    ASSERT_NE(res, Success);
-    EXPECT_THAT(res.Failure().reason,
-                testing::HasSubstr(R"(:3:14 error: bitcast: expected exactly 1 operands, got 0
-    %2:i32 = bitcast
-             ^^^^^^^
-)")) << res.Failure();
-}
-
-TEST_F(IR_ValidatorTest, Bitcast_NullArg) {
-    auto* f = b.Function("f", ty.void_());
-    b.Append(f->Block(), [&] {
-        b.Bitcast(ty.i32(), nullptr);
-        b.Return(f);
-    });
-
-    auto res = ir::Validate(mod);
-    ASSERT_NE(res, Success);
-    EXPECT_THAT(res.Failure().reason,
-                testing::HasSubstr(R"(:3:22 error: bitcast: operand is undefined
-    %2:i32 = bitcast undef
-                     ^^^^^
-)")) << res.Failure();
-}
-
-TEST_F(IR_ValidatorTest, Bitcast_MissingResult) {
-    auto* f = b.Function("f", ty.void_());
-    b.Append(f->Block(), [&] {
-        auto* bitcast = b.Bitcast(ty.i32(), 1_u);
-        bitcast->ClearResults();
-        b.Return(f);
-    });
-
-    auto res = ir::Validate(mod);
-    ASSERT_NE(res, Success);
-    EXPECT_THAT(res.Failure().reason,
-                testing::HasSubstr(R"(:3:13 error: bitcast: expected exactly 1 results, got 0
-    undef = bitcast 1u
-            ^^^^^^^
-)")) << res.Failure();
-}
-
-TEST_F(IR_ValidatorTest, Bitcast_NullResult) {
-    auto* f = b.Function("f", ty.void_());
-    b.Append(f->Block(), [&] {
-        auto* c = b.Bitcast(ty.i32(), 1_u);
-        c->SetResult(nullptr);
-        b.Return(f);
-    });
-
-    auto res = ir::Validate(mod);
-    ASSERT_NE(res, Success);
-    EXPECT_THAT(res.Failure().reason, testing::HasSubstr(R"(:3:5 error: bitcast: result is undefined
-    undef = bitcast 1u
-    ^^^^^
-)")) << res.Failure();
 }
 
 TEST_F(IR_ValidatorTest, Builtin_NoStage) {
@@ -1400,14 +1462,22 @@ TEST_F(IR_ValidatorTest, Builtin_NoStage) {
 )")) << res.Failure();
 }
 
-namespace {
-template <typename T>
-static const core::type::Type* TypeBuilder(core::type::Manager& m) {
-    return m.Get<T>();
-}
+TEST_F(IR_ValidatorTest, InputAttachmentIndex_NonEntryPoint_InvalidIOKind) {
+    auto* f = b.Function("my_func", ty.void_());
+    auto* p = b.FunctionParam("p", ty.input_attachment(ty.f32()));
+    p->SetAttributes(IOAttributes{.input_attachment_index = 0u});
+    f->SetParams({p});
 
-using TypeBuilderFn = decltype(&TypeBuilder<i32>);
-}  // namespace
+    b.Append(f->Block(), [&] { b.Return(f); });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(
+        res.Failure().reason,
+        testing::HasSubstr(
+            R"(input attachment index IO attributes cannot be declared on a input param. They can only be used on a module scope variable.)"))
+        << res.Failure();
+}
 
 using BitcastTypeTest = IRTestParamHelper<std::tuple<
     /* bitcast allowed */ bool,
@@ -1432,7 +1502,7 @@ TEST_P(BitcastTypeTest, Check) {
     } else {
         ASSERT_NE(res, Success) << "Bitcast should NOT be defined for '" << src_ty->FriendlyName()
                                 << "' -> '" << dest_ty->FriendlyName() << "'";
-        EXPECT_THAT(res.Failure().reason, testing::HasSubstr("bitcast is not defined"));
+        EXPECT_THAT(res.Failure().reason, testing::HasSubstr("no matching call to 'bitcast"));
     }
 }
 
@@ -1494,5 +1564,109 @@ INSTANTIATE_TEST_SUITE_P(
         std::make_tuple(false, TypeBuilder<f16>, TypeBuilder<i32>),
         std::make_tuple(false, TypeBuilder<f16>, TypeBuilder<f32>),
         std::make_tuple(false, TypeBuilder<f16>, TypeBuilder<vec2h>)));
+
+TEST_F(IR_ValidatorTest, Builtin_SubgroupMatrixStore_OOBOffset) {
+    auto* mat_ty = ty.subgroup_matrix_left(ty.u32(), 8u, 8u);
+    auto* arr_ptr_ty = ty.ptr<workgroup, array<u32, 8>>();
+
+    auto* f = b.Function("foo", ty.void_());
+    auto* arr_param = b.FunctionParam(arr_ptr_ty);
+    auto* mat_param = b.FunctionParam(mat_ty);
+    f->SetParams({arr_param, mat_param});
+
+    b.Append(f->Block(), [&] {
+        b.Call(ty.void_(), core::BuiltinFn::kSubgroupMatrixStore, arr_param, 12_u, mat_param, true,
+               8_u);
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr("the offset argument of subgroupMatrixStore (12) is out of "
+                                   "bounds of the array type of size 8"));
+}
+
+TEST_F(IR_ValidatorTest, Builtin_SubgroupMatrixLoad_OOBOffset) {
+    auto* mat_ty = ty.subgroup_matrix_left(ty.u32(), 8u, 8u);
+    auto* arr_ptr_ty = ty.ptr<workgroup, array<u32, 8>>();
+
+    auto* f = b.Function("foo", ty.void_());
+    auto* arr_param = b.FunctionParam(arr_ptr_ty);
+    f->SetParams({arr_param});
+
+    b.Append(f->Block(), [&] {
+        b.CallExplicit(mat_ty, core::BuiltinFn::kSubgroupMatrixLoad, Vector{mat_ty}, arr_param, 8_u,
+                       true, 8_u);
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr("the offset argument of subgroupMatrixLoad (8) is out of bounds "
+                                   "of the array type of size 8"));
+}
+
+TEST_F(IR_ValidatorTest, Builtin_SubgroupMatrixLoad_NegativeOffset) {
+    auto* mat_ty = ty.subgroup_matrix_left(ty.u32(), 8u, 8u);
+    auto* arr_ptr_ty = ty.ptr<workgroup, array<u32, 8>>();
+
+    auto* f = b.Function("foo", ty.void_());
+    auto* arr_param = b.FunctionParam(arr_ptr_ty);
+    f->SetParams({arr_param});
+
+    b.Append(f->Block(), [&] {
+        b.CallExplicit(mat_ty, core::BuiltinFn::kSubgroupMatrixLoad, Vector{mat_ty}, arr_param,
+                       -1_i, true, 8_u);
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr("no matching call to 'subgroupMatrixLoad"));
+}
+
+TEST_F(IR_ValidatorTest, Builtin_SubgroupMatrixStore_i8_i32_InBoundsOffset) {
+    auto* mat_ty = ty.subgroup_matrix_left(ty.i8(), 8u, 8u);
+    auto* arr_ptr_ty = ty.ptr<workgroup, array<i32, 8>>();
+
+    auto* f = b.Function("foo", ty.void_());
+    auto* arr_param = b.FunctionParam(arr_ptr_ty);
+    auto* mat_param = b.FunctionParam(mat_ty);
+    f->SetParams({arr_param, mat_param});
+
+    b.Append(f->Block(), [&] {
+        b.Call(ty.void_(), core::BuiltinFn::kSubgroupMatrixStore, arr_param, 12_u, mat_param, true,
+               8_u);
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod, core::ir::Capabilities{core::ir::Capability::kAllow8BitIntegers});
+    ASSERT_EQ(res, Success) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Builtin_SubgroupMatrixStore_i8_i32_OOBOffset) {
+    auto* mat_ty = ty.subgroup_matrix_left(ty.i8(), 8u, 8u);
+    auto* arr_ptr_ty = ty.ptr<workgroup, array<i32, 8>>();
+
+    auto* f = b.Function("foo", ty.void_());
+    auto* arr_param = b.FunctionParam(arr_ptr_ty);
+    auto* mat_param = b.FunctionParam(mat_ty);
+    f->SetParams({arr_param, mat_param});
+
+    b.Append(f->Block(), [&] {
+        b.Call(ty.void_(), core::BuiltinFn::kSubgroupMatrixStore, arr_param, 32_u, mat_param, true,
+               8_u);
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod, core::ir::Capabilities{core::ir::Capability::kAllow8BitIntegers});
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr("the offset argument of subgroupMatrixStore (32) is out of "
+                                   "bounds of the array type of size 32"));
+}
 
 }  // namespace tint::core::ir

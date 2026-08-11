@@ -29,11 +29,11 @@
 #include <array>
 #include <vector>
 
-#include "dawn/common/Assert.h"
 #include "dawn/native/DawnNative.h"
-#include "dawn/tests/DawnTest.h"
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/WGPUHelpers.h"
+#include "src/utils/assert.h"
 
 namespace dawn {
 namespace {
@@ -54,6 +54,11 @@ class MultisampledRenderingTest : public DawnTest {
 
         // TODO(crbug.com/468061892): Fails on Windows 11/NVIDIA GTX 1660.
         DAWN_SUPPRESS_TEST_IF(IsWindows11() && IsNvidia() && IsD3D12() &&
+                              IsBackendValidationEnabled());
+
+        // TODO(crbug.com/468061892): Fails on Windows 11/AMD RX 5500 XT w/
+        // backend validation.
+        DAWN_SUPPRESS_TEST_IF(IsWindows11() && IsAMD() && IsD3D12() &&
                               IsBackendValidationEnabled());
     }
 
@@ -1053,6 +1058,61 @@ TEST_P(MultisampledRenderingTest, ResolveIntoMultipleResolveTargetsWithShaderOut
     VerifyResolveTarget(kGreen, resolveTexture2, 0, 0, kMSAACoverage);
 }
 
+// Test that the sample_mask input builtin has only the bit for the current sample set
+// when per-sample shading is active.
+TEST_P(MultisampledRenderingTest, SampleMaskInputWithSampleShading) {
+    // sample_mask is not supported in compat.
+    DAWN_TEST_UNSUPPORTED_IF(IsCompatibilityMode());
+
+    // TODO(crbug.com/dawn/673): Work around or enforce via validation that sample variables are not
+    // supported on some platforms.
+    DAWN_TEST_UNSUPPORTED_IF(HasToggleEnabled("disable_sample_variables"));
+
+    wgpu::CommandEncoder commandEncoder = device.CreateCommandEncoder();
+
+    // The fragment shader uses sample_index, which triggers per-sample shading.
+    // It verifies that the sample_mask input has only the bit for the current sample set.
+    const char* fs = R"(
+        struct U {
+            color : vec4f
+        }
+        @group(0) @binding(0) var<uniform> uBuffer : U;
+
+        struct FragmentOut {
+            @location(0) color : vec4f,
+        }
+
+        @fragment fn main(@builtin(sample_index) sampleIndex : u32,
+                          @builtin(sample_mask) mask : u32) -> FragmentOut {
+            var output : FragmentOut;
+            if (mask == (1u << sampleIndex)) {
+                output.color = vec4f(0.0, 1.0, 0.0, 1.0);
+            } else {
+                output.color = vec4f(1.0, 0.0, 0.0, 1.0);
+            }
+            _ = uBuffer.color;
+            return output;
+        })";
+
+    wgpu::RenderPipeline pipeline = CreateRenderPipelineForTest(fs, 1, false);
+
+    {
+        utils::ComboRenderPassDescriptor renderPass =
+            CreateComboRenderPassDescriptorForTest({mMultisampledColorView}, {mResolveView},
+                                                   wgpu::LoadOp::Clear, wgpu::LoadOp::Clear, false);
+
+        EncodeRenderPassForTest(commandEncoder, renderPass, pipeline, {0.0, 0.0, 0.0, 0.0});
+    }
+
+    wgpu::CommandBuffer commandBuffer = commandEncoder.Finish();
+    queue.Submit(1, &commandBuffer);
+
+    // All samples should have passed the check, so the resolved color should be green.
+    // We check pixel {2, 0} which is fully covered by the triangle.
+    utils::RGBA8 expectedColor = {0, 255, 0, 255};
+    EXPECT_TEXTURE_EQ(&expectedColor, mResolveTexture, {2, 0}, {1, 1});
+}
+
 // Test using one multisampled color attachment with resolve target can render correctly
 // with alphaToCoverageEnabled.
 TEST_P(MultisampledRenderingTest, ResolveInto2DTextureWithAlphaToCoverage) {
@@ -1285,6 +1345,9 @@ TEST_P(MultisampledRenderingTest, ResolveInto2DTextureWithAlphaToCoverageAndRast
     // TODO(crbug.com/458113207): Flaky w/ WARP.
     DAWN_SUPPRESS_TEST_IF(IsWindows() && IsWARP());
 
+    // TODO(crbug.com/500793601): Fails on Windows 11/AMD RX 5500 XT.
+    DAWN_TEST_UNSUPPORTED_IF(IsWindows11() && IsAMD());
+
     constexpr bool kTestDepth = false;
     constexpr float kMSAACoverage = 0.50f;
     constexpr uint32_t kSampleMask = 0xFFFFFFFF;
@@ -1374,6 +1437,46 @@ TEST_P(MultisampledRenderingTest, ResolveInto2DTextureWithScissor) {
     VerifyResolveTarget(kGreen, mResolveTexture, 0, 0, kMSAACoverage, kGreenX, kGreenY);
 }
 
+class MultisampledRenderingWithEmptyPassWorkaroundTest : public MultisampledRenderingTest {};
+
+TEST_P(MultisampledRenderingWithEmptyPassWorkaroundTest, ResolveOneMultisampledTextureTwice) {
+    constexpr bool kTestDepth = false;
+    wgpu::CommandEncoder commandEncoder = device.CreateCommandEncoder();
+
+    wgpu::Texture resolveTexture2 = CreateTextureForRenderAttachment(kColorFormat, 1);
+
+    // In first render pass clear the color view to green triangle resolve.
+    {
+        utils::ComboRenderPassDescriptor renderPass = CreateComboRenderPassDescriptorForTest(
+            {mMultisampledColorView}, {mResolveView}, wgpu::LoadOp::Clear, wgpu::LoadOp::Clear,
+            kTestDepth);
+        renderPass.cColorAttachments[0].clearValue = kGreen;
+
+        wgpu::RenderPassEncoder renderPassEncoder = commandEncoder.BeginRenderPass(&renderPass);
+        // No work done during the pass
+        renderPassEncoder.End();
+    }
+
+    // In second render pass load the previously cleared color view and resolve.
+    {
+        wgpu::TextureView resolveView2 = resolveTexture2.CreateView();
+        utils::ComboRenderPassDescriptor renderPass = CreateComboRenderPassDescriptorForTest(
+            {mMultisampledColorView}, {resolveView2}, wgpu::LoadOp::Load, wgpu::LoadOp::Load,
+            kTestDepth);
+
+        wgpu::RenderPassEncoder renderPassEncoder = commandEncoder.BeginRenderPass(&renderPass);
+        // No work done during the pass
+        renderPassEncoder.End();
+    }
+
+    wgpu::CommandBuffer commandBuffer = commandEncoder.Finish();
+    queue.Submit(1, &commandBuffer);
+
+    constexpr float kMSAACoverage = 1.0f;
+    VerifyResolveTarget(kGreen, mResolveTexture, 0, 0, kMSAACoverage);
+    VerifyResolveTarget(kGreen, resolveTexture2, 0, 0, kMSAACoverage);
+}
+
 class MultisampledRenderingWithTransientAttachmentTest : public MultisampledRenderingTest {};
 
 // Test using one multisampled color transient attachment with resolve target can render correctly.
@@ -1409,6 +1512,58 @@ TEST_P(MultisampledRenderingWithTransientAttachmentTest, ResolveTransientAttachm
     queue.Submit(1, &commandBuffer);
 
     VerifyResolveTarget(kGreen, mResolveTexture);
+}
+
+// Test using multiple multisampled color transient attachment with resolve target can render
+// correctly.
+TEST_P(MultisampledRenderingWithTransientAttachmentTest,
+       ResolveMultipleTransientAttachmentsInto2DTexture) {
+    constexpr bool kTestDepth = false;
+
+    auto transientMultisampledColorTexture =
+        CreateTextureForRenderAttachment(kColorFormat, kSampleCount,
+                                         /*mipLevelCount=*/1,
+                                         /*arrayLayerCount=*/1,
+                                         /*transientAttachment=*/true);
+    auto transientMultisampledColorView = transientMultisampledColorTexture.CreateView();
+    auto transientMultisampledColorTexture2 =
+        CreateTextureForRenderAttachment(kColorFormat, kSampleCount,
+                                         /*mipLevelCount=*/1,
+                                         /*arrayLayerCount=*/1,
+                                         /*transientAttachment=*/true);
+    auto transientMultisampledColorView2 = transientMultisampledColorTexture2.CreateView();
+    wgpu::Texture resolveTexture2 = CreateTextureForRenderAttachment(kColorFormat, 1);
+    wgpu::TextureView resolveView2 = resolveTexture2.CreateView();
+
+    wgpu::CommandEncoder commandEncoder = device.CreateCommandEncoder();
+    wgpu::RenderPipeline pipeline = CreateRenderPipelineWithTwoOutputsForTest();
+
+    // Draw a red triangle to the first color attachment, and a blue triangle to the second color
+    // attachment, and do MSAA resolve on two render targets in one render pass.
+    {
+        utils::ComboRenderPassDescriptor renderPass = CreateComboRenderPassDescriptorForTest(
+            {transientMultisampledColorView, transientMultisampledColorView2},
+            {mResolveView, resolveView2}, wgpu::LoadOp::Clear, wgpu::LoadOp::Clear, kTestDepth);
+
+        // Note: It is not possible to store into a transient attachment.
+        renderPass.cColorAttachments[0].storeOp = wgpu::StoreOp::Discard;
+        renderPass.cColorAttachments[1].storeOp = wgpu::StoreOp::Discard;
+
+        std::array<float, 8> kUniformData = {
+            static_cast<float>(kRed.r),   static_cast<float>(kRed.g),
+            static_cast<float>(kRed.b),   static_cast<float>(kRed.a),
+            static_cast<float>(kGreen.r), static_cast<float>(kGreen.g),
+            static_cast<float>(kGreen.b), static_cast<float>(kGreen.a)};
+        constexpr uint32_t kSize = sizeof(kUniformData);
+
+        EncodeRenderPassForTest(commandEncoder, renderPass, pipeline, kUniformData.data(), kSize);
+    }
+
+    wgpu::CommandBuffer commandBuffer = commandEncoder.Finish();
+    queue.Submit(1, &commandBuffer);
+
+    VerifyResolveTarget(kRed, mResolveTexture);
+    VerifyResolveTarget(kGreen, resolveTexture2);
 }
 
 class MultisampledRenderToSingleSampledTest : public MultisampledRenderingTest {
@@ -1858,6 +2013,9 @@ class DawnLoadResolveTextureTest : public MultisampledRenderingTest {
 // LoadOp::ExpandResolveTexture. The resolve texture will have its content preserved between
 // passes.
 TEST_P(DawnLoadResolveTextureTest, DrawThenLoad) {
+    // TODO(crbug.com/519251257): Produces incorrect result on Pixel 10.
+    DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsImgTec() && IsVulkan());
+
     auto multiSampledTexture = CreateTextureForRenderAttachment(
         kColorFormat, 4, 1, 1,
         /*transientAttachment=*/device.HasFeature(wgpu::FeatureName::TransientAttachments),
@@ -1906,6 +2064,9 @@ TEST_P(DawnLoadResolveTextureTest, DrawThenLoad) {
 
 // Test using ExpandResolveTexture load op for non-zero indexed attachment.
 TEST_P(DawnLoadResolveTextureTest, DrawThenLoadNonZeroIndexedAttachment) {
+    // TODO(crbug.com/519251257): Produces incorrect result on Pixel 10.
+    DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsImgTec() && IsVulkan());
+
     auto multiSampledTexture = CreateTextureForRenderAttachment(
         kColorFormat, 4, 1, 1,
         /*transientAttachment=*/device.HasFeature(wgpu::FeatureName::TransientAttachments),
@@ -1955,6 +2116,9 @@ TEST_P(DawnLoadResolveTextureTest, DrawThenLoadNonZeroIndexedAttachment) {
 // Test rendering into 2 attachments. The 1st attachment will use
 // LoadOp::ExpandResolveTexture.
 TEST_P(DawnLoadResolveTextureTest, TwoOutputsDrawThenLoadColor0) {
+    // TODO(crbug.com/519251257): Produces incorrect result on Pixel 10.
+    DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsImgTec() && IsVulkan());
+
     // TODO(42240662): "resolve_multiple_attachments_in_separate_passes" is currently not working
     // with DawnLoadResolveTexture feature if there are more than one attachment.
     DAWN_TEST_UNSUPPORTED_IF(HasResolveMultipleAttachmentInSeparatePassesToggle());
@@ -2036,6 +2200,9 @@ TEST_P(DawnLoadResolveTextureTest, TwoOutputsDrawThenLoadColor0) {
 // Test rendering into 2 attachments. The 2nd attachment will use
 // LoadOp::ExpandResolveTexture.
 TEST_P(DawnLoadResolveTextureTest, TwoOutputsDrawThenLoadColor1) {
+    // TODO(crbug.com/519251257): Produces incorrect result on Pixel 10.
+    DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsImgTec() && IsVulkan());
+
     // TODO(42240662): "resolve_multiple_attachments_in_separate_passes" is currently not working
     // with DawnLoadResolveTexture feature if there are more than one attachment.
     DAWN_TEST_UNSUPPORTED_IF(HasResolveMultipleAttachmentInSeparatePassesToggle());
@@ -2116,6 +2283,9 @@ TEST_P(DawnLoadResolveTextureTest, TwoOutputsDrawThenLoadColor1) {
 // Test rendering into 2 attachments. The both attachments will use
 // LoadOp::ExpandResolveTexture.
 TEST_P(DawnLoadResolveTextureTest, TwoOutputsDrawThenLoadColor0AndColor1) {
+    // TODO(crbug.com/519251257): Produces incorrect result on Pixel 10.
+    DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsImgTec() && IsVulkan());
+
     // TODO(42240662): "resolve_multiple_attachments_in_separate_passes" is currently not working
     // with DawnLoadResolveTexture feature if there are more than one attachment.
     DAWN_TEST_UNSUPPORTED_IF(HasResolveMultipleAttachmentInSeparatePassesToggle());
@@ -2192,6 +2362,9 @@ TEST_P(DawnLoadResolveTextureTest, TwoOutputsDrawThenLoadColor0AndColor1) {
 
 // Test ExpandResolveTexture load op rendering with depth test works correctly.
 TEST_P(DawnLoadResolveTextureTest, DrawWithDepthTest) {
+    // TODO(crbug.com/519251257): Produces incorrect result on Pixel 10.
+    DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsImgTec() && IsVulkan());
+
     auto multiSampledTexture = CreateTextureForRenderAttachment(
         kColorFormat, 4, 1, 1,
         /*transientAttachment=*/device.HasFeature(wgpu::FeatureName::TransientAttachments),
@@ -2263,6 +2436,9 @@ TEST_P(DawnLoadResolveTextureTest, DrawWithDepthTest) {
 // Test ExpandResolveTexture load op rendering with depth test works correctly with
 // two outputs both use ExpandResolveTexture load op.
 TEST_P(DawnLoadResolveTextureTest, TwoOutputsDrawWithDepthTestColor0AndColor1) {
+    // TODO(crbug.com/519251257): Produces incorrect result on Pixel 10.
+    DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsImgTec() && IsVulkan());
+
     // TODO(42240662): "resolve_multiple_attachments_in_separate_passes" is currently not working
     // with DawnLoadResolveTexture feature if there are more than one attachment.
     DAWN_TEST_UNSUPPORTED_IF(HasResolveMultipleAttachmentInSeparatePassesToggle());
@@ -2367,6 +2543,9 @@ TEST_P(DawnLoadResolveTextureTest, TwoOutputsDrawWithDepthTestColor0AndColor1) {
 
 // Test rendering into a layer of a 2D array texture and load op=LoadOp::ExpandResolveTexture.
 TEST_P(DawnLoadResolveTextureTest, DrawThenLoad2DArrayTextureLayer) {
+    // TODO(crbug.com/519251257): Produces incorrect result on Pixel 10.
+    DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsImgTec() && IsVulkan());
+
     // Creating 2D view from 2D array texture is not supported in compat mode.
     DAWN_TEST_UNSUPPORTED_IF(IsCompatibilityMode());
 
@@ -2879,6 +3058,9 @@ DAWN_INSTANTIATE_TEST(MultisampledRenderingTest,
                       MetalBackend({"always_resolve_into_zero_level_and_layer"}),
                       MetalBackend({"always_resolve_into_zero_level_and_layer",
                                     "emulate_store_and_msaa_resolve"}));
+
+DAWN_INSTANTIATE_TEST(MultisampledRenderingWithEmptyPassWorkaroundTest,
+                      VulkanBackend({"vulkan_add_work_to_empty_resolve_pass"}));
 
 DAWN_INSTANTIATE_TEST(MultisampledRenderingWithTransientAttachmentTest,
                       D3D11Backend(),

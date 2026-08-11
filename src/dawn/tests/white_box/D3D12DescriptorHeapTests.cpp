@@ -25,21 +25,22 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <algorithm>
 #include <list>
 #include <set>
 #include <vector>
 
-#include "dawn/native/Device.h"
-#include "dawn/native/Toggles.h"
-#include "dawn/native/d3d12/BindGroupLayoutD3D12.h"
-#include "dawn/native/d3d12/DeviceD3D12.h"
-#include "dawn/native/d3d12/QueueD3D12.h"
-#include "dawn/native/d3d12/ShaderVisibleDescriptorAllocatorD3D12.h"
-#include "dawn/native/d3d12/StagingDescriptorAllocatorD3D12.h"
-#include "dawn/tests/DawnTest.h"
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/WGPUHelpers.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "src/dawn/native/ResourceTableDefaultResources.h"
+#include "src/dawn/native/Toggles.h"
+#include "src/dawn/native/d3d12/BindGroupLayoutD3D12.h"
+#include "src/dawn/native/d3d12/DeviceD3D12.h"
+#include "src/dawn/native/d3d12/QueueD3D12.h"
+#include "src/dawn/native/d3d12/ShaderVisibleDescriptorAllocatorD3D12.h"
+#include "src/dawn/native/d3d12/StagingDescriptorAllocatorD3D12.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/WGPUHelpers.h"
 
 namespace dawn::native::d3d12 {
 namespace {
@@ -160,7 +161,7 @@ TEST_P(D3D12DescriptorHeapTests, SwitchOverViewHeap) {
     utils::BasicRenderPass renderPass = utils::CreateBasicRenderPass(device, kRTSize, kRTSize);
 
     Device* d3dDevice = reinterpret_cast<Device*>(device.Get());
-    auto& allocator = d3dDevice->GetViewShaderVisibleDescriptorAllocator();
+    auto* allocator = d3dDevice->GetViewShaderVisibleDescriptorAllocator();
     const uint64_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
 
     const HeapVersionID heapSerial = allocator->GetShaderVisibleHeapSerialForTesting();
@@ -188,7 +189,164 @@ TEST_P(D3D12DescriptorHeapTests, SwitchOverViewHeap) {
     wgpu::CommandBuffer commands = encoder.Finish();
     queue.Submit(1, &commands);
 
-    EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(), heapSerial + HeapVersionID(1));
+    EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(), heapSerial + HeapVersionID(1u));
+}
+
+// Tests that a descriptor heap switch, which changes the current descriptor tables, in one type of
+// pass (render) is also applied to another pass (compute) if it is reused in the same command
+// buffer. This is tested by dispatching on simple compute pipeline, then drawing on a render
+// pipeline multiple times so as to overflow the descriptor heap and cause a switch, and then
+// finally issuing one more dispatch on the original compute pipeline, all on the same command
+// encoder.
+TEST_P(D3D12DescriptorHeapTests, CrossPassStaleRootDescriptorTable) {
+    Device* d3dDevice = reinterpret_cast<Device*>(device.Get());
+    auto* allocator = d3dDevice->GetViewShaderVisibleDescriptorAllocator();
+    const uint64_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
+
+    // Compute pass
+    wgpu::ComputePipeline cp;
+    wgpu::BindGroup cpBindGroup0;
+    wgpu::Buffer cpOutBuf;
+    constexpr uint32_t kNumOut = 256;
+    constexpr uint32_t kMagic = 0xCAFEBABE;
+    {
+        // Simple compute shader that copies src[0] to dst[gid.x]
+        wgpu::ShaderModule csModule = utils::CreateShaderModule(device, R"(
+            @group(0) @binding(0) var<storage, read> src : array<u32>;
+            @group(0) @binding(1) var<storage, read_write> dst : array<u32>;
+
+            @compute @workgroup_size(1)
+            fn main(@builtin(global_invocation_id) gid : vec3<u32>) {
+                dst[gid.x] = src[0];
+            }
+        )");
+
+        wgpu::ComputePipelineDescriptor cpDesc;
+        cpDesc.compute.module = csModule;
+        cp = device.CreateComputePipeline(&cpDesc);
+
+        wgpu::Buffer inBuf = utils::CreateBufferFromData(device, &kMagic, sizeof(kMagic),
+                                                         wgpu::BufferUsage::Storage);
+
+        wgpu::BufferDescriptor outBufDesc;
+        outBufDesc.size = kNumOut * sizeof(uint32_t);
+        outBufDesc.usage = wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc;
+        cpOutBuf = device.CreateBuffer(&outBufDesc);
+
+        cpBindGroup0 = utils::MakeBindGroup(device, cp.GetBindGroupLayout(0),
+                                            {
+                                                {0, inBuf},
+                                                {1, cpOutBuf},
+                                            });
+    }
+
+    // Render pass
+    wgpu::RenderPipeline rp;
+    wgpu::Texture rtTex;
+    // To overflow the view heap, we need to create more than 'heapSize' descriptors. We'll create
+    // kNumBindGroups, each with kBindingsPerGroup UBOs.
+    constexpr int kBindingsPerGroup = 8;
+    const int kNumBindGroups = (heapSize / kBindingsPerGroup) + 1;
+    std::vector<wgpu::BindGroup> rpBGs(kNumBindGroups);
+    {
+        wgpu::ShaderModule vsModule = utils::CreateShaderModule(device, R"(
+            @vertex fn main(@builtin(vertex_index) vi : u32) -> @builtin(position) vec4f {
+                var p = array<vec2f, 3>(
+                    vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+                return vec4f(p[vi], 0.0, 1.0);
+            }
+        )");
+
+        // The fragment shader has kBindingsPerGroup bindings
+        wgpu::ShaderModule fsModule = utils::CreateShaderModule(device, R"(
+            @group(0) @binding(0) var<uniform> u0 : vec4f;
+            @group(0) @binding(1) var<uniform> u1 : vec4f;
+            @group(0) @binding(2) var<uniform> u2 : vec4f;
+            @group(0) @binding(3) var<uniform> u3 : vec4f;
+            @group(0) @binding(4) var<uniform> u4 : vec4f;
+            @group(0) @binding(5) var<uniform> u5 : vec4f;
+            @group(0) @binding(6) var<uniform> u6 : vec4f;
+            @group(0) @binding(7) var<uniform> u7 : vec4f;
+
+            @fragment fn main() -> @location(0) vec4f {
+                return u0 + u1 + u2 + u3 + u4 + u5 + u6 + u7;
+            }
+        )");
+
+        utils::ComboRenderPipelineDescriptor rpDesc;
+        rpDesc.vertex.module = vsModule;
+        rpDesc.cFragment.module = fsModule;
+        rpDesc.cTargets[0].format = wgpu::TextureFormat::RGBA8Unorm;
+
+        rp = device.CreateRenderPipeline(&rpDesc);
+
+        wgpu::BindGroupLayout rpBGL = rp.GetBindGroupLayout(0);
+
+        wgpu::TextureDescriptor texDesc;
+        texDesc.size = {4, 4, 1};
+        texDesc.format = wgpu::TextureFormat::RGBA8Unorm;
+        texDesc.usage = wgpu::TextureUsage::RenderAttachment;
+        rtTex = device.CreateTexture(&texDesc);
+
+        wgpu::BufferDescriptor uboDesc;
+        uboDesc.size = 256;
+        uboDesc.usage = wgpu::BufferUsage::Uniform;
+        wgpu::Buffer ubo = device.CreateBuffer(&uboDesc);
+
+        for (int i = 0; i < kNumBindGroups; ++i) {
+            std::vector<wgpu::BindGroupEntry> entries(kBindingsPerGroup);
+            for (int j = 0; j < kBindingsPerGroup; ++j) {
+                wgpu::BindGroupEntry entry;
+                entry.binding = uint32_t(j);
+                entry.buffer = ubo;
+                entries[j] = entry;
+            }
+            wgpu::BindGroupDescriptor bgDesc;
+            bgDesc.layout = rpBGL;
+            bgDesc.entryCount = entries.size();
+            bgDesc.entries = entries.data();
+            rpBGs[i] = device.CreateBindGroup(&bgDesc);
+        }
+    }
+
+    wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+
+    // Pass A: Compute
+    {
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetPipeline(cp);
+        pass.SetBindGroup(0, cpBindGroup0);
+        pass.DispatchWorkgroups(1);
+        pass.End();
+    }
+
+    // Pass B: Render (Overflow heap)
+    {
+        utils::ComboRenderPassDescriptor rpDesc({rtTex.CreateView()});
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rpDesc);
+        pass.SetPipeline(rp);
+        for (int i = 0; i < kNumBindGroups; ++i) {
+            pass.SetBindGroup(0, rpBGs[i]);
+            pass.Draw(3);
+        }
+        pass.End();
+    }
+
+    // Pass C: Compute (Same pipeline, same bind group)
+    {
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetPipeline(cp);
+        pass.SetBindGroup(0, cpBindGroup0);
+        pass.DispatchWorkgroups(kNumOut);
+        pass.End();
+    }
+
+    wgpu::CommandBuffer commands = encoder.Finish();
+    queue.Submit(1, &commands);
+
+    // Verify results
+    std::vector<uint32_t> expected(kNumOut, kMagic);
+    EXPECT_BUFFER_U32_RANGE_EQ(expected.data(), cpOutBuf, 0, kNumOut);
 }
 
 // Verify the shader visible view heap switches over within a single submit because bind group 0
@@ -219,7 +377,7 @@ TEST_P(D3D12DescriptorHeapTests, SwitchOverViewHeapBecauseOfBindingGroup0) {
     )");
 
     Device* d3dDevice = reinterpret_cast<Device*>(device.Get());
-    auto& allocator = d3dDevice->GetViewShaderVisibleDescriptorAllocator();
+    auto* allocator = d3dDevice->GetViewShaderVisibleDescriptorAllocator();
     const uint64_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
 
     // This test is written assuming a certain heap size to trigger
@@ -273,7 +431,7 @@ TEST_P(D3D12DescriptorHeapTests, SwitchOverViewHeapBecauseOfBindingGroup0) {
     wgpu::CommandBuffer commands = encoder.Finish();
     queue.Submit(1, &commands);
 
-    EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(), heapSerial + HeapVersionID(1));
+    EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(), heapSerial + HeapVersionID(1u));
 }
 
 // Verify the shader visible sampler heaps does not switch over within a single submit when samplers
@@ -296,11 +454,10 @@ TEST_P(D3D12DescriptorHeapTests, NoSwitchOverSamplerHeapBecauseOfCache) {
                 return vec4f(0.0, 0.0, 0.0, 0.0);
             })");
 
-
     wgpu::Sampler sampler = device.CreateSampler();
 
     Device* d3dDevice = reinterpret_cast<Device*>(device.Get());
-    auto& allocator = d3dDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    auto* allocator = d3dDevice->GetSamplerShaderVisibleDescriptorAllocator();
     const uint64_t samplerHeapSize = allocator->GetShaderVisibleHeapSizeForTesting();
 
     const HeapVersionID heapSerial = allocator->GetShaderVisibleHeapSerialForTesting();
@@ -341,7 +498,7 @@ TEST_P(D3D12DescriptorHeapTests, SwitchOverSamplerHeap) {
     // are cached by bind group, so the second draw would reuse the samplers from the first.
 
     Device* d3dDevice = reinterpret_cast<Device*>(device.Get());
-    auto& allocator = d3dDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    auto* allocator = d3dDevice->GetSamplerShaderVisibleDescriptorAllocator();
     [[maybe_unused]] const uint64_t samplerHeapSize =
         allocator->GetShaderVisibleHeapSizeForTesting();
 
@@ -454,7 +611,7 @@ TEST_P(D3D12DescriptorHeapTests, SwitchOverSamplerHeap) {
     wgpu::CommandBuffer commands = encoder.Finish();
     queue.Submit(1, &commands);
 
-    EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(), heapSerial + HeapVersionID(1));
+    EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(), heapSerial + HeapVersionID(1u));
 }
 
 // Verify the shader visible sampler heap switches over within a single submit because bind group 0
@@ -476,7 +633,7 @@ TEST_P(D3D12DescriptorHeapTests, SwitchOverSamplerHeapBecauseOfBindingGroup0) {
     // the allocation of group 0 was overwritten by the success of group 1.
 
     Device* d3dDevice = reinterpret_cast<Device*>(device.Get());
-    auto& allocator = d3dDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    auto* allocator = d3dDevice->GetSamplerShaderVisibleDescriptorAllocator();
     [[maybe_unused]] const uint64_t samplerHeapSize =
         allocator->GetShaderVisibleHeapSizeForTesting();
 
@@ -593,7 +750,7 @@ TEST_P(D3D12DescriptorHeapTests, SwitchOverSamplerHeapBecauseOfBindingGroup0) {
     wgpu::CommandBuffer commands = encoder.Finish();
     queue.Submit(1, &commands);
 
-    EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(), heapSerial + HeapVersionID(1));
+    EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(), heapSerial + HeapVersionID(1u));
 }
 
 // Verify shader-visible heaps can be recycled for multiple submits.
@@ -602,7 +759,8 @@ TEST_P(D3D12DescriptorHeapTests, PoolHeapsInMultipleSubmits) {
     DAWN_TEST_UNSUPPORTED_IF(
         !mD3DDevice->IsToggleEnabled(native::Toggle::UseD3D12SmallShaderVisibleHeapForTesting));
 
-    auto& allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    auto* allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    const uint32_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
 
     std::list<ComPtr<ID3D12DescriptorHeap>> heaps = {allocator->GetShaderVisibleHeap()};
 
@@ -611,7 +769,7 @@ TEST_P(D3D12DescriptorHeapTests, PoolHeapsInMultipleSubmits) {
     // Allocate + increment internal serials up to |kFrameDepth| and ensure heaps are always
     // unique.
     for (uint32_t i = 0; i < kFrameDepth; i++) {
-        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap().IsSuccess());
+        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap(heapSize).IsSuccess());
         ComPtr<ID3D12DescriptorHeap> heap = allocator->GetShaderVisibleHeap();
         EXPECT_TRUE(std::find(heaps.begin(), heaps.end(), heap) == heaps.end());
         heaps.push_back(heap);
@@ -625,7 +783,7 @@ TEST_P(D3D12DescriptorHeapTests, PoolHeapsInMultipleSubmits) {
     // (oldest heaps are recycled first). The "+ 1" is so we also include the very first heap in
     // the check.
     for (uint32_t i = 0; i < kFrameDepth + 1; i++) {
-        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap().IsSuccess());
+        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap(heapSize).IsSuccess());
         ComPtr<ID3D12DescriptorHeap> heap = allocator->GetShaderVisibleHeap();
         EXPECT_TRUE(heaps.front() == heap);
         heaps.pop_front();
@@ -645,7 +803,8 @@ TEST_P(D3D12DescriptorHeapTests, PoolHeapsInPendingSubmit) {
 
     constexpr uint32_t kNumOfSwitches = 5;
 
-    auto& allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    auto* allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    const uint32_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
 
     const HeapVersionID heapSerial = allocator->GetShaderVisibleHeapSerialForTesting();
 
@@ -655,7 +814,7 @@ TEST_P(D3D12DescriptorHeapTests, PoolHeapsInPendingSubmit) {
 
     // Switch-over |kNumOfSwitches| and ensure heaps are always unique.
     for (uint32_t i = 0; i < kNumOfSwitches; i++) {
-        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap().IsSuccess());
+        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap(heapSize).IsSuccess());
         ComPtr<ID3D12DescriptorHeap> heap = allocator->GetShaderVisibleHeap();
         EXPECT_TRUE(std::find(heaps.begin(), heaps.end(), heap) == heaps.end());
         heaps.insert(heap);
@@ -676,7 +835,8 @@ TEST_P(D3D12DescriptorHeapTests, PoolHeapsInPendingAndMultipleSubmits) {
 
     constexpr uint32_t kNumOfSwitches = 5;
 
-    auto& allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    auto* allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    const uint32_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
     const HeapVersionID heapSerial = allocator->GetShaderVisibleHeapSerialForTesting();
 
     std::set<ComPtr<ID3D12DescriptorHeap>> heaps = {allocator->GetShaderVisibleHeap()};
@@ -685,7 +845,7 @@ TEST_P(D3D12DescriptorHeapTests, PoolHeapsInPendingAndMultipleSubmits) {
 
     // Switch-over |kNumOfSwitches| to create a pool of unique heaps.
     for (uint32_t i = 0; i < kNumOfSwitches; i++) {
-        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap().IsSuccess());
+        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap(heapSize).IsSuccess());
         ComPtr<ID3D12DescriptorHeap> heap = allocator->GetShaderVisibleHeap();
         EXPECT_TRUE(std::find(heaps.begin(), heaps.end(), heap) == heaps.end());
         heaps.insert(heap);
@@ -700,7 +860,7 @@ TEST_P(D3D12DescriptorHeapTests, PoolHeapsInPendingAndMultipleSubmits) {
 
     // Switch-over |kNumOfSwitches| again reusing the same heaps.
     for (uint32_t i = 0; i < kNumOfSwitches; i++) {
-        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap().IsSuccess());
+        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap(heapSize).IsSuccess());
         ComPtr<ID3D12DescriptorHeap> heap = allocator->GetShaderVisibleHeap();
         EXPECT_TRUE(std::find(heaps.begin(), heaps.end(), heap) != heaps.end());
         heaps.erase(heap);
@@ -712,9 +872,20 @@ TEST_P(D3D12DescriptorHeapTests, PoolHeapsInPendingAndMultipleSubmits) {
     EXPECT_EQ(allocator->GetShaderVisiblePoolSizeForTesting(), kNumOfSwitches);
 }
 
+// Verify that an initial allocation larger than the default works.
+TEST_P(D3D12DescriptorHeapTests, FirstAllocLargerThanDefault) {
+    auto* allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    const uint32_t defaultHeapSize = allocator->GetShaderVisibleHeapSizeForTesting();
+    uint32_t newHeapSize = std::min(defaultHeapSize * 2, allocator->GetShaderVisibleHeapMaxSize());
+
+    EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap(newHeapSize).IsSuccess());
+    EXPECT_EQ(allocator->GetShaderVisibleHeapSizeForTesting(), (newHeapSize));
+}
+
 // Verify shader-visible heaps do not recycle in multiple submits.
 TEST_P(D3D12DescriptorHeapTests, GrowHeapsInMultipleSubmits) {
-    auto& allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    auto* allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    uint32_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
 
     const HeapVersionID heapSerial = allocator->GetShaderVisibleHeapSerialForTesting();
 
@@ -724,7 +895,9 @@ TEST_P(D3D12DescriptorHeapTests, GrowHeapsInMultipleSubmits) {
 
     // Growth: Allocate + Tick() and ensure heaps are always unique.
     while (allocator->GetShaderVisiblePoolSizeForTesting() == 0) {
-        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap().IsSuccess());
+        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap(heapSize).IsSuccess());
+        EXPECT_TRUE(heapSize <= allocator->GetShaderVisibleHeapSizeForTesting());
+        heapSize = std::min(heapSize * 2, allocator->GetShaderVisibleHeapMaxSize());
         ComPtr<ID3D12DescriptorHeap> heap = allocator->GetShaderVisibleHeap();
         EXPECT_TRUE(std::find(heaps.begin(), heaps.end(), heap) == heaps.end());
         heaps.insert(heap);
@@ -739,7 +912,8 @@ TEST_P(D3D12DescriptorHeapTests, GrowHeapsInMultipleSubmits) {
 
 // Verify shader-visible heaps do not recycle in a pending submit.
 TEST_P(D3D12DescriptorHeapTests, GrowHeapsInPendingSubmit) {
-    auto& allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    auto* allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    uint32_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
 
     const HeapVersionID heapSerial = allocator->GetShaderVisibleHeapSerialForTesting();
 
@@ -749,7 +923,8 @@ TEST_P(D3D12DescriptorHeapTests, GrowHeapsInPendingSubmit) {
 
     // Growth: Allocate new heaps.
     while (allocator->GetShaderVisiblePoolSizeForTesting() == 0) {
-        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap().IsSuccess());
+        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap(heapSize).IsSuccess());
+        heapSize = std::min(heapSize * 2, allocator->GetShaderVisibleHeapMaxSize());
         ComPtr<ID3D12DescriptorHeap> heap = allocator->GetShaderVisibleHeap();
         EXPECT_TRUE(std::find(heaps.begin(), heaps.end(), heap) == heaps.end());
         heaps.insert(heap);
@@ -768,7 +943,8 @@ TEST_P(D3D12DescriptorHeapTests, GrowAndPoolHeapsInPendingAndMultipleSubmits) {
     // TODO(crbug.com/463661448): Flaky on Snapdragon X Elite SoCs.
     DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm());
 
-    auto& allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    auto* allocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+    uint32_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
 
     std::set<ComPtr<ID3D12DescriptorHeap>> heaps = {allocator->GetShaderVisibleHeap()};
 
@@ -776,7 +952,8 @@ TEST_P(D3D12DescriptorHeapTests, GrowAndPoolHeapsInPendingAndMultipleSubmits) {
 
     uint32_t kNumOfPooledHeaps = 5;
     while (allocator->GetShaderVisiblePoolSizeForTesting() < kNumOfPooledHeaps) {
-        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap().IsSuccess());
+        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap(heapSize).IsSuccess());
+        heapSize = std::min(heapSize * 2, allocator->GetShaderVisibleHeapMaxSize());
         ComPtr<ID3D12DescriptorHeap> heap = allocator->GetShaderVisibleHeap();
         EXPECT_TRUE(std::find(heaps.begin(), heaps.end(), heap) == heaps.end());
         heaps.insert(heap);
@@ -789,7 +966,7 @@ TEST_P(D3D12DescriptorHeapTests, GrowAndPoolHeapsInPendingAndMultipleSubmits) {
 
     // Switch-over the pool-allocated heaps.
     for (uint32_t i = 0; i < kNumOfPooledHeaps; i++) {
-        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap().IsSuccess());
+        EXPECT_TRUE(allocator->AllocateAndSwitchShaderVisibleHeap(heapSize).IsSuccess());
         ComPtr<ID3D12DescriptorHeap> heap = allocator->GetShaderVisibleHeap();
         EXPECT_FALSE(std::find(heaps.begin(), heaps.end(), heap) == heaps.end());
     }
@@ -1188,9 +1365,8 @@ TEST_P(D3D12DescriptorHeapTests, EncodeManyUBOAndSamplers) {
         wgpu::SamplerDescriptor samplerDescriptor;
         wgpu::Sampler sampler = device.CreateSampler(&samplerDescriptor);
 
-        auto& viewAllocator = mD3DDevice->GetViewShaderVisibleDescriptorAllocator();
-
-        auto& samplerAllocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
+        auto* viewAllocator = mD3DDevice->GetViewShaderVisibleDescriptorAllocator();
+        auto* samplerAllocator = mD3DDevice->GetSamplerShaderVisibleDescriptorAllocator();
 
         const HeapVersionID viewHeapSerial = viewAllocator->GetShaderVisibleHeapSerialForTesting();
         const HeapVersionID samplerHeapSerial =
@@ -1415,7 +1591,7 @@ TEST_P(D3D12DescriptorHeapTests, AllocateDeallocateMany) {
 // Verifies that gpu descriptor heap allocations are only valid during the serial they were created
 // on.
 TEST_P(D3D12DescriptorHeapTests, InvalidateAllocationAfterSerial) {
-    auto& gpuAllocator = mD3DDevice->GetViewShaderVisibleDescriptorAllocator();
+    auto* gpuAllocator = mD3DDevice->GetViewShaderVisibleDescriptorAllocator();
 
     GPUDescriptorHeapAllocation gpuHeapDescAllocation;
 
@@ -1433,6 +1609,257 @@ TEST_P(D3D12DescriptorHeapTests, InvalidateAllocationAfterSerial) {
 DAWN_INSTANTIATE_TEST(D3D12DescriptorHeapTests,
                       D3D12Backend(),
                       D3D12Backend({"use_d3d12_small_shader_visible_heap"}));
+
+class D3D12ResourceTableDescriptorHeapTests : public D3D12DescriptorHeapTests {
+  protected:
+    // Number of view descriptors implicitly allocated by a ResourceTable, which are
+    // for the default resources plus one for the metadata buffer.
+    uint32_t mImplicitDescriptorCount;
+
+    void SetUp() override {
+        D3D12DescriptorHeapTests::SetUp();
+        DAWN_TEST_UNSUPPORTED_IF(
+            !SupportsFeatures({wgpu::FeatureName::ChromiumExperimentalSamplingResourceTable}));
+
+        // Override the fragment shader from base
+        mSimpleFSModule = utils::CreateShaderModule(device, R"(
+            enable chromium_experimental_resource_table;
+            @fragment fn main() -> @location(0) vec4f {
+                _ = hasResource<texture_2d<u32>>(0);
+                return vec4f(0);
+            })");
+
+        mImplicitDescriptorCount =
+            uint32_t{ResourceTableDefaultResources::GetNonSamplerCount()} + 1;
+    }
+
+    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
+        if (SupportsFeatures({wgpu::FeatureName::ChromiumExperimentalSamplingResourceTable})) {
+            return {wgpu::FeatureName::ChromiumExperimentalSamplingResourceTable};
+        }
+        return {};
+    }
+
+    wgpu::ResourceTable MakeResourceTable(uint32_t size) {
+        wgpu::ResourceTableDescriptor desc;
+        desc.size = size;
+        wgpu::ResourceTable table = device.CreateResourceTable(&desc);
+        return table;
+    }
+
+    wgpu::PipelineLayout MakePipelineLayoutWithTable(std::vector<wgpu::BindGroupLayout> bgls = {},
+                                                     uint32_t immediateSize = 0) {
+        wgpu::PipelineLayoutResourceTable plTable;
+        plTable.usesResourceTable = true;
+
+        wgpu::PipelineLayoutDescriptor desc{
+            .nextInChain = &plTable,
+            .bindGroupLayoutCount = bgls.size(),
+            .bindGroupLayouts = bgls.data(),
+            .immediateSize = immediateSize,
+        };
+
+        return device.CreatePipelineLayout(&desc);
+    }
+};
+
+// Verify the shader visible view heaps switch over every submit when binding a resource table that
+// doubles in size
+TEST_P(D3D12ResourceTableDescriptorHeapTests, SwitchOverViewHeapGradually) {
+    utils::ComboRenderPipelineDescriptor renderPipelineDescriptor;
+    renderPipelineDescriptor.layout = MakePipelineLayoutWithTable();
+    renderPipelineDescriptor.vertex.module = mSimpleVSModule;
+    renderPipelineDescriptor.cFragment.module = mSimpleFSModule;
+
+    wgpu::RenderPipeline renderPipeline = device.CreateRenderPipeline(&renderPipelineDescriptor);
+    utils::BasicRenderPass renderPass = utils::CreateBasicRenderPass(device, kRTSize, kRTSize);
+
+    Device* d3dDevice = reinterpret_cast<Device*>(device.Get());
+    auto* allocator = d3dDevice->GetViewShaderVisibleDescriptorAllocator();
+    const uint64_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
+    DAWN_ASSERT(
+        heapSize >
+        mImplicitDescriptorCount);  // Don't test with UseD3D12SmallShaderVisibleHeapForTesting
+
+    const HeapVersionID heapSerial = allocator->GetShaderVisibleHeapSerialForTesting();
+
+    uint32_t tableSize = heapSize;
+    for (HeapVersionID i{0u};; ++i) {
+        wgpu::ResourceTable table = MakeResourceTable(tableSize - mImplicitDescriptorCount);
+
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&renderPass.renderPassInfo);
+        pass.SetPipeline(renderPipeline);
+        pass.SetResourceTable(table);
+        pass.Draw(3);
+        pass.End();
+        wgpu::CommandBuffer commands = encoder.Finish();
+        queue.Submit(1, &commands);
+
+        EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(), heapSerial + i);
+
+        // Make the table grow so that each iteration is double the previous heap size
+        // to force the allocator to grow by double its current size.
+        tableSize *= 2;
+        if ((tableSize - mImplicitDescriptorCount) >= kMaxResourceTableSize) {
+            break;
+        }
+    }
+}
+
+// Verify the shader visible view heaps switch over every submit when binding a resource table that
+// quadruples in size
+TEST_P(D3D12ResourceTableDescriptorHeapTests, SwitchOverViewHeapLargeJumps) {
+    utils::ComboRenderPipelineDescriptor renderPipelineDescriptor;
+    renderPipelineDescriptor.layout = MakePipelineLayoutWithTable();
+    renderPipelineDescriptor.vertex.module = mSimpleVSModule;
+    renderPipelineDescriptor.cFragment.module = mSimpleFSModule;
+
+    wgpu::RenderPipeline renderPipeline = device.CreateRenderPipeline(&renderPipelineDescriptor);
+    utils::BasicRenderPass renderPass = utils::CreateBasicRenderPass(device, kRTSize, kRTSize);
+
+    Device* d3dDevice = reinterpret_cast<Device*>(device.Get());
+    auto* allocator = d3dDevice->GetViewShaderVisibleDescriptorAllocator();
+    const uint64_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
+    DAWN_ASSERT(
+        heapSize >
+        mImplicitDescriptorCount);  // Don't test with UseD3D12SmallShaderVisibleHeapForTesting
+
+    const HeapVersionID heapSerial = allocator->GetShaderVisibleHeapSerialForTesting();
+
+    uint32_t tableSize = heapSize;
+    for (HeapVersionID i{0u};; ++i) {
+        wgpu::ResourceTable table = MakeResourceTable(tableSize - mImplicitDescriptorCount);
+
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&renderPass.renderPassInfo);
+        pass.SetPipeline(renderPipeline);
+        pass.SetResourceTable(table);
+        pass.Draw(3);
+        pass.End();
+        wgpu::CommandBuffer commands = encoder.Finish();
+        queue.Submit(1, &commands);
+
+        EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(), heapSerial + i);
+
+        // Make the table grow so that each iteration is quadruple the previous heap size
+        // to force the allocator to grow by quadruple its current size.
+        tableSize *= 4;
+        if ((tableSize - mImplicitDescriptorCount) >= kMaxResourceTableSize) {
+            break;
+        }
+    }
+}
+
+// Verify the shader visible view heaps switch over every submit when binding a resource table that
+// goes from smallest to largest size
+TEST_P(D3D12ResourceTableDescriptorHeapTests, SwitchOverViewHeapLargestJump) {
+    utils::ComboRenderPipelineDescriptor renderPipelineDescriptor;
+    renderPipelineDescriptor.layout = MakePipelineLayoutWithTable();
+    renderPipelineDescriptor.vertex.module = mSimpleVSModule;
+    renderPipelineDescriptor.cFragment.module = mSimpleFSModule;
+
+    wgpu::RenderPipeline renderPipeline = device.CreateRenderPipeline(&renderPipelineDescriptor);
+    utils::BasicRenderPass renderPass = utils::CreateBasicRenderPass(device, kRTSize, kRTSize);
+
+    Device* d3dDevice = reinterpret_cast<Device*>(device.Get());
+    auto* allocator = d3dDevice->GetViewShaderVisibleDescriptorAllocator();
+    const uint64_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
+    DAWN_ASSERT(
+        heapSize >
+        mImplicitDescriptorCount);  // Don't test with UseD3D12SmallShaderVisibleHeapForTesting
+
+    const HeapVersionID heapSerial = allocator->GetShaderVisibleHeapSerialForTesting();
+
+    auto draw = [&](wgpu::ResourceTable table) {
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&renderPass.renderPassInfo);
+        pass.SetPipeline(renderPipeline);
+        pass.SetResourceTable(table);
+        pass.Draw(3);
+        pass.End();
+        wgpu::CommandBuffer commands = encoder.Finish();
+        queue.Submit(1, &commands);
+    };
+
+    // Make min size table
+    {
+        wgpu::ResourceTable table = MakeResourceTable(heapSize - mImplicitDescriptorCount);
+        draw(table);
+        EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(),
+                  heapSerial + HeapVersionID(0u));
+    }
+    // Make largest table
+    {
+        wgpu::ResourceTable table =
+            MakeResourceTable(kMaxResourceTableSize - mImplicitDescriptorCount);
+        draw(table);
+        EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(),
+                  heapSerial + HeapVersionID(1u));
+    }
+}
+
+// Verify the shader visible view heaps switch over every submit when binding a resource table that
+// goes from smallest to largest size
+TEST_P(D3D12ResourceTableDescriptorHeapTests, SwitchOverViewHeapTableAndBindGroups) {
+    auto fsModule = utils::CreateShaderModule(device, R"(
+        enable chromium_experimental_resource_table;
+
+        @group(0) @binding(0) var<storage, read_write> buffer : array<u32>;
+
+        @fragment fn main() -> @location(0) vec4f {
+            _ = hasResource<texture_2d<u32>>(0);
+            return vec4f(0);
+        })");
+
+    wgpu::BindGroupLayout bgl = utils::MakeBindGroupLayout(
+        device, {{0, wgpu::ShaderStage::Fragment, wgpu::BufferBindingType::Storage}});
+
+    utils::ComboRenderPipelineDescriptor renderPipelineDescriptor;
+    renderPipelineDescriptor.layout = MakePipelineLayoutWithTable({{bgl}});
+    renderPipelineDescriptor.vertex.module = mSimpleVSModule;
+    renderPipelineDescriptor.cFragment.module = fsModule;
+
+    wgpu::RenderPipeline renderPipeline = device.CreateRenderPipeline(&renderPipelineDescriptor);
+    utils::BasicRenderPass renderPass = utils::CreateBasicRenderPass(device, kRTSize, kRTSize);
+
+    Device* d3dDevice = reinterpret_cast<Device*>(device.Get());
+    auto* allocator = d3dDevice->GetViewShaderVisibleDescriptorAllocator();
+    const uint64_t heapSize = allocator->GetShaderVisibleHeapSizeForTesting();
+    DAWN_ASSERT(
+        heapSize >
+        mImplicitDescriptorCount);  // Don't test with UseD3D12SmallShaderVisibleHeapForTesting
+
+    const HeapVersionID heapSerial = allocator->GetShaderVisibleHeapSerialForTesting();
+
+    // Create a bind group with a buffer
+    wgpu::BufferDescriptor bDesc = {
+        .usage = wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopySrc,
+        .size = sizeof(uint32_t),
+    };
+    wgpu::Buffer buffer = device.CreateBuffer(&bDesc);
+    wgpu::BindGroup bg = utils::MakeBindGroup(device, bgl, {{0, buffer}});
+
+    // Make a table that's exactly double the heap size (e.g. 8192), which should cause
+    // a realloc. With the bind group of 1 resource, the realloc min size will be heapSize * 2 + 1
+    // (e.g. 8193), which should result in a realloc of heapSize * 4 (e.g. 16384).
+    wgpu::ResourceTable table = MakeResourceTable((heapSize * 2) - mImplicitDescriptorCount);
+
+    // Draw with both the table and bind group. This should result in a heap realloc.
+    wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+    wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&renderPass.renderPassInfo);
+    pass.SetPipeline(renderPipeline);
+    pass.SetBindGroup(0, bg);
+    pass.SetResourceTable(table);
+    pass.Draw(3);
+    pass.End();
+    wgpu::CommandBuffer commands = encoder.Finish();
+    queue.Submit(1, &commands);
+
+    EXPECT_EQ(allocator->GetShaderVisibleHeapSerialForTesting(), heapSerial + HeapVersionID(1u));
+}
+
+DAWN_INSTANTIATE_TEST(D3D12ResourceTableDescriptorHeapTests, D3D12Backend(), );
 
 }  // anonymous namespace
 }  // namespace dawn::native::d3d12

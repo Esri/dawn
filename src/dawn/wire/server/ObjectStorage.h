@@ -38,6 +38,7 @@
 #include "dawn/wire/WireCmd_autogen.h"
 #include "dawn/wire/WireServer.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "src/dawn/common/MutexProtected.h"
 
 namespace dawn::wire::server {
 
@@ -62,14 +63,15 @@ struct ObjectDataBase {
 template <typename T>
 struct ObjectData : public ObjectDataBase<T> {};
 
-enum class BufferMapWriteState { Unmapped, Mapped, MapError };
+struct BufferMapState {
+    std::unique_ptr<MemoryTransferService::ReadHandle> readHandle = nullptr;
+    std::unique_ptr<MemoryTransferService::WriteHandle> writeHandle = nullptr;
+};
 
 template <>
 struct ObjectData<WGPUBuffer> : public ObjectDataBase<WGPUBuffer> {
-    // TODO(enga): Use a tagged pointer to save space.
-    std::unique_ptr<MemoryTransferService::ReadHandle> readHandle;
-    std::unique_ptr<MemoryTransferService::WriteHandle> writeHandle;
-    BufferMapWriteState mapWriteState = BufferMapWriteState::Unmapped;
+    MutexRefProtected<BufferMapState> mapState;
+
     WGPUBufferUsage usage = WGPUBufferUsage_None;
     // Indicate if writeHandle needs to be destroyed on unmap
     bool mappedAtCreation = false;
@@ -194,18 +196,21 @@ class KnownObjectsBase {
         return WireResult::Success;
     }
 
-    WireResult FillReservation(ObjectId id, T handle, Known<T>* known = nullptr) {
-        DAWN_ASSERT(id < mKnown.size());
-        DAWN_ASSERT(handle != nullptr);
-        Data* data = &mKnown[id];
+    WireResult FillReservation(ObjectHandle handle, T nativeHandle, Known<T>* known = nullptr) {
+        DAWN_ASSERT(handle.id < mKnown.size());
+        DAWN_ASSERT(nativeHandle != nullptr);
+        Data* data = &mKnown[handle.id];
 
         if (data->state != AllocationState::Reserved) {
             return WireResult::FatalError;
         }
-        data->handle = handle;
+        if (data->generation != handle.generation) {
+            return WireResult::FatalError;
+        }
+        data->handle = nativeHandle;
         data->state = AllocationState::Allocated;
         if (known != nullptr) {
-            *known = {id, data};
+            *known = {handle.id, data};
         }
         return WireResult::Success;
     }
@@ -302,8 +307,10 @@ class KnownObjects<WGPUDevice> : public KnownObjectsBase<WGPUDevice> {
         return WireResult::Success;
     }
 
-    WireResult FillReservation(ObjectId id, WGPUDevice handle, Known<WGPUDevice>* known = nullptr) {
-        auto result = KnownObjectsBase<WGPUDevice>::FillReservation(id, handle, known);
+    WireResult FillReservation(ObjectHandle handle,
+                               WGPUDevice nativeHandle,
+                               Known<WGPUDevice>* known = nullptr) {
+        auto result = KnownObjectsBase<WGPUDevice>::FillReservation(handle, nativeHandle, known);
         if (result == WireResult::Success) {
             mKnownSet.insert((*known)->handle);
         }

@@ -32,8 +32,8 @@
 #include <cstddef>
 #include <utility>
 
-#include "dawn/common/Assert.h"
-#include "dawn/common/Compiler.h"
+#include "src/dawn/common/Compiler.h"
+#include "src/utils/assert.h"
 
 namespace dawn {
 

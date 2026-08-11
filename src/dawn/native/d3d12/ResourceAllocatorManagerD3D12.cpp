@@ -25,20 +25,20 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d12/ResourceAllocatorManagerD3D12.h"
+#include "src/dawn/native/d3d12/ResourceAllocatorManagerD3D12.h"
 
 #include <algorithm>
 #include <limits>
 #include <utility>
 
-#include "dawn/native/Queue.h"
-#include "dawn/native/d3d/D3DError.h"
-#include "dawn/native/d3d12/DeviceD3D12.h"
-#include "dawn/native/d3d12/HeapAllocatorD3D12.h"
-#include "dawn/native/d3d12/HeapD3D12.h"
-#include "dawn/native/d3d12/ResidencyManagerD3D12.h"
-#include "dawn/native/d3d12/ResourceHeapAllocationD3D12.h"
-#include "dawn/native/d3d12/UtilsD3D12.h"
+#include "src/dawn/native/Queue.h"
+#include "src/dawn/native/d3d/D3DError.h"
+#include "src/dawn/native/d3d12/DeviceD3D12.h"
+#include "src/dawn/native/d3d12/HeapAllocatorD3D12.h"
+#include "src/dawn/native/d3d12/HeapD3D12.h"
+#include "src/dawn/native/d3d12/ResidencyManagerD3D12.h"
+#include "src/dawn/native/d3d12/ResourceHeapAllocationD3D12.h"
+#include "src/dawn/native/d3d12/UtilsD3D12.h"
 
 namespace dawn::native::d3d12 {
 namespace {
@@ -191,7 +191,7 @@ uint32_t GetColumnPitch(uint32_t baseHeight, uint32_t mipLevelCount) {
     return Align(columnPitch, 4);
 }
 
-uint32_t ComputeExtraArraySizeForIntelGen12(uint32_t width,
+uint64_t ComputeExtraArraySizeForIntelGen12(uint32_t width,
                                             uint32_t height,
                                             uint32_t arrayLayerCount,
                                             uint32_t mipLevelCount,
@@ -295,17 +295,28 @@ D3D12_HEAP_FLAGS GetHeapFlagsForCommittedResource(Device* device,
 
 }  // namespace
 
-ResourceAllocatorManager::ResourceAllocatorManager(Device* device) : mDevice(device) {
+ResourceAllocatorManager::ResourceAllocatorManager(Device* device, QueueBase* queue)
+    : mDevice(device) {
     D3D12_HEAP_FLAGS createNotZeroedHeapFlag =
         mDevice->IsToggleEnabled(Toggle::D3D12CreateNotZeroedHeap)
             ? D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
             : D3D12_HEAP_FLAG_NONE;
 
+    mAllocatedMemoryTracker = AcquireRef(new AllocationSizeTracker());
+    mUsedMemoryTracker = AcquireRef(new AllocationSizeTracker());
+
+    // Register with the execution queue so UpdateCompletedSerialTo is called automatically.
+    queue->RegisterSerialProcessor(QueuePriority::BestEffort,
+                                   Ref<AllocationSizeTracker>(mAllocatedMemoryTracker));
+    queue->RegisterSerialProcessor(QueuePriority::BestEffort,
+                                   Ref<AllocationSizeTracker>(mUsedMemoryTracker));
+
     for (uint32_t i = 0; i < ResourceHeapKind::EnumCount; i++) {
         const ResourceHeapKind resourceHeapKind = static_cast<ResourceHeapKind>(i);
         D3D12_HEAP_FLAGS heapFlags = GetD3D12HeapFlags(resourceHeapKind) | createNotZeroedHeapFlag;
         mHeapAllocators[i] = std::make_unique<HeapAllocator>(
-            mDevice, resourceHeapKind, heapFlags, GetMemorySegment(mDevice, resourceHeapKind));
+            mDevice, resourceHeapKind, heapFlags, GetMemorySegment(mDevice, resourceHeapKind),
+            mAllocatedMemoryTracker.Get());
         mPooledHeapAllocators[i] =
             std::make_unique<PooledResourceMemoryAllocator>(mHeapAllocators[i].get());
         mSubAllocatedResourceAllocators[i] = std::make_unique<BuddyMemoryAllocator>(
@@ -355,10 +366,18 @@ ResultOrError<ResourceHeapAllocation> ResourceAllocatorManager::AllocateMemory(
         // Multisample textures have one layer at most. Only non-multisample textures need the
         // workaround.
         DAWN_ASSERT(revisedDescriptor.SampleDesc.Count <= 1);
-        revisedDescriptor.DepthOrArraySize += ComputeExtraArraySizeForIntelGen12(
-            resourceDescriptor.Width, resourceDescriptor.Height,
-            resourceDescriptor.DepthOrArraySize, resourceDescriptor.MipLevels,
-            resourceDescriptor.SampleDesc.Count, colorFormatBytesPerBlock);
+        // Make sure the result fits in DepthOrArraySize which is a UINT16
+        uint64_t depthOrArraySize =
+            revisedDescriptor.DepthOrArraySize +
+            ComputeExtraArraySizeForIntelGen12(
+                resourceDescriptor.Width, resourceDescriptor.Height,
+                resourceDescriptor.DepthOrArraySize, resourceDescriptor.MipLevels,
+                resourceDescriptor.SampleDesc.Count, colorFormatBytesPerBlock);
+        if (depthOrArraySize >= std::numeric_limits<UINT16>::max()) {
+            return DAWN_OUT_OF_MEMORY_ERROR(
+                "Texture array size with Intel Gen12 workaround exceeds UINT16");
+        }
+        revisedDescriptor.DepthOrArraySize = depthOrArraySize;
     }
 
     // TODO(crbug.com/dawn/849): Conditionally disable sub-allocation.
@@ -412,6 +431,14 @@ void ResourceAllocatorManager::DeallocateMemory(ResourceHeapAllocation& allocati
     if (allocation.GetInfo().mMethod == AllocationMethod::kDirect) {
         mHeapsToDelete.Enqueue(std::unique_ptr<ResourceHeapBase>(allocation.GetResourceHeap()),
                                mDevice->GetQueue()->GetPendingCommandSerial());
+
+        mUsedMemoryTracker->Decrement(mDevice->GetQueue()->GetPendingCommandSerial(),
+                                      allocation.GetInfo().mRequestedSize);
+        mAllocatedMemoryTracker->Decrement(mDevice->GetQueue()->GetPendingCommandSerial(),
+                                           allocation.GetInfo().mRequestedSize);
+    } else if (allocation.GetInfo().mMethod == AllocationMethod::kSubAllocated) {
+        mUsedMemoryTracker->Decrement(mDevice->GetQueue()->GetPendingCommandSerial(),
+                                      allocation.GetInfo().mRequestedSize);
     }
 
     // Invalidate the allocation immediately in case one accidentally
@@ -494,6 +521,8 @@ ResultOrError<ResourceHeapAllocation> ResourceAllocatorManager::CreatePlacedReso
             optimizedClearValue, IID_PPV_ARGS(&placedResource)),
         "ID3D12Device::CreatePlacedResource"));
 
+    mUsedMemoryTracker->Increment(resourceInfo.SizeInBytes);
+
     // After CreatePlacedResource has finished, the heap can be unlocked from residency. This
     // will insert it into the residency LRU.
     mDevice->GetResidencyManager()->UnlockAllocation(heap);
@@ -548,6 +577,9 @@ ResultOrError<ResourceHeapAllocation> ResourceAllocatorManager::CreateCommittedR
             optimizedClearValue, IID_PPV_ARGS(&committedResource)),
         "ID3D12Device::CreateCommittedResource"));
 
+    mAllocatedMemoryTracker->Increment(resourceInfo.SizeInBytes);
+    mUsedMemoryTracker->Increment(resourceInfo.SizeInBytes);
+
     // When using CreateCommittedResource, D3D12 creates an implicit heap that contains the
     // resource allocation. Because Dawn's memory residency management occurs at the resource
     // heap granularity, every directly allocated ResourceHeapAllocation also stores a Heap
@@ -573,6 +605,14 @@ void ResourceAllocatorManager::FreeRecycledAllocations() {
     for (auto& alloc : mPooledHeapAllocators) {
         alloc->FreeRecycledAllocations();
     }
+}
+
+uint64_t ResourceAllocatorManager::GetTotalAllocatedMemory() const {
+    return mAllocatedMemoryTracker->GetSize();
+}
+
+uint64_t ResourceAllocatorManager::GetTotalUsedMemory() const {
+    return mUsedMemoryTracker->GetSize();
 }
 
 }  // namespace dawn::native::d3d12

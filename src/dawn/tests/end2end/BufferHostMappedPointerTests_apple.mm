@@ -27,10 +27,10 @@
 
 #include <mach/mach.h>
 
-#include "dawn/common/Log.h"
-#include "dawn/common/MutexProtected.h"
-#include "dawn/tests/MockCallback.h"
-#include "dawn/tests/end2end/BufferHostMappedPointerTests.h"
+#include "src/dawn/common/MutexProtected.h"
+#include "src/dawn/tests/MockCallback.h"
+#include "src/dawn/tests/end2end/BufferHostMappedPointerTests.h"
+#include "src/utils/log.h"
 
 namespace dawn {
 namespace {

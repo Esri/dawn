@@ -25,17 +25,21 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "src/tint/cmd/fuzz/common/ir_fuzzer.h"
 #include "src/tint/lang/core/ir/transform/binary_polyfill.h"
-
-#include "src/tint/cmd/fuzz/ir/fuzz.h"
 #include "src/tint/lang/core/ir/validator.h"
 
 namespace tint::core::ir::transform {
 namespace {
 
 Result<SuccessType> BinaryPolyfillFuzzer(Module& ir,
-                                         const fuzz::ir::Context&,
+                                         const fuzz::ir::Context& context,
                                          const BinaryPolyfillConfig& config) {
+    if (context.options.verbose) {
+        PrintReflected(std::cout, config);
+        std::cout << "\n";
+    }
+
     return BinaryPolyfill(ir, config);
 }
 

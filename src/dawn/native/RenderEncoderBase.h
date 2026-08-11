@@ -28,12 +28,12 @@
 #ifndef SRC_DAWN_NATIVE_RENDERENCODERBASE_H_
 #define SRC_DAWN_NATIVE_RENDERENCODERBASE_H_
 
-#include "dawn/native/AttachmentState.h"
-#include "dawn/native/CommandBufferStateTracker.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/IndirectDrawMetadata.h"
-#include "dawn/native/PassResourceUsageTracker.h"
-#include "dawn/native/ProgrammableEncoder.h"
+#include "src/dawn/native/AttachmentState.h"
+#include "src/dawn/native/CommandBufferStateTracker.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/IndirectDrawMetadata.h"
+#include "src/dawn/native/PassResourceUsageTracker.h"
+#include "src/dawn/native/ProgrammableEncoder.h"
 
 namespace dawn::native {
 
@@ -72,6 +72,7 @@ class RenderEncoderBase : public ProgrammableEncoder {
                                      uint64_t drawCountBufferOffset = 0);
 
     void APISetPipeline(RenderPipelineBase* pipeline);
+    void APISetResourceTable(ResourceTableBase* table);
 
     void APISetVertexBuffer(uint32_t slot, BufferBase* buffer, uint64_t offset, uint64_t size);
     void APISetIndexBuffer(BufferBase* buffer,

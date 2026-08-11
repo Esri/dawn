@@ -31,8 +31,8 @@
 #include <optional>
 
 #include "absl/strings/str_format.h"
-#include "dawn/native/dawn_platform.h"
 #include "dawn/native/webgpu_absl_format_autogen.h"
+#include "src/dawn/native/dawn_platform.h"
 
 namespace dawn::detail {
 template <typename Tag, typename T>
@@ -52,29 +52,29 @@ namespace dawn::native {
 
 struct Color;
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString>
-AbslFormatConvert(const Color* value, const absl::FormatConversionSpec& spec, absl::FormatSink* s);
+AbslFormatConvert(const Color& value, const absl::FormatConversionSpec& spec, absl::FormatSink* s);
 
 struct Extent2D;
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
-    const Extent2D* value,
+    const Extent2D& value,
     const absl::FormatConversionSpec& spec,
     absl::FormatSink* s);
 
 struct Extent3D;
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
-    const Extent3D* value,
+    const Extent3D& value,
     const absl::FormatConversionSpec& spec,
     absl::FormatSink* s);
 
 struct Origin2D;
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
-    const Origin2D* value,
+    const Origin2D& value,
     const absl::FormatConversionSpec& spec,
     absl::FormatSink* s);
 
 struct Origin3D;
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
-    const Origin3D* value,
+    const Origin3D& value,
     const absl::FormatConversionSpec& spec,
     absl::FormatSink* s);
 
@@ -158,19 +158,25 @@ absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConv
 
 struct TexelCopyTextureInfo;
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
-    const TexelCopyTextureInfo* value,
+    const TexelCopyTextureInfo& value,
     const absl::FormatConversionSpec& spec,
     absl::FormatSink* s);
 
 struct TexelCopyBufferLayout;
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
-    const TexelCopyBufferLayout* value,
+    const TexelCopyBufferLayout& value,
     const absl::FormatConversionSpec& spec,
     absl::FormatSink* s);
 
 struct ShaderModuleEntryPoint;
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
-    const ShaderModuleEntryPoint* value,
+    const ShaderModuleEntryPoint& value,
+    const absl::FormatConversionSpec& spec,
+    absl::FormatSink* s);
+
+struct RenderAreaRect;
+absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
+    const RenderAreaRect& value,
     const absl::FormatConversionSpec& spec,
     absl::FormatSink* s);
 
@@ -226,7 +232,7 @@ enum class SampleTypeBit : uint8_t;
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString>
 AbslFormatConvert(SampleTypeBit value, const absl::FormatConversionSpec& spec, absl::FormatSink* s);
 
-enum class SingleShaderStage;
+enum class SingleShaderStage : uint8_t;
 absl::FormatConvertResult<absl::FormatConversionCharSet::kString> AbslFormatConvert(
     SingleShaderStage value,
     const absl::FormatConversionSpec& spec,

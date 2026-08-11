@@ -100,7 +100,9 @@ enum extension {
   // A Chromium-specific extension for resource table
   chromium_experimental_resource_table
   // A Chromium-specific extension for the attribute `subgroup_size`
-  chromium_experimental_subgroup_size_control
+  subgroup_size_control
+  // WGSL Extension for atomic vec2u min max
+  atomic_vec2u_min_max
 }
 
 // https://gpuweb.github.io/gpuweb/wgsl/#language-extensions-sec
@@ -118,8 +120,9 @@ enum language_feature {
   immediate_address_space
   texture_and_sampler_let
   buffer_view
-  filtering_parameters
   swizzle_assignment
+  linear_indexing
+  texture_formats_tier1
 
   // Non-standard language features for Chromium developers.
   chromium_print
@@ -160,14 +163,19 @@ type mat4x3<T>
 type mat4x4<T>
 @display("vec{N}<{T}>")     type vec<N: num, T>
 @display("mat{N}x{M}<{T}>") type mat<N: num, M: num, T>
+
 type ptr<S: address_space, T, A: access>
 type ref<S: address_space, T, A: access>
+
 type atomic<T>
+
 @display("array<{T}>") type runtime_array<T>
 type array<T, N: num>
 type binding_array<T, N: num>
+
 type sampler
 type sampler_comparison
+
 type texture_1d<T>
 type texture_2d<T>
 type texture_2d_array<T>
@@ -349,10 +357,12 @@ match uniform_or_storage
 @must_use @const implicit(N: num)
   fn any(vec<N, bool>) -> bool
 
-@must_use implicit(T, R: read)
-  fn arrayLength(ptr<storage, runtime_array<T>, R>) -> u32
+@must_use implicit(AS: uniform_or_storage, T, R: read)
+  fn arrayLength(ptr<AS, runtime_array<T>, R>) -> u32
 @must_use @stage("fragment", "compute") implicit(T, W: writable)
   fn arrayLength(ptr<storage, runtime_array<T>, W>) -> u32
+@must_use @stage("compute") implicit(T, W: writable)
+  fn arrayLength(ptr<workgroup, runtime_array<T>, W>) -> u32
 
 @must_use @const implicit(T: fa_f32_f16)
   fn asin(@test_value(0.479425538604) T) -> T
@@ -775,6 +785,7 @@ match uniform_or_storage
   fn textureDimensions(texture: texture_cube_array<T>) -> vec2<u32>
 @must_use implicit(T: fiu32, L: iu32)
   fn textureDimensions(texture: texture_cube_array<T>, level: L) -> vec2<u32>
+
 @must_use implicit(T: fiu32)
   fn textureDimensions(texture: texture_multisampled_2d<T>) -> vec2<u32>
 @must_use
@@ -795,6 +806,7 @@ match uniform_or_storage
   fn textureDimensions(texture: texture_depth_cube_array, level: L) -> vec2<u32>
 @must_use
   fn textureDimensions(texture: texture_depth_multisampled_2d) -> vec2<u32>
+
 @must_use implicit(F: texel_format, R: read)
   fn textureDimensions(texture: texture_storage_1d<F, R>) -> u32
 @must_use implicit(F: texel_format, R: read)
@@ -803,8 +815,6 @@ match uniform_or_storage
   fn textureDimensions(texture: texture_storage_2d_array<F, R>) -> vec2<u32>
 @must_use implicit(F: texel_format, R: read)
   fn textureDimensions(texture: texture_storage_3d<F, R>) -> vec3<u32>
-@must_use implicit(F: texel_format, R: read)
-  fn textureDimensions(texture: texel_buffer<F, R>) -> u32
 @must_use @stage("fragment", "compute") implicit(F: texel_format, W: writable)
   fn textureDimensions(texture: texture_storage_1d<F, W>) -> u32
 @must_use @stage("fragment", "compute") implicit(F: texel_format, W: writable)
@@ -813,8 +823,12 @@ match uniform_or_storage
   fn textureDimensions(texture: texture_storage_2d_array<F, W>) -> vec2<u32>
 @must_use @stage("fragment", "compute") implicit(F: texel_format, W: writable)
   fn textureDimensions(texture: texture_storage_3d<F, W>) -> vec3<u32>
+
+@must_use implicit(F: texel_format, R: read)
+  fn textureDimensions(texture: texel_buffer<F, R>) -> u32
 @must_use @stage("fragment", "compute") implicit(F: texel_format, W: writable)
   fn textureDimensions(texture: texel_buffer<F, W>) -> u32
+
 @must_use
   fn textureDimensions(texture: texture_external) -> vec2<u32>
 
@@ -1203,7 +1217,6 @@ match uniform_or_storage
                        array_index: A,
                        ddx: vec3<f32>,
                        ddy: vec3<f32>) -> vec4<f32>
-
 @must_use
   fn textureSampleLevel(texture: texture_1d<f32>,
                         sampler: sampler,
@@ -1448,6 +1461,11 @@ match uniform_or_storage
 @stage("fragment", "compute") implicit(T: iu32, S: workgroup_or_storage)
   fn atomicCompareExchangeWeak(ptr<S, atomic<T>, read_write>, T, T) -> __atomic_compare_exchange_result<T>
 
+@stage("fragment", "compute")
+  fn atomicStoreMax(ptr<storage, atomic<vec2<u32> >, read_write>, vec2<u32>)
+@stage("fragment", "compute")
+  fn atomicStoreMin(ptr<storage, atomic<vec2<u32> >, read_write>, vec2<u32>)
+
 //////////////////////////////////////////
 // subgroups
 //////////////////////////////////////////
@@ -1458,20 +1476,20 @@ match uniform_or_storage
 @must_use @stage("fragment", "compute")
   fn subgroupElect() -> bool
 
-@must_use @stage("fragment", "compute") implicit(T: fiu32_f16)
-  fn subgroupBroadcast(value: T, @const sourceLaneIndex: iu32) -> T
-@must_use @stage("fragment", "compute") implicit(N: num, T: fiu32_f16)
-  fn subgroupBroadcast(value: vec<N, T>, @const sourceLaneIndex: iu32) -> vec<N, T>
+@must_use @stage("fragment", "compute") implicit(T: fiu32_f16, I: iu32)
+  fn subgroupBroadcast(value: T, @const sourceLaneIndex: I) -> T
+@must_use @stage("fragment", "compute") implicit(N: num, T: fiu32_f16, I: iu32)
+  fn subgroupBroadcast(value: vec<N, T>, @const sourceLaneIndex: I) -> vec<N, T>
 
 @must_use @stage("fragment", "compute") implicit(T: fiu32_f16)
   fn subgroupBroadcastFirst(value: T) -> T
 @must_use @stage("fragment", "compute") implicit(N: num, T: fiu32_f16)
   fn subgroupBroadcastFirst(value: vec<N, T>) -> vec<N, T>
 
-@must_use @stage("fragment", "compute") implicit(T: fiu32_f16)
-  fn subgroupShuffle(value: T, sourceLaneIndex: iu32) -> T
-@must_use @stage("fragment", "compute") implicit(N: num, T: fiu32_f16)
-  fn subgroupShuffle(value: vec<N, T>, sourceLaneIndex: iu32) -> vec<N, T>
+@must_use @stage("fragment", "compute") implicit(T: fiu32_f16, I: iu32)
+  fn subgroupShuffle(value: T, sourceLaneIndex: I) -> T
+@must_use @stage("fragment", "compute") implicit(N: num, T: fiu32_f16, I: iu32)
+  fn subgroupShuffle(value: vec<N, T>, sourceLaneIndex: I) -> vec<N, T>
 
 @must_use @stage("fragment", "compute") implicit(T: fiu32_f16)
   fn subgroupShuffleXor(value: T, mask: u32) -> T
@@ -1548,10 +1566,10 @@ match uniform_or_storage
 @must_use @stage("fragment", "compute")
   fn subgroupAny(bool) -> bool
 
-@must_use @stage("fragment", "compute") implicit(T: fiu32_f16)
-  fn quadBroadcast(e: T, @const id: iu32) -> T
-@must_use @stage("fragment", "compute") implicit(N: num, T: fiu32_f16)
-  fn quadBroadcast(e: vec<N, T>, @const id: iu32) -> vec<N, T>
+@must_use @stage("fragment", "compute") implicit(T: fiu32_f16, I: iu32)
+  fn quadBroadcast(e: T, @const id: I) -> T
+@must_use @stage("fragment", "compute") implicit(N: num, T: fiu32_f16, I: iu32)
+  fn quadBroadcast(e: vec<N, T>, @const id: I) -> vec<N, T>
 
 @must_use @stage("fragment", "compute") implicit(T: fiu32_f16)
   fn quadSwapX(e: T) -> T
@@ -1571,68 +1589,68 @@ match uniform_or_storage
 //////////////////////////////////////////
 // subgroup matrix
 //////////////////////////////////////////
-@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: fiu32_f16, C: num, R: num)
-  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<storage, runtime_array<S>, readable>,
+@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: fiu32_f16, C: num, R: num, AM: readable)
+  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<storage, runtime_array<S>, AM>,
                                                          offset: u32,
                                                          @const col_major: bool,
                                                          @test_value(8) stride: u32) -> T
-@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: fiu32_f16, C: num, R: num, AC: num)
-  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<workgroup_or_storage, array<S, AC>, readable>,
+@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: fiu32_f16, C: num, R: num, AC: num, AS: workgroup_or_storage, AM: readable)
+  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<AS, array<S, AC>, AM>,
                                                          offset: u32,
                                                          @const col_major: bool,
                                                          @test_value(8) stride: u32) -> T
-@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: i8, C: num, R: num)
-  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<storage, runtime_array<i32>, readable>,
+@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: i8, C: num, R: num, AM: readable)
+  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<storage, runtime_array<i32>, AM>,
                                                          offset: u32,
                                                          @const col_major: bool,
                                                          @test_value(8) stride: u32) -> T
-@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: u8, C: num, R: num)
-  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<storage, runtime_array<u32>, readable>,
+@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: u8, C: num, R: num, AM: readable)
+  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<storage, runtime_array<u32>, AM>,
                                                          offset: u32,
                                                          @const col_major: bool,
                                                          @test_value(8) stride: u32) -> T
-@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: i8, C: num, R: num, AC: num)
-  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<workgroup_or_storage, array<i32, AC>, readable>,
+@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: i8, C: num, R: num, AC: num, AS: workgroup_or_storage, AM: readable)
+  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<AS, array<i32, AC>, AM>,
                                                          offset: u32,
                                                          @const col_major: bool,
                                                          @test_value(8) stride: u32) -> T
-@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: u8, C: num, R: num, AC: num)
-  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<workgroup_or_storage, array<u32, AC>, readable>,
+@must_use @stage("compute") implicit(K: subgroup_matrix_kind, S: u8, C: num, R: num, AC: num, AS: workgroup_or_storage, AM: readable)
+  fn subgroupMatrixLoad<T: subgroup_matrix<K, S, C, R> >(ptr<AS, array<u32, AC>, AM>,
                                                          offset: u32,
                                                          @const col_major: bool,
                                                          @test_value(8) stride: u32) -> T
-@stage("compute") implicit(K: subgroup_matrix_kind, S: fiu32_f16, C: num, R: num)
-  fn subgroupMatrixStore(ptr<storage, runtime_array<S>, writable>,
+@stage("compute") implicit(K: subgroup_matrix_kind, S: fiu32_f16, C: num, R: num, AM: writable)
+  fn subgroupMatrixStore(ptr<storage, runtime_array<S>, AM>,
                          offset: u32,
                          subgroup_matrix<K, S, C, R>,
                          @const col_major: bool,
                          @test_value(8) stride: u32)
-@stage("compute") implicit(K: subgroup_matrix_kind, S: fiu32_f16, C: num, R: num, AC: num)
-  fn subgroupMatrixStore(ptr<workgroup_or_storage, array<S, AC>, writable>,
+@stage("compute") implicit(K: subgroup_matrix_kind, S: fiu32_f16, C: num, R: num, AC: num, AS: workgroup_or_storage, AM: writable)
+  fn subgroupMatrixStore(ptr<AS, array<S, AC>, AM>,
                          offset: u32,
                          subgroup_matrix<K, S, C, R>,
                          @const col_major: bool,
                          @test_value(8) stride: u32)
-@stage("compute") implicit(K: subgroup_matrix_kind, S: i8, C: num, R: num)
-  fn subgroupMatrixStore(ptr<storage, runtime_array<i32>, writable>,
+@stage("compute") implicit(K: subgroup_matrix_kind, S: i8, C: num, R: num, AM: writable)
+  fn subgroupMatrixStore(ptr<storage, runtime_array<i32>, AM>,
                          offset: u32,
                          subgroup_matrix<K, S, C, R>,
                          @const col_major: bool,
                          @test_value(8) stride: u32)
-@stage("compute") implicit(K: subgroup_matrix_kind, S: u8, C: num, R: num)
-  fn subgroupMatrixStore(ptr<storage, runtime_array<u32>, writable>,
+@stage("compute") implicit(K: subgroup_matrix_kind, S: u8, C: num, R: num, AM: writable)
+  fn subgroupMatrixStore(ptr<storage, runtime_array<u32>, AM>,
                          offset: u32,
                          subgroup_matrix<K, S, C, R>,
                          @const col_major: bool,
                          @test_value(8) stride: u32)
-@stage("compute") implicit(K: subgroup_matrix_kind, S: i8, C: num, R: num, AC: num)
-  fn subgroupMatrixStore(ptr<workgroup_or_storage, array<i32, AC>, writable>,
+@stage("compute") implicit(K: subgroup_matrix_kind, S: i8, C: num, R: num, AC: num, AS: workgroup_or_storage, AM: writable)
+  fn subgroupMatrixStore(ptr<AS, array<i32, AC>, AM>,
                          offset: u32,
                          subgroup_matrix<K, S, C, R>,
                          @const col_major: bool,
                          @test_value(8) stride: u32)
-@stage("compute") implicit(K: subgroup_matrix_kind, S: u8, C: num, R: num, AC: num)
-  fn subgroupMatrixStore(ptr<workgroup_or_storage, array<u32, AC>, writable>,
+@stage("compute") implicit(K: subgroup_matrix_kind, S: u8, C: num, R: num, AC: num, AS: workgroup_or_storage, AM: writable)
+  fn subgroupMatrixStore(ptr<AS, array<u32, AC>, AM>,
                          offset: u32,
                          subgroup_matrix<K, S, C, R>,
                          @const col_major: bool,
@@ -1709,22 +1727,23 @@ match uniform_or_storage
 //////////////////////////////////////////
 // buffer view
 //////////////////////////////////////////
-@must_use implicit(R: read, AS: uniform_or_storage, N: num)
-  fn bufferView<T>(ptr<AS, buffer<N>, R>, offset: u32) -> ptr<AS, T, R>
-@must_use implicit(R: read, AS: uniform_or_storage, N: num)
-  fn bufferView<T>(ptr<AS, buffer<N>, R>, offset: i32) -> ptr<AS, T, R>
-@must_use implicit(W: read_write, AS: workgroup_or_storage, N: num)
-  fn bufferView<T>(ptr<AS, buffer<N>, W>, offset: u32) -> ptr<AS, T, W>
-@must_use implicit(W: read_write, AS: workgroup_or_storage, N: num)
-  fn bufferView<T>(ptr<AS, buffer<N>, W>, offset: i32) -> ptr<AS, T, W>
-@must_use implicit(R: read, AS: uniform_or_storage)
-  fn bufferView<T>(ptr<AS, unsized_buffer, R>, offset: u32) -> ptr<AS, T, R>
-@must_use implicit(R: read, AS: uniform_or_storage)
-  fn bufferView<T>(ptr<AS, unsized_buffer, R>, offset: i32) -> ptr<AS, T, R>
-@must_use implicit(W: read_write, AS: workgroup_or_storage)
-  fn bufferView<T>(ptr<AS, unsized_buffer, W>, offset: u32) -> ptr<AS, T, W>
-@must_use implicit(W: read_write, AS: workgroup_or_storage)
-  fn bufferView<T>(ptr<AS, unsized_buffer, W>, offset: i32) -> ptr<AS, T, W>
+@must_use implicit(R: read, AS: uniform_or_storage, N: num, I: iu32)
+  fn bufferView<T>(ptr<AS, buffer<N>, R>, offset: I) -> ptr<AS, T, R>
+@must_use implicit(W: read_write, AS: workgroup_or_storage, N: num, I: iu32)
+  fn bufferView<T>(ptr<AS, buffer<N>, W>, offset: I) -> ptr<AS, T, W>
+@must_use implicit(R: read, AS: uniform_or_storage, I: iu32)
+  fn bufferView<T>(ptr<AS, unsized_buffer, R>, offset: I) -> ptr<AS, T, R>
+@must_use implicit(W: read_write, AS: workgroup_or_storage, I: iu32)
+  fn bufferView<T>(ptr<AS, unsized_buffer, W>, offset: I) -> ptr<AS, T, W>
+
+@must_use implicit(R: read, AS: uniform_or_storage, N: num, O: iu32, S: iu32)
+  fn bufferArrayView<T>(ptr<AS, buffer<N>, R>, offset: O, s: S) -> ptr<AS, T, R>
+@must_use implicit(W: read_write, AS: workgroup_or_storage, N: num, O: iu32, S: iu32)
+  fn bufferArrayView<T>(ptr<AS, buffer<N>, W>, offset: O, s: S) -> ptr<AS, T, W>
+@must_use implicit(R: read, AS: uniform_or_storage, O: iu32, S: iu32)
+  fn bufferArrayView<T>(ptr<AS, unsized_buffer, R>, offset: O, s: S) -> ptr<AS, T, R>
+@must_use implicit(W: read_write, AS: workgroup_or_storage, O: iu32, S: iu32)
+  fn bufferArrayView<T>(ptr<AS, unsized_buffer, W>, offset: O, s: S) -> ptr<AS, T, W>
 
 @must_use implicit(R: read, AS: uniform_or_storage, N: num)
   fn bufferLength(ptr<AS, buffer<N>, R>) -> u32
@@ -2126,12 +2145,6 @@ implicit(T: fa_f32_f16) ctor mat4x4(T, T, T, T,
   op >> (vec<N, T>, vec<N, u32>) -> vec<N, T>
 
 ////////////////////////////////////////////////////////////////////////////////
-// Tint internal builtins                                                     //
-////////////////////////////////////////////////////////////////////////////////
-@const("Identity") implicit(T)
-  fn __tint_materialize(T) -> T
-
-////////////////////////////////////////////////////////////////////////////////
 // chromium_experimental_resource_table                                       //
 ////////////////////////////////////////////////////////////////////////////////
 @must_use implicit(K: fiu32, I: iu32)
@@ -2146,6 +2159,7 @@ implicit(T: fa_f32_f16) ctor mat4x4(T, T, T, T,
   fn hasResource<T: texture_cube<K> >(index: I) -> bool
 @must_use implicit(K: fiu32, I: iu32)
   fn hasResource<T: texture_cube_array<K> >(index: I) -> bool
+
 @must_use implicit(K: fiu32, I: iu32)
   fn hasResource<T: texture_multisampled_2d<K> >(index: I) -> bool
 @must_use implicit(I: iu32)
@@ -2175,6 +2189,7 @@ implicit(T: fa_f32_f16) ctor mat4x4(T, T, T, T,
   fn getResource<T: texture_cube<K> >(index: I) -> T
 @must_use implicit(K: fiu32, I: iu32)
   fn getResource<T: texture_cube_array<K> >(index: I) -> T
+
 @must_use implicit(K: fiu32, I: iu32)
   fn getResource<T: texture_multisampled_2d<K> >(index: I) -> T
 @must_use implicit(I: iu32)
@@ -2191,4 +2206,3 @@ implicit(T: fa_f32_f16) ctor mat4x4(T, T, T, T,
   fn getResource<S: sampler>(index: I) -> S
 @must_use implicit(I: iu32)
   fn getResource<S: sampler_comparison>(index: I) -> S
-

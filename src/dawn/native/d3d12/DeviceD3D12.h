@@ -31,14 +31,14 @@
 #include <memory>
 #include <vector>
 
-#include "dawn/common/MutexProtected.h"
-#include "dawn/common/SerialQueue.h"
-#include "dawn/native/d3d/DeviceD3D.h"
-#include "dawn/native/d3d12/CommandRecordingContext.h"
-#include "dawn/native/d3d12/D3D12Info.h"
-#include "dawn/native/d3d12/Forward.h"
-#include "dawn/native/d3d12/ResourceAllocatorManagerD3D12.h"
-#include "dawn/native/d3d12/TextureD3D12.h"
+#include "src/dawn/common/MutexProtected.h"
+#include "src/dawn/common/SerialQueue.h"
+#include "src/dawn/native/d3d/DeviceD3D.h"
+#include "src/dawn/native/d3d12/CommandRecordingContext.h"
+#include "src/dawn/native/d3d12/D3D12Info.h"
+#include "src/dawn/native/d3d12/Forward.h"
+#include "src/dawn/native/d3d12/ResourceAllocatorManagerD3D12.h"
+#include "src/dawn/native/d3d12/TextureD3D12.h"
 
 namespace dawn::native::d3d12 {
 
@@ -119,10 +119,13 @@ class Device final : public d3d::Device {
 
     void DeallocateMemory(ResourceHeapAllocation& allocation);
 
-    MutexProtected<ShaderVisibleDescriptorAllocator>& GetViewShaderVisibleDescriptorAllocator()
-        const;
-    MutexProtected<ShaderVisibleDescriptorAllocator>& GetSamplerShaderVisibleDescriptorAllocator()
-        const;
+    // Returns the shader-visible view (SRV) allocator. Not MutexProtected as it is only accessed by
+    // a single thread, during command recording.
+    ShaderVisibleDescriptorAllocator* GetViewShaderVisibleDescriptorAllocator() const;
+
+    // Returns the shader-visible view (SRV) allocator. Not MutexProtected as it is only accessed by
+    // a single thread, during command recording.
+    ShaderVisibleDescriptorAllocator* GetSamplerShaderVisibleDescriptorAllocator() const;
 
     // Returns nullptr when descriptor count is zero.
     MutexProtected<StagingDescriptorAllocator>* GetViewStagingDescriptorAllocator(
@@ -160,6 +163,8 @@ class Device final : public d3d::Device {
         const RenderPipelineBase* renderPipelineBase) const override;
 
     uint64_t GetBufferCopyOffsetAlignmentForDepthStencil() const override;
+
+    AllocatorMemoryInfo GetAllocatorMemoryInfo() const override;
 
     // Dawn APIs
     void SetLabelImpl() override;
@@ -272,11 +277,9 @@ class Device final : public d3d::Device {
 
     std::unique_ptr<MutexProtected<StagingDescriptorAllocator>> mDepthStencilViewAllocator;
 
-    std::unique_ptr<MutexProtected<ShaderVisibleDescriptorAllocator>>
-        mViewShaderVisibleDescriptorAllocator;
+    std::unique_ptr<ShaderVisibleDescriptorAllocator> mViewShaderVisibleDescriptorAllocator;
 
-    std::unique_ptr<MutexProtected<ShaderVisibleDescriptorAllocator>>
-        mSamplerShaderVisibleDescriptorAllocator;
+    std::unique_ptr<ShaderVisibleDescriptorAllocator> mSamplerShaderVisibleDescriptorAllocator;
 
     // Sampler cache needs to be destroyed before the CPU sampler allocator to ensure the final
     // release is called.

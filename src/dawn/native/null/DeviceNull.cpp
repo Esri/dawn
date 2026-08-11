@@ -25,21 +25,21 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/null/DeviceNull.h"
+#include "src/dawn/native/null/DeviceNull.h"
 
 #include <limits>
 #include <unordered_map>
 #include <utility>
 
-#include "dawn/native/BackendConnection.h"
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/Commands.h"
-#include "dawn/native/ErrorData.h"
-#include "dawn/native/Instance.h"
-#include "dawn/native/Surface.h"
-#include "dawn/native/TintUtils.h"
 #include "partition_alloc/pointers/raw_ptr.h"
-
+#include "src/dawn/native/BackendConnection.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/Commands.h"
+#include "src/dawn/native/ErrorData.h"
+#include "src/dawn/native/Instance.h"
+#include "src/dawn/native/Surface.h"
+#include "src/dawn/native/TintUtils.h"
+#include "src/utils/compiler.h"
 #include "tint/tint.h"
 
 namespace dawn::native::null {
@@ -96,7 +96,6 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
 MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits) {
     GetDefaultLimitsForSupportedFeatureLevel(limits);
     limits->v1.maxImmediateSize = kMaxImmediateDataBytes;
-    limits->resourceTableLimits.maxResourceTableSize = kMaxResourceTableSize;
     return {};
 }
 
@@ -127,15 +126,6 @@ void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
     }
     if (auto* d3dProperties = info.Get<AdapterPropertiesD3D>()) {
         d3dProperties->shaderModel = 0;
-    }
-    if (auto* explicitComputeSubgroupSizeConfigs =
-            info.Get<AdapterPropertiesExplicitComputeSubgroupSizeConfigs>()) {
-        explicitComputeSubgroupSizeConfigs->minExplicitComputeSubgroupSize =
-            GetMinExplicitComputeSubgroupSize();
-        explicitComputeSubgroupSizeConfigs->maxExplicitComputeSubgroupSize =
-            GetMaxExplicitComputeSubgroupSize();
-        explicitComputeSubgroupSizeConfigs->maxComputeWorkgroupSubgroups =
-            GetMaxComputeWorkgroupSubgroups();
     }
 }
 
@@ -402,13 +392,13 @@ void Buffer::CopyFromStaging(BufferBase* staging,
                              uint64_t destinationOffset,
                              uint64_t size) {
     uint8_t* ptr = reinterpret_cast<uint8_t*>(staging->GetMappedPointer());
-    memcpy(mBackingData.get() + destinationOffset, ptr + sourceOffset, size);
+    DAWN_UNSAFE_TODO(memcpy(mBackingData.get() + destinationOffset, ptr + sourceOffset, size));
 }
 
 void Buffer::DoWriteBuffer(uint64_t bufferOffset, const void* data, size_t size) {
     DAWN_ASSERT(bufferOffset + size <= GetSize());
     DAWN_ASSERT(mBackingData);
-    memcpy(mBackingData.get() + bufferOffset, data, size);
+    DAWN_UNSAFE_TODO(memcpy(mBackingData.get() + bufferOffset, data, size));
 }
 
 MaybeError Buffer::MapAsyncImpl(wgpu::MapMode mode, size_t offset, size_t size) {
@@ -496,7 +486,7 @@ MaybeError Queue::WaitForIdleForDestructionImpl() {
 }
 
 // ComputePipeline
-MaybeError ComputePipeline::InitializeImpl() {
+ResultOrError<Extent3D> ComputePipeline::InitializeImpl() {
     const ProgrammableStage& computeStage = GetStage(SingleShaderStage::Compute);
 
     tint::null::writer::Options tintOptions;
@@ -505,9 +495,15 @@ MaybeError ComputePipeline::InitializeImpl() {
         .map = BuildSubstituteOverridesTransformConfig(computeStage),
     };
 
+    auto device = GetDevice();
+    tint::wgsl::reader::IROptions irOptions{
+        .dump_ir_when_validating = device->IsToggleEnabled(Toggle::DumpTintIR),
+        .enable_validation_asserts = device->IsToggleEnabled(Toggle::EnableTintIRValidationAsserts),
+    };
+
     // Convert the AST program to an IR module.
-    auto ir =
-        tint::wgsl::reader::ProgramToLoweredIR(computeStage.module->GetTintProgram()->program);
+    auto ir = tint::wgsl::reader::ProgramToLoweredIR(computeStage.module->GetTintProgram()->program,
+                                                     irOptions);
     DAWN_INVALID_IF(ir != tint::Success, "An error occurred while generating Tint IR\n%s",
                     ir.Failure().reason);
 
@@ -522,18 +518,13 @@ MaybeError ComputePipeline::InitializeImpl() {
         LimitsForCompilationRequest::Create(GetDevice()->GetAdapter()->GetLimits().v1);
     auto maxSubgroupSize = GetDevice()->GetAdapter()->GetPhysicalDevice()->GetSubgroupMaxSize();
 
-    Extent3D _;
-    DAWN_TRY_ASSIGN(_, ValidateComputeStageWorkgroupSize(
-                           tintResult->workgroup_info, computeStage.metadata->usesSubgroupMatrix,
-                           maxSubgroupSize, limits, adapterSupportedLimits));
+    Extent3D wgSize;
+    DAWN_TRY_ASSIGN(
+        wgSize, ValidateComputeStageWorkgroupSize(tintResult->workgroup_info,
+                                                  computeStage.metadata->usesSubgroupMatrix,
+                                                  maxSubgroupSize, limits, adapterSupportedLimits));
 
-    DAWN_TRY(ValidateExplicitComputeSubgroupSize(
-        tintResult->workgroup_info,
-        GetDevice()->GetAdapter()->GetPhysicalDevice()->GetMinExplicitComputeSubgroupSize(),
-        GetDevice()->GetAdapter()->GetPhysicalDevice()->GetMaxExplicitComputeSubgroupSize(),
-        GetDevice()->GetAdapter()->GetPhysicalDevice()->GetMaxComputeWorkgroupSubgroups()));
-
-    return {};
+    return wgSize;
 }
 
 // RenderPipeline

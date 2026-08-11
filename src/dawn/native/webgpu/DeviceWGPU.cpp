@@ -25,62 +25,64 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/webgpu/DeviceWGPU.h"
+#include "src/dawn/native/webgpu/DeviceWGPU.h"
 
 #include <string>
 #include <utility>
 
-#include "dawn/common/Constants.h"
-#include "dawn/common/Log.h"
-#include "dawn/common/StringViewUtils.h"
-#include "dawn/native/BackendConnection.h"
-#include "dawn/native/BindGroupLayoutInternal.h"
-#include "dawn/native/Buffer.h"
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/CommandBuffer.h"
-#include "dawn/native/CommandEncoder.h"
-#include "dawn/native/ErrorData.h"
-#include "dawn/native/Instance.h"
-#include "dawn/native/PhysicalDevice.h"
-#include "dawn/native/QuerySet.h"
-#include "dawn/native/Queue.h"
-#include "dawn/native/Surface.h"
-#include "dawn/native/SwapChain.h"
-#include "dawn/native/Texture.h"
-#include "dawn/native/webgpu/BackendWGPU.h"
-#include "dawn/native/webgpu/BindGroupLayoutWGPU.h"
-#include "dawn/native/webgpu/BindGroupWGPU.h"
-#include "dawn/native/webgpu/BufferWGPU.h"
-#include "dawn/native/webgpu/CaptureContext.h"
-#include "dawn/native/webgpu/CommandBufferWGPU.h"
-#include "dawn/native/webgpu/ComputePipelineWGPU.h"
-#include "dawn/native/webgpu/ExternalTextureWGPU.h"
-#include "dawn/native/webgpu/PhysicalDeviceWGPU.h"
-#include "dawn/native/webgpu/PipelineLayoutWGPU.h"
-#include "dawn/native/webgpu/QuerySetWGPU.h"
-#include "dawn/native/webgpu/QueueWGPU.h"
-#include "dawn/native/webgpu/RenderBundleWGPU.h"
-#include "dawn/native/webgpu/RenderPipelineWGPU.h"
-#include "dawn/native/webgpu/SamplerWGPU.h"
-#include "dawn/native/webgpu/ShaderModuleWGPU.h"
-#include "dawn/native/webgpu/TextureWGPU.h"
-#include "dawn/native/webgpu/ToWGPU.h"
-
+#include "src/dawn/common/Constants.h"
+#include "src/dawn/common/StringViewUtils.h"
+#include "src/dawn/native/BackendConnection.h"
+#include "src/dawn/native/BindGroupLayoutInternal.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/CommandBuffer.h"
+#include "src/dawn/native/CommandEncoder.h"
+#include "src/dawn/native/ErrorData.h"
+#include "src/dawn/native/Instance.h"
+#include "src/dawn/native/PhysicalDevice.h"
+#include "src/dawn/native/QuerySet.h"
+#include "src/dawn/native/Queue.h"
+#include "src/dawn/native/Surface.h"
+#include "src/dawn/native/SwapChain.h"
+#include "src/dawn/native/Texture.h"
+#include "src/dawn/native/webgpu/BackendWGPU.h"
+#include "src/dawn/native/webgpu/BindGroupLayoutWGPU.h"
+#include "src/dawn/native/webgpu/BindGroupWGPU.h"
+#include "src/dawn/native/webgpu/BufferWGPU.h"
+#include "src/dawn/native/webgpu/CaptureContext.h"
+#include "src/dawn/native/webgpu/CommandBufferWGPU.h"
+#include "src/dawn/native/webgpu/ComputePipelineWGPU.h"
+#include "src/dawn/native/webgpu/ExternalTextureWGPU.h"
+#include "src/dawn/native/webgpu/PhysicalDeviceWGPU.h"
+#include "src/dawn/native/webgpu/PipelineLayoutWGPU.h"
+#include "src/dawn/native/webgpu/QuerySetWGPU.h"
+#include "src/dawn/native/webgpu/QueueWGPU.h"
+#include "src/dawn/native/webgpu/RenderBundleWGPU.h"
+#include "src/dawn/native/webgpu/RenderPipelineWGPU.h"
+#include "src/dawn/native/webgpu/SamplerWGPU.h"
+#include "src/dawn/native/webgpu/ShaderModuleWGPU.h"
+#include "src/dawn/native/webgpu/SharedFenceWGPU.h"
+#include "src/dawn/native/webgpu/SharedTextureMemoryWGPU.h"
+#include "src/dawn/native/webgpu/SwapChainWGPU.h"
+#include "src/dawn/native/webgpu/TextureWGPU.h"
+#include "src/dawn/native/webgpu/ToWGPU.h"
+#include "src/utils/log.h"
 #include "tint/tint.h"
 
 namespace dawn::native::webgpu {
 
 namespace {
 
-// Toggles in this list are the only ones enabled in webgpu::Device.
-// Other toggles are passed down to the inner device.
+// Toggles in this list are the only ones with ToggleStage::Device that enabled in webgpu::Device.
+// Other toggles are only passed down to the inner device.
 constexpr Toggle kOuterToggles[] = {
     // Toggles webgpu::Device needs
     Toggle::SkipValidation,
     Toggle::DisableBaseVertex,
     Toggle::DisableBindGroupLayoutEntryArraySize,
-    Toggle::AllowUnsafeAPIs,
     Toggle::EnableImmediateErrorHandling,
+    Toggle::EnableTintIRValidationAsserts,
 
     // Toggles enabled by default for all backend, do not force set them to avoid warnings.
     Toggle::LazyClearResourceOnFirstUse,
@@ -103,9 +105,15 @@ ResultOrError<Ref<Device>> Device::Create(AdapterBase* adapter,
     // TogglesState deviceToggles already has them resolved.
 
     // For outer (this webgpu::Device), we want to disable everything else.
-    std::vector<Toggle> togglesToDisable;
     for (size_t i : deviceToggles.GetEnabledToggles()) {
         Toggle t = static_cast<Toggle>(i);
+        const ToggleInfo* info = TogglesInfo::GetToggleInfo(t);
+
+        if (info->stage != ToggleStage::Device) {
+            // Bypass any force settings if not a device stage toggle.
+            continue;
+        }
+
         bool isOuter = false;
         for (Toggle outer : kOuterToggles) {
             if (t == outer) {
@@ -189,7 +197,7 @@ Device::Device(AdapterBase* adapter,
 
     // TODO(crbug.com/413053623): use adapterRequestDevice instead as dawn_wire doesn't support
     // adapterCreateDevice.
-    mInnerHandle = wgpu.adapterCreateDevice(innerAdapter, &apiDesc);
+    mInnerHandle = wgpu->adapterCreateDevice(innerAdapter, &apiDesc);
 }
 
 Device::~Device() {
@@ -271,7 +279,7 @@ ResultOrError<Ref<ShaderModuleBase>> Device::CreateShaderModuleImpl(
 ResultOrError<Ref<SwapChainBase>> Device::CreateSwapChainImpl(Surface* surface,
                                                               SwapChainBase* previousSwapChain,
                                                               const SurfaceConfiguration* config) {
-    return Ref<SwapChainBase>{nullptr};
+    return SwapChain::Create(this, surface, previousSwapChain, config);
 }
 ResultOrError<Ref<TextureBase>> Device::CreateTextureImpl(
     const UnpackedPtr<TextureDescriptor>& descriptor) {
@@ -281,6 +289,89 @@ ResultOrError<Ref<TextureViewBase>> Device::CreateTextureViewImpl(
     TextureBase* texture,
     const UnpackedPtr<TextureViewDescriptor>& descriptor) {
     return TextureView::Create(texture, descriptor);
+}
+
+ResultOrError<Ref<SharedTextureMemoryBase>> Device::ImportSharedTextureMemoryImpl(
+    const SharedTextureMemoryDescriptor* baseDescriptor) {
+    UnpackedPtr<SharedTextureMemoryDescriptor> unpacked;
+    DAWN_TRY_ASSIGN(unpacked, ValidateAndUnpack(baseDescriptor));
+
+    // TODO(crbug.com/483147423): Handle all possible chained structures.
+    if (unpacked.Get<SharedTextureMemoryIOSurfaceDescriptor>()) {
+        auto feature = Feature::SharedTextureMemoryIOSurface;
+        DAWN_INVALID_IF(!HasFeature(feature), "%s is not enabled.", ToAPI(feature));
+    } else if (unpacked.Get<SharedTextureMemoryAHardwareBufferDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedTextureMemory in WebGPU backend has not been implemented for all platforms.");
+    } else if (unpacked.Get<SharedTextureMemoryDXGISharedHandleDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedTextureMemory in WebGPU backend has not been implemented for all platforms.");
+    } else if (unpacked.Get<SharedTextureMemoryEGLImageDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedTextureMemory in WebGPU backend has not been implemented for all platforms.");
+    } else if (unpacked.Get<SharedTextureMemoryOpaqueFDDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedTextureMemory in WebGPU backend has not been implemented for all platforms.");
+    } else if (unpacked.Get<SharedTextureMemoryVkDedicatedAllocationDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedTextureMemory in WebGPU backend has not been implemented for all platforms.");
+    } else if (unpacked.Get<SharedTextureMemoryZirconHandleDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedTextureMemory in WebGPU backend has not been implemented for all platforms.");
+    } else if (unpacked.Get<SharedTextureMemoryDmaBufDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedTextureMemory in WebGPU backend has not been implemented for all platforms.");
+    } else {
+        return DAWN_VALIDATION_ERROR("SharedTextureMemory chain is missing.");
+    }
+
+    // ValidateSubset pass for none, fail for invalid if exists.
+    DAWN_TRY((unpacked.ValidateSubset<
+              SharedTextureMemoryIOSurfaceDescriptor, SharedTextureMemoryAHardwareBufferDescriptor,
+              SharedTextureMemoryDXGISharedHandleDescriptor, SharedTextureMemoryEGLImageDescriptor,
+              SharedTextureMemoryOpaqueFDDescriptor,
+              SharedTextureMemoryVkDedicatedAllocationDescriptor,
+              SharedTextureMemoryZirconHandleDescriptor, SharedTextureMemoryDmaBufDescriptor>()));
+
+    return SharedTextureMemory::Create(this, unpacked);
+}
+
+ResultOrError<Ref<SharedFenceBase>> Device::ImportSharedFenceImpl(
+    const SharedFenceDescriptor* baseDescriptor) {
+    UnpackedPtr<SharedFenceDescriptor> unpacked;
+    DAWN_TRY_ASSIGN(unpacked, ValidateAndUnpack(baseDescriptor));
+
+    // TODO(crbug.com/483147423): Handle all possible chained structures.
+    if (unpacked.Get<SharedFenceMTLSharedEventDescriptor>()) {
+        auto feature = Feature::SharedFenceMTLSharedEvent;
+        DAWN_INVALID_IF(!HasFeature(feature), "%s is not enabled.", ToAPI(feature));
+    } else if (unpacked.Get<SharedFenceDXGISharedHandleDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedFence in WebGPU backend has not been implemented for all platforms.");
+    } else if (unpacked.Get<SharedFenceEGLSyncDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedFence in WebGPU backend has not been implemented for all platforms.");
+    } else if (unpacked.Get<SharedFenceSyncFDDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedFence in WebGPU backend has not been implemented for all platforms.");
+    } else if (unpacked.Get<SharedFenceVkSemaphoreOpaqueFDDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedFence in WebGPU backend has not been implemented for all platforms.");
+    } else if (unpacked.Get<SharedFenceVkSemaphoreZirconHandleDescriptor>()) {
+        return DAWN_UNIMPLEMENTED_ERROR(
+            "SharedFence in WebGPU backend has not been implemented for all platforms.");
+    } else {
+        return DAWN_VALIDATION_ERROR("SharedFence chain is missing.");
+    }
+
+    // ValidateSubset pass for none, fail for invalid if exists.
+    DAWN_TRY((
+        unpacked.ValidateSubset<SharedFenceMTLSharedEventDescriptor,
+                                SharedFenceDXGISharedHandleDescriptor, SharedFenceEGLSyncDescriptor,
+                                SharedFenceVkSemaphoreOpaqueFDDescriptor,
+                                SharedFenceVkSemaphoreZirconHandleDescriptor>()));
+
+    return SharedFence::Create(this, unpacked);
 }
 
 void Device::DestroyImpl(DestroyReason reason) {
@@ -293,8 +384,12 @@ void Device::DestroyImpl(DestroyReason reason) {
     //   is implicitly destroyed. This case is thread-safe because there are no
     //   other threads using the device since there are no other live refs.
 
+    if (ToBackend(GetQueue())->IsCapturing()) {
+        EndCapture();
+    }
+
     if (mInnerHandle) {
-        wgpu.deviceDestroy(mInnerHandle);
+        wgpu->deviceDestroy(mInnerHandle);
     }
 }
 
@@ -307,7 +402,7 @@ MaybeError Device::CopyFromStagingToBuffer(BufferBase* source,
                                            BufferBase* destination,
                                            uint64_t destinationOffset,
                                            uint64_t size) {
-    wgpu.queueWriteBuffer(
+    wgpu->queueWriteBuffer(
         ToBackend(GetQueue())->GetInnerHandle(), ToBackend(destination)->GetInnerHandle(),
         sourceOffset,
         // The staging buffers in the DynamicUploader are assumed in Dawn to be persistently mapped
@@ -315,7 +410,7 @@ MaybeError Device::CopyFromStagingToBuffer(BufferBase* source,
         // buffers in a copyB2B we would need to unmap them but the DynamicUploader doesn't support
         // that. Instead keep the buffers mapped and use queueWriteBuffer to read directly from the
         // mapped staging memory.
-        wgpu.bufferGetConstMappedRange(ToBackend(source)->GetInnerHandle(), 0, source->GetSize()),
+        wgpu->bufferGetConstMappedRange(ToBackend(source)->GetInnerHandle(), 0, source->GetSize()),
         size);
     return {};
 }
@@ -328,20 +423,20 @@ MaybeError Device::CopyFromStagingToTextureImpl(BufferBase* source,
     WGPUTexelCopyTextureInfo innerDestination = ToWGPU(dst);
     size_t bufferSize = source->GetSize();
     WGPUExtent3D size = ToWGPU(copySizePixels);
-    wgpu.queueWriteTexture(
+    wgpu->queueWriteTexture(
         ToBackend(GetQueue())->GetInnerHandle(), &innerDestination,
         // The staging buffers in the DynamicUploader are assumed in Dawn to be persistently mapped
         // buffers that always have the mapped pointer accessible. n the WebGPU backend, to use the
         // buffers in a copyB2T we would need to unmap them but the DynamicUploader doesn't support
         // that. Instead keep the buffers mapped and use queueWriteTexture to read directly from the
         // mapped staging memory.
-        wgpu.bufferGetConstMappedRange(ToBackend(source)->GetInnerHandle(), 0, bufferSize),
+        wgpu->bufferGetConstMappedRange(ToBackend(source)->GetInnerHandle(), 0, bufferSize),
         bufferSize, &innerSource, &size);
     return {};
 }
 
 MaybeError Device::TickImpl() {
-    wgpu.deviceTick(mInnerHandle);
+    wgpu->deviceTick(mInnerHandle);
     return {};
 }
 
@@ -355,6 +450,10 @@ uint64_t Device::GetOptimalBufferToTextureCopyOffsetAlignment() const {
 
 float Device::GetTimestampPeriodInNS() const {
     return 1.0f;
+}
+
+bool Device::AreTimestampsQuantized() const {
+    return true;
 }
 
 bool Device::CanResolveSubRect() const {
@@ -379,9 +478,11 @@ void Device::StartCapture(CaptureStream& commandStream, CaptureStream& contentSt
 }
 
 void Device::EndCapture() {
-    MaybeError result = ToBackend(GetQueue())->SetCaptureContext(nullptr);
-    [[maybe_unused]] bool hadError =
-        ConsumedError(std::move(result), "calling %s.EndCapture()", this);
+    if (ToBackend(GetQueue())->IsCapturing()) {
+        MaybeError result = ToBackend(GetQueue())->SetCaptureContext(nullptr);
+        [[maybe_unused]] bool hadError =
+            ConsumedError(std::move(result), "calling %s.EndCapture()", this);
+    }
 }
 
 }  // namespace dawn::native::webgpu

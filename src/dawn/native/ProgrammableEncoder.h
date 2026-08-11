@@ -30,14 +30,13 @@
 
 #include <string>
 
-#include "dawn/native/CommandEncoder.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/IntegerTypes.h"
-#include "dawn/native/ObjectBase.h"
 #include "partition_alloc/pointers/raw_ptr.h"
-
-#include "dawn/native/dawn_platform.h"
+#include "src/dawn/native/CommandEncoder.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/Forward.h"
+#include "src/dawn/native/IntegerTypes.h"
+#include "src/dawn/native/ObjectBase.h"
+#include "src/dawn/native/dawn_platform.h"
 
 namespace dawn::native {
 
@@ -77,6 +76,9 @@ class ProgrammableEncoder : public ApiObjectBase {
                         ErrorTag errorTag,
                         StringView label);
 
+    // Called by APISetResourceTable in child classes
+    MaybeError SetResourceTable(ResourceTableBase* table, CommandAllocator* allocator);
+
     raw_ptr<EncodingContext> mEncodingContext = nullptr;
 
     uint64_t mDebugGroupStackSize = 0;
@@ -84,7 +86,6 @@ class ProgrammableEncoder : public ApiObjectBase {
     bool mEnded = false;
 
   private:
-    const bool mValidationEnabled;
     const bool mNeedsIndirectGPUValidation;
 };
 

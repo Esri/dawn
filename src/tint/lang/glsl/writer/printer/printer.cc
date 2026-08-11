@@ -33,7 +33,6 @@
 #include "src/tint/lang/core/constant/splat.h"
 #include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/ir/access.h"
-#include "src/tint/lang/core/ir/bitcast.h"
 #include "src/tint/lang/core/ir/break_if.h"
 #include "src/tint/lang/core/ir/construct.h"
 #include "src/tint/lang/core/ir/continue.h"
@@ -77,6 +76,7 @@
 #include "src/tint/lang/core/type/pointer.h"
 #include "src/tint/lang/core/type/sampled_texture.h"
 #include "src/tint/lang/core/type/storage_texture.h"
+#include "src/tint/lang/core/type/u16.h"
 #include "src/tint/lang/core/type/u32.h"
 #include "src/tint/lang/core/type/vector.h"
 #include "src/tint/lang/core/type/void.h"
@@ -98,6 +98,7 @@ namespace tint::glsl::writer {
 namespace {
 
 constexpr const char* kAMDGpuShaderHalfFloat = "GL_AMD_gpu_shader_half_float";
+constexpr const char* kAMDGpuShaderInt16 = "GL_AMD_gpu_shader_int16";
 constexpr const char* kOESSampleVariables = "GL_OES_sample_variables";
 constexpr const char* kEXTBlendFuncExtended = "GL_EXT_blend_func_extended";
 constexpr const char* kEXTTextureShadowLod = "GL_EXT_texture_shadow_lod";
@@ -113,6 +114,12 @@ enum class LayoutFormat : uint8_t {
 /// @returns true if @p ident is a GLSL keyword that needs to be avoided
 bool IsKeyword(std::string_view ident);
 
+// The list of properties that are not supported.
+const core::ir::Properties kUnsupportedProperties{
+    core::ir::Property::kAllowMultipleEntryPoints,
+    core::ir::Property::kAllowOverrides,
+};
+
 /// PIMPL class for the MSL generator
 class Printer : public tint::TextGenerator {
   public:
@@ -123,8 +130,8 @@ class Printer : public tint::TextGenerator {
 
     /// @returns the generated GLSL shader
     tint::Result<Output> Generate() {
-        TINT_CHECK_RESULT(
-            core::ir::ValidateAndDumpIfNeeded(ir_, "glsl.Printer", kPrinterCapabilities));
+        AssertValid(ir_, kPrinterCapabilities, "before glsl.Printer");
+        AssertNoUnsupportedProperties(ir_, kUnsupportedProperties);
 
         {
             TINT_SCOPED_ASSIGNMENT(current_buffer_, &header_buffer_);
@@ -214,7 +221,7 @@ class Printer : public tint::TextGenerator {
 
     /// @returns `true` if @p ident should be renamed
     bool ShouldRename(std::string_view ident) {
-        return options_.strip_all_names || IsKeyword(ident) || !tint::utf8::IsASCII(ident);
+        return options_.strip_all_names || IsKeyword(ident) || !tint::utf8::IsIdentifier(ident);
     }
 
     /// @returns the name of the given value, creating a new unique name if the value is unnamed in
@@ -404,7 +411,7 @@ class Printer : public tint::TextGenerator {
 
                 [&](const core::ir::BreakIf* i) { EmitBreakIf(i); },                        //
                 [&](const core::ir::Call* i) { EmitCallStmt(i); },                          //
-                [&](const core::ir::Continue*) { EmitContinue(); },                         //
+                [&](const core::ir::Continue* c) { EmitContinue(c); },                      //
                 [&](const core::ir::ExitIf*) { /* do nothing handled by transform */ },     //
                 [&](const core::ir::ExitLoop*) { EmitExitLoop(); },                         //
                 [&](const core::ir::ExitSwitch*) { EmitExitSwitch(); },                     //
@@ -422,7 +429,6 @@ class Printer : public tint::TextGenerator {
                 [&](const core::ir::ExitIf*) { /* do nothing handled by transform */ },  //
                                                                                          //
                 [&](const core::ir::Access*) { /* inlined */ },                          //
-                [&](const core::ir::Bitcast*) { /* inlined */ },                         //
                 [&](const core::ir::Construct*) { /* inlined */ },                       //
                 [&](const core::ir::CoreBinary*) { /* inlined */ },                      //
                 [&](const core::ir::CoreUnary*) { /* inlined */ },                       //
@@ -488,11 +494,13 @@ class Printer : public tint::TextGenerator {
 
     void EmitDiscard() { Line() << "discard;"; }
 
-    void EmitContinue() {
+    void EmitContinue(const core::ir::Continue* c) {
         if (emit_continuing_) {
             emit_continuing_();
         }
-        Line() << "continue;";
+        if (c->Block() != c->Loop()->Body()) {
+            Line() << "continue;";
+        }
     }
 
     void EmitExitLoop() { Line() << "break;"; }
@@ -708,6 +716,10 @@ class Printer : public tint::TextGenerator {
             [&](const core::type::Bool*) { out << "bool"; },
             [&](const core::type::I32*) { out << "int"; },
             [&](const core::type::U32*) { out << "uint"; },
+            [&](const core::type::U16*) {
+                EmitExtension(kAMDGpuShaderInt16);
+                out << "uint16_t";
+            },
             [&](const core::type::Void*) { out << "void"; },
             [&](const core::type::F32*) { out << "float"; },
             [&](const core::type::F16*) {
@@ -828,6 +840,10 @@ class Printer : public tint::TextGenerator {
             },
             [&](const core::type::I32*) { out << "i"; },
             [&](const core::type::U32*) { out << "u"; },
+            [&](const core::type::U16*) {
+                EmitExtension(kAMDGpuShaderInt16);
+                out << "u16";
+            },
             [&](const core::type::Bool*) { out << "b"; },  //
             TINT_ICE_ON_NO_MATCH);
 
@@ -983,15 +999,15 @@ class Printer : public tint::TextGenerator {
     void EmitReturn(const core::ir::Return* r) {
         // If this return has no arguments and the current block is for the function which is
         // being returned, skip the return.
-        if (current_block_ == current_function_->Block() && r->Args().IsEmpty()) {
+        if (current_block_ == current_function_->Block() && r->Args().empty()) {
             return;
         }
 
         auto out = Line();
         out << "return";
-        if (!r->Args().IsEmpty()) {
+        if (!r->Args().empty()) {
             out << " ";
-            EmitValue(out, r->Args().Front());
+            EmitValue(out, r->Args().front());
         }
         out << ";";
     }
@@ -1026,13 +1042,13 @@ class Printer : public tint::TextGenerator {
                 break;
             case core::AddressSpace::kWorkgroup: {
                 auto* ty = ptr->StoreType();
-                uint32_t align = ty->Align();
-                uint32_t size = ty->Size();
+                uint64_t align = ty->Align();
+                uint64_t size = ty->Size();
 
                 // This essentially matches std430 layout rules from GLSL, which are in
                 // turn specified as an upper bound for Vulkan layout sizing.
                 result_.workgroup_info.storage_size +=
-                    tint::RoundUp(16u, tint::RoundUp(align, size));
+                    tint::RoundUp(static_cast<uint64_t>(16u), tint::RoundUp(align, size));
 
                 EmitWorkgroupVar(var);
                 break;
@@ -1119,17 +1135,10 @@ class Printer : public tint::TextGenerator {
     void EmitImmediateVar(core::ir::Var* var) {
         // We need to use the same name for the immediate data structure and variable between
         // different pipeline stages.
-        constexpr const char* kImmediateStructName = "tint_immediate_struct";
         constexpr const char* kImmediateVarName = "tint_immediates";
 
         auto out = Line();
         EmitLayoutLocation(out, {0}, std::nullopt);
-
-        auto* ptr = var->Result()->Type()->As<core::type::Pointer>();
-        auto* str = ptr->StoreType()->As<core::type::Struct>();
-        TINT_IR_ASSERT(ir_, str);
-        names_.Add(str, kImmediateStructName);
-        EmitStructType(str);
 
         names_.Add(var->Result(), kImmediateVarName);
         EmitTypeAndName(out, var->Result()->Type(), kImmediateVarName);
@@ -1487,6 +1496,11 @@ class Printer : public tint::TextGenerator {
 
         auto fn = c->Func();
 
+        if (fn == BuiltinFn::kFloat16BitsToUint16 || fn == BuiltinFn::kUint16BitsToFloat16) {
+            EmitExtension(kAMDGpuShaderHalfFloat);
+            EmitExtension(kAMDGpuShaderInt16);
+        }
+
         if (RequiresEXTTextureShadowLod(fn)) {
             EmitExtension(kEXTTextureShadowLod);
             fn = EXTToNonEXT(fn);
@@ -1514,7 +1528,7 @@ class Printer : public tint::TextGenerator {
 
     /// Emit a constructor
     void EmitConstruct(StringStream& out, const core::ir::Construct* c) {
-        if (c->Args().IsEmpty()) {
+        if (c->Args().empty()) {
             EmitZeroValue(out, c->Result()->Type());
             return;
         }
@@ -1847,6 +1861,7 @@ class Printer : public tint::TextGenerator {
             [&](const core::type::Bool*) { out << (c->ValueAs<AInt>() ? "true" : "false"); },
             [&](const core::type::I32*) { PrintI32(out, c->ValueAs<i32>()); },
             [&](const core::type::U32*) { out << c->ValueAs<AInt>() << "u"; },
+            [&](const core::type::U16*) { out << c->ValueAs<AInt>() << "u"; },
             [&](const core::type::F32*) { PrintF32(out, c->ValueAs<f32>()); },
             [&](const core::type::F16*) { PrintF16(out, c->ValueAs<f16>()); },
             [&](const core::type::Vector* v) { EmitConstantVector(out, v, c); },

@@ -48,8 +48,6 @@ tint_add_target(tint_lang_core_ir lib
   lang/core/ir/access.h
   lang/core/ir/binary.cc
   lang/core/ir/binary.h
-  lang/core/ir/bitcast.cc
-  lang/core/ir/bitcast.h
   lang/core/ir/block.cc
   lang/core/ir/block.h
   lang/core/ir/block_param.cc
@@ -62,6 +60,7 @@ tint_add_target(tint_lang_core_ir lib
   lang/core/ir/builtin_call.h
   lang/core/ir/call.cc
   lang/core/ir/call.h
+  lang/core/ir/capabilities.h
   lang/core/ir/clone_context.cc
   lang/core/ir/clone_context.h
   lang/core/ir/const_param_validator.cc
@@ -102,12 +101,16 @@ tint_add_target(tint_lang_core_ir lib
   lang/core/ir/function.h
   lang/core/ir/function_param.cc
   lang/core/ir/function_param.h
+  lang/core/ir/functional_validator.cc
+  lang/core/ir/functional_validator.h
   lang/core/ir/if.cc
   lang/core/ir/if.h
   lang/core/ir/instruction.cc
   lang/core/ir/instruction.h
   lang/core/ir/instruction_result.cc
   lang/core/ir/instruction_result.h
+  lang/core/ir/io_attribute_validator.cc
+  lang/core/ir/io_attribute_validator.h
   lang/core/ir/let.cc
   lang/core/ir/let.h
   lang/core/ir/load.cc
@@ -141,6 +144,8 @@ tint_add_target(tint_lang_core_ir lib
   lang/core/ir/store.h
   lang/core/ir/store_vector_element.cc
   lang/core/ir/store_vector_element.h
+  lang/core/ir/structural_validator.cc
+  lang/core/ir/structural_validator.h
   lang/core/ir/switch.cc
   lang/core/ir/switch.h
   lang/core/ir/swizzle.cc
@@ -180,6 +185,7 @@ tint_target_add_dependencies(tint_lang_core_ir lib
   tint_utils_macros
   tint_utils_math
   tint_utils_memory
+  tint_utils_reflection
   tint_utils_rtti
   tint_utils_symbol
   tint_utils_text
@@ -195,7 +201,6 @@ tint_target_add_external_dependencies(tint_lang_core_ir lib
 ################################################################################
 tint_add_target(tint_lang_core_ir_test test
   lang/core/ir/access_test.cc
-  lang/core/ir/bitcast_test.cc
   lang/core/ir/block_param_test.cc
   lang/core/ir/block_test.cc
   lang/core/ir/break_if_test.cc
@@ -269,6 +274,7 @@ tint_target_add_dependencies(tint_lang_core_ir_test test
   tint_utils_macros
   tint_utils_math
   tint_utils_memory
+  tint_utils_reflection
   tint_utils_rtti
   tint_utils_symbol
   tint_utils_text

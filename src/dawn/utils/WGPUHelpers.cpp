@@ -25,20 +25,20 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/utils/WGPUHelpers.h"
 
 #include <algorithm>
 #include <cstring>
-#include <iomanip>
-#include <mutex>
 #include <queue>
-#include <sstream>
 
 #include "absl/container/flat_hash_map.h"
-#include "dawn/common/Constants.h"
-#include "dawn/common/Log.h"
-#include "dawn/common/Numeric.h"
+#include "src/dawn/common/Constants.h"
+#include "src/utils/numeric.h"
 
+#ifndef __EMSCRIPTEN__
+#include "src/dawn/common/ExternalTextureParams.h"
+#endif  // __EMSCRIPTEN__
+//
 namespace dawn::utils {
 
 wgpu::ShaderModule CreateShaderModule(const wgpu::Device& device, const char* source) {
@@ -142,12 +142,7 @@ void ComboRenderPassDescriptor::UnsetDepthStencilLoadStoreOpsForFormat(wgpu::Tex
     }
 }
 
-BasicRenderPass::BasicRenderPass()
-    : width(0),
-      height(0),
-      color(nullptr),
-      colorFormat(wgpu::TextureFormat::RGBA8Unorm),
-      renderPassInfo() {}
+BasicRenderPass::BasicRenderPass() = default;
 
 BasicRenderPass::BasicRenderPass(uint32_t texWidth,
                                  uint32_t texHeight,
@@ -226,18 +221,18 @@ wgpu::PipelineLayout MakeBasicPipelineLayout(const wgpu::Device& device,
         descriptor.bindGroupLayouts = nullptr;
     }
 
-    if (immediateDataByteSize > 0) {
-        descriptor.immediateSize = immediateDataByteSize;
-    }
+    descriptor.immediateSize = immediateDataByteSize;
 
     return device.CreatePipelineLayout(&descriptor);
 }
 
 wgpu::PipelineLayout MakePipelineLayout(const wgpu::Device& device,
-                                        std::vector<wgpu::BindGroupLayout> bgls) {
+                                        std::vector<wgpu::BindGroupLayout> bgls,
+                                        uint32_t immediateSize) {
     wgpu::PipelineLayoutDescriptor descriptor;
     descriptor.bindGroupLayoutCount = uint32_t(bgls.size());
     descriptor.bindGroupLayouts = bgls.data();
+    descriptor.immediateSize = immediateSize;
     return device.CreatePipelineLayout(&descriptor);
 }
 
@@ -416,43 +411,25 @@ wgpu::BindGroup MakeBindGroup(
     return device.CreateBindGroup(&descriptor);
 }
 
-ColorSpaceConversionInfo GetYUVBT709ToRGBSRGBColorSpaceConversionInfo() {
-    ColorSpaceConversionInfo info;
-    info.yuvToRgbConversionMatrix = {1.164384f, 0.0f,       1.792741f,  -0.972945f,
-                                     1.164384f, -0.213249f, -0.532909f, 0.301483f,
-                                     1.164384f, 2.112402f,  0.0f,       -1.133402f};
-    info.gamutConversionMatrix = {1.0f, 0.0f, 0.0f,  //
-                                  0.0f, 1.0f, 0.0f,  //
-                                  0.0f, 0.0f, 1.0f};
-    info.srcTransferFunctionParameters = {2.2, 1.0 / 1.099, 0.099 / 1.099, 1 / 4.5, 0.081,
-                                          0.0, 0.0};
-    info.dstTransferFunctionParameters = {1 / 2.4, 1.137119, 0.0, 12.92, 0.0031308, -0.055, 0.0};
-    return info;
+#ifndef __EMSCRIPTEN__
+wgpu::ExternalTexture MakePassthroughExternalTexture(const wgpu::Device& device,
+                                                     const wgpu::Texture& plane0,
+                                                     const wgpu::Texture& plane1) {
+    ExternalTextureColorSpaceParams noopConversion = GetNoopColorSpaceParams();
+    wgpu::ExternalTextureDescriptor etDesc = {
+        .plane0 = plane0.CreateView(),
+        .plane1 = plane1 ? plane1.CreateView() : nullptr,
+        .cropOrigin = {0, 0},
+        .cropSize = {plane0.GetWidth(), plane0.GetHeight()},
+        .apparentSize = {plane0.GetWidth(), plane0.GetHeight()},
+        .yuvToRgbConversionMatrix = noopConversion.yuvToRgbConversionMatrix.data(),
+        .srcTransferFunctionParameters = noopConversion.srcTransferFunction.data(),
+        .dstTransferFunctionParameters = noopConversion.dstTransferFunction.data(),
+        .gamutConversionMatrix = noopConversion.gamutConversionMatrix.data(),
+    };
+    return device.CreateExternalTexture(&etDesc);
 }
-
-ColorSpaceConversionInfo GetNoopRGBColorSpaceConversionInfo() {
-    ColorSpaceConversionInfo info;
-
-    // YUV to RGB is not used as the data is RGB.
-    info.yuvToRgbConversionMatrix = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    // Identity gamut conversion matrix.
-    info.gamutConversionMatrix = {1.0f, 0.0f, 0.0f,  //
-                                  0.0f, 1.0f, 0.0f,  //
-                                  0.0f, 0.0f, 1.0f};
-
-    // Set A = G = 1 and everything else to 0 to turn the code below into pow(x, 1) which is x
-    //
-    //    if (abs(v) < params.D) {
-    //        return sign(v) * (params.C * abs(v) + params.F);
-    //    }
-    //    return pow(A * x + B, G) + E
-    //
-    // Note that for some reason the order of the data is G A B C D E F
-    info.srcTransferFunctionParameters = {1, 1, 0, 0, 0, 0, 0};
-    info.dstTransferFunctionParameters = {1, 1, 0, 0, 0, 0, 0};
-
-    return info;
-}
+#endif  // __EMSCRIPTEN__
 
 bool BackendRequiresCompat(wgpu::BackendType backend) {
     switch (backend) {
@@ -478,8 +455,7 @@ const absl::flat_hash_map<wgpu::FeatureName, absl::flat_hash_set<wgpu::FeatureNa
 
 // Below are experimental features that are not supported by Emscripten.
 #ifndef __EMSCRIPTEN__
-        {wgpu::FeatureName::ChromiumExperimentalSubgroupSizeControl,
-         {wgpu::FeatureName::Subgroups}},
+        {wgpu::FeatureName::SubgroupSizeControl, {wgpu::FeatureName::Subgroups}},
 #endif
 
         // Add other implicit enabling rules here

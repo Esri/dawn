@@ -33,18 +33,18 @@
 #include <string>
 #include <vector>
 
-#include "dawn/common/ContentLessObjectCacheable.h"
-#include "dawn/common/ityp_array.h"
-#include "dawn/common/ityp_bitset.h"
-#include "dawn/native/BindingInfo.h"
-#include "dawn/native/CachedObject.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/IntegerTypes.h"
-#include "dawn/native/ObjectBase.h"
-#include "dawn/native/dawn_platform.h"
 #include "partition_alloc/pointers/raw_ptr.h"
 #include "partition_alloc/pointers/raw_ptr_exclusion.h"
+#include "src/dawn/common/ContentLessObjectCacheable.h"
+#include "src/dawn/common/ityp_array.h"
+#include "src/dawn/common/ityp_bitset.h"
+#include "src/dawn/native/BindingInfo.h"
+#include "src/dawn/native/CachedObject.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/Forward.h"
+#include "src/dawn/native/IntegerTypes.h"
+#include "src/dawn/native/ObjectBase.h"
+#include "src/dawn/native/dawn_platform.h"
 
 namespace dawn::native {
 
@@ -60,8 +60,8 @@ struct StageAndDescriptor {
                        size_t constantCount,
                        ConstantEntry const* constants);
 
-    SingleShaderStage shaderStage;
-    raw_ptr<ShaderModuleBase> module;
+    SingleShaderStage shaderStage = SingleShaderStage::Vertex;
+    raw_ptr<ShaderModuleBase> module = nullptr;
     std::string entryPoint;
     size_t constantCount = 0u;
 
@@ -91,16 +91,17 @@ class PipelineLayoutBase : public ApiObjectBase,
     const BindGroupLayoutBase* GetFrontendBindGroupLayout(BindGroupIndex group) const;
     BindGroupLayoutBase* GetFrontendBindGroupLayout(BindGroupIndex group);
     const BindGroupLayoutInternalBase* GetBindGroupLayout(BindGroupIndex group) const;
+    BindGroupLayoutInternalBase* GetBindGroupLayout(BindGroupIndex group);
     const BindGroupMask& GetBindGroupLayoutsMask() const;
+
     bool HasPixelLocalStorage() const;
     const std::vector<wgpu::TextureFormat>& GetStorageAttachmentSlots() const;
     bool HasAnyStorageAttachments() const;
-    uint32_t GetNumStorageBufferBindingsInVertexStage() const;
-    uint32_t GetNumStorageTextureBindingsInVertexStage() const;
-    uint32_t GetNumStorageBufferBindingsInFragmentStage() const;
-    uint32_t GetNumStorageTextureBindingsInFragmentStage() const;
 
     bool UsesResourceTable() const;
+
+    bool HasExternalTextures() const;
+    bool HasAPIStaticSamplers() const;
 
     // Utility functions to compute inherited bind groups.
     // Returns the inherited bind groups as a mask.
@@ -126,10 +127,6 @@ class PipelineLayoutBase : public ApiObjectBase,
     PerBindGroup<Ref<BindGroupLayoutBase>> mBindGroupLayouts;
     BindGroupMask mMask;
     bool mHasPLS = false;
-    uint32_t mNumStorageBufferBindingsInVertexStage = 0;
-    uint32_t mNumStorageTextureBindingsInVertexStage = 0;
-    uint32_t mNumStorageBufferBindingsInFragmentStage = 0;
-    uint32_t mNumStorageTextureBindingsInFragmentStage = 0;
     std::vector<wgpu::TextureFormat> mStorageAttachmentSlots;
     uint32_t mImmediateDataRangeByteSize = 0;
     bool mUsesResourceTable = false;

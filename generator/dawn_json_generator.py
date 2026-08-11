@@ -39,6 +39,7 @@ from webgpu_docs_utility import build_doc_map, load_json_data
 
 
 class Metadata:
+
     def __init__(self, metadata):
         self.api = metadata['api']
         self.namespace = metadata['namespace']
@@ -48,7 +49,9 @@ class Metadata:
         self.native_namespace = metadata['native_namespace']
         self.copyright_year = metadata.get('copyright_year', None)
 
+
 class Name:
+
     def __init__(self, name, native=False):
         self.native = native
         self.name = name
@@ -99,6 +102,7 @@ class Name:
             result += chunk.lower()
         return result
 
+
 def concat_names(*names):
     return ' '.join([name.canonical_case() for name in names])
 
@@ -108,7 +112,6 @@ def validate_and_get_tags(json_data):
         'dawn',
         'emscripten',
         'native',
-        'compat',
         'deprecated',
         'art',
     }
@@ -121,6 +124,7 @@ def validate_and_get_tags(json_data):
 
 
 class Type:
+
     def __init__(self, name, json_data, native=False):
         self.json_data = json_data
         self.dict_name = name
@@ -138,6 +142,7 @@ EnumValue = namedtuple('EnumValue', ['name', 'value', 'valid', 'json_data'])
 
 
 class EnumType(Type):
+
     def __init__(self, is_enabled, name, json_data):
         Type.__init__(self, name, json_data)
 
@@ -145,6 +150,7 @@ class EnumType(Type):
         self.hasUndefined = False
         self.contiguous = True
         self.startValue = None
+        self.allowConflict = False
         lastValue = None
         for m in self.json_data['values']:
             if not is_enabled(m):
@@ -156,9 +162,6 @@ class EnumType(Type):
                 tags = []
 
             prefix = 0
-            if 'compat' in tags:
-                assert prefix == 0
-                prefix = 0x0002_0000
 
             if 'dawn' in tags:
                 # Dawn-only or Dawn+Emscripten
@@ -191,12 +194,12 @@ class EnumType(Type):
             lastValue = value
             self.values.append(
                 EnumValue(Name(value_name), value, m.get('valid', True), m))
+            self.allowConflict |= m.get('enum_value_conflict', False)
 
         # Assert that all values except those with "enum_value_conflict": true are unique in enums
         all_values = set()
         for value in self.values:
             if value.value in all_values:
-                #TODO(42241174) remove this condition once wgpu refactoring is complete.
                 if not value.json_data.get('enum_value_conflict', False):
                     raise Exception(
                         "Duplicate value {} for '{}' in enum '{}'".format(
@@ -209,6 +212,7 @@ BitmaskValue = namedtuple('BitmaskValue', ['name', 'value', 'json_data'])
 
 
 class BitmaskType(Type):
+
     def __init__(self, is_enabled, name, json_data):
         Type.__init__(self, name, json_data)
         self.values = [
@@ -230,6 +234,7 @@ class CallbackFunctionType(Type):
 
 
 class FunctionPointerType(Type):
+
     def __init__(self, is_enabled, name, json_data):
         Type.__init__(self, name, json_data)
         self.returns = None
@@ -237,12 +242,14 @@ class FunctionPointerType(Type):
 
 
 class TypedefType(Type):
+
     def __init__(self, is_enabled, name, json_data):
         Type.__init__(self, name, json_data)
         self.type = None
 
 
 class NativeType(Type):
+
     def __init__(self, is_enabled, name, json_data):
         Type.__init__(self, name, json_data, native=True)
         self.is_wire_transparent = json_data.get('wire transparent', True)
@@ -318,6 +325,7 @@ class Method():
 
 
 class ObjectType(Type):
+
     def __init__(self, is_enabled, name, json_data):
         json_data_override = {'methods': []}
         if 'methods' in json_data:
@@ -328,12 +336,14 @@ class ObjectType(Type):
 
 
 class Record:
+
     def __init__(self, name):
         self.name = Name(name)
         self.members = []
         self.may_have_dawn_object = False
 
     def update_metadata(self):
+
         def may_have_dawn_object(member):
             if isinstance(member.type, ObjectType):
                 return True
@@ -353,6 +363,7 @@ class Record:
 
 
 class StructureType(Record, Type):
+
     def __init__(self, is_enabled, name, json_data):
         tags = validate_and_get_tags(json_data)
         if tags == ['emscripten']:
@@ -422,12 +433,14 @@ class StructureType(Record, Type):
 
 
 class CallbackInfoType(StructureType):
+
     def __init__(self, is_enabled, name, json_data):
         StructureType.__init__(self, is_enabled, name, json_data)
         self.extensible = 'in'
 
 
 class ConstantDefinition():
+
     def __init__(self, is_enabled, name, json_data):
         self.type = None
         self.value = json_data['value']
@@ -437,6 +450,7 @@ class ConstantDefinition():
 
 
 class FunctionDeclaration():
+
     def __init__(self, is_enabled, name, json_data, no_cpp=False):
         self.returns = None
         self.arguments = []
@@ -446,6 +460,7 @@ class FunctionDeclaration():
 
 
 class Command(Record):
+
     def __init__(self, name, members=None):
         Record.__init__(self, name)
         self.members = members or []
@@ -453,10 +468,11 @@ class Command(Record):
         self.derived_method = None
 
 
-def linked_record_members(json_data, types):
+def linked_record_members(json_data, types, check_span_regularity=False):
     members = []
     members_by_name = {}
-    for m in json_data:
+    index_of_member = {}
+    for (i, m) in enumerate(json_data):
         member = RecordMember(Name(m['name']),
                               types[m['type']],
                               m.get('annotation', 'value'),
@@ -475,6 +491,7 @@ def linked_record_members(json_data, types):
             member.set_id_type(types[id_type])
         members.append(member)
         members_by_name[member.name.canonical_case()] = member
+        index_of_member[member.name.canonical_case()] = i
 
     for (member, m) in zip(members, json_data):
         if member.annotation != 'value':
@@ -489,6 +506,13 @@ def linked_record_members(json_data, types):
                 member.length = "constant"
                 member.constant_length = m['length']
             else:
+                # Check that the length member comes just before the `member`
+                if check_span_regularity:
+                    length_index = index_of_member[m['length']]
+                    member_index = index_of_member[
+                        member.name.canonical_case()]
+                    assert length_index == member_index - 1
+
                 member.length = members_by_name[m['length']]
 
     return members
@@ -515,12 +539,17 @@ def link_object(obj, types):
     obj.methods = [make_method(m) for m in obj.json_data.get('methods', [])]
     obj.methods.sort(key=lambda method: method.name)
 
+
 def link_structure(struct, types):
-    struct.members = linked_record_members(struct.json_data['members'], types)
+    struct.members = linked_record_members(struct.json_data['members'],
+                                           types,
+                                           check_span_regularity=True)
     for root in struct.json_data.get('chain roots', []):
         struct.chain_roots.append(types[root])
         types[root].extensions.append(struct)
-    struct.chain_roots = [types[root] for root in struct.json_data.get('chain roots', [])]
+    struct.chain_roots = [
+        types[root] for root in struct.json_data.get('chain roots', [])
+    ]
     assert all((root.category == 'structure' for root in struct.chain_roots))
 
 
@@ -550,6 +579,7 @@ def link_function(function, types):
 
     function.arguments = linked_record_members(
         function.json_data.get('args', []), types)
+
 
 # Sort structures so that if struct A has struct B as a member, then B is
 # listed before A.
@@ -727,6 +757,7 @@ def parse_json(json, enabled_tags, disabled_tags=None):
         'c_methods_sorted_by_parent':
         get_c_methods_sorted_by_parent(api_params),
         'c_methods_sorted_by_name': get_c_methods_sorted_by_name(api_params),
+        'cpp_methods': lambda typ: cpp_methods(api_params, typ),
     }
 
 
@@ -861,6 +892,9 @@ def analyze_converter_usage(params_kotlin):
             # Recursively mark all members of this structure.
             for member in typ.members:
                 mark_n2k(member.type)
+            # Recursively mark all potential chained children.
+            for child in chain_children.get(typ.name.get(), []):
+                mark_n2k(child)
 
     def mark_k2n(typ):
         # Only proceed if it's a structure and hasn't been marked yet to avoid infinite recursion.
@@ -967,7 +1001,6 @@ def compute_kotlin_params(loaded_json,
                 continue
 
             yield member
-
 
     # Calculate if we should, and can, provide a Kotlin default value for a given argument.
     # This will affect its order in the method parameter and structure field lists.
@@ -1162,6 +1195,20 @@ def compute_kotlin_params(loaded_json,
     params_kotlin['jni_name'] = jni_name
     params_kotlin['include_callback'] = include_callback
 
+    def check_jvm_overload_usage(functions):
+        """Checks functions to see if they have default parameters.
+
+        Sets a `has_default` flag on each function, which is used to add @JvmOverloads.
+        """
+        for func in functions:
+            func.has_default = False
+            for arg in func.arguments:
+                if kotlin_default(arg) is not None:
+                    func.has_default = True
+                    break
+
+    check_jvm_overload_usage(params_kotlin['by_category']['function'])
+
     params_kotlin['has_kotlin_classes'] = (
         [
             callback for callback in by_category['callback function'] +
@@ -1193,6 +1240,7 @@ def as_cType(c_prefix, name):
         return name.concatcase()
     else:
         return c_prefix + name.CamelCase()
+
 
 def as_cppType(name):
     # Special case for 'bool' because it has a typedef for compatibility.
@@ -1362,6 +1410,18 @@ def c_methods(params, typ):
         assert False, "c_methods only valid on objects and structure"
 
 
+def cpp_methods(params, typ):
+    if typ.category == 'structure':
+        methods = []
+        for member in typ.members:
+            if member.type.category == 'callback info':
+                methods.append(
+                    Method(Name(" ".join(["set"] + member.name.chunks[:-1])),
+                           None, [member], False, {}))
+        return methods
+    else:
+        assert False, "cpp_methods only valid on structures"
+
 def get_c_methods_sorted_by_parent(api_params):
     return sorted([(typ, c_methods(api_params, typ))
                    for typ in (api_params['by_category']['object'] +
@@ -1384,7 +1444,8 @@ def find_by_name(members, name):
 
 
 def has_callback_arguments(method):
-    return any(arg.type.category == 'function pointer' for arg in method.arguments)
+    return any(arg.type.category == 'function pointer'
+               for arg in method.arguments)
 
 
 # TODO: crbug.com/dawn/2509 - Remove this helper when once we deprecate older APIs.
@@ -1394,9 +1455,8 @@ def has_callback_info(method):
         and arg.type.category != 'callback info' for arg in method.arguments)
 
 
-def has_callbackInfoStruct(method):
-    return any(arg.type.category == 'callback info'
-               for arg in method.arguments)
+def has_callbackInfoStruct(args):
+    return any(arg.type.category == 'callback info' for arg in args)
 
 
 def is_wire_serializable(type):
@@ -1409,8 +1469,10 @@ def is_wire_serializable(type):
 
 
 def is_enum_value_proxy(value):
-    return ('deprecated' in value.json_data.get('tags', [])
-            and value.json_data.get('enum_value_conflict', False))
+    conflicts = value.json_data.get('enum_value_conflict', False)
+    is_proxy = 'deprecated' in value.json_data.get(
+        'tags', []) or value.json_data.get('is_proxy', False)
+    return conflicts and is_proxy
 
 
 def unreachable_code(msg="unreachable_code"):
@@ -1483,6 +1545,7 @@ def make_base_render_params(metadata):
 
 
 class MultiGeneratorFromDawnJSON(Generator):
+
     def get_description(self):
         return 'Generates code for various target from Dawn.json.'
 
@@ -1549,15 +1612,12 @@ class MultiGeneratorFromDawnJSON(Generator):
         renders = []
         imported_templates = []
 
-        params_dawn = parse_json(
-            loaded_json,
-            enabled_tags=['compat', 'dawn', 'native', 'deprecated'])
+        params_dawn = parse_json(loaded_json,
+                                 enabled_tags=['dawn', 'native', 'deprecated'])
 
-        params_all = parse_json(loaded_json,
-                                enabled_tags=[
-                                    'compat', 'dawn', 'emscripten', 'native',
-                                    'deprecated'
-                                ])
+        params_all = parse_json(
+            loaded_json,
+            enabled_tags=['dawn', 'emscripten', 'native', 'deprecated'])
 
         metadata = params_dawn['metadata']
         RENDER_PARAMS_BASE = make_base_render_params(metadata)
@@ -1625,6 +1685,14 @@ class MultiGeneratorFromDawnJSON(Generator):
                            'include/webgpu/' + api + '_cpp_chained_struct.h',
                            [RENDER_PARAMS_BASE, params_dawn]))
 
+        if 'cpp_modules' in targets:
+            renders.append(
+                FileRender('api_cpp.ixx', 'include/dawn/' + api + '.ixx', [
+                    RENDER_PARAMS_BASE, params_dawn, {
+                        'cpp_header': api + '/' + api + '_cpp.h',
+                    }
+                ]))
+
         if 'proc' in targets:
             renders.append(
                 FileRender('dawn_proc.cpp', 'src/dawn/' + prefix + '_proc.cpp',
@@ -1655,8 +1723,8 @@ class MultiGeneratorFromDawnJSON(Generator):
             ]
 
             assert api == 'webgpu'
-            params_emscripten = parse_json(
-                loaded_json, enabled_tags=['compat', 'emscripten'])
+            params_emscripten = parse_json(loaded_json,
+                                           enabled_tags=['emscripten'])
             # system/include/webgpu
             imported_templates.append('BSD_LICENSE')
             renders.append(
@@ -1685,10 +1753,21 @@ class MultiGeneratorFromDawnJSON(Generator):
                                }
                            ]))
 
+        if 'emdawnwebgpu_modules' in targets:
+            assert api == 'webgpu'
+            params_emscripten = parse_json(loaded_json,
+                                           enabled_tags=['emscripten'])
+            renders.append(
+                FileRender('api_cpp.ixx', 'include/dawn/' + api + '.ixx', [
+                    RENDER_PARAMS_BASE, params_emscripten, {
+                        'cpp_header': api + '/' + api + '_cpp.h',
+                    }
+                ]))
+
         if 'emdawnwebgpu_js' in targets:
             assert api == 'webgpu'
-            params_emscripten = parse_json(
-                loaded_json, enabled_tags=['compat', 'emscripten'])
+            params_emscripten = parse_json(loaded_json,
+                                           enabled_tags=['emscripten'])
             renders.append(
                 FileRender('emdawnwebgpu/struct_info_webgpu.json',
                            'src/emdawnwebgpu/struct_info_webgpu.json',
@@ -1705,8 +1784,8 @@ class MultiGeneratorFromDawnJSON(Generator):
 
         if 'emdawnwebgpu_link_test_cpp' in targets:
             assert api == 'webgpu'
-            params_emscripten = parse_json(
-                loaded_json, enabled_tags=['compat', 'emscripten'])
+            params_emscripten = parse_json(loaded_json,
+                                           enabled_tags=['emscripten'])
             renders.append(
                 FileRender('emdawnwebgpu/LinkTest.cpp',
                            'src/emdawnwebgpu/LinkTest.cpp',
@@ -1747,69 +1826,70 @@ class MultiGeneratorFromDawnJSON(Generator):
             namespace = metadata.namespace
             renders.append(
                 FileRender('dawn/native/ValidationUtils.h',
-                           'src/' + native_dir + '/ValidationUtils_autogen.h',
+                           native_dir + '/ValidationUtils_autogen.h',
                            frontend_params))
             renders.append(
                 FileRender('dawn/native/ValidationUtils.cpp',
-                           'src/' + native_dir + '/ValidationUtils_autogen.cpp',
+                           native_dir + '/ValidationUtils_autogen.cpp',
                            frontend_params))
             renders.append(
                 FileRender('dawn/native/dawn_platform.h',
-                           'src/' + native_dir + '/' + prefix + '_platform_autogen.h',
+                           native_dir + '/' + prefix + '_platform_autogen.h',
                            frontend_params))
             renders.append(
                 FileRender('dawn/native/api_structs.h',
-                           'src/' + native_dir + '/' + namespace + '_structs_autogen.h',
-                           frontend_params))
-            renders.append(
-                FileRender('dawn/native/api_structs.cpp',
-                           'src/' + native_dir + '/' + namespace + '_structs_autogen.cpp',
-                           frontend_params))
-            renders.append(
-                FileRender('dawn/native/ProcTable.cpp',
-                           'src/' + native_dir + '/ProcTable.cpp', frontend_params))
-            renders.append(
-                FileRender('dawn/native/ChainUtils.h',
-                           'src/' + native_dir + '/ChainUtils_autogen.h',
-                           frontend_params))
-            renders.append(
-                FileRender('dawn/native/ChainUtils.cpp',
-                           'src/' + native_dir + '/ChainUtils_autogen.cpp',
-                           frontend_params))
-            renders.append(
-                FileRender('dawn/native/Features.h',
-                           'src/' + native_dir + '/Features_autogen.h',
-                           frontend_params))
-            renders.append(
-                FileRender('dawn/native/Features.inl',
-                           'src/' + native_dir + '/Features_autogen.inl',
-                           frontend_params))
-            renders.append(
-                FileRender('dawn/native/api_absl_format.h',
-                           'src/' + native_dir + '/' + api + '_absl_format_autogen.h',
-                           frontend_params))
-            renders.append(
-                FileRender('dawn/native/api_absl_format.cpp',
-                           'src/' + native_dir + '/' + api + '_absl_format_autogen.cpp',
+                           native_dir + '/' + namespace + '_structs_autogen.h',
                            frontend_params))
             renders.append(
                 FileRender(
-                    'dawn/native/api_StreamImpl.cpp', 'src/' + native_dir +
-                    '/' + api + '_StreamImpl_autogen.cpp', frontend_params))
+                    'dawn/native/api_structs.cpp',
+                    native_dir + '/' + namespace + '_structs_autogen.cpp',
+                    frontend_params))
+            renders.append(
+                FileRender('dawn/native/ProcTable.cpp',
+                           native_dir + '/ProcTable.cpp', frontend_params))
+            renders.append(
+                FileRender('dawn/native/ChainUtils.h',
+                           native_dir + '/ChainUtils_autogen.h',
+                           frontend_params))
+            renders.append(
+                FileRender('dawn/native/ChainUtils.cpp',
+                           native_dir + '/ChainUtils_autogen.cpp',
+                           frontend_params))
+            renders.append(
+                FileRender('dawn/native/Features.h',
+                           native_dir + '/Features_autogen.h',
+                           frontend_params))
+            renders.append(
+                FileRender('dawn/native/Features.inl',
+                           native_dir + '/Features_autogen.inl',
+                           frontend_params))
+            renders.append(
+                FileRender('dawn/native/api_absl_format.h',
+                           native_dir + '/' + api + '_absl_format_autogen.h',
+                           frontend_params))
+            renders.append(
+                FileRender('dawn/native/api_absl_format.cpp',
+                           native_dir + '/' + api + '_absl_format_autogen.cpp',
+                           frontend_params))
+            renders.append(
+                FileRender('dawn/native/api_StreamImpl.cpp',
+                           native_dir + '/' + api + '_StreamImpl_autogen.cpp',
+                           frontend_params))
             renders.append(
                 FileRender('dawn/native/ObjectType.h',
-                           'src/' + native_dir + '/ObjectType_autogen.h',
+                           native_dir + '/ObjectType_autogen.h',
                            frontend_params))
             renders.append(
                 FileRender('dawn/native/ObjectType.cpp',
-                           'src/' + native_dir + '/ObjectType_autogen.cpp',
+                           native_dir + '/ObjectType_autogen.cpp',
                            frontend_params))
 
         if 'dawn_utils' in targets:
             # Generate ComboLimits without any extensions so it works on
             # all targets (and doesn't chain any experimental stuff like
             # extensions that are output only and produce warnings on input).
-            params = parse_json(loaded_json, enabled_tags=['compat'])
+            params = parse_json(loaded_json, enabled_tags=[])
             renders.append(
                 FileRender('dawn/utils/ComboLimits.h',
                            'src/dawn/utils/ComboLimits.h',
@@ -1820,10 +1900,9 @@ class MultiGeneratorFromDawnJSON(Generator):
                            [RENDER_PARAMS_BASE, params]))
 
         if 'wire' in targets:
-            params_dawn_wire = parse_json(
-                loaded_json,
-                enabled_tags=['compat', 'dawn', 'deprecated'],
-                disabled_tags=['native'])
+            params_dawn_wire = parse_json(loaded_json,
+                                          enabled_tags=['dawn', 'deprecated'],
+                                          disabled_tags=['native'])
             additional_params = compute_wire_params(params_dawn_wire,
                                                     wire_json)
 
@@ -1850,7 +1929,7 @@ class MultiGeneratorFromDawnJSON(Generator):
                            wire_params))
             renders.append(
                 FileRender('dawn/wire/client/ApiProcs.cpp',
-                           'src/dawn/wire/client/ApiProcs_autogen.cpp',
+                           'src/dawn/wire/client/ApiProcs_autogen.cpp.inc',
                            wire_params))
             renders.append(
                 FileRender('dawn/wire/client/ClientBase.h',

@@ -25,23 +25,28 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/ComputePassEncoder.h"
+#include "src/dawn/native/ComputePassEncoder.h"
 
-#include "dawn/common/Range.h"
-#include "dawn/native/Adapter.h"
-#include "dawn/native/BindGroup.h"
-#include "dawn/native/BindGroupLayout.h"
-#include "dawn/native/Buffer.h"
-#include "dawn/native/CommandEncoder.h"
-#include "dawn/native/CommandValidation.h"
-#include "dawn/native/Commands.h"
-#include "dawn/native/ComputePipeline.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/InternalPipelineStore.h"
+#include <algorithm>
+#include <limits>
+
 #include "dawn/native/ObjectType_autogen.h"
-#include "dawn/native/PassResourceUsageTracker.h"
-#include "dawn/native/QuerySet.h"
-#include "dawn/native/utils/WGPUHelpers.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/common/Strings.h"
+#include "src/dawn/native/Adapter.h"
+#include "src/dawn/native/BindGroup.h"
+#include "src/dawn/native/BindGroupLayout.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/CommandEncoder.h"
+#include "src/dawn/native/CommandValidation.h"
+#include "src/dawn/native/Commands.h"
+#include "src/dawn/native/ComputePipeline.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/InternalPipelineStore.h"
+#include "src/dawn/native/PassResourceUsageTracker.h"
+#include "src/dawn/native/QuerySet.h"
+#include "src/dawn/native/utils/WGPUHelpers.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native {
 
@@ -55,46 +60,62 @@ ResultOrError<ComputePipelineBase*> GetOrCreateIndirectDispatchValidationPipelin
         return store->dispatchIndirectValidationPipeline.Get();
     }
 
+    // TODO(https://crbug.com/dawn/488346117): Use immediates instead of uniform.
     // TODO(https://crbug.com/dawn/1108): Propagate validation feedback from this
     // shader in various failure modes.
     // Type 'bool' cannot be used in address space 'uniform' as it is non-host-shareable.
     Ref<ShaderModuleBase> shaderModule;
-    DAWN_TRY_ASSIGN(shaderModule, utils::CreateShaderModule(device, R"(
-                struct UniformParams {
-                    maxComputeWorkgroupsPerDimension: u32,
-                    clientOffsetInU32: u32,
-                    enableValidation: u32,
-                    duplicateNumWorkgroups: u32,
+    DAWN_TRY_ASSIGN(shaderModule, utils::CreateShaderModule(device, DAWN_MULTILINE(
+        struct UniformParams {
+            maxComputeWorkgroupsPerDimension: u32,
+            clientOffsetInU32: u32,
+            enableValidation: u32,
+            duplicateNumWorkgroups: u32,
+            linearIndexing: u32,
+            overflowValue: u32,
+        }
+
+        struct IndirectParams {
+            data: array<u32>
+        }
+
+        struct ValidatedParams {
+            data: array<u32>
+        }
+
+        @group(0) @binding(0) var<uniform> uniformParams: UniformParams;
+        @group(0) @binding(1) var<storage, read_write> clientParams: IndirectParams;
+        @group(0) @binding(2) var<storage, read_write> validatedParams: ValidatedParams;
+
+        @compute @workgroup_size(1, 1, 1)
+        fn main() {
+            var workgroups = vec3u(clientParams.data[uniformParams.clientOffsetInU32 + 0],
+                                   clientParams.data[uniformParams.clientOffsetInU32 + 1],
+                                   clientParams.data[uniformParams.clientOffsetInU32 + 2]);
+            if (uniformParams.enableValidation > 0u) {
+                var invalid = false;
+                if (max(workgroups.x, max(workgroups.y, workgroups.z)) > uniformParams.maxComputeWorkgroupsPerDimension) {
+                    invalid = true;
+                } else if (uniformParams.linearIndexing > 0u) {
+                    invalid |= workgroups.x > (uniformParams.overflowValue / workgroups.y);
+                    let xy = workgroups.x * workgroups.y;
+                    invalid |= xy > (uniformParams.overflowValue / workgroups.z);
                 }
 
-                struct IndirectParams {
-                    data: array<u32>
+                if (invalid) {
+                    workgroups = vec3u(0);
                 }
-
-                struct ValidatedParams {
-                    data: array<u32>
-                }
-
-                @group(0) @binding(0) var<uniform> uniformParams: UniformParams;
-                @group(0) @binding(1) var<storage, read_write> clientParams: IndirectParams;
-                @group(0) @binding(2) var<storage, read_write> validatedParams: ValidatedParams;
-
-                @compute @workgroup_size(1, 1, 1)
-                fn main() {
-                    for (var i = 0u; i < 3u; i = i + 1u) {
-                        var numWorkgroups = clientParams.data[uniformParams.clientOffsetInU32 + i];
-                        if (uniformParams.enableValidation > 0u &&
-                            numWorkgroups > uniformParams.maxComputeWorkgroupsPerDimension) {
-                            numWorkgroups = 0u;
-                        }
-                        validatedParams.data[i] = numWorkgroups;
-
-                        if (uniformParams.duplicateNumWorkgroups > 0u) {
-                             validatedParams.data[i + 3u] = numWorkgroups;
-                        }
-                    }
-                }
-            )"));
+            }
+            validatedParams.data[0] = workgroups.x;
+            validatedParams.data[1] = workgroups.y;
+            validatedParams.data[2] = workgroups.z;
+            if (uniformParams.duplicateNumWorkgroups > 0u) {
+                validatedParams.data[3] = workgroups.x;
+                validatedParams.data[4] = workgroups.y;
+                validatedParams.data[5] = workgroups.z;
+            }
+        }
+    )));
 
     Ref<BindGroupLayoutBase> bindGroupLayout;
     DAWN_TRY_ASSIGN(bindGroupLayout,
@@ -130,9 +151,6 @@ ComputePassEncoder::ComputePassEncoder(DeviceBase* device,
     : ProgrammableEncoder(device, descriptor->label, encodingContext),
       mCommandEncoder(commandEncoder) {
     GetObjectTrackingList()->Track(this);
-    if (auto* resourceTable = mCommandEncoder->GetResourceTable()) {
-        mCommandBufferState.SetResourceTable(resourceTable);
-    }
 }
 
 ComputePassEncoder::~ComputePassEncoder() {
@@ -243,13 +261,37 @@ void ComputePassEncoder::APIDispatchWorkgroups(uint32_t workgroupCountX,
                     DAWN_INCREASE_LIMIT_MESSAGE(GetDevice()->GetAdapter()->GetLimits().v1,
                                                 maxComputeWorkgroupsPerDimension, workgroupCountZ));
 
+                auto pipeline = mCommandBufferState.GetComputePipeline();
+                if (pipeline->UsesLinearIndexing()) {
+                    // Validate without assumptions on the range of the various uint32_t limits, as
+                    // they may be increased from default values.
+                    const auto wgSize = pipeline->GetWorkgroupSize();
+                    const uint64_t wgInvocations =
+                        pipeline->UsesGlobalInvocationIndex()
+                            ? wgSize.width * wgSize.height * wgSize.depthOrArrayLayers
+                            : 1u;
+                    const uint64_t factorWGAndX = wgInvocations * workgroupCountX;
+                    const uint64_t factorYAndZ =
+                        static_cast<uint64_t>(workgroupCountY) * workgroupCountZ;
+                    bool overflow = factorWGAndX > std::numeric_limits<uint32_t>::max();
+                    overflow |= factorYAndZ > std::numeric_limits<uint32_t>::max();
+                    overflow |= factorWGAndX * factorYAndZ > std::numeric_limits<uint32_t>::max();
+                    DAWN_INVALID_IF(
+                        overflow,
+                        "Dispatch using linear_indexing built-in value would "
+                        "exceed unsigned 32-bit range. (num WGs = [%u, %u, %u], wg size "
+                        "= [%u, %u, %u])",
+                        workgroupCountX, workgroupCountY, workgroupCountZ, wgSize.width,
+                        wgSize.height, wgSize.depthOrArrayLayers);
+                }
+
                 if (!GetDevice()->HasFlexibleTextureViews()) {
                     DAWN_TRY(mCommandBufferState.ValidateNoDifferentTextureViewsOnSameTexture());
                 }
             }
 
             // Record the synchronization scope for Dispatch, which is just the current
-            // bindgroups.
+            // bindgroups and resource table.
             AddDispatchSyncScope();
 
             DispatchCmd* dispatch = allocator->Allocate<DispatchCmd>(Command::Dispatch);
@@ -277,6 +319,15 @@ ComputePassEncoder::TransformIndirectDispatchBuffer(Ref<BufferBase> indirectBuff
             mCommandBufferState.GetComputePipeline());
     if (!IsValidationEnabled() && !shouldDuplicateNumWorkgroups) {
         return std::make_pair(indirectBuffer, indirectOffset);
+    }
+    const bool usesLinearIndexing = mCommandBufferState.GetComputePipeline()->UsesLinearIndexing();
+    const bool usesGlobalIndex =
+        mCommandBufferState.GetComputePipeline()->UsesGlobalInvocationIndex();
+    const auto wgSize = mCommandBufferState.GetComputePipeline()->GetWorkgroupSize();
+    const uint32_t wgInvocations = wgSize.width * wgSize.height * wgSize.depthOrArrayLayers;
+    uint32_t overflowValue = std::numeric_limits<uint32_t>::max();
+    if (usesGlobalIndex) {
+        overflowValue /= wgInvocations;
     }
 
     // Save the previous command buffer state so it can be restored after the
@@ -310,17 +361,21 @@ ComputePassEncoder::TransformIndirectDispatchBuffer(Ref<BufferBase> indirectBuff
         uint32_t clientOffsetInU32;
         uint32_t enableValidation;
         uint32_t duplicateNumWorkgroups;
+        uint32_t linearIndexing;
+        uint32_t overflowValue;
     };
 
     // Create a uniform buffer to hold parameters for the shader.
     Ref<BufferBase> uniformBuffer;
     {
-        UniformParams params;
+        UniformParams params = {};
         params.maxComputeWorkgroupsPerDimension =
             device->GetLimits().v1.maxComputeWorkgroupsPerDimension;
         params.clientOffsetInU32 = clientOffsetFromAlignedBoundary / sizeof(uint32_t);
         params.enableValidation = static_cast<uint32_t>(IsValidationEnabled());
         params.duplicateNumWorkgroups = static_cast<uint32_t>(shouldDuplicateNumWorkgroups);
+        params.linearIndexing = static_cast<uint32_t>(usesLinearIndexing);
+        params.overflowValue = overflowValue;
 
         DAWN_TRY_ASSIGN(uniformBuffer,
                         utils::CreateBufferFromData(device, wgpu::BufferUsage::Uniform, {params}));
@@ -454,6 +509,22 @@ void ComputePassEncoder::APISetPipeline(ComputePipelineBase* pipeline) {
         "encoding %s.SetPipeline(%s).", this, pipeline);
 }
 
+void ComputePassEncoder::APISetResourceTable(ResourceTableBase* table) {
+    mEncodingContext->TryEncode(
+        this,
+        [&](CommandAllocator* allocator) -> MaybeError {
+            DAWN_TRY(ProgrammableEncoder::SetResourceTable(table, allocator));
+            mCommandBufferState.SetResourceTable(table);
+            if (table) {
+                // Add table for submit validation. Note that we add the currently used table to the
+                // usage tracker in AddDispatchSyncScope for command processing.
+                mUsageTracker.AddReferencedResourceTable(table);
+            }
+            return {};
+        },
+        "encoding %s.SetResourceTable(%s).", this, table);
+}
+
 void ComputePassEncoder::APISetBindGroup(uint32_t groupIndexIn,
                                          BindGroupBase* group,
                                          uint32_t dynamicOffsetCount,
@@ -501,7 +572,7 @@ void ComputePassEncoder::APISetImmediates(uint32_t offset, const void* data, siz
             cmd->offset = offset;
             cmd->size = uint32_t(size);
             uint8_t* immediateDatas = allocator->AllocateData<uint8_t>(cmd->size);
-            memcpy(immediateDatas, data, size);
+            DAWN_UNSAFE_TODO(memcpy(immediateDatas, data, size));
 
             mCommandBufferState.SetImmediateData(offset, uint32_t(size));
 
@@ -510,7 +581,9 @@ void ComputePassEncoder::APISetImmediates(uint32_t offset, const void* data, siz
         "encoding %s.SetImmediates(%u, %u, ...).", this, offset, size);
 }
 
-void ComputePassEncoder::APIWriteTimestamp(QuerySetBase* querySet, uint32_t queryIndex) {
+void ComputePassEncoder::APIWriteTimestamp(QuerySetBase* querySet, uint32_t queryIndexUntyped) {
+    QueryIndex queryIndex{queryIndexUntyped};
+
     mEncodingContext->TryEncode(
         this,
         [&](CommandAllocator* allocator) -> MaybeError {
@@ -520,7 +593,7 @@ void ComputePassEncoder::APIWriteTimestamp(QuerySetBase* querySet, uint32_t quer
                     Feature::ChromiumExperimentalTimestampQueryInsidePasses));
             }
 
-            mCommandEncoder->TrackQueryAvailability(querySet, queryIndex);
+            mCommandEncoder->TrackUsedQuerySet(querySet);
 
             WriteTimestampCmd* cmd =
                 allocator->Allocate<WriteTimestampCmd>(Command::WriteTimestamp);
@@ -536,6 +609,9 @@ void ComputePassEncoder::AddDispatchSyncScope(SyncScopeUsageTracker scope) {
     PipelineLayoutBase* layout = mCommandBufferState.GetPipelineLayout();
     for (BindGroupIndex i : layout->GetBindGroupLayoutsMask()) {
         scope.AddBindGroup(mCommandBufferState.GetBindGroup(i));
+    }
+    if (auto* table = mCommandBufferState.GetResourceTable()) {
+        scope.AddResourceTableUsage(table);
     }
     mUsageTracker.AddDispatch(scope.AcquireSyncScopeUsage());
 }

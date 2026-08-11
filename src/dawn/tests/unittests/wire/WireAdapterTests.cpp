@@ -29,13 +29,14 @@
 #include <utility>
 #include <vector>
 
-#include "dawn/common/StringViewUtils.h"
-#include "dawn/tests/MockCallback.h"
-#include "dawn/tests/StringViewMatchers.h"
-#include "dawn/tests/unittests/wire/WireFutureTest.h"
-#include "dawn/tests/unittests/wire/WireTest.h"
 #include "dawn/wire/WireClient.h"
 #include "dawn/wire/WireServer.h"
+#include "src/dawn/common/StringViewUtils.h"
+#include "src/dawn/tests/MockCallback.h"
+#include "src/dawn/tests/StringViewMatchers.h"
+#include "src/dawn/tests/unittests/wire/WireFutureTest.h"
+#include "src/dawn/tests/unittests/wire/WireTest.h"
+#include "src/utils/compiler.h"
 #include "webgpu/webgpu_cpp.h"
 
 namespace dawn::wire {
@@ -47,7 +48,6 @@ using testing::InvokeWithoutArgs;
 using testing::IsNull;
 using testing::NonEmptySizedString;
 using testing::NotNull;
-using testing::Return;
 using testing::SizedString;
 using testing::WithArg;
 
@@ -162,7 +162,7 @@ TEST_P(WireAdapterTests, RequestDeviceSuccess) {
     RequestDevice(&desc);
 
     // Expect the server to receive the message. Then, mock a fake reply.
-    WGPUDevice apiDevice = api.GetNewDevice();
+    WGPUDevice apiDevice = GetNewDevice();
     // The backend device should not be known by the wire server.
     EXPECT_FALSE(GetWireServer()->IsDeviceKnown(apiDevice));
 
@@ -216,7 +216,7 @@ TEST_P(WireAdapterTests, RequestDeviceSuccess) {
                 device.GetFeatures(reinterpret_cast<wgpu::SupportedFeatures*>(&features));
 
                 std::vector<WGPUFeatureName> featuresList(
-                    features.features, features.features + features.featureCount);
+                    features.features, DAWN_UNSAFE_TODO(features.features + features.featureCount));
                 ASSERT_EQ(featuresList.size(), fakeFeaturesList.size());
                 std::unordered_set<WGPUFeatureName> featureSet(fakeFeaturesList);
                 for (WGPUFeatureName feature : featuresList) {
@@ -230,7 +230,6 @@ TEST_P(WireAdapterTests, RequestDeviceSuccess) {
 
     device = nullptr;
     // Cleared when the device is destroyed.
-    EXPECT_CALL(api, OnDeviceSetLoggingCallback(apiDevice, _)).Times(1);
     EXPECT_CALL(api, DeviceRelease(apiDevice));
 
     // Server has not recevied the release yet, so the device should be known.
@@ -315,7 +314,7 @@ TEST_P(WireAdapterTests, RequestDeviceAdapterDestroyedBeforeCallback) {
     adapter = nullptr;
 
     // Mock a reply from the server.
-    WGPUDevice apiDevice = api.GetNewDevice();
+    WGPUDevice apiDevice = GetNewDevice();
     EXPECT_CALL(api, OnAdapterRequestDevice(apiAdapter, NotNull(), _))
         .WillOnce(InvokeWithoutArgs([&] {
             // Set on device creation to forward callbacks to the client.
@@ -336,12 +335,6 @@ TEST_P(WireAdapterTests, RequestDeviceAdapterDestroyedBeforeCallback) {
             .WillOnce(WithArg<1>([&](wgpu::Device result) { device = std::move(result); }));
         FlushCallbacks();
     });
-
-    device = nullptr;
-    // Cleared when the device is destroyed.
-    EXPECT_CALL(api, OnDeviceSetLoggingCallback(apiDevice, _)).Times(1);
-    EXPECT_CALL(api, DeviceRelease(apiDevice));
-    FlushClient();
 }
 
 // Test that RequestDevice receives unknown status if the wire is disconnected
@@ -364,7 +357,7 @@ TEST_P(WireAdapterTests, RequestDeviceWireHandle) {
     RequestDevice(nullptr);
 
     // Expect the server to receive the message. Then, mock a fake reply.
-    WGPUDevice apiDevice = api.GetNewDevice();
+    WGPUDevice apiDevice = GetNewDevice();
     EXPECT_CALL(api, OnAdapterRequestDevice(apiAdapter, NotNull(), _))
         .WillOnce(InvokeWithoutArgs([&] {
             // Set on device creation to forward callbacks to the client.
@@ -394,7 +387,6 @@ TEST_P(WireAdapterTests, RequestDeviceWireHandle) {
 
     device = nullptr;
     // Cleared when the device is destroyed.
-    EXPECT_CALL(api, OnDeviceSetLoggingCallback(apiDevice, _)).Times(1);
     EXPECT_CALL(api, DeviceRelease(apiDevice));
     FlushClient();
 }

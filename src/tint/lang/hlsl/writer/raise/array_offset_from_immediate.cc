@@ -133,6 +133,8 @@ struct State {
                         case hlsl::BuiltinFn::kInterlockedAdd:
                         case hlsl::BuiltinFn::kInterlockedMax:
                         case hlsl::BuiltinFn::kInterlockedMin:
+                        case hlsl::BuiltinFn::kInterlockedMax64:
+                        case hlsl::BuiltinFn::kInterlockedMin64:
                         case hlsl::BuiltinFn::kInterlockedAnd:
                         case hlsl::BuiltinFn::kInterlockedOr:
                         case hlsl::BuiltinFn::kInterlockedXor:
@@ -144,6 +146,10 @@ struct State {
                         case hlsl::BuiltinFn::kLoad2F16:
                         case hlsl::BuiltinFn::kLoad3F16:
                         case hlsl::BuiltinFn::kLoad4F16:
+                        case hlsl::BuiltinFn::kLoadU16:
+                        case hlsl::BuiltinFn::kLoad2U16:
+                        case hlsl::BuiltinFn::kLoad3U16:
+                        case hlsl::BuiltinFn::kLoad4U16:
                         case hlsl::BuiltinFn::kStore:
                         case hlsl::BuiltinFn::kStore2:
                         case hlsl::BuiltinFn::kStore3:
@@ -152,17 +158,27 @@ struct State {
                         case hlsl::BuiltinFn::kStore2F16:
                         case hlsl::BuiltinFn::kStore3F16:
                         case hlsl::BuiltinFn::kStore4F16:
+                        case hlsl::BuiltinFn::kStoreU16:
+                        case hlsl::BuiltinFn::kStore2U16:
+                        case hlsl::BuiltinFn::kStore3U16:
+                        case hlsl::BuiltinFn::kStore4U16:
                             add_offset_to_arg(0);
                             break;
                         // Ignore the functions below
                         case hlsl::BuiltinFn::kAsint:
                         case hlsl::BuiltinFn::kAsuint:
                         case hlsl::BuiltinFn::kAsfloat:
+                        case hlsl::BuiltinFn::kAsuint16:
+                        case hlsl::BuiltinFn::kAsfloat16:
                         case hlsl::BuiltinFn::kDot4AddI8Packed:
                         case hlsl::BuiltinFn::kDot4AddU8Packed:
                         case hlsl::BuiltinFn::kF32Tof16:
                         case hlsl::BuiltinFn::kF16Tof32:
                         case hlsl::BuiltinFn::kMul:
+                        case hlsl::BuiltinFn::kMultiply:
+                        case hlsl::BuiltinFn::kMultiplyAccumulate:
+                        case hlsl::BuiltinFn::kGet:
+                        case hlsl::BuiltinFn::kSet:
                         case hlsl::BuiltinFn::kPackU8:
                         case hlsl::BuiltinFn::kPackS8:
                         case hlsl::BuiltinFn::kPackClampS8:
@@ -176,6 +192,7 @@ struct State {
                         case hlsl::BuiltinFn::kWaveReadLaneAt:
                         case hlsl::BuiltinFn::kModf:
                         case hlsl::BuiltinFn::kFrexp:
+                        case hlsl::BuiltinFn::kSelect:
                         case hlsl::BuiltinFn::kGatherCmp:
                         case hlsl::BuiltinFn::kGather:
                         case hlsl::BuiltinFn::kGatherAlpha:
@@ -189,6 +206,7 @@ struct State {
                         case hlsl::BuiltinFn::kSampleCmpLevelZero:
                         case hlsl::BuiltinFn::kSampleGrad:
                         case hlsl::BuiltinFn::kSampleLevel:
+                        case hlsl::BuiltinFn::kSplat:
                         case hlsl::BuiltinFn::kNone:
                             break;
                     }
@@ -223,8 +241,7 @@ Result<SuccessType> ArrayOffsetFromImmediates(
     const uint32_t buffer_offsets_offset,
     const uint32_t buffer_offsets_array_elements_num,
     const std::unordered_map<BindingPoint, uint32_t>& bindpoint_to_offset_index) {
-    TINT_CHECK_RESULT(ValidateAndDumpIfNeeded(ir, "core.ArrayOffsetFromImmediates",
-                                              kArrayOffsetFromImmediateCapabilities));
+    AssertValid(ir, kArrayOffsetFromImmediateCapabilities, "before core.ArrayOffsetFromImmediates");
 
     State state{ir, immediate_data_layout, buffer_offsets_offset, buffer_offsets_array_elements_num,
                 bindpoint_to_offset_index};

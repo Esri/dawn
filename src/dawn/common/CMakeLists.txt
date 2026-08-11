@@ -26,14 +26,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 DawnGenerator(
-    SCRIPT "${Dawn_SOURCE_DIR}/generator/dawn_version_generator.py"
-    PRINT_NAME "Dawn version based utilities"
-    OUTPUT_HEADERS DAWN_VERSION_AUTOGEN_HEADERS
-    EXTRA_PARAMETERS "--dawn-dir"
-         "${Dawn_SOURCE_DIR}"
-)
-
-DawnGenerator(
     SCRIPT "${Dawn_SOURCE_DIR}/generator/dawn_gpu_info_generator.py"
     PRINT_NAME "Dawn GPU info utilities"
     OUTPUT_HEADERS DAWN_GPU_INFO_AUTOGEN_HEADERS
@@ -43,13 +35,13 @@ DawnGenerator(
 )
 
 set(private_headers
-    "${DAWN_VERSION_AUTOGEN_HEADERS}"
     "${DAWN_GPU_INFO_AUTOGEN_HEADERS}"
+    "Algebra.h"
     "AlignedAlloc.h"
     "Alloc.h"
-    "Assert.h"
     "Atomic.h"
     "BitSetRangeIterator.h"
+    "ColorSpace.h"
     "Compiler.h"
     "Constants.h"
     "ContentLessObjectCache.h"
@@ -69,18 +61,14 @@ set(private_headers
     "ityp_stack_vec.h"
     "ityp_vector.h"
     "LinkedList.h"
-    "Log.h"
     "LRUCache.h"
     "MatchVariant.h"
     "Math.h"
     "Mutex.h"
     "MutexProtected.h"
-    "NonCopyable.h"
-    "NonMovable.h"
     "NSRef.h"
     "Numeric.h"
     "PlacementAllocated.h"
-    "Platform.h"
     "Preprocessor.h"
     "Range.h"
     "Ref.h"
@@ -94,13 +82,12 @@ set(private_headers
     "SerialStorage.h"
     "SlabAllocator.h"
     "StackAllocated.h"
+    "Strings.h"
     "StringViewUtils.h"
     "SystemUtils.h"
     "ThreadLocal.h"
     "Time.h"
-    "TypedInteger.h"
     "TypeTraits.h"
-    "UnderlyingType.h"
     "vulkan_platform.h"
     "WeakRef.h"
     "WeakRefSupport.h"
@@ -111,12 +98,10 @@ set(private_headers
 set(sources
     "${DAWN_GPU_INFO_AUTOGEN_SOURCES}"
     "AlignedAlloc.cpp"
-    "Assert.cpp"
     "Defer.cpp"
     "DynamicLib.cpp"
     "FutureUtils.cpp"
     "GPUInfo.cpp"
-    "Log.cpp"
     "Math.cpp"
     "RefCounted.cpp"
     "Result.cpp"
@@ -131,15 +116,14 @@ set(sources
 set(conditional_private_depends)
 
 if (WIN32)
-    list(APPEND headers
-        "windows_with_undefs.h"
+    list(APPEND private_headers
         "WindowsUtils.h"
     )
     list(APPEND sources
         "WindowsUtils.cpp"
     )
 elseif(APPLE)
-    list(APPEND headers
+    list(APPEND private_headers
         "IOSurfaceUtils.h"
     )
     list(APPEND sources
@@ -149,6 +133,17 @@ elseif(APPLE)
     list(APPEND conditional_private_depends
         "-framework Foundation"
         "-framework IOSurface"
+    )
+endif()
+
+if (NOT EMSCRIPTEN)
+    list(APPEND private_headers
+        "ExternalTextureParams.h"
+        "WGPUDeviceCallbackInfos.h"
+    )
+    list(APPEND sources
+        "ExternalTextureParams.cpp"
+        "WGPUDeviceCallbackInfos.cpp"
     )
 endif()
 
@@ -178,6 +173,7 @@ dawn_add_library(
     DEPENDS
         webgpu_c
         webgpu_cpp
+        dawn::dawn_version
         absl::flat_hash_set
         absl::inlined_vector
         absl::no_destructor

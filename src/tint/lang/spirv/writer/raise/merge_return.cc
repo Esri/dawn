@@ -42,9 +42,6 @@ namespace {
 
 // The capabilities that the transform can support.
 const core::ir::Capabilities kMergeReturnCapabilities{
-    core::ir::Capability::kAllowDuplicateBindings,
-    core::ir::Capability::kAllowAnyInputAttachmentIndexType,
-    core::ir::Capability::kAllowNonCoreTypes,
     core::ir::Capability::kAllow8BitIntegers,
 };
 
@@ -227,7 +224,7 @@ struct State {
                 exit_if->SetIf(cond);
 
                 auto exit_args = exit_if->Args();
-                if (!exit_args.IsEmpty()) {
+                if (!exit_args.empty()) {
                     cond->SetResults(tint::Transform<8>(exit_args, [&](auto* arg) {  //
                         return b.InstructionResult(arg->Type());
                     }));
@@ -271,7 +268,7 @@ struct State {
 }  // namespace
 
 Result<SuccessType> MergeReturn(core::ir::Module& ir) {
-    TINT_CHECK_RESULT(ValidateAndDumpIfNeeded(ir, "spirv.MergeReturn", kMergeReturnCapabilities));
+    core::ir::AssertValid(ir, kMergeReturnCapabilities, "before spirv.MergeReturn");
 
     // Process each function.
     for (auto& fn : ir.functions) {

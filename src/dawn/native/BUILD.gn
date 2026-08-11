@@ -27,6 +27,9 @@
 
 import("../../../scripts/dawn_overrides_with_defaults.gni")
 
+# Import ANGLE after overrides to ensure dawn_angle_dir is defined.
+import("${dawn_angle_dir}/gni/angle.gni")
+
 import("//build_overrides/build.gni")
 import("${dawn_root}/generator/dawn_generator.gni")
 import("${dawn_root}/scripts/dawn_component.gni")
@@ -61,7 +64,8 @@ config("internal") {
   ]
 }
 
-# Config that adds the @executable_path rpath if needed so that Swiftshader or the Vulkan loader are found.
+# Config that adds the @executable_path rpath if needed so that Swiftshader or
+# the Vulkan loader are found.
 config("vulkan_rpath") {
   if (is_apple && dawn_enable_vulkan &&
       (use_swiftshader || enable_vulkan_loader)) {
@@ -147,6 +151,26 @@ source_set("headers") {
 if (dawn_standalone && (dawn_enable_d3d11 || dawn_enable_d3d12)) {
   # Use ANGLE's target as it's always available in standalone builds
   _copy_fxc_dll_target = "//third_party/angle:copy_compiler_dll"
+}
+
+if (dawn_enable_d3d12 && dawn_use_agility_sdk) {
+  # Copy DLLs to out dir in D3D12 directory
+  if (target_cpu == "x64") {
+    _bin_dir = "$dawn_agility_sdk_dir/src/build/native/bin/x64"
+  } else if (target_cpu == "x86") {
+    _bin_dir = "$dawn_agility_sdk_dir/src/build/native/bin/win32"
+  } else if (target_cpu == "arm64") {
+    _bin_dir = "$dawn_agility_sdk_dir/src/build/native/bin/arm64"
+  }
+  assert(defined(_bin_dir), "Agility SDK not supported on $target_cpu")
+
+  copy("copy_agility_sdk_dlls") {
+    sources = [
+      "$_bin_dir/D3D12Core.dll",
+      "$_bin_dir/d3d12SDKLayers.dll",
+    ]
+    outputs = [ "$root_out_dir/D3D12/{{source_file_part}}" ]
+  }
 }
 
 # The meat of the compilation for dawn native so that we can cheaply have
@@ -296,10 +320,9 @@ source_set("sources") {
     "Format.cpp",
     "Format.h",
     "Forward.h",
-    "ImmediateConstantsLayout.cpp",
-    "ImmediateConstantsLayout.h",
-    "ImmediateConstantsTracker.cpp",
-    "ImmediateConstantsTracker.h",
+    "ImmediatesLayout.cpp",
+    "ImmediatesLayout.h",
+    "ImmediatesTracker.h",
     "IndirectDrawMetadata.cpp",
     "IndirectDrawMetadata.h",
     "IndirectDrawValidationEncoder.cpp",
@@ -316,6 +339,7 @@ source_set("sources") {
     "ObjectBase.h",
     "ObjectContentHasher.cpp",
     "ObjectContentHasher.h",
+    "ObjectLabel.h",
     "PassResourceUsage.h",
     "PassResourceUsageTracker.cpp",
     "PassResourceUsageTracker.h",
@@ -357,6 +381,8 @@ source_set("sources") {
     "ResourceMemoryAllocation.h",
     "ResourceTable.cpp",
     "ResourceTable.h",
+    "ResourceTableDefaultResources.cpp",
+    "ResourceTableDefaultResources.h",
     "RingBufferAllocator.cpp",
     "RingBufferAllocator.h",
     "Sampler.cpp",
@@ -409,7 +435,6 @@ source_set("sources") {
     "stream/ByteVectorSink.h",
     "stream/Sink.h",
     "stream/Source.h",
-    "stream/Stream.cpp",
     "stream/Stream.h",
     "utils/WGPUHelpers.cpp",
     "utils/WGPUHelpers.h",
@@ -516,10 +541,13 @@ source_set("sources") {
       "d3d11/DeviceInfoD3D11.cpp",
       "d3d11/DeviceInfoD3D11.h",
       "d3d11/Forward.h",
+      "d3d11/ImmediatesLayoutD3D11.h",
       "d3d11/PhysicalDeviceD3D11.cpp",
       "d3d11/PhysicalDeviceD3D11.h",
       "d3d11/PipelineLayoutD3D11.cpp",
       "d3d11/PipelineLayoutD3D11.h",
+      "d3d11/PipelineStateTrackerD3D11.cpp",
+      "d3d11/PipelineStateTrackerD3D11.h",
       "d3d11/PlatformFunctionsD3D11.cpp",
       "d3d11/PlatformFunctionsD3D11.h",
       "d3d11/QuerySetD3D11.cpp",
@@ -546,10 +574,15 @@ source_set("sources") {
   }
 
   if (dawn_enable_d3d12) {
+    if (dawn_use_agility_sdk) {
+      include_dirs = [ "$dawn_agility_sdk_dir/src/build/native/include" ]
+      defines += [ "DAWN_USE_AGILITY_SDK" ]
+      data_deps += [ ":copy_agility_sdk_dlls" ]
+    }
     if (dawn_use_built_dxc) {
-      deps += [ "$dawn_root/third_party/gn/dxc:dxcompiler" ]
+      deps += [ "${dawn_dxc_gn_dir}:dxcompiler" ]
       defines += [ "DAWN_USE_BUILT_DXC" ]
-      data_deps += [ "$dawn_root/third_party/gn/dxc:copy_dxil_dll" ]
+      data_deps += [ "${dawn_dxc_gn_dir}:copy_dxil_dll" ]
     }
     libs += [ "dxguid.lib" ]
     sources += [
@@ -580,6 +613,7 @@ source_set("sources") {
       "d3d12/HeapAllocatorD3D12.h",
       "d3d12/HeapD3D12.cpp",
       "d3d12/HeapD3D12.h",
+      "d3d12/ImmediatesLayoutD3D12.h",
       "d3d12/IntegerTypes.h",
       "d3d12/PageableD3D12.cpp",
       "d3d12/PageableD3D12.h",
@@ -665,6 +699,7 @@ source_set("sources") {
       "metal/DeviceMTL.h",
       "metal/DeviceMTL.mm",
       "metal/Forward.h",
+      "metal/ImmediatesLayoutMTL.h",
       "metal/MultiDrawEncoder.h",
       "metal/MultiDrawEncoder.mm",
       "metal/PhysicalDeviceMTL.h",
@@ -751,6 +786,12 @@ source_set("sources") {
       "webgpu/Serialization.h",
       "webgpu/ShaderModuleWGPU.cpp",
       "webgpu/ShaderModuleWGPU.h",
+      "webgpu/SharedFenceWGPU.cpp",
+      "webgpu/SharedFenceWGPU.h",
+      "webgpu/SharedTextureMemoryWGPU.cpp",
+      "webgpu/SharedTextureMemoryWGPU.h",
+      "webgpu/SwapChainWGPU.cpp",
+      "webgpu/SwapChainWGPU.h",
       "webgpu/TextureWGPU.cpp",
       "webgpu/TextureWGPU.h",
       "webgpu/ToWGPU.cpp",
@@ -760,8 +801,7 @@ source_set("sources") {
     deps += [ "${dawn_root}/src/dawn:serialization" ]
   }
 
-  if ((dawn_enable_opengl || dawn_enable_vulkan) &&
-      dawn_enable_spirv_validation) {
+  if (dawn_enable_spirv_validation) {
     sources += [
       "SpirvValidation.cpp",
       "SpirvValidation.h",
@@ -773,10 +813,11 @@ source_set("sources") {
   }
 
   if (dawn_enable_opengl) {
+    defines += [ "DAWN_ANGLE_LIBS_SUFFIX=\"${angle_libs_suffix}\"" ]
     public_deps += [
       ":opengl_loader_gen",
       "${dawn_root}/src/tint/api/common",
-      "${dawn_root}/third_party/khronos:khronos_platform",
+      "${dawn_root}/third_party/EGL-Registry:khronos_platform",
     ]
     sources += get_target_outputs(":opengl_loader_gen")
     sources += [
@@ -803,6 +844,7 @@ source_set("sources") {
       "opengl/Forward.h",
       "opengl/GLFormat.cpp",
       "opengl/GLFormat.h",
+      "opengl/ImmediatesLayoutGL.h",
       "opengl/IntegerTypes.h",
       "opengl/OpenGLFunctions.cpp",
       "opengl/OpenGLFunctions.h",
@@ -844,7 +886,7 @@ source_set("sources") {
       "opengl/UtilsGL.h",
       "opengl/opengl_platform.h",
     ]
-    include_dirs += [ "//third_party/khronos" ]
+    include_dirs += [ "//third_party/EGL-Registry" ]
   }
 
   if (dawn_enable_vulkan) {
@@ -876,6 +918,9 @@ source_set("sources") {
       "vulkan/Forward.h",
       "vulkan/FramebufferCache.cpp",
       "vulkan/FramebufferCache.h",
+      "vulkan/FramebufferFetchHelper.cpp",
+      "vulkan/FramebufferFetchHelper.h",
+      "vulkan/ImmediatesLayoutVk.h",
       "vulkan/MemoryTypeSelector.cpp",
       "vulkan/MemoryTypeSelector.h",
       "vulkan/PhysicalDeviceVk.cpp",
@@ -884,7 +929,6 @@ source_set("sources") {
       "vulkan/PipelineCacheVk.h",
       "vulkan/PipelineLayoutVk.cpp",
       "vulkan/PipelineLayoutVk.h",
-      "vulkan/PipelineVk.cpp",
       "vulkan/PipelineVk.h",
       "vulkan/QuerySetVk.cpp",
       "vulkan/QuerySetVk.h",
@@ -914,6 +958,8 @@ source_set("sources") {
       "vulkan/StreamImplVk.cpp",
       "vulkan/SwapChainVk.cpp",
       "vulkan/SwapChainVk.h",
+      "vulkan/TexelBufferViewVk.cpp",
+      "vulkan/TexelBufferViewVk.h",
       "vulkan/TextureVk.cpp",
       "vulkan/TextureVk.h",
       "vulkan/UniqueVkHandle.h",

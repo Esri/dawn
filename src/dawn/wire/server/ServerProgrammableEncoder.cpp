@@ -27,8 +27,8 @@
 
 #include <limits>
 
-#include "dawn/common/Assert.h"
-#include "dawn/wire/server/Server.h"
+#include "src/dawn/wire/server/Server.h"
+#include "src/utils/assert.h"
 
 namespace dawn::wire::server {
 

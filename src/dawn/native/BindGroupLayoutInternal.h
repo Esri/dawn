@@ -34,20 +34,19 @@
 #include <string>
 
 #include "absl/container/flat_hash_map.h"
-#include "dawn/common/Constants.h"
-#include "dawn/common/ContentLessObjectCacheable.h"
-#include "dawn/common/Range.h"
-#include "dawn/common/SlabAllocator.h"
-#include "dawn/common/ityp_span.h"
-#include "dawn/common/ityp_vector.h"
-#include "dawn/native/BindingInfo.h"
-#include "dawn/native/CachedObject.h"
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/ObjectBase.h"
-
-#include "dawn/native/dawn_platform.h"
+#include "src/dawn/common/Constants.h"
+#include "src/dawn/common/ContentLessObjectCacheable.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/common/SlabAllocator.h"
+#include "src/dawn/common/ityp_span.h"
+#include "src/dawn/common/ityp_vector.h"
+#include "src/dawn/native/BindingInfo.h"
+#include "src/dawn/native/CachedObject.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/Forward.h"
+#include "src/dawn/native/ObjectBase.h"
+#include "src/dawn/native/dawn_platform.h"
 
 namespace dawn::native {
 
@@ -140,8 +139,10 @@ class BindGroupLayoutInternalBase : public ApiObjectBase,
     BindingIndex GetDynamicBufferCount() const;
     uint32_t GetDynamicStorageBufferCount() const;
     uint32_t GetUnverifiedBufferCount() const;
+    uint32_t GetAPIStaticSamplerCount() const;
     uint32_t GetStaticSamplerCount() const;
     bool IsStorageBufferBinding(BindingIndex bindingIndex) const;
+    bool IsExternalTextureBinding(APIBindingIndex bindingIndex) const;
 
     uint32_t GetExternalTextureCount() const;
 
@@ -156,6 +157,7 @@ class BindGroupLayoutInternalBase : public ApiObjectBase,
     BeginEndRange<BindingIndex> GetStaticSamplerIndices() const;
     BeginEndRange<BindingIndex> GetNonStaticSamplerIndices() const;
     BeginEndRange<BindingIndex> GetInputAttachmentIndices() const;
+    BeginEndRange<APIBindingIndex> GetExternalTextureIndices() const;
 
     // Functions necessary for the unordered_set<BGLBase*>-based cache.
     size_t ComputeContentHash() override;
@@ -171,13 +173,15 @@ class BindGroupLayoutInternalBase : public ApiObjectBase,
     // used to get the stored counts.
     const BindingCounts& GetValidationBindingCounts() const;
 
-    uint32_t GetUnexpandedBindingCount() const;
+    // Returns the number of bindings that's expected in the BindGroupDescriptor for BindGroups
+    // created from this layout.
+    uint32_t GetBindingCountForBindGroupCreation() const;
 
     bool NeedsCrossBindingValidation() const;
 
     struct BufferBindingData {
-        uint64_t offset;
-        uint64_t size;
+        uint64_t offset = 0;
+        uint64_t size = 0;
     };
 
     struct BindingDataPointers {
@@ -226,7 +230,7 @@ class BindGroupLayoutInternalBase : public ApiObjectBase,
     // "end" of the last binding type)
     BindingIndex GetBindingTypeStart(BindingTypeOrder type) const;
     BindingIndex GetBindingTypeEnd(BindingTypeOrder type) const;
-    std::array<BindingIndex, BindingTypeOrder_Count + 1> mBindingTypeStart;
+    std::array<BindingIndex, BindingTypeOrder_Count + 1> mBindingTypeStart = {};
 
     // Additional counts for types of bindings.
     uint32_t mUnverifiedBufferCount = 0;

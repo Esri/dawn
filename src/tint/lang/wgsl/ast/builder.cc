@@ -26,6 +26,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "src/tint/lang/wgsl/ast/builder.h"
+
 #include "src/tint/lang/core/enums.h"
 
 using namespace tint::core::number_suffixes;  // NOLINT
@@ -458,10 +459,6 @@ ast::Type Builder::TypesBuilder::sampler(core::type::SamplerKind kind) const {
     return sampler(builder->source_, kind);
 }
 
-ast::Type Builder::TypesBuilder::sampler(core::SamplerFiltering filtering) const {
-    return sampler(builder->source_, filtering);
-}
-
 ast::Type Builder::TypesBuilder::sampler(const Source& source, core::type::SamplerKind kind) const {
     switch (kind) {
         case core::type::SamplerKind::kSampler:
@@ -470,14 +467,6 @@ ast::Type Builder::TypesBuilder::sampler(const Source& source, core::type::Sampl
             return AsType(source, "sampler_comparison");
     }
     TINT_ICE() << "invalid sampler kind " << kind;
-}
-
-ast::Type Builder::TypesBuilder::sampler(const Source& source,
-                                         core::SamplerFiltering filtering) const {
-    TINT_ASSERT(filtering == core::SamplerFiltering::kFiltering ||
-                filtering == core::SamplerFiltering::kNonFiltering);
-
-    return AsType(source, "sampler", filtering);
 }
 
 ast::Type Builder::TypesBuilder::depth_texture(core::type::TextureDimension dims) const {
@@ -520,12 +509,6 @@ ast::Type Builder::TypesBuilder::sampled_texture(core::type::TextureDimension di
     return sampled_texture(builder->source_, dims, subtype);
 }
 
-ast::Type Builder::TypesBuilder::sampled_texture(core::type::TextureDimension dims,
-                                                 ast::Type subtype,
-                                                 core::TextureFilterable filterable) const {
-    return sampled_texture(builder->source_, dims, subtype, filterable);
-}
-
 ast::Type Builder::TypesBuilder::sampled_texture(const Source& source,
                                                  core::type::TextureDimension dims,
                                                  ast::Type subtype) const {
@@ -542,32 +525,6 @@ ast::Type Builder::TypesBuilder::sampled_texture(const Source& source,
             return AsType(source, "texture_cube", subtype);
         case core::type::TextureDimension::kCubeArray:
             return AsType(source, "texture_cube_array", subtype);
-        default:
-            break;
-    }
-    TINT_ICE() << "invalid sampled_texture dimensions: " << dims;
-}
-
-ast::Type Builder::TypesBuilder::sampled_texture(const Source& source,
-                                                 core::type::TextureDimension dims,
-                                                 ast::Type subtype,
-                                                 core::TextureFilterable filterable) const {
-    TINT_ASSERT(filterable == core::TextureFilterable::kFilterable ||
-                filterable == core::TextureFilterable::kUnfilterable);
-
-    switch (dims) {
-        case core::type::TextureDimension::k1d:
-            return AsType(source, "texture_1d", subtype, filterable);
-        case core::type::TextureDimension::k2d:
-            return AsType(source, "texture_2d", subtype, filterable);
-        case core::type::TextureDimension::k3d:
-            return AsType(source, "texture_3d", subtype, filterable);
-        case core::type::TextureDimension::k2dArray:
-            return AsType(source, "texture_2d_array", subtype, filterable);
-        case core::type::TextureDimension::kCube:
-            return AsType(source, "texture_cube", subtype, filterable);
-        case core::type::TextureDimension::kCubeArray:
-            return AsType(source, "texture_cube_array", subtype, filterable);
         default:
             break;
     }
@@ -674,6 +631,7 @@ ast::Type Builder::TypesBuilder::subgroup_matrix(core::SubgroupMatrixKind kind,
         case core::SubgroupMatrixKind::kUndefined:
             TINT_UNREACHABLE();
     }
+    TINT_UNREACHABLE();
 }
 
 ast::Type Builder::TypesBuilder::buffer(uint32_t size) const {

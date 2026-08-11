@@ -25,22 +25,22 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/webgpu/RenderBundleWGPU.h"
+#include "src/dawn/native/webgpu/RenderBundleWGPU.h"
 
 #include <utility>
 #include <vector>
 
-#include "dawn/native/CommandEncoder.h"
-#include "dawn/native/Commands.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/webgpu/BindGroupWGPU.h"
-#include "dawn/native/webgpu/BufferWGPU.h"
-#include "dawn/native/webgpu/CaptureContext.h"
-#include "dawn/native/webgpu/CommandBufferHelpers.h"
-#include "dawn/native/webgpu/DeviceWGPU.h"
-#include "dawn/native/webgpu/RenderPipelineWGPU.h"
-#include "dawn/native/webgpu/TextureWGPU.h"
-#include "dawn/native/webgpu/ToWGPU.h"
+#include "src/dawn/native/CommandEncoder.h"
+#include "src/dawn/native/Commands.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/webgpu/BindGroupWGPU.h"
+#include "src/dawn/native/webgpu/BufferWGPU.h"
+#include "src/dawn/native/webgpu/CaptureContext.h"
+#include "src/dawn/native/webgpu/CommandBufferHelpers.h"
+#include "src/dawn/native/webgpu/DeviceWGPU.h"
+#include "src/dawn/native/webgpu/RenderPipelineWGPU.h"
+#include "src/dawn/native/webgpu/TextureWGPU.h"
+#include "src/dawn/native/webgpu/ToWGPU.h"
 
 namespace dawn::native::webgpu {
 
@@ -183,7 +183,7 @@ RenderBundle::RenderBundle(RenderBundleEncoderBase* encoder,
                        std::move(usages),
                        std::move(indirectDrawMetaData)),
       RecordableObject(schema::ObjectType::RenderBundle),
-      ObjectWGPU(ToBackend(GetDevice())->wgpu.renderBundleRelease) {
+      ObjectWGPU(ToBackend(GetDevice())->wgpu->renderBundleRelease) {
     Device* device = ToBackend(GetDevice());
 
     const AttachmentState* attachmentState = GetAttachmentState();
@@ -207,24 +207,26 @@ RenderBundle::RenderBundle(RenderBundleEncoderBase* encoder,
     bundleEncoderDescriptor.depthReadOnly = IsDepthReadOnly();
     bundleEncoderDescriptor.stencilReadOnly = IsStencilReadOnly();
 
-    WGPURenderBundleEncoder innerRenderBundleEncoder = device->wgpu.deviceCreateRenderBundleEncoder(
-        device->GetInnerHandle(), &bundleEncoderDescriptor);
+    WGPURenderBundleEncoder innerRenderBundleEncoder =
+        device->wgpu->deviceCreateRenderBundleEncoder(device->GetInnerHandle(),
+                                                      &bundleEncoderDescriptor);
 
     CommandIterator* iter = GetCommands();
     Command bundleCommandType;
     while (iter->NextCommandId(&bundleCommandType)) {
-        EncodeRenderBundleCommand(device->wgpu, innerRenderBundleEncoder, *iter, bundleCommandType);
+        EncodeRenderBundleCommand(device->wgpu.get(), innerRenderBundleEncoder, *iter,
+                                  bundleCommandType);
     }
 
-    mInnerHandle = device->wgpu.renderBundleEncoderFinish(innerRenderBundleEncoder, nullptr);
+    mInnerHandle = device->wgpu->renderBundleEncoderFinish(innerRenderBundleEncoder, nullptr);
     DAWN_ASSERT(mInnerHandle);
 
-    device->wgpu.renderBundleEncoderRelease(innerRenderBundleEncoder);
+    device->wgpu->renderBundleEncoderRelease(innerRenderBundleEncoder);
 }
 
 void RenderBundle::DestroyImpl(DestroyReason reason) {
     RenderBundleBase::DestroyImpl(reason);
-    ToBackend(GetDevice())->wgpu.renderBundleRelease(mInnerHandle);
+    ToBackend(GetDevice())->wgpu->renderBundleRelease(mInnerHandle);
     mInnerHandle = nullptr;
 }
 

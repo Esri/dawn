@@ -29,9 +29,8 @@
 #define SRC_DAWN_TESTS_UNITTESTS_NATIVE_MOCKS_QUERYSETMOCK_H_
 
 #include "gmock/gmock.h"
-
-#include "dawn/native/QuerySet.h"
-#include "dawn/tests/unittests/native/mocks/DeviceMock.h"
+#include "src/dawn/native/QuerySet.h"
+#include "src/dawn/tests/unittests/native/mocks/DeviceMock.h"
 
 namespace dawn::native {
 

@@ -25,12 +25,13 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/opengl/RenderPipelineGL.h"
+#include "src/dawn/native/opengl/RenderPipelineGL.h"
 
-#include "dawn/native/opengl/DeviceGL.h"
-#include "dawn/native/opengl/Forward.h"
-#include "dawn/native/opengl/PersistentPipelineStateGL.h"
-#include "dawn/native/opengl/UtilsGL.h"
+#include "src/dawn/native/opengl/DeviceGL.h"
+#include "src/dawn/native/opengl/Forward.h"
+#include "src/dawn/native/opengl/ImmediatesLayoutGL.h"
+#include "src/dawn/native/opengl/PersistentPipelineStateGL.h"
+#include "src/dawn/native/opengl/UtilsGL.h"
 
 namespace dawn::native::opengl {
 
@@ -222,30 +223,64 @@ RenderPipeline::RenderPipeline(Device* device,
       mGlPrimitiveTopology(GLPrimitiveTopology(GetPrimitiveTopology())) {}
 
 MaybeError RenderPipeline::InitializeImpl() {
-    VertexAttributeMask bgraSwizzleAttributes = {};
-    for (VertexAttributeLocation i : GetAttributeLocationsUsed()) {
-        bgraSwizzleAttributes.set(i, GetAttribute(i).format == wgpu::VertexFormat::Unorm8x4BGRA);
+    if (UsesVertexIndex()) {
+        mImmediateMask |= GetImmediateBlockBits(offsetof(RenderImmediates, firstVertex),
+                                                kImmediateElementByteSize);
     }
+    if (UsesInstanceIndex()) {
+        mImmediateMask |= GetImmediateBlockBits(offsetof(RenderImmediates, firstInstance),
+                                                kImmediateElementByteSize);
+    }
+    if (UsesFragDepth()) {
+        mImmediateMask |= GetImmediateBlockBits(offsetof(RenderImmediates, clampFragDepth),
+                                                sizeof(ClampFragDepthArgs));
+    }
+    return ToBackend(GetDevice())
+        ->EnqueueGL([self = Ref<RenderPipeline>(this)](const OpenGLFunctions& gl) -> MaybeError {
+            VertexAttributeMask bgraSwizzleAttributes = {};
+            for (VertexAttributeLocation i : self->GetAttributeLocationsUsed()) {
+                bgraSwizzleAttributes.set(
+                    i, self->GetAttribute(i).format == wgpu::VertexFormat::Unorm8x4BGRA);
+            }
 
-    auto gl = ToBackend(GetDevice())->GetGL();
-    DAWN_TRY(InitializeBase(gl, ToBackend(GetLayout()), GetAllStages(), UsesVertexIndex(),
-                            UsesInstanceIndex(), UsesFragDepth(), bgraSwizzleAttributes));
-    DAWN_TRY(CreateVAOForVertexState(gl));
-    return {};
+            DAWN_TRY(self->InitializeBase(gl, ToBackend(self->GetLayout()), self->GetAllStages(),
+                                          self->mImmediateMask, bgraSwizzleAttributes));
+            DAWN_TRY(self->CreateVAOForVertexState(gl));
+            return {};
+        });
 }
 
 RenderPipeline::~RenderPipeline() = default;
 
 void RenderPipeline::DestroyImpl(DestroyReason reason) {
     RenderPipelineBase::DestroyImpl(reason);
-    const OpenGLFunctions& gl = ToBackend(GetDevice())->GetGL();
-    DAWN_GL_TRY_IGNORE_ERRORS(gl, DeleteVertexArrays(1, &mVertexArrayObject));
-    DAWN_GL_TRY_IGNORE_ERRORS(gl, BindVertexArray(0));
-    DeleteProgram(gl);
+    IgnoreErrors(ToBackend(GetDevice())
+                     ->EnqueueDestroyGL(this, &RenderPipeline::GetVertexArrayObject, reason,
+                                        [](const OpenGLFunctions& gl, GLuint vao) -> MaybeError {
+                                            DAWN_GL_TRY_IGNORE_ERRORS(gl,
+                                                                      DeleteVertexArrays(1, &vao));
+                                            DAWN_GL_TRY_IGNORE_ERRORS(gl, BindVertexArray(0));
+                                            return {};
+                                        }));
+    IgnoreErrors(
+        ToBackend(GetDevice())
+            ->EnqueueDestroyGL(this, &RenderPipeline::GetProgramHandle, reason,
+                               [](const OpenGLFunctions& gl, GLuint program) -> MaybeError {
+                                   DAWN_GL_TRY_IGNORE_ERRORS(gl, DeleteProgram(program));
+                                   return {};
+                               }));
 }
 
 GLenum RenderPipeline::GetGLPrimitiveTopology() const {
     return mGlPrimitiveTopology;
+}
+
+GLuint RenderPipeline::GetProgramHandle() const {
+    return mProgram;
+}
+
+GLuint RenderPipeline::GetVertexArrayObject() const {
+    return mVertexArrayObject;
 }
 
 VertexAttributeMask RenderPipeline::GetAttributesUsingVertexBuffer(VertexBufferSlot slot) const {

@@ -25,15 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifdef UNSAFE_BUFFERS_BUILD
-// TODO(crbug.com/439062058): Remove this and convert code to safer constructs.
-#pragma allow_unsafe_buffers
-#endif
+#include "src/dawn/wire/client/LimitsAndFeatures.h"
 
-#include "dawn/wire/client/LimitsAndFeatures.h"
-
-#include "dawn/common/Assert.h"
-#include "dawn/wire/SupportedFeatures.h"
+#include "src/dawn/wire/SupportedFeatures.h"
+#include "src/utils/assert.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::wire::client {
 
@@ -58,10 +54,6 @@ WGPUStatus LimitsAndFeatures::GetLimits(WGPULimits* limits) const {
             case WGPUSType_DawnTexelCopyBufferRowAlignmentLimits: {
                 *reinterpret_cast<WGPUDawnTexelCopyBufferRowAlignmentLimits*>(chain) =
                     mTexelCopyBufferRowAlignmentLimits;
-                break;
-            }
-            case WGPUSType_ResourceTableLimits: {
-                *reinterpret_cast<WGPUResourceTableLimits*>(chain) = mResourceTableLimits;
                 break;
             }
             default:
@@ -95,14 +87,10 @@ void LimitsAndFeatures::ToSupportedFeatures(WGPUSupportedFeatures* supportedFeat
     WGPUFeatureName* features = new WGPUFeatureName[count];
     uint32_t index = 0;
     for (WGPUFeatureName f : mFeatures) {
-        features[index++] = f;
+        DAWN_UNSAFE_TODO(features[index++]) = f;
     }
     DAWN_ASSERT(index == count);
     supportedFeatures->features = features;
-}
-
-const WGPUResourceTableLimits& LimitsAndFeatures::GetResourceTableLimits() const {
-    return mResourceTableLimits;
 }
 
 void LimitsAndFeatures::SetLimits(const WGPULimits* limits) {
@@ -126,12 +114,6 @@ void LimitsAndFeatures::SetLimits(const WGPULimits* limits) {
                 mTexelCopyBufferRowAlignmentLimits.chain.next = nullptr;
                 break;
             }
-            case WGPUSType_ResourceTableLimits: {
-                mResourceTableLimits = *reinterpret_cast<WGPUResourceTableLimits*>(chain);
-                DAWN_ASSERT(mResourceTableLimits.chain.sType == WGPUSType_ResourceTableLimits);
-                mResourceTableLimits.chain.next = nullptr;
-                break;
-            }
             default:
                 DAWN_UNREACHABLE();
         }
@@ -143,10 +125,10 @@ void LimitsAndFeatures::SetFeatures(const WGPUFeatureName* features, uint32_t fe
     for (uint32_t i = 0; i < featuresCount; ++i) {
         // Filter out features that the server supports, but the client does not.
         // (Could be different versions)
-        if (!IsFeatureSupported(features[i])) {
+        if (!IsFeatureSupported(DAWN_UNSAFE_TODO(features[i]))) {
             continue;
         }
-        mFeatures.insert(features[i]);
+        mFeatures.insert(DAWN_UNSAFE_TODO(features[i]));
     }
 }
 

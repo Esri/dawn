@@ -1,0 +1,2320 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{76FFE024-5DA4-6349-95AD-D982F21F33B8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn">
+      <UniqueIdentifier>{509224B4-D131-5945-A852-80574574F6EC}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\utils">
+      <UniqueIdentifier>{75C593AF-F917-E247-9FD0-45BF2FDF1BDF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint">
+      <UniqueIdentifier>{7D172E3F-3F4D-5745-9909-7B4594A1C34F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils">
+      <UniqueIdentifier>{692277F8-D0D2-8B4D-BCDC-AACC1EB63E2D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\rtti">
+      <UniqueIdentifier>{AFA51CD4-F155-304B-9B3D-F525356F6B34}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\native">
+      <UniqueIdentifier>{F40E8029-9C03-EB4D-8F8F-57CFAEC814F2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\native\utils">
+      <UniqueIdentifier>{9D0C7859-8F48-0F44-A337-AD780DE272F5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="out">
+      <UniqueIdentifier>{1D1FE10F-6A5D-3A4F-862D-7D5680428FCD}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="out\gen">
+      <UniqueIdentifier>{8BE2EEA2-9DE5-CF4E-BCAD-6CB46FBA7C29}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="out\gen\src">
+      <UniqueIdentifier>{FEA27026-E963-C446-B50E-9370D352F5C1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="out\gen\src\dawn">
+      <UniqueIdentifier>{13D9A960-5EFB-BF4A-977D-5D7CA1F898F6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="out\gen\src\dawn\native">
+      <UniqueIdentifier>{A4175D4A-8917-1345-979B-9B8F46FA06EB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="out\gen\src\dawn\common">
+      <UniqueIdentifier>{A1EA0827-D8E0-8649-98C4-A600FA615940}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\common">
+      <UniqueIdentifier>{EC3DD11C-BA85-6D49-AC7E-97756FFB5DDB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\native\null">
+      <UniqueIdentifier>{10711A77-6DC0-C945-81FE-3E539B99EB80}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\native\stream">
+      <UniqueIdentifier>{910D06E3-CC9F-C347-8843-9C5181904CBB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\platform">
+      <UniqueIdentifier>{302BDDDB-3831-2F4F-B3DB-0AA63421C142}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\platform\metrics">
+      <UniqueIdentifier>{0A1C0A67-049F-E945-959F-B38836F338F5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\platform\tracing">
+      <UniqueIdentifier>{A0834F78-4F93-8A47-AA6D-B26A0EF9533A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\replay">
+      <UniqueIdentifier>{F3796485-AE16-C74B-9ED2-65F9A7E385E3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\api">
+      <UniqueIdentifier>{11CB41CD-B2DA-0045-8B8E-E9965DC87C8E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\api\common">
+      <UniqueIdentifier>{465222D2-298A-484E-B609-F2A250019DDE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\api\helpers">
+      <UniqueIdentifier>{13FCBD0A-4636-314F-9754-AC8625011A09}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang">
+      <UniqueIdentifier>{CB651332-753F-2F45-8474-5921E420FC43}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\core">
+      <UniqueIdentifier>{08DF932E-AD90-214A-8A93-92F996276829}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\core\constant">
+      <UniqueIdentifier>{922B7ADC-D938-E54D-A6C4-7A7042DD9E1C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\core\intrinsic">
+      <UniqueIdentifier>{D522D94E-7D2E-ED48-9735-F8BA600D1770}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\core\ir">
+      <UniqueIdentifier>{4AA8480F-A1EB-BE42-905A-C75FA44486F0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\core\ir\analysis">
+      <UniqueIdentifier>{4C058A3D-66E4-C04B-9872-742EF9090638}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\core\ir\transform">
+      <UniqueIdentifier>{45A5613A-45A5-594A-9B4D-3D7E10C269D1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\core\ir\type">
+      <UniqueIdentifier>{07FAF8A4-EC2D-E14F-ABA4-9627CA7733E4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\core\type">
+      <UniqueIdentifier>{9FAED125-2CC1-FF41-B87D-AA2F82C40A14}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\null">
+      <UniqueIdentifier>{A2F78C43-783A-B34B-AE92-AC96648F45BA}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\null\writer">
+      <UniqueIdentifier>{36636946-8EBA-734D-BF2C-86701ACA013A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\null\writer\common">
+      <UniqueIdentifier>{974CD784-62F0-2A45-9E5E-F03A52669D25}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\null\writer\raise">
+      <UniqueIdentifier>{52508C14-3D23-9B40-8850-7200278F0ACF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl">
+      <UniqueIdentifier>{9A135480-68C7-4241-93B3-FF0B1C113617}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\ast">
+      <UniqueIdentifier>{194D3306-BA9E-0741-8318-C4D86D387A99}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\inspector">
+      <UniqueIdentifier>{8D379EA8-5F2B-AF4D-B61F-F32120A60F7D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\intrinsic">
+      <UniqueIdentifier>{6FBCA527-8E9B-6547-896C-0B0A2615F958}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\ir">
+      <UniqueIdentifier>{A78CD142-418F-C647-8A3A-AFEFDF1EB6F8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\program">
+      <UniqueIdentifier>{9252C144-FE0E-5F4F-B5E3-3D8F9866938D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\reader">
+      <UniqueIdentifier>{8389F921-6C57-5C45-9808-77C6B3C40B49}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\reader\lower">
+      <UniqueIdentifier>{54F59080-7074-3F45-B032-2DC4FCC07FFA}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\reader\parser">
+      <UniqueIdentifier>{BAB76BC4-62DA-ED40-A861-2909B212FEC4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\reader\program_to_ir">
+      <UniqueIdentifier>{8A249870-EE22-9742-9F42-71B5BDDA6B79}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\resolver">
+      <UniqueIdentifier>{77E19B65-FE27-A84E-A0A2-3E225FA0F66B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\sem">
+      <UniqueIdentifier>{7B4741B1-BABE-914C-92AA-39D128FA7FCC}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\writer">
+      <UniqueIdentifier>{2EB9CAC0-3597-E142-AFB9-53AB6F5F83F3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\writer\ast_printer">
+      <UniqueIdentifier>{3BC25FC3-80A6-1649-A83F-D44796E1BB08}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\writer\common">
+      <UniqueIdentifier>{A3CCDA02-10B5-AC4D-99A0-76BACAECAF58}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\writer\ir_to_program">
+      <UniqueIdentifier>{C8E2C497-94F2-7F4D-A3B8-E9E8426B20A7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\wgsl\writer\raise">
+      <UniqueIdentifier>{52ADF044-BEC6-BE4B-A5C3-0633D87F6109}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\bytes">
+      <UniqueIdentifier>{771A4A9B-25CF-A143-8DA5-7A2411EDF23A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\command">
+      <UniqueIdentifier>{3FADD6ED-55ED-CB46-984A-BD5D0D5AE1C9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\containers">
+      <UniqueIdentifier>{86CE533C-7C75-754F-89C2-CDAD68D8039A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\diagnostic">
+      <UniqueIdentifier>{53B520AC-D58E-FA46-9C90-AD25267538CF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\ice">
+      <UniqueIdentifier>{09FEADA3-0D30-0149-8420-882789F33623}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\macros">
+      <UniqueIdentifier>{2EEBD0A6-B8BD-0346-8081-ECF74E1F2E28}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\math">
+      <UniqueIdentifier>{1555C533-DAE9-A64B-B6EA-F3AB70951BD1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\memory">
+      <UniqueIdentifier>{309E226D-5993-FA4D-8A51-3BD654919553}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\reflection">
+      <UniqueIdentifier>{A234C572-7D1D-824D-A4E4-89C7CE11C3E0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\strconv">
+      <UniqueIdentifier>{7098FAEF-DA5E-D54C-B785-5A7BF8B8F48E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\symbol">
+      <UniqueIdentifier>{751E7148-B6A6-B147-A1FC-7E0642135E69}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\system">
+      <UniqueIdentifier>{F3FA0AFF-BE81-354C-8701-5B942A9F970F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\text">
+      <UniqueIdentifier>{008AA4AB-E536-5749-8E41-1443F21FBBCC}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\text_generator">
+      <UniqueIdentifier>{974B39D9-FA01-3F45-8445-E944547EE35B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\utils">
+      <UniqueIdentifier>{F42AA355-6408-C146-ADDA-AD091B3233FB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\utils\file">
+      <UniqueIdentifier>{839A0F1F-8080-3B44-B553-A49C38332450}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\hlsl">
+      <UniqueIdentifier>{CA3D613E-B0D7-384E-BAA7-147D96B16CF1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\hlsl\intrinsic">
+      <UniqueIdentifier>{6697CFEA-557E-6049-B101-F4720A937A3B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\hlsl\ir">
+      <UniqueIdentifier>{93ADE2EA-259C-DA40-83D0-2AB35A20D8C5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\hlsl\type">
+      <UniqueIdentifier>{C6423DE0-B49A-5447-A5B9-3529798D34BF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\hlsl\validate">
+      <UniqueIdentifier>{A46A72E9-C598-B846-B154-0210EDE841AE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\hlsl\writer">
+      <UniqueIdentifier>{DBF17906-A54D-ED45-86C8-46EAA8BB68E2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\hlsl\writer\common">
+      <UniqueIdentifier>{0B6D7954-6B6B-AD48-A3B0-57EDCB4DAC15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\hlsl\writer\printer">
+      <UniqueIdentifier>{6289359A-0886-BA4A-BDFA-EE3951580394}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\hlsl\writer\raise">
+      <UniqueIdentifier>{7F4914F6-7812-4445-B777-EDCA22F4A055}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv">
+      <UniqueIdentifier>{977F7891-4E95-314C-9AFB-7C5C7DF4C48D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\intrinsic">
+      <UniqueIdentifier>{6B17E299-EE5A-9443-AF0E-284D37AA50AE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\ir">
+      <UniqueIdentifier>{7EE83969-C5ED-D942-A505-E6B8F8B28C34}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\reader">
+      <UniqueIdentifier>{37842667-3469-3A4E-BC79-2A46E9B632EF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\reader\common">
+      <UniqueIdentifier>{0D37A6DC-F367-8343-855F-8F94916811E1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\reader\lower">
+      <UniqueIdentifier>{37AC8C5F-4F25-1740-8B11-307635CB1CCB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\reader\parser">
+      <UniqueIdentifier>{AA9AC6DD-02E5-DE44-9C45-733C2E93BFD8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\type">
+      <UniqueIdentifier>{881D7416-2C03-FB48-860B-E056867042B1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\validate">
+      <UniqueIdentifier>{9FF235C0-66B4-5742-AB72-851F85E63BC9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\writer">
+      <UniqueIdentifier>{4B73412D-4448-FC4D-88F4-1F63C0E34045}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\writer\analysis">
+      <UniqueIdentifier>{CD2DF651-4F80-F448-A71F-DADD00F92214}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\writer\common">
+      <UniqueIdentifier>{BA8535A3-C52C-B144-887C-A2031A955A6F}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\writer\printer">
+      <UniqueIdentifier>{36D009CB-BCBE-A84C-B3DC-81F0ADEC48CB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\tint\lang\spirv\writer\raise">
+      <UniqueIdentifier>{05B39435-E1F1-9545-B775-B2F7B6107BA4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\native\d3d">
+      <UniqueIdentifier>{32686D89-D576-C142-A076-477B24A557A2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\native\d3d12">
+      <UniqueIdentifier>{530E8FAA-99A7-CD43-A4F6-3447E230DE4E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\native\vulkan">
+      <UniqueIdentifier>{EEC844A2-9831-BE4F-A37C-89EAD25AF064}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\native\vulkan\external_memory">
+      <UniqueIdentifier>{864077EE-EA97-B640-A963-DBC60C56527D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\dawn\native\vulkan\external_semaphore">
+      <UniqueIdentifier>{85FD35E8-EE66-7C47-A643-5C2B25625EA1}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\dawn\utils\SystemHandle.cpp">
+      <Filter>src\dawn\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\rtti\castable_rtc_shim_1.cc">
+      <Filter>src\tint\utils\rtti</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\utils\RenderDoc.cpp">
+      <Filter>src\dawn\native\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\ChainUtils_autogen.cpp">
+      <Filter>out\gen\src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\ObjectType_autogen.cpp">
+      <Filter>out\gen\src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\ProcTable.cpp">
+      <Filter>out\gen\src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\ValidationUtils_autogen.cpp">
+      <Filter>out\gen\src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\webgpu_absl_format_autogen.cpp">
+      <Filter>out\gen\src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\webgpu_dawn_native_proc.cpp">
+      <Filter>out\gen\src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\webgpu_StreamImpl_autogen.cpp">
+      <Filter>out\gen\src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\wgpu_structs_autogen.cpp">
+      <Filter>out\gen\src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\common\GPUInfo_autogen.cpp">
+      <Filter>out\gen\src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\AlignedAlloc.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\Defer.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\DynamicLib.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\ExternalTextureParams.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\FutureUtils.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\GPUInfo.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\Math.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\RefCounted.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\Result.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\Sha3.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\SlabAllocator.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\StringViewUtils.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\SystemUtils.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\ThreadLocal.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\WGPUDeviceCallbackInfos.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\WeakRefSupport.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Adapter.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ApplyClearColorValueWithDrawHelper.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\AsyncTask.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\AttachmentState.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BackendConnection.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BindGroup.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BindGroupLayout.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BindGroupLayoutInternal.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BindingInfo.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlitBufferToDepthStencil.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlitBufferToTexture.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlitColorToColorWithDraw.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlitDepthToDepth.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlitTextureToBuffer.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Blob.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlobCache.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BuddyAllocator.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BuddyMemoryAllocator.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Buffer.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CacheKey.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CacheRequest.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CachedObject.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CallbackTaskManager.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CommandAllocator.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CommandBuffer.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CommandBufferStateTracker.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CommandEncoder.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CommandValidation.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Commands.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CompilationMessages.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ComputePassEncoder.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ComputePipeline.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CopyTextureForBrowserHelper.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CreatePipelineAsyncEvent.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\DawnNative.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Device.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\DeviceGuard.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\DynamicUploader.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\EncodingContext.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Error.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ErrorData.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ErrorInjector.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ErrorScope.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\EventManager.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ExecutionQueue.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ExternalTexture.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Features.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Format.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ImmediatesLayout.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\IndirectDrawMetadata.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\IndirectDrawValidationEncoder.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Instance.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\InternalPipelineStore.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Limits.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ObjectBase.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ObjectContentHasher.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PassResourceUsageTracker.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PerStage.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PhysicalDevice.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Pipeline.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PipelineCache.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PipelineLayout.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PooledResourceMemoryAllocator.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ProgrammableEncoder.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\QueryHelper.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\QuerySet.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Queue.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderBundle.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderBundleEncoder.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderEncoderBase.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderPassEncoder.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderPassWorkaroundsHelper.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderPipeline.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ResourceMemoryAllocation.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ResourceTable.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ResourceTableDefaultResources.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RingBufferAllocator.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Sampler.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ScratchBuffer.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ShaderModule.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ShaderModuleParseRequest.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SharedBufferMemory.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SharedFence.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SharedResourceMemory.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SharedTextureMemory.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Subresource.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Surface.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SwapChain.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SystemEvent.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\TexelBufferView.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Texture.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\TintUtils.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Toggles.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ValidationUtils.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\WaitListEvent.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\dawn_platform.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\null\DeviceNull_rtc_shim_1.cpp">
+      <Filter>src\dawn\native\null</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\null\NullBackend_rtc_shim_1.cpp">
+      <Filter>src\dawn\native\null</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\stream\BlobSource.cpp">
+      <Filter>src\dawn\native\stream</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\stream\ByteVectorSink.cpp">
+      <Filter>src\dawn\native\stream</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\utils\WGPUHelpers.cpp">
+      <Filter>src\dawn\native\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\webgpu_absl_format.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\platform\DawnPlatform.cpp">
+      <Filter>src\dawn\platform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\platform\WorkerThread.cpp">
+      <Filter>src\dawn\platform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\platform\metrics\HistogramMacros.cpp">
+      <Filter>src\dawn\platform\metrics</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\platform\tracing\EventTracer.cpp">
+      <Filter>src\dawn\platform\tracing</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\BlitBufferToDepthTexture.cpp">
+      <Filter>src\dawn\replay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\Capture.cpp">
+      <Filter>src\dawn\replay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\CaptureWalker.cpp">
+      <Filter>src\dawn\replay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\Deserialization.cpp">
+      <Filter>src\dawn\replay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\Error_rtc_shim_1.cpp">
+      <Filter>src\dawn\replay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\ReadHead.cpp">
+      <Filter>src\dawn\replay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\Replay.cpp">
+      <Filter>src\dawn\replay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\SurfaceDiscovery.cpp">
+      <Filter>src\dawn\replay</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\api\common\vertex_pulling_config.cc">
+      <Filter>src\tint\api\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\api\helpers\generate_bindings.cc">
+      <Filter>src\tint\api\helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\api\tint.cc">
+      <Filter>src\tint\api</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\binary_op.cc">
+      <Filter>src\tint\lang\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\composite.cc">
+      <Filter>src\tint\lang\core\constant</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\eval.cc">
+      <Filter>src\tint\lang\core\constant</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\invalid.cc">
+      <Filter>src\tint\lang\core\constant</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\manager.cc">
+      <Filter>src\tint\lang\core\constant</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\node.cc">
+      <Filter>src\tint\lang\core\constant</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\scalar.cc">
+      <Filter>src\tint\lang\core\constant</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\splat.cc">
+      <Filter>src\tint\lang\core\constant</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\string.cc">
+      <Filter>src\tint\lang\core\constant</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\value.cc">
+      <Filter>src\tint\lang\core\constant</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\enums.cc">
+      <Filter>src\tint\lang\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\intrinsic\ctor_conv.cc">
+      <Filter>src\tint\lang\core\intrinsic</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\intrinsic\data.cc">
+      <Filter>src\tint\lang\core\intrinsic</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\intrinsic\table.cc">
+      <Filter>src\tint\lang\core\intrinsic</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\access.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\analysis\for_loop_analysis.cc">
+      <Filter>src\tint\lang\core\ir\analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\analysis\integer_range_analysis.cc">
+      <Filter>src\tint\lang\core\ir\analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\analysis\loop_analysis.cc">
+      <Filter>src\tint\lang\core\ir\analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\analysis\subgroup_matrix.cc">
+      <Filter>src\tint\lang\core\ir\analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\binary.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\block.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\block_param.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\break_if.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\builder.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\builtin_call.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\call.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\clone_context.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\const_param_validator.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\constant.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\constexpr_if.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\construct.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\continue.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\control_instruction.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\convert.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\core_binary.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\core_builtin_call.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\core_unary.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\disassembler.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\discard.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\evaluator.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\exit.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\exit_if.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\exit_loop.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\exit_switch.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\function.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\function_param.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\functional_validator.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\if.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\instruction.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\instruction_result.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\io_attribute_validator.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\let.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\load.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\load_vector_element.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\loop.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\member_builtin_call.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\module.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\multi_in_block.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\next_iteration.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\operand_instruction.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\override.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\phony.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\reflection.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\return.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\store.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\store_vector_element.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\structural_validator.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\switch.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\swizzle.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\terminate_invocation.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\terminator.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\array_length_from.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\bgra8unorm_polyfill.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\binary_polyfill.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\binding_remapper.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\block_decorated_structs.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\builtin_polyfill.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\builtin_scalarize.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\change_immediate_to_uniform.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\collapse_subgroup_min_max.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\combine_access_instructions.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\conversion_polyfill.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\dead_code_elimination.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\decompose_access.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\demote_to_helper.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\direct_variable_access.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\multiplanar_external_texture.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\prepare_immediate_data.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\preserve_padding.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\prevent_infinite_loops.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\propagate_buffer_sizes.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\remove_continue_in_switch.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\remove_terminator_args.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\remove_uniform_vector_component_loads.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\rename_conflicts.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\resource_table.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\resource_table_helper.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\robustness.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\shader_io.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\signed_integer_polyfill.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\single_entry_point.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\std140.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\substitute_overrides.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\value_to_let.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\vectorize_scalar_matrix_constructors.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\vertex_pulling.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\zero_init_workgroup_memory.cc">
+      <Filter>src\tint\lang\core\ir\transform</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\type\array_count.cc">
+      <Filter>src\tint\lang\core\ir\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\unary.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\unreachable.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\unused.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\user_call.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\validator.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\value_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\var.cc">
+      <Filter>src\tint\lang\core\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\number.cc">
+      <Filter>src\tint\lang\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\abstract_float.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\abstract_int.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\abstract_numeric.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\array.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\array_count_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\atomic.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\binding_array.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\bool.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\buffer_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\builtin_structs.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\depth_multisampled_texture.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\depth_texture.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\external_texture.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\f16.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\f32.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\function_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\i32.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\i8.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\input_attachment.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\invalid_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\manager_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\matrix.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\memory_view.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\multisampled_texture.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\node_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\numeric_scalar.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\pointer.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\reference.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\resource_table_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\resource_type.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\sampled_texture.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\sampler_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\sampler_kind.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\scalar_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\storage_texture.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\string_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\struct.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\subgroup_matrix_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\swizzle_view.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\texel_buffer.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\texture_rtc_shim_1.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\texture_dimension.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\type.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\u16.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\u32.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\u64.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\u8.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\unique_node.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\vector.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\void.cc">
+      <Filter>src\tint\lang\core\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\unary_op.cc">
+      <Filter>src\tint\lang\core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\null\writer\common\options.cc">
+      <Filter>src\tint\lang\null\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\null\writer\common\output.cc">
+      <Filter>src\tint\lang\null\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\null\writer\raise\raise.cc">
+      <Filter>src\tint\lang\null\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\null\writer\writer.cc">
+      <Filter>src\tint\lang\null\writer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\accessor_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\alias.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\assignment_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\binary_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\binding_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\blend_src_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\block_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\bool_literal_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\break_if_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\break_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\builder_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\builtin_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\call_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\call_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\case_selector.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\case_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\color_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\compound_assignment_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\const.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\const_assert.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\continue_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\diagnostic_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\diagnostic_control.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\diagnostic_directive.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\diagnostic_rule_name.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\discard_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\enable.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\extension.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\float_literal_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\for_loop_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\function_rtc_shim_2.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\group_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\id_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\identifier.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\identifier_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\if_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\increment_decrement_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\index_accessor_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\input_attachment_index_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\int_literal_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\interpolate_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\invariant_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\let_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\literal_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\location_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\loop_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\member_accessor_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\module_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\must_use_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\node_rtc_shim_2.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\override_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\parameter.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\phony_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\pipeline_stage.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\requires.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\return_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\stage_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\struct_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\struct_member.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\struct_member_align_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\struct_member_size_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\subgroup_size_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\switch_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\templated_identifier.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\type_decl.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\unary_op_expression.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\var_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\variable.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\variable_decl_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\while_statement.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\workgroup_attribute.cc">
+      <Filter>src\tint\lang\wgsl\ast</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\enums_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\feature_status.cc">
+      <Filter>src\tint\lang\wgsl</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\inspector\entry_point.cc">
+      <Filter>src\tint\lang\wgsl\inspector</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\inspector\inspector.cc">
+      <Filter>src\tint\lang\wgsl\inspector</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\inspector\resource_binding.cc">
+      <Filter>src\tint\lang\wgsl\inspector</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\inspector\scalar_rtc_shim_2.cc">
+      <Filter>src\tint\lang\wgsl\inspector</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\intrinsic\ctor_conv_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\intrinsic</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\intrinsic\data_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\intrinsic</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ir\atomic_vec2u_to_from_u64.cc">
+      <Filter>src\tint\lang\wgsl\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ir\builtin_call_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ir\unary_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\program\program.cc">
+      <Filter>src\tint\lang\wgsl\program</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\program\program_builder.cc">
+      <Filter>src\tint\lang\wgsl\program</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\lower\lower.cc">
+      <Filter>src\tint\lang\wgsl\reader\lower</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\parser\lexer.cc">
+      <Filter>src\tint\lang\wgsl\reader\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\parser\parser.cc">
+      <Filter>src\tint\lang\wgsl\reader\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\parser\token.cc">
+      <Filter>src\tint\lang\wgsl\reader\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\program_to_ir\program_to_ir.cc">
+      <Filter>src\tint\lang\wgsl\reader\program_to_ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\reader.cc">
+      <Filter>src\tint\lang\wgsl\reader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reserved_words.cc">
+      <Filter>src\tint\lang\wgsl</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\dependency_graph.cc">
+      <Filter>src\tint\lang\wgsl\resolver</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\incomplete_type.cc">
+      <Filter>src\tint\lang\wgsl\resolver</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\resolve.cc">
+      <Filter>src\tint\lang\wgsl\resolver</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\resolver.cc">
+      <Filter>src\tint\lang\wgsl\resolver</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\sem_helper.cc">
+      <Filter>src\tint\lang\wgsl\resolver</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\uniformity.cc">
+      <Filter>src\tint\lang\wgsl\resolver</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\unresolved_identifier.cc">
+      <Filter>src\tint\lang\wgsl\resolver</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\validator_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\resolver</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\accessor_expression_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\array_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\array_count_rtc_shim_2.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\behavior.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\block_statement_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\break_if_statement_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\builtin_enum_expression.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\builtin_fn.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\call_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\call_target.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\expression_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\for_loop_statement_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\function_rtc_shim_3.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\function_expression.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\if_statement_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\index_accessor_expression_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\info.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\load_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\loop_statement_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\materialize.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\member_accessor_expression_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\module_rtc_shim_2.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\node_rtc_shim_3.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\statement_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\struct_rtc_shim_2.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\switch_statement_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\type_expression.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\value_constructor.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\value_conversion.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\value_expression.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\variable_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\while_statement_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\sem</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\ast_printer\ast_printer.cc">
+      <Filter>src\tint\lang\wgsl\writer\ast_printer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\common\common.cc">
+      <Filter>src\tint\lang\wgsl\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\ir_to_program\ir_to_program.cc">
+      <Filter>src\tint\lang\wgsl\writer\ir_to_program</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\output_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\writer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\raise\ptr_to_ref.cc">
+      <Filter>src\tint\lang\wgsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\raise\raise_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\raise\value_to_let_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\writer_rtc_shim_1.cc">
+      <Filter>src\tint\lang\wgsl\writer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\bytes\buffer_reader.cc">
+      <Filter>src\tint\utils\bytes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\bytes\reader_rtc_shim_1.cc">
+      <Filter>src\tint\utils\bytes</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\command\args.cc">
+      <Filter>src\tint\utils\command</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\command\cli.cc">
+      <Filter>src\tint\utils\command</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\containers\containers.cc">
+      <Filter>src\tint\utils\containers</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\diagnostic\diagnostic.cc">
+      <Filter>src\tint\utils\diagnostic</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\diagnostic\formatter.cc">
+      <Filter>src\tint\utils\diagnostic</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\diagnostic\source.cc">
+      <Filter>src\tint\utils\diagnostic</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\ice\debugger.cc">
+      <Filter>src\tint\utils\ice</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\ice\ice.cc">
+      <Filter>src\tint\utils\ice</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\macros\macros.cc">
+      <Filter>src\tint\utils\macros</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\math\math_rtc_shim_1.cc">
+      <Filter>src\tint\utils\math</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\memory\memory.cc">
+      <Filter>src\tint\utils\memory</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\reflection\reflection_rtc_shim_1.cc">
+      <Filter>src\tint\utils\reflection</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\result_rtc_shim_1.cc">
+      <Filter>src\tint\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\rtti\switch_rtc_shim_1.cc">
+      <Filter>src\tint\utils\rtti</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\strconv\float_to_string.cc">
+      <Filter>src\tint\utils\strconv</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\strconv\parse_num.cc">
+      <Filter>src\tint\utils\strconv</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\symbol\generation_id.cc">
+      <Filter>src\tint\utils\symbol</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\symbol\symbol.cc">
+      <Filter>src\tint\utils\symbol</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\symbol\symbol_table.cc">
+      <Filter>src\tint\utils\symbol</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\system\env_other.cc">
+      <Filter>src\tint\utils\system</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\base64.cc">
+      <Filter>src\tint\utils\text</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\color_mode.cc">
+      <Filter>src\tint\utils\text</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\string_rtc_shim_2.cc">
+      <Filter>src\tint\utils\text</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\string_stream.cc">
+      <Filter>src\tint\utils\text</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\styled_text.cc">
+      <Filter>src\tint\utils\text</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\styled_text_printer.cc">
+      <Filter>src\tint\utils\text</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\styled_text_printer_ansi.cc">
+      <Filter>src\tint\utils\text</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\styled_text_theme.cc">
+      <Filter>src\tint\utils\text</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\unicode.cc">
+      <Filter>src\tint\utils\text</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text_generator\text_generator.cc">
+      <Filter>src\tint\utils\text_generator</Filter>
+    </ClCompile>
+    <ClCompile Include="src\utils\log.cc">
+      <Filter>src\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\WindowsUtils.cpp">
+      <Filter>src\dawn\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SpirvValidation_rtc_shim_1.cpp">
+      <Filter>src\dawn\native</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\utils\WindowsDebugLogger.cpp">
+      <Filter>src\dawn\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\utils\WindowsTimer.cpp">
+      <Filter>src\dawn\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\command\command_windows.cc">
+      <Filter>src\tint\utils\command</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\file\tmpfile_windows.cc">
+      <Filter>src\tint\utils\file</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\system\env_windows.cc">
+      <Filter>src\tint\utils\system</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\system\executable_path_windows.cc">
+      <Filter>src\tint\utils\system</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\system\terminal_windows.cc">
+      <Filter>src\tint\utils\system</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\styled_text_printer_windows.cc">
+      <Filter>src\tint\utils\text</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\builtin_fn_rtc_shim_1.cc">
+      <Filter>src\tint\lang\hlsl</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\intrinsic\data_rtc_shim_2.cc">
+      <Filter>src\tint\lang\hlsl\intrinsic</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\ir\builtin_call_rtc_shim_2.cc">
+      <Filter>src\tint\lang\hlsl\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\ir\member_builtin_call_rtc_shim_1.cc">
+      <Filter>src\tint\lang\hlsl\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\ir\ternary.cc">
+      <Filter>src\tint\lang\hlsl\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\type\byte_address_buffer.cc">
+      <Filter>src\tint\lang\hlsl\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\type\int8_t4_packed.cc">
+      <Filter>src\tint\lang\hlsl\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\type\matrix_layout.cc">
+      <Filter>src\tint\lang\hlsl\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\type\rasterizer_ordered_texture_2d.cc">
+      <Filter>src\tint\lang\hlsl\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\type\uint8_t4_packed.cc">
+      <Filter>src\tint\lang\hlsl\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\validate\validate.cc">
+      <Filter>src\tint\lang\hlsl\validate</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\common\option_helpers.cc">
+      <Filter>src\tint\lang\hlsl\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\common\options_rtc_shim_1.cc">
+      <Filter>src\tint\lang\hlsl\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\common\output_rtc_shim_2.cc">
+      <Filter>src\tint\lang\hlsl\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\printer\printer.cc">
+      <Filter>src\tint\lang\hlsl\writer\printer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\array_offset_from_immediate.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\array_offset_from_uniform.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\binary_polyfill_rtc_shim_1.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\builtin_polyfill_rtc_shim_1.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\decompose_storage_access.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\extract_ternary_values.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\localize_struct_array_assignment.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\pixel_local.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\promote_initializers.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\raise_rtc_shim_2.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\replace_default_only_switch.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\replace_non_indexable_mat_vec_stores.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\replace_subgroup_matrix_init.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\resource_table_helper_rtc_shim_1.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\shader_io_rtc_shim_1.cc">
+      <Filter>src\tint\lang\hlsl\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\writer_rtc_shim_2.cc">
+      <Filter>src\tint\lang\hlsl\writer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\builtin_fn_rtc_shim_3.cc">
+      <Filter>src\tint\lang\spirv</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\intrinsic\data_rtc_shim_4.cc">
+      <Filter>src\tint\lang\spirv\intrinsic</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\ir\binary_rtc_shim_1.cc">
+      <Filter>src\tint\lang\spirv\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\ir\builtin_call_rtc_shim_4.cc">
+      <Filter>src\tint\lang\spirv\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\ir\copy_logical.cc">
+      <Filter>src\tint\lang\spirv\ir</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\common\common_rtc_shim_1.cc">
+      <Filter>src\tint\lang\spirv\reader\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\atomics.cc">
+      <Filter>src\tint\lang\spirv\reader\lower</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\builtins.cc">
+      <Filter>src\tint\lang\spirv\reader\lower</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\decompose_strided_array.cc">
+      <Filter>src\tint\lang\spirv\reader\lower</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\decompose_strided_matrix.cc">
+      <Filter>src\tint\lang\spirv\reader\lower</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\lower_rtc_shim_1.cc">
+      <Filter>src\tint\lang\spirv\reader\lower</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\shader_io_rtc_shim_3.cc">
+      <Filter>src\tint\lang\spirv\reader\lower</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\texture_rtc_shim_2.cc">
+      <Filter>src\tint\lang\spirv\reader\lower</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\transpose_row_major.cc">
+      <Filter>src\tint\lang\spirv\reader\lower</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\vector_element_pointer.cc">
+      <Filter>src\tint\lang\spirv\reader\lower</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\parser\parser_rtc_shim_1.cc">
+      <Filter>src\tint\lang\spirv\reader\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\reader_rtc_shim_2.cc">
+      <Filter>src\tint\lang\spirv\reader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\type\explicit_layout_array.cc">
+      <Filter>src\tint\lang\spirv\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\type\image.cc">
+      <Filter>src\tint\lang\spirv\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\type\literal.cc">
+      <Filter>src\tint\lang\spirv\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\type\sampled_image.cc">
+      <Filter>src\tint\lang\spirv\type</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\validate\validate_rtc_shim_2.cc">
+      <Filter>src\tint\lang\spirv\validate</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\analysis\relaxed_precision_decorations.cc">
+      <Filter>src\tint\lang\spirv\writer\analysis</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\binary_writer.cc">
+      <Filter>src\tint\lang\spirv\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\function_rtc_shim_4.cc">
+      <Filter>src\tint\lang\spirv\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\instruction_rtc_shim_1.cc">
+      <Filter>src\tint\lang\spirv\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\module_rtc_shim_3.cc">
+      <Filter>src\tint\lang\spirv\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\operand.cc">
+      <Filter>src\tint\lang\spirv\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\option_helper.cc">
+      <Filter>src\tint\lang\spirv\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\output_rtc_shim_4.cc">
+      <Filter>src\tint\lang\spirv\writer\common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\printer\printer_rtc_shim_2.cc">
+      <Filter>src\tint\lang\spirv\writer\printer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\builtin_polyfill_rtc_shim_3.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\case_switch_to_if_else.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\expand_implicit_splats.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\fork_explicit_layout_types.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\handle_matrix_arithmetic.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\keep_binding_array_as_pointer.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\merge_return.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\pass_matrix_by_pointer.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\raise_rtc_shim_4.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\remove_unreachable_in_loop_continuing.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\resource_table_helper_rtc_shim_2.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\shader_io_rtc_shim_4.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\unary_polyfill.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\var_for_dynamic_index.cc">
+      <Filter>src\tint\lang\spirv\writer\raise</Filter>
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\writer_rtc_shim_4.cc">
+      <Filter>src\tint\lang\spirv\writer</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\BackendD3D.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\BlobD3D.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\D3DBackend.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\D3DError.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\DeviceD3D.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\KeyedMutex.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\PhysicalDeviceD3D.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\PlatformFunctions.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\QueueD3D.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\ShaderUtils.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\SharedFenceD3D.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\SharedTextureMemoryD3D.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\SwapChainD3D.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\UtilsD3D.cpp">
+      <Filter>src\dawn\native\d3d</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\BackendD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\BindGroupD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\BindGroupLayoutD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\BufferD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\CPUDescriptorHeapAllocationD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\CommandBufferD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\CommandRecordingContext.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ComputePipelineD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\D3D12Backend.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\D3D12Info.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\DeviceD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\GPUDescriptorHeapAllocationD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\HeapAllocatorD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\HeapD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\PageableD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\PhysicalDeviceD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\PipelineLayoutD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\PlatformFunctionsD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\QuerySetD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\QueueD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\RenderPassBuilderD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\RenderPipelineD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ResidencyManagerD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ResourceAllocatorManagerD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ResourceHeapAllocationD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ResourceTableD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SamplerD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SamplerHeapCacheD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ShaderModuleD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ShaderVisibleDescriptorAllocatorD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SharedBufferMemoryD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SharedFenceD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SharedTextureMemoryD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\StagingDescriptorAllocatorD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\StreamImplD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SwapChainD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\TextureCopySplitter.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\TextureD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\UtilsD3D12.cpp">
+      <Filter>src\dawn\native\d3d12</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\BackendVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\BindGroupLayoutVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\BindGroupVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\BufferVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\CommandBufferVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\CommandRecordingContextVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ComputePipelineVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\DescriptorSetAllocator.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\DeviceVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\FencedDeleter.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\FramebufferCache.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\FramebufferFetchHelper.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\MemoryTypeSelector.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\PhysicalDeviceVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\PipelineCacheVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\PipelineLayoutVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\QuerySetVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\QueueVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\RenderPassCache.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\RenderPipelineVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ResolveTextureLoadingUtilsVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ResourceHeapVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ResourceMemoryAllocatorVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ResourceTableVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\SamplerVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ShaderModuleVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\SharedFenceVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\SharedTextureMemoryVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\StreamImplVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\SwapChainVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\TexelBufferViewVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\TextureVk.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\UtilsVulkan.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\VulkanBackend.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\VulkanError.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\VulkanExtensions.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\VulkanFunctions.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\VulkanInfo.cpp">
+      <Filter>src\dawn\native\vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\external_memory\MemoryService.cpp">
+      <Filter>src\dawn\native\vulkan\external_memory</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\external_memory\MemoryServiceImplementation.cpp">
+      <Filter>src\dawn\native\vulkan\external_memory</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\external_semaphore\SemaphoreService.cpp">
+      <Filter>src\dawn\native\vulkan\external_semaphore</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\external_semaphore\SemaphoreServiceImplementation.cpp">
+      <Filter>src\dawn\native\vulkan\external_semaphore</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

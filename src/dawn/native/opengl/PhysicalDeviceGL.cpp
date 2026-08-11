@@ -25,7 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/opengl/PhysicalDeviceGL.h"
+#include "src/dawn/native/opengl/PhysicalDeviceGL.h"
 
 #include <algorithm>
 #include <memory>
@@ -33,15 +33,16 @@
 #include <string_view>
 #include <utility>
 
-#include "dawn/common/GPUInfo.h"
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/Instance.h"
-#include "dawn/native/opengl/ContextEGL.h"
-#include "dawn/native/opengl/DeviceGL.h"
-#include "dawn/native/opengl/DisplayEGL.h"
-#include "dawn/native/opengl/SwapChainEGL.h"
-#include "dawn/native/opengl/UtilsGL.h"
 #include "dawn/platform/DawnPlatform.h"
+#include "src/dawn/common/GPUInfo.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/Instance.h"
+#include "src/dawn/native/opengl/ContextEGL.h"
+#include "src/dawn/native/opengl/DeviceGL.h"
+#include "src/dawn/native/opengl/DisplayEGL.h"
+#include "src/dawn/native/opengl/SwapChainEGL.h"
+#include "src/dawn/native/opengl/UtilsGL.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native::opengl {
 
@@ -63,7 +64,7 @@ uint32_t GetVendorIdFromVendors(const char* vendor) {
     uint32_t vendorId = 0;
     for (const auto& it : kVendors) {
         // Matching vendor name with vendor string
-        if (strstr(vendor, it.vendorName) != nullptr) {
+        if (DAWN_UNSAFE_TODO(strstr(vendor, it.vendorName)) != nullptr) {
             vendorId = it.vendorId;
             break;
         }
@@ -150,7 +151,7 @@ bool PhysicalDevice::SupportsExternalImages() const {
 }
 
 MaybeError PhysicalDevice::InitializeImpl() {
-    DAWN_TRY(mFunctions.Initialize(mDisplay->egl.GetProcAddress));
+    DAWN_TRY(mFunctions.Initialize(mDisplay->egl->GetProcAddress));
 
     // In some cases (like like of EGL_KHR_create_context) we don't know before this point that we
     // got a GL context that supports the required version. Check it now.
@@ -251,18 +252,18 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
         EnableFeature(Feature::TextureCompressionETC2);
     }
 
-    if (mDisplay->egl.HasExt(EGLExt::DisplayTextureShareGroup)) {
+    if (mDisplay->egl->HasExt(EGLExt::DisplayTextureShareGroup)) {
         EnableFeature(dawn::native::Feature::ANGLETextureSharing);
     }
 
-    if (mDisplay->egl.HasExt(EGLExt::ImageNativeBuffer) &&
-        mDisplay->egl.HasExt(EGLExt::GetNativeClientBuffer)) {
+    if (mDisplay->egl->HasExt(EGLExt::ImageNativeBuffer) &&
+        mDisplay->egl->HasExt(EGLExt::GetNativeClientBuffer)) {
         EnableFeature(dawn::native::Feature::SharedTextureMemoryAHardwareBuffer);
     }
 
-    if (mDisplay->egl.HasExt(EGLExt::WaitSync) &&
+    if (mDisplay->egl->HasExt(EGLExt::WaitSync) &&
         mFunctions.IsGLExtensionSupported("GL_OES_EGL_sync")) {
-        if (mDisplay->egl.HasExt(EGLExt::NativeFenceSync)) {
+        if (mDisplay->egl->HasExt(EGLExt::NativeFenceSync)) {
             EnableFeature(dawn::native::Feature::SharedFenceSyncFD);
         }
         EnableFeature(dawn::native::Feature::SharedFenceEGLSync);
@@ -278,7 +279,9 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     }
 
     // ShaderF16
-    if (mFunctions.IsGLExtensionSupported("GL_AMD_gpu_shader_half_float")) {
+    // Int16 required to support buffer_view conversions
+    if (mFunctions.IsGLExtensionSupported("GL_AMD_gpu_shader_half_float") &&
+        mFunctions.IsGLExtensionSupported("GL_AMD_gpu_shader_int16")) {
         EnableFeature(Feature::ShaderF16);
     }
 
@@ -291,6 +294,8 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     // Unorm16TextureFormats
     if (mFunctions.IsGLExtensionSupported("GL_EXT_texture_norm16")) {
         EnableFeature(Feature::Unorm16TextureFormats);
+        EnableFeature(Feature::Unorm16Filterable);
+        EnableFeature(Feature::Unorm16FormatsForExternalTexture);
     }
 
     // Float32Blendable
@@ -406,6 +411,7 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits)
     DAWN_TRY_ASSIGN(v[1], GetIndexed(gl, GL_MAX_COMPUTE_WORK_GROUP_COUNT, 1));
     DAWN_TRY_ASSIGN(v[2], GetIndexed(gl, GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2));
     limits->v1.maxComputeWorkgroupsPerDimension = std::min({v[0], v[1], v[2]});
+    limits->v1.maxImmediateSize = kMaxImmediateDataBytes;
     return {};
 }
 
@@ -517,7 +523,8 @@ ResultOrError<Ref<DeviceBase>> PhysicalDevice::CreateDeviceImpl(
     Ref<DeviceBase::DeviceLostEvent>&& lostEvent) {
     bool useANGLETextureSharing = false;
     for (size_t i = 0; i < descriptor->requiredFeatureCount; ++i) {
-        if (descriptor->requiredFeatures[i] == wgpu::FeatureName::ANGLETextureSharing) {
+        if (DAWN_UNSAFE_TODO(descriptor->requiredFeatures[i]) ==
+            wgpu::FeatureName::ANGLETextureSharing) {
             useANGLETextureSharing = true;
         }
     }
@@ -528,7 +535,8 @@ ResultOrError<Ref<DeviceBase>> PhysicalDevice::CreateDeviceImpl(
     // Use the pre-1.5 extension enum instead.
     bool disableEGL15Robustness = mVendorId == gpu_info::kVendorID_ImgTec;
     bool forceES31AndMinExtensions = deviceToggles.IsEnabled(Toggle::GLForceES31AndNoExtensions);
-    bool bindContextOnlyDuringUse = deviceToggles.IsEnabled(Toggle::GLAllowContextOnMultiThreads);
+    bool bindContextOnlyDuringUse = deviceToggles.IsEnabled(Toggle::GLAllowContextOnMultiThreads) ||
+                                    deviceToggles.IsEnabled(Toggle::GLDefer);
 
     std::unique_ptr<ContextEGL> context;
     DAWN_TRY_ASSIGN(context, ContextEGL::Create(mDisplay, GetBackendType(), useRobustness,

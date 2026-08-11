@@ -4,6 +4,7 @@ gclient_gn_args_file = 'build/config/gclient_args.gni'
 
 gclient_gn_args = [
   'build_with_chromium',
+  'dawn_node',
   'dawn_wasm',
   'generate_location_tags',
 ]
@@ -22,18 +23,22 @@ vars = {
   'dawn_tintd': False, # Also fetches dependencies required for building tintd.
   'dawn_cmake_version': 'version:2@3.23.3',
   'dawn_cmake_win32_sha1': 'b106d66bcdc8a71ea2cdf5446091327bfdb1bcd7',
-  'dawn_gn_version': 'git_revision:304bbef6c7e9a86630c12986b99c8654eb7fe648',
+  'dawn_gn_version': 'git_revision:bac66cfc3254aabcd8640c8ebbeb6d62a198d454',
   # ninja CIPD package version.
   # https://chrome-infra-packages.appspot.com/p/infra/3pp/tools/ninja
   'dawn_ninja_version': 'version:3@1.12.1.chromium.4',
-  'dawn_go_version': 'version:2@1.21.3',
+  'dawn_go_version': 'version:3@1.25.0',
   'dawn_node_version': 'version:2@20.11.0',
+  'agility_sdk_version': 'version:2@1.721.0-preview',
 
   # GN variable required by //testing that will be output in the gclient_args.gni
   'generate_location_tags': False,
 
   # Fetch clang-tidy into the same bin/ directory as our clang binary.
   'checkout_clang_tidy': False,
+
+  # Fetch clangd into the same bin/ directory as our clang binary.
+  'checkout_clangd': False,
 
   # Fetch configuration files required for the 'use_remoteexec' gn arg
   'download_remoteexec_cfg': False,
@@ -47,7 +52,7 @@ vars = {
   # reclient CIPD package version
   'reclient_version': 're_client_version:0.185.0.db415f21-gomaip',
   # siso CIPD package version.
-  'siso_version': 'git_revision:73b1681189a8d8a4d922cd84246dcec2494142a5',
+  'siso_version': 'git_revision:b18cb0f263cfcc2f17a925cb211972a32dc211f6',
 
   # 'magic' text to tell depot_tools that git submodules should be accepted
   # but parity with DEPS file is expected.
@@ -66,24 +71,27 @@ vars = {
 
   # Version of Chromium the DEPS entries synced by scripts/roll_chromium_deps.py
   # were last synced to.
-  'chromium_revision': 'aded944da35a756ef3b04d8a3b3f1822b1555b50',
+  'chromium_revision': '68855c577a9bd5e3d4b6ea5fad41b04f1ee684f8',
   # We never want to actually checkout Chromium, but we need a fake DEPS entry
   # in order for the Chromium -> Dawn DEPS autoroller to work.
   'checkout_placeholder_chromium': False,
 
   # Checkout mesa 3D graphics library and related dependencies
-  # Not used by Dawn/Tint directly, but is used as part of an
-  #  experiment in the fuzzing stack.
+  # Not used by Dawn/Tint directly, but is used as part of extended fuzzing stack.
   'checkout_mesa': False,
+
+  # Checkout //tools/code_coverage from Chromium and fetches the
+  # prebuilt versions of llvm-cov and llvm-profdata.
+  'checkout_clang_coverage_tools': False,
 }
 
 deps = {
   'buildtools': {
-    'url': '{chromium_git}/chromium/src/buildtools@6a18683f555b4ac8b05ac8395c29c84483ac9588',
+    'url': '{chromium_git}/chromium/src/buildtools@f0ccfb5933f7daa9545159afbb35bdf8951efcc4',
     'condition': 'dawn_standalone',
   },
   'third_party/clang-format/script': {
-    'url': '{chromium_git}/external/github.com/llvm/llvm-project/clang/tools/clang-format.git@c2725e0622e1a86d55f14514f2177a39efea4a0e',
+    'url': '{chromium_git}/external/github.com/llvm/llvm-project/clang/tools/clang-format.git@6eddfb5ec5f92127a531eda66c568d3a11e7ec11',
     'condition': 'dawn_standalone',
   },
   'buildtools/linux64': {
@@ -112,12 +120,12 @@ deps = {
   },
 
   'third_party/depot_tools': {
-    'url': '{chromium_git}/chromium/tools/depot_tools.git@fe9b05bca6fe48fda19c51f4939f20b59c9bfd48',
+    'url': '{chromium_git}/chromium/tools/depot_tools.git@488d7480e234ccbca59a49eadf9d23cd7aa02c31',
     'condition': 'dawn_standalone',
   },
 
   'third_party/libc++/src': {
-    'url': '{chromium_git}/external/github.com/llvm/llvm-project/libcxx.git@7ab65651aed6802d2599dcb7a73b1f82d5179d05',
+    'url': '{chromium_git}/external/github.com/llvm/llvm-project/libcxx.git@5abc7f839700f0f17338434e1c1c6a8c87c00c11',
     'condition': 'dawn_standalone',
   },
 
@@ -128,7 +136,7 @@ deps = {
 
   # Required by libc++
   'third_party/llvm-libc/src': {
-    'url': '{chromium_git}/external/github.com/llvm/llvm-project/libc.git@d99c56d4b9f6663bff528c4fac5313bceb32e762',
+    'url': '{chromium_git}/external/github.com/llvm/llvm-project/libc.git@e3241c478290c1dcfb0a54a13d5fb893ab386287',
     'condition': 'dawn_standalone',
   },
 
@@ -143,15 +151,15 @@ deps = {
   # The //build and //tools/* deps should all be updated in unison, as
   #  there are dependencies between them.
   'build': {
-  'url': '{chromium_git}/chromium/src/build@ab55ebf038a0786480640ca55a3156eecce76b62',
+  'url': '{chromium_git}/chromium/src/build@e127ac4fd20679760a791031da74ebe0621d4cad',
     'condition': 'dawn_standalone',
   },
   'tools/clang': {
-  'url': '{chromium_git}/chromium/src/tools/clang@c9cac29ea48c54aec24526f3e81fb122d9a99cc0',
+  'url': '{chromium_git}/chromium/src/tools/clang@15a7d06547d62bb035f9e3d4a82917e8cfe15a56',
     'condition': 'dawn_standalone',
   },
   'tools/memory': {
-    'url': '{chromium_git}/chromium/src/tools/memory@b635f27e932356a2e29450e5cfa544cdcc9ea6bb',
+    'url': '{chromium_git}/chromium/src/tools/memory@a7e928b8bb8d79aa2feb809c1bd4752eecc68802',
     'condition': 'dawn_standalone',
   },
   'tools/valgrind': {
@@ -159,8 +167,12 @@ deps = {
     'condition': 'dawn_standalone',
   },
   'tools/win': {
-    'url': Var('chromium_git') + '/chromium/src/tools/win@baacfc6d5986b07abe0503216b491e234b94ba79',
+    'url': Var('chromium_git') + '/chromium/src/tools/win@faefd1b6fa9eeb033ad6fe60368ccb9bf908cbd0',
     'condition': 'checkout_win and not build_with_chromium',
+  },
+  'tools/code_coverage': {
+    'url': '{chromium_git}/chromium/src/tools/code_coverage@74d04576e893e08d9d16c99866c7d6696713d554',
+    'condition': 'dawn_standalone and checkout_clang_coverage_tools',
   },
 
   # Linux sysroots for hermetic builds instead of relying on whatever is
@@ -172,10 +184,10 @@ deps = {
     'dep_type': 'gcs',
     'objects': [
       {
-        'object_name': '47b3a0b161ca011b2b33d4fc1ef6ef269b8208a0b7e4c900700c345acdfd1814',
-        'sha256sum': '47b3a0b161ca011b2b33d4fc1ef6ef269b8208a0b7e4c900700c345acdfd1814',
-        'size_bytes': 19054416,
-        'generation': 1741221481689337,
+        'object_name': 'b45a7f586a107380ca6141b00d74321922b41d6d327dc33e74a2f82fd454304c',
+        'sha256sum': 'b45a7f586a107380ca6141b00d74321922b41d6d327dc33e74a2f82fd454304c',
+        'size_bytes': 18374340,
+        'generation': 1770327986819219,
       },
     ],
   },
@@ -185,10 +197,10 @@ deps = {
     'dep_type': 'gcs',
     'objects': [
       {
-        'object_name': '2f915d821eec27515c0c6d21b69898e23762908d8d7ccc1aa2a8f5f25e8b7e18',
-        'sha256sum': '2f915d821eec27515c0c6d21b69898e23762908d8d7ccc1aa2a8f5f25e8b7e18',
-        'size_bytes': 19204088,
-        'generation': 1741221484487736,
+        'object_name': 'c7176a4c7aacbf46bda58a029f39f79a68008d3dee6518f154dcf5161a5486d8',
+        'sha256sum': 'c7176a4c7aacbf46bda58a029f39f79a68008d3dee6518f154dcf5161a5486d8',
+        'size_bytes': 18420984,
+        'generation': 1770327978874031,
       },
     ],
   },
@@ -198,10 +210,10 @@ deps = {
     'dep_type': 'gcs',
     'objects': [
       {
-        'object_name': '63f0e5128b84f7b0421956a4a40affa472be8da0e58caf27e9acbc84072daee7',
-        'sha256sum': '63f0e5128b84f7b0421956a4a40affa472be8da0e58caf27e9acbc84072daee7',
-        'size_bytes': 20786772,
-        'generation': 1741221485445080,
+        'object_name': '3de724b0d63478e1ae35f07b95d02261581a66e05c19aebe4e443d76179a565e',
+        'sha256sum': '3de724b0d63478e1ae35f07b95d02261581a66e05c19aebe4e443d76179a565e',
+        'size_bytes': 19768196,
+        'generation': 1770327987132454,
       },
     ],
   },
@@ -211,10 +223,10 @@ deps = {
     'dep_type': 'gcs',
     'objects': [
       {
-        'object_name': '2098b42d9698f5c8a15683abbf6d424b7f56200bd2488198e15f31554acb391f',
-        'sha256sum': '2098b42d9698f5c8a15683abbf6d424b7f56200bd2488198e15f31554acb391f',
-        'size_bytes': 19690120,
-        'generation': 1741221481662026,
+        'object_name': '82e930d6fa5d5ab1172cabc63b911ec800b182b4f8c14a273a89596541fe8658',
+        'sha256sum': '82e930d6fa5d5ab1172cabc63b911ec800b182b4f8c14a273a89596541fe8658',
+        'size_bytes': 18613672,
+        'generation': 1770327971826284,
       },
     ],
   },
@@ -224,10 +236,10 @@ deps = {
     'dep_type': 'gcs',
     'objects': [
       {
-        'object_name': '58f8594905bfe0fa0b7c7a7e882f01725455d07b7161e6539de5169867009b9f',
-        'sha256sum': '58f8594905bfe0fa0b7c7a7e882f01725455d07b7161e6539de5169867009b9f',
-        'size_bytes': 19896004,
-        'generation': 1741221481819702,
+        'object_name': 'c847a32ae492aa14688be47fa696026e8dae8d9f4f589ec42fad29862bf311b3',
+        'sha256sum': 'c847a32ae492aa14688be47fa696026e8dae8d9f4f589ec42fad29862bf311b3',
+        'size_bytes': 19042256,
+        'generation': 1770327970830699,
       },
     ],
   },
@@ -237,23 +249,23 @@ deps = {
     'dep_type': 'gcs',
     'objects': [
       {
-        'object_name': '36a164623d03f525e3dfb783a5e9b8a00e98e1ddd2b5cff4e449bd016dd27e50',
-        'sha256sum': '36a164623d03f525e3dfb783a5e9b8a00e98e1ddd2b5cff4e449bd016dd27e50',
-        'size_bytes': 20781612,
-        'generation': 1741221486381719,
+        'object_name': '52d61d4446ffebfaa3dda2cd02da4ab4876ff237853f46d273e7f9b666652e1d',
+        'sha256sum': '52d61d4446ffebfaa3dda2cd02da4ab4876ff237853f46d273e7f9b666652e1d',
+        'size_bytes': 19727236,
+        'generation': 1770327973518330,
       },
     ],
   },
 
   # Used for Dawn-side GN arg definitions.
   'tools/mb': {
-    'url': '{chromium_git}/chromium/src/tools/mb@1fc5adbbce8acd2a5fdccefde5af9865b982429d',
+    'url': '{chromium_git}/chromium/src/tools/mb@8ec8c01977257bc710e46aba16b37a883d66bef1',
     'condition': 'dawn_standalone',
   },
 
   # Testing, GTest and GMock
   'testing': {
-    'url': '{chromium_git}/chromium/src/testing@deff31dd00dc0cdcd56ba8ac07e6c151fb93f598',
+    'url': '{chromium_git}/chromium/src/testing@ae45ec59abb3bc6037ddeeba3d307c1f60a89342',
     'condition': 'dawn_standalone',
   },
   'third_party/libFuzzer/src': {
@@ -266,22 +278,22 @@ deps = {
   },
   # This is a dependency of //testing
   'third_party/catapult': {
-    'url': '{chromium_git}/catapult.git@25df0be83cbb2b07a42737e37aeaf14a7e2077f5',
+    'url': '{chromium_git}/catapult.git@28c0ffb61b838b8902caebcf9c11af78e252cc70',
     'condition': 'dawn_standalone',
   },
   'third_party/google_benchmark/src': {
-    'url': '{chromium_git}/external/github.com/google/benchmark.git' + '@' + '188e8278990a9069ffc84441cb5a024fd0bede37',
+    'url': '{chromium_git}/external/github.com/google/benchmark.git' + '@' + '8abf1e701fbd88c8170f48fe0558247e2e5f8e7d',
     'condition': 'dawn_standalone',
   },
 
-  # Required for fuzzer + mesa experiment
+  # Required tint fuzzer + mesa
   'third_party/mesa/src': {
     'url': '{chromium_git}/external/gitlab.freedesktop.org/mesa/mesa/@2e683eb7385c54f872acc47b371210d2282bc103',
-    'condition': 'dawn_standalone and checkout_mesa',
+    'condition': 'checkout_mesa',
   },
   'third_party/meson/src': {
     'url': '{chromium_git}/external/github.com/mesonbuild/meson@d389906a136c2aac9820ded0f38d1e25ef25fb9a',
-    'condition': 'dawn_standalone and checkout_mesa',
+    'condition': 'checkout_mesa',
   },
 
   # Jinja2 and MarkupSafe for the code generator
@@ -295,101 +307,112 @@ deps = {
   },
 
   # GLFW for tests and samples
-  'third_party/glfw': {
-    'url': '{chromium_git}/external/github.com/glfw/glfw@b35641f4a3c62aa86a0b3c983d163bc0fe36026d',
+  'third_party/glfw3/src': {
+    'url': '{chromium_git}/external/github.com/glfw/glfw@567b1ec2442d59525e24c19e8d413df6baf02496',
   },
 
   'third_party/vulkan_memory_allocator': {
-    'url': '{chromium_git}/external/github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator@cb0597213b0fcb999caa9ed08c2f88dc45eb7d50',
+    'url': '{chromium_git}/external/github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator@7e55b011e16182fc349149abbd3aaf3b1db46421',
     'condition': 'dawn_standalone',
   },
 
   'third_party/angle': {
-    'url': '{chromium_git}/angle/angle@e86fc0a186c54ce05620ace85229f63a093cc5fe',
+    'url': '{chromium_git}/angle/angle@1b18da44dff8704b82f36d15424c7ac0583ce0ac',
     'condition': 'dawn_standalone',
   },
 
   'third_party/swiftshader': {
-    'url': '{swiftshader_git}/SwiftShader@3b5edab3497f7f15c56e4ccf4ecbd0139e657755',
+    'url': '{swiftshader_git}/SwiftShader@5b0479bd2d15058aaa9eb490e364f920ff824a8c',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-deps': {
-    'url': '{chromium_git}/vulkan-deps@5019d2a78945d3ad5a688e9a570e4835a7245200',
+    'url': '{chromium_git}/vulkan-deps@eb0415a66313f3f4fb489e05753a24c644a15f25',
     'condition': 'dawn_standalone',
   },
 
   'third_party/glslang/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/glslang@968eb87c07f957520b7a96433933bb8d2bb0fc3c',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/glslang@98beacdbe5d99f4ac5e4c58bc02bb16c6aeee515',
     'condition': 'dawn_standalone',
   },
 
   'third_party/spirv-headers/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Headers@f31ca173eff866369e54d35e53375fadbabd58f4',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Headers@1e770e7de8373a8dd49f23416cf7ca4001d01040',
     'condition': 'dawn_standalone',
   },
 
   'third_party/spirv-tools/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Tools@d9d2ec123c1b92de48c12fd084fc278cd99c6fce',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/SPIRV-Tools@199cb207b911501ddd76dcddf100a6e21c15ef23',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-headers/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Headers@3cfca3829608e778cf59b0dab55d77f4f6c79bee',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Headers@45834b722e29ca6968f3811ae930eae7bb73e9e8',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-loader/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Loader@075488ccd6600fea664e10ee2f946c76086827d2',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Loader@9f37518d271f83abb2ffc5aeac46fe99efcd6717',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-tools/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Tools@7aa95f41d4b787e205a1ae845901ffc7ff96e49e',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Tools@68749eafbf27114a1dd807d6c870e53306673e64',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-utility-libraries/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Utility-Libraries@906b27a77f4857fae6da3062df4cf6ab0c06e8d4',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-Utility-Libraries@1eb9fdda3c16757aaf2fd16773733a90f519e50b',
     'condition': 'dawn_standalone',
   },
 
   'third_party/vulkan-validation-layers/src': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-ValidationLayers@8d15e69f51d126a559446e6a74c39890d565fc71',
+    'url': '{chromium_git}/external/github.com/KhronosGroup/Vulkan-ValidationLayers@4cd431278be1e3dd074af9989e956306e4f1a2a6',
     'condition': 'dawn_standalone',
   },
 
   'third_party/zlib': {
-    'url': '{chromium_git}/chromium/src/third_party/zlib@7eda07b1e067ef3fd7eea0419c88b5af45c9a776',
+    'url': '{chromium_git}/chromium/src/third_party/zlib@3246f1b60849cc505e231c5d19d0cbf358093555',
     'condition': 'dawn_standalone',
   },
 
   'third_party/abseil-cpp': {
-    'url': '{chromium_git}/chromium/src/third_party/abseil-cpp@675d3d37ecbec78fd51378c6774c45715b1e4382',
+    'url': '{chromium_git}/chromium/src/third_party/abseil-cpp@26b7a9b4417b3b0603967ffb02be6fd353e5324c',
     'condition': 'dawn_standalone',
   },
 
-  'third_party/dxc': {
-    'url': '{chromium_git}/external/github.com/microsoft/DirectXShaderCompiler@7936ebc894881a33eb24e44c207f336c98b1dd93',
+  'third_party/directx-shader-compiler/src': {
+    'url': '{chromium_git}/external/github.com/microsoft/DirectXShaderCompiler@c207c7b793957f2d288cb7448516c62808624f71',
   },
 
-  'third_party/dxheaders': {
+  'third_party/directx-headers/src': {
     # The non-Windows build of DXC depends on DirectX-Headers, and at a specific commit (not ToT)
     'url': '{chromium_git}/external/github.com/microsoft/DirectX-Headers@980971e835876dc0cde415e8f9bc646e64667bf7',
     'condition': 'host_os != "win"',
   },
 
-  'third_party/khronos/OpenGL-Registry': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/OpenGL-Registry@5bae8738b23d06968e7c3a41308568120943ae77',
+  'third_party/agility-sdk/src': {
+    'packages': [
+      {
+        'package': 'chromium/third_party/agility-sdk',
+        'version': Var('agility_sdk_version'),
+      },
+    ],
+    'condition': 'dawn_standalone and host_os == "win"',
+    'dep_type': 'cipd',
   },
 
-  'third_party/khronos/EGL-Registry': {
-    'url': '{chromium_git}/external/github.com/KhronosGroup/EGL-Registry@7dea2ed79187cd13f76183c4b9100159b9e3e071',
+  'third_party/OpenGL-Registry/src': {
+    'url': '{chromium_git}/external/github.com/KhronosGroup/OpenGL-Registry@9d527dbc81bb76e35ba284fe385ed8a5ddb90cbc',
+  },
+
+  'third_party/EGL-Registry/src': {
+    'url': '{chromium_git}/external/github.com/KhronosGroup/EGL-Registry@3d7796b3721d93976b6bfe536aa97bbc4bce8667',
   },
 
   # WebGPU CTS - Used both by the dawn_node tests and transitively by Chromium.
   'third_party/webgpu-cts': {
-    'url': '{chromium_git}/external/github.com/gpuweb/cts@319cd9b70c367739d375df758fd1ef6bb506f311',
+    'url': '{chromium_git}/external/github.com/gpuweb/cts@70b970834c4f73c9e6171e4e8832039e1f22e291',
     'condition': 'build_with_chromium or dawn_standalone',
   },
 
@@ -397,7 +420,7 @@ deps = {
   'third_party/emsdk': {
     # Note: Always use an emsdk hash referring to a tagged release, just so
     # emsdk and emscripten are always in sync with an exact release.
-    'url': '{chromium_git}/external/github.com/emscripten-core/emsdk.git@b4258c35121c8d0e12f53568ffb22236d7816723',
+    'url': '{chromium_git}/external/github.com/emscripten-core/emsdk.git@948c31acd3f369a5da276e33ab2ed57108c165e5',
     'condition': 'dawn_wasm',
   },
 
@@ -411,7 +434,7 @@ deps = {
     'condition': 'dawn_node',
   },
   'third_party/gpuweb': {
-    'url': '{chromium_git}/external/github.com/gpuweb/gpuweb@b4b5752ff755fe33bf6a67fb6e5964ba9d40dcdc',
+    'url': '{chromium_git}/external/github.com/gpuweb/gpuweb@acaf809d9323e72429d2252e372ee4d917fc40eb',
     'condition': 'dawn_node',
   },
 
@@ -482,7 +505,7 @@ deps = {
 
   # Upstream webgpu.h headers for testing purposes
   'third_party/webgpu-headers/src': {
-    'url': '{chromium_git}/external/github.com/webgpu-native/webgpu-headers@0bfcdc4f487023d85e33597de0a94fc523e30fca',
+    'url': '{chromium_git}/external/github.com/webgpu-native/webgpu-headers@bf8ddb91dc38ea11ec1b727dae1fa965c4207d22',
   },
 
   # Like the Node dependency, architectures are listed out explicitly instead of
@@ -494,7 +517,7 @@ deps = {
       'version': Var('dawn_go_version'),
     }],
     'dep_type': 'cipd',
-    'condition': 'checkout_linux and non_git_source',
+    'condition': '(checkout_android or checkout_linux) and non_git_source',
   },
   'tools/golang/linux-arm64': {
     'packages': [{
@@ -502,7 +525,7 @@ deps = {
       'version': Var('dawn_go_version'),
     }],
     'dep_type': 'cipd',
-    'condition': 'checkout_linux and non_git_source',
+    'condition': '(checkout_android or checkout_linux) and non_git_source',
   },
   'tools/golang/mac-amd64': {
     'packages': [{
@@ -510,7 +533,7 @@ deps = {
       'version': Var('dawn_go_version'),
     }],
     'dep_type': 'cipd',
-    'condition': 'checkout_mac and non_git_source',
+    'condition': '(checkout_ios or checkout_mac) and non_git_source',
   },
   'tools/golang/mac-arm64': {
     'packages': [{
@@ -518,7 +541,7 @@ deps = {
       'version': Var('dawn_go_version'),
     }],
     'dep_type': 'cipd',
-    'condition': 'checkout_mac and non_git_source',
+    'condition': '(checkout_ios or checkout_mac) and non_git_source',
   },
   'tools/golang/windows-amd64': {
     'packages': [{
@@ -580,23 +603,23 @@ deps = {
 
   # Misc dependencies inherited from Tint
   'third_party/protobuf': {
-    'url': '{chromium_git}/chromium/src/third_party/protobuf@a0f4dc977fa2ef7f47708aec914a4fbfeefc6103',
+    'url': '{chromium_git}/chromium/src/third_party/protobuf@58977fe9e1c58cffe93bf1a6b89c2ece066208d4',
     'condition': 'dawn_standalone',
   },
 
   'tools/protoc_wrapper': {
-    'url': '{chromium_git}/chromium/src/tools/protoc_wrapper@3438d4183bfc7c0d6850e8b970204cc8189f0323',
+    'url': '{chromium_git}/chromium/src/tools/protoc_wrapper@418c65786fdf6fc5f10cb008c252c2b12c4713a6',
     'condition': 'dawn_standalone',
   },
 
   'third_party/libprotobuf-mutator/src': {
-    'url': '{chromium_git}/external/github.com/google/libprotobuf-mutator.git@7bf98f78a30b067e22420ff699348f084f802e12',
+    'url': '{chromium_git}/external/github.com/google/libprotobuf-mutator.git@c1c950eae0440c3808f2b8bd7c57d0c6a42c1a90',
     'condition': 'dawn_standalone',
   },
 
   # Dependencies for tintd.
   'third_party/jsoncpp': {
-    'url': '{chromium_git}/external/github.com/open-source-parsers/jsoncpp.git@42e892d96e47b1f6e29844cc705e148ec4856448',
+    'url': '{chromium_git}/external/github.com/open-source-parsers/jsoncpp.git@d4d072177213b117fb81d4cfda140de090616161',
     'condition': 'dawn_tintd',
   },
 
@@ -608,7 +631,7 @@ deps = {
   # Dependencies for PartitionAlloc.
   # Doc: https://docs.google.com/document/d/1wz45t0alQthsIU9P7_rQcfQyqnrBMXzrOjSzdQo-V-A
   'third_party/partition_alloc': {
-    'url': '{chromium_git}/chromium/src/base/allocator/partition_allocator.git@24e411a428ae1128d44850dc0b98376da84bddd5',
+    'url': '{chromium_git}/chromium/src/base/allocator/partition_allocator.git@f1608363138557a80c2f35bf65127ae306f90cd3',
     'condition': 'dawn_standalone',
   },
 
@@ -696,12 +719,29 @@ hooks = [
                '--package=clang-tidy'],
   },
   {
+    # This is also supposed to support the same set of platforms as 'clang'
+    # above. LLVM ToT support isn't provided at the moment.
+    'name': 'clangd',
+    'pattern': '.',
+    'condition': 'dawn_standalone and checkout_clangd',
+    'action': ['vpython3', 'tools/clang/scripts/update.py',
+               '--package=clangd'],
+  },
+  {
     'name': 'objdump',
     'pattern': '.',
     'action': ['vpython3', 'tools/clang/scripts/update.py',
                '--package=objdump'],
     'condition': 'dawn_standalone',
   },
+  {
+    'name': 'coverage_tools',
+    'pattern': '.',
+    'action': ['vpython3', 'tools/clang/scripts/update.py',
+               '--package=coverage_tools'],
+    'condition': 'dawn_standalone and checkout_clang_coverage_tools',
+  },
+
   # Pull dsymutil binaries using checked-in hashes.
   {
     'name': 'dsymutil_mac_arm64',

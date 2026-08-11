@@ -52,51 +52,48 @@ class HlslWriterTestHelperBase : public BASE {
     core::type::Manager& ty{mod.Types()};
 
   protected:
-    /// Validation errors
-    std::string err_;
-
     /// Generated HLSL
     Output output_;
 
     /// Run the writer on the IR module and validate the result.
     /// @returns true if generation and validation succeeded
-    bool Generate(Options options = {}) {
+    Result<SuccessType> Generate(Options options = {}) {
+        mod.enable_validation_asserts = true;
+
         if (options.entry_point_name.empty()) {
             options.entry_point_name = "main";
         }
 
         auto result = writer::Generate(mod, options);
-        if (result != Success) {
-            err_ = result.Failure().reason;
-            return false;
-        }
+        TINT_CHECK_RESULT(result);
         output_ = result.Get();
 
-        const char* dxc_path = validate::kDxcDLLName;
-        auto dxc = tint::Command::LookPath(dxc_path);
-        if (dxc.Found()) {
-            uint32_t hlsl_shader_model = 66;
-            bool require_16bit_types = true;
+        if (options.compiler == Options::Compiler::kDXC_2021) {
+            const char* dxc_path = validate::kDxcDLLName;
+            auto dxc = tint::Command::LookPath(dxc_path);
+            if (dxc.Found()) {
+                auto hlsl_shader_model = validate::HlslShaderModel::kSM_6_10;
+                bool require_16bit_types = true;
 
-            auto validate_res = validate::ValidateUsingDXC(
-                dxc.Path(), output_.hlsl, output_.entry_point_name, output_.pipeline_stage,
-                require_16bit_types, hlsl_shader_model);
-            if (validate_res.failed) {
-                size_t line_num = 1;
+                auto validate_res = validate::ValidateUsingDXC(
+                    dxc.Path(), output_.hlsl, output_.entry_point_name, output_.pipeline_stage,
+                    require_16bit_types, hlsl_shader_model);
+                if (validate_res.failed) {
+                    size_t line_num = 1;
 
-                std::stringstream err;
-                err << "DXC was expected to succeed, but failed:\n\n";
-                for (auto line : Split(output_.hlsl, "\n")) {
-                    err << line_num++ << ": " << line << "\n";
+                    std::stringstream err;
+                    err << "DXC was expected to succeed, but failed:\n\n";
+                    for (auto line : Split(output_.hlsl, "\n")) {
+                        err << line_num++ << ": " << line << "\n";
+                    }
+                    err << "\n\n" << validate_res.output;
+
+                    return Failure(err.str());
                 }
-                err << "\n\n" << validate_res.output;
-
-                err_ = err.str();
-                return false;
             }
         }
 
-        return true;
+        return Success;
     }
 };
 

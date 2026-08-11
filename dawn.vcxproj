@@ -1,0 +1,1658 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Test|ARM64">
+      <Configuration>Test</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Test|x64">
+      <Configuration>Test</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <ProjectGuid>{B737C74D-7147-4E95-8B6B-A0193894E8F7}</ProjectGuid>
+    <UseNativeEnvironment>true</UseNativeEnvironment>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <RootNamespace>dawn</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+    <MinimumVisualStudioVersion>14.0</MinimumVisualStudioVersion>
+    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v145</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v145</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v145</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v145</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Test|ARM64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v145</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Test|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v145</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Test|ARM64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Test|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">..\..\output\windows_arm64_debug\staticlib\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">..\..\output\intermediate\3rdparty\dawn\windows_arm64_debug\ARM64\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">dawn</TargetName>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">..\..\output\windows_x64_debug\staticlib\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">..\..\output\intermediate\3rdparty\dawn\windows_x64_debug\x64\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">dawn</TargetName>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">..\..\output\windows_arm64_release\staticlib\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">..\..\output\intermediate\3rdparty\dawn\windows_arm64_release\ARM64\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">dawn</TargetName>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">..\..\output\windows_x64_release\staticlib\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">..\..\output\intermediate\3rdparty\dawn\windows_x64_release\x64\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">dawn</TargetName>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Test|ARM64'">..\..\output\windows_arm64_test\staticlib\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Test|ARM64'">..\..\output\intermediate\3rdparty\dawn\windows_arm64_test\ARM64\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Test|ARM64'">dawn</TargetName>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Test|x64'">..\..\output\windows_x64_test\staticlib\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Test|x64'">..\..\output\intermediate\3rdparty\dawn\windows_x64_test\x64\</IntDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Test|x64'">dawn</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <ClCompile>
+      <AdditionalOptions>/std:c++20 /MP /Zc:rvalueCast /Zc:strictStrings /bigobj /Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_ARM64;_DEBUG;DEBUG;_ITERATOR_DEBUG_LEVEL=1;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader></PrecompiledHeader>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ProgramDataBaseFileName>$(OutDir)dawn.pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_ARM64;_DEBUG;DEBUG;_ITERATOR_DEBUG_LEVEL=1;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Lib>
+      <OutputFile>$(OutDir)dawn.lib</OutputFile>
+      <TargetMachine>MachineARM64</TargetMachine>
+    </Lib>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation Condition="'$(GenerateDebugInformation)'!=''">$(GenerateDebugInformation)</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)dawn_link.pdb</ProgramDatabaseFile>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalOptions>/std:c++20 /MP /Zc:rvalueCast /Zc:strictStrings /bigobj /Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_X64;_DEBUG;DEBUG;_ITERATOR_DEBUG_LEVEL=1;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader></PrecompiledHeader>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ProgramDataBaseFileName>$(OutDir)dawn.pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_X64;_DEBUG;DEBUG;_ITERATOR_DEBUG_LEVEL=1;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Lib>
+      <OutputFile>$(OutDir)dawn.lib</OutputFile>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Lib>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation Condition="'$(GenerateDebugInformation)'!=''">$(GenerateDebugInformation)</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)dawn_link.pdb</ProgramDatabaseFile>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <ClCompile>
+      <AdditionalOptions>/std:c++20 /MP /Zc:rvalueCast /Zc:strictStrings /bigobj /Gw /Gy /Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
+      <Optimization>MaxSpeed</Optimization>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_ARM64;NDEBUG;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader></PrecompiledHeader>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ProgramDataBaseFileName>$(OutDir)dawn.pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_ARM64;NDEBUG;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Lib>
+      <OutputFile>$(OutDir)dawn.lib</OutputFile>
+      <TargetMachine>MachineARM64</TargetMachine>
+    </Lib>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation Condition="'$(GenerateDebugInformation)'!=''">$(GenerateDebugInformation)</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)dawn_link.pdb</ProgramDatabaseFile>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalOptions>/std:c++20 /MP /Zc:rvalueCast /Zc:strictStrings /bigobj /Gw /Gy /Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
+      <Optimization>MaxSpeed</Optimization>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_X64;NDEBUG;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader></PrecompiledHeader>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ProgramDataBaseFileName>$(OutDir)dawn.pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_X64;NDEBUG;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Lib>
+      <OutputFile>$(OutDir)dawn.lib</OutputFile>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Lib>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation Condition="'$(GenerateDebugInformation)'!=''">$(GenerateDebugInformation)</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)dawn_link.pdb</ProgramDatabaseFile>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Test|ARM64'">
+    <ClCompile>
+      <AdditionalOptions>/std:c++20 /MP /Zc:rvalueCast /Zc:strictStrings /bigobj /Zc:preprocessor /Ob2 %(AdditionalOptions)</AdditionalOptions>
+      <Optimization>MaxSpeed</Optimization>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_ARM64;NDEBUG;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader></PrecompiledHeader>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ProgramDataBaseFileName>$(OutDir)dawn.pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_ARM64;NDEBUG;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Lib>
+      <OutputFile>$(OutDir)dawn.lib</OutputFile>
+      <TargetMachine>MachineARM64</TargetMachine>
+    </Lib>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation Condition="'$(GenerateDebugInformation)'!=''">$(GenerateDebugInformation)</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)dawn_link.pdb</ProgramDatabaseFile>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Test|x64'">
+    <ClCompile>
+      <AdditionalOptions>/std:c++20 /MP /Zc:rvalueCast /Zc:strictStrings /bigobj /Zc:preprocessor /Ob2 %(AdditionalOptions)</AdditionalOptions>
+      <Optimization>MaxSpeed</Optimization>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_X64;NDEBUG;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <StringPooling>true</StringPooling>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <PrecompiledHeader></PrecompiledHeader>
+      <AdditionalUsingDirectories>$(WindowsSDK_MetadataPath);$(AdditionalUsingDirectories)</AdditionalUsingDirectories>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <ProgramDataBaseFileName>$(OutDir)dawn.pdb</ProgramDataBaseFileName>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>RTC;RTC_WINDOWS_FAMILY;RTC_WINDOWS_DESKTOP;_LIB;WIN32;_WINDOWS;WINDOWS;_UNICODE;UNICODE;NOMINMAX;_USE_MATH_DEFINES;WIN32_LEAN_AND_MEAN;WINVER=0x0A00;_WIN32_WINNT=0x0A00;NTDDI_VERSION=0x0A000000;CPPREST_FORCE_PPLX;_PPLTASK_ASYNC_LOGGING=0;_CRT_NONSTDC_NO_DEPRECATE;_CRT_SECURE_NO_WARNINGS;_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS;_SILENCE_ALL_CXX20_DEPRECATION_WARNINGS;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS;RTC_X64;NDEBUG;DAWN_DISABLE_LOGGING;DAWN_FORCE_SYSTEM_COMPONENT_LOAD;DAWN_NATIVE_IMPLEMENTATION;STRIP_LOG=1;TINT_BUILD_WGSL_READER=1;TINT_BUILD_WGSL_WRITER=1;TINT_BUILD_NULL_WRITER=1;DAWN_USE_WINDOWS_UI;TINT_BUILD_IS_WIN=1;ENABLE_PCH=1;ENABLE_HLSL;TINT_BUILD_HLSL_WRITER=1;DAWN_ENABLE_SPIRV_VALIDATION;TINT_BUILD_SPV_READER=1;TINT_BUILD_SPV_WRITER=1;D3D_SHADER_MODEL_6_9= 0x69;D3D_SHADER_MODEL_6_8= 0x68;D3D_SHADER_MODEL_6_7= 0x67;D3D12_FEATURE_D3D12_OPTIONS9	= 37;DAWN_ENABLE_BACKEND_D3D12;D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));DAWN_ENABLE_BACKEND_VULKAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;out\gen\include;include;out\gen\src;src;src\dawn\partition_alloc;src\dawn\utils;..\abseil-cpp;..\SPIRV-Headers\include;..\SPIRV-Tools\include;..\SPIRV-Tools\out\gen;..\SPIRV-Tools;..\DirectXShaderCompiler\include\dxc;..\DirectXShaderCompiler\include;..\Vulkan-Headers\include;..\Vulkan-Utility-Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Lib>
+      <OutputFile>$(OutDir)dawn.lib</OutputFile>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Lib>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation Condition="'$(GenerateDebugInformation)'!=''">$(GenerateDebugInformation)</GenerateDebugInformation>
+      <ProgramDatabaseFile>$(OutDir)dawn_link.pdb</ProgramDatabaseFile>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="src\dawn\utils\SystemHandle.cpp">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\rtti\castable_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\utils\RenderDoc.cpp">
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\ChainUtils_autogen.cpp">
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\ObjectType_autogen.cpp">
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\ProcTable.cpp">
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\ValidationUtils_autogen.cpp">
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\webgpu_absl_format_autogen.cpp">
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\webgpu_dawn_native_proc.cpp">
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\webgpu_StreamImpl_autogen.cpp">
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\native\wgpu_structs_autogen.cpp">
+    </ClCompile>
+    <ClCompile Include="out\gen\src\dawn\common\GPUInfo_autogen.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\AlignedAlloc.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\Defer.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\DynamicLib.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\ExternalTextureParams.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\FutureUtils.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\GPUInfo.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\Math.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\RefCounted.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\Result.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\Sha3.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\SlabAllocator.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\StringViewUtils.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\SystemUtils.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\ThreadLocal.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\WGPUDeviceCallbackInfos.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\WeakRefSupport.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Adapter.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ApplyClearColorValueWithDrawHelper.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\AsyncTask.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\AttachmentState.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BackendConnection.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BindGroup.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BindGroupLayout.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BindGroupLayoutInternal.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BindingInfo.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlitBufferToDepthStencil.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlitBufferToTexture.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlitColorToColorWithDraw.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlitDepthToDepth.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlitTextureToBuffer.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Blob.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BlobCache.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BuddyAllocator.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\BuddyMemoryAllocator.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Buffer.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CacheKey.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CacheRequest.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CachedObject.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CallbackTaskManager.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CommandAllocator.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CommandBuffer.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CommandBufferStateTracker.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CommandEncoder.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CommandValidation.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Commands.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CompilationMessages.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ComputePassEncoder.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ComputePipeline.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CopyTextureForBrowserHelper.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\CreatePipelineAsyncEvent.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\DawnNative.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Device.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\DeviceGuard.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\DynamicUploader.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\EncodingContext.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Error.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ErrorData.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ErrorInjector.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ErrorScope.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\EventManager.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ExecutionQueue.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ExternalTexture.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Features.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Format.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ImmediatesLayout.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\IndirectDrawMetadata.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\IndirectDrawValidationEncoder.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Instance.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\InternalPipelineStore.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Limits.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ObjectBase.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ObjectContentHasher.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PassResourceUsageTracker.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PerStage.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PhysicalDevice.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Pipeline.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PipelineCache.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PipelineLayout.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\PooledResourceMemoryAllocator.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ProgrammableEncoder.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\QueryHelper.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\QuerySet.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Queue.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderBundle.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderBundleEncoder.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderEncoderBase.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderPassEncoder.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderPassWorkaroundsHelper.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RenderPipeline.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ResourceMemoryAllocation.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ResourceTable.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ResourceTableDefaultResources.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\RingBufferAllocator.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Sampler.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ScratchBuffer.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ShaderModule.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ShaderModuleParseRequest.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SharedBufferMemory.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SharedFence.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SharedResourceMemory.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SharedTextureMemory.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Subresource.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Surface.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SwapChain.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SystemEvent.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\TexelBufferView.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Texture.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\TintUtils.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\Toggles.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\ValidationUtils.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\WaitListEvent.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\dawn_platform.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\null\DeviceNull_rtc_shim_1.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\null\NullBackend_rtc_shim_1.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\stream\BlobSource.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\stream\ByteVectorSink.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\utils\WGPUHelpers.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\webgpu_absl_format.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\platform\DawnPlatform.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\platform\WorkerThread.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\platform\metrics\HistogramMacros.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\platform\tracing\EventTracer.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\BlitBufferToDepthTexture.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\Capture.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\CaptureWalker.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\Deserialization.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\Error_rtc_shim_1.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\ReadHead.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\Replay.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\replay\SurfaceDiscovery.cpp">
+    </ClCompile>
+    <ClCompile Include="src\tint\api\common\vertex_pulling_config.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\api\helpers\generate_bindings.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\api\tint.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\binary_op.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\composite.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\eval.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\invalid.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\manager.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\node.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\scalar.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\splat.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\string.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\constant\value.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\enums.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\intrinsic\ctor_conv.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\intrinsic\data.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\intrinsic\table.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\access.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\analysis\for_loop_analysis.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\analysis\integer_range_analysis.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\analysis\loop_analysis.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\analysis\subgroup_matrix.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\binary.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\block.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\block_param.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\break_if.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\builder.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\builtin_call.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\call.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\clone_context.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\const_param_validator.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\constant.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\constexpr_if.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\construct.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\continue.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\control_instruction.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\convert.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\core_binary.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\core_builtin_call.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\core_unary.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\disassembler.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\discard.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\evaluator.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\exit.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\exit_if.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\exit_loop.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\exit_switch.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\function.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\function_param.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\functional_validator.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\if.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\instruction.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\instruction_result.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\io_attribute_validator.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\let.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\load.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\load_vector_element.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\loop.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\member_builtin_call.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\module.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\multi_in_block.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\next_iteration.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\operand_instruction.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\override.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\phony.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\reflection.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\return.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\store.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\store_vector_element.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\structural_validator.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\switch.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\swizzle.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\terminate_invocation.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\terminator.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\array_length_from.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\bgra8unorm_polyfill.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\binary_polyfill.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\binding_remapper.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\block_decorated_structs.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\builtin_polyfill.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\builtin_scalarize.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\change_immediate_to_uniform.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\collapse_subgroup_min_max.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\combine_access_instructions.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\conversion_polyfill.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\dead_code_elimination.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\decompose_access.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\demote_to_helper.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\direct_variable_access.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\multiplanar_external_texture.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\prepare_immediate_data.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\preserve_padding.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\prevent_infinite_loops.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\propagate_buffer_sizes.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\remove_continue_in_switch.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\remove_terminator_args.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\remove_uniform_vector_component_loads.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\rename_conflicts.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\resource_table.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\resource_table_helper.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\robustness.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\shader_io.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\signed_integer_polyfill.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\single_entry_point.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\std140.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\substitute_overrides.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\value_to_let.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\vectorize_scalar_matrix_constructors.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\vertex_pulling.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\transform\zero_init_workgroup_memory.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\type\array_count.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\unary.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\unreachable.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\unused.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\user_call.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\validator.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\value_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\ir\var.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\number.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\abstract_float.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\abstract_int.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\abstract_numeric.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\array.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\array_count_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\atomic.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\binding_array.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\bool.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\buffer_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\builtin_structs.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\depth_multisampled_texture.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\depth_texture.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\external_texture.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\f16.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\f32.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\function_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\i32.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\i8.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\input_attachment.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\invalid_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\manager_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\matrix.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\memory_view.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\multisampled_texture.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\node_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\numeric_scalar.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\pointer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\reference.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\resource_table_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\resource_type.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\sampled_texture.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\sampler_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\sampler_kind.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\scalar_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\storage_texture.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\string_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\struct.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\subgroup_matrix_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\swizzle_view.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\texel_buffer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\texture_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\texture_dimension.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\type.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\u16.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\u32.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\u64.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\u8.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\unique_node.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\vector.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\type\void.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\core\unary_op.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\null\writer\common\options.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\null\writer\common\output.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\null\writer\raise\raise.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\null\writer\writer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\accessor_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\alias.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\assignment_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\binary_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\binding_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\blend_src_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\block_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\bool_literal_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\break_if_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\break_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\builder_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\builtin_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\call_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\call_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\case_selector.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\case_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\color_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\compound_assignment_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\const.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\const_assert.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\continue_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\diagnostic_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\diagnostic_control.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\diagnostic_directive.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\diagnostic_rule_name.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\discard_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\enable.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\extension.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\float_literal_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\for_loop_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\function_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\group_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\id_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\identifier.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\identifier_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\if_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\increment_decrement_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\index_accessor_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\input_attachment_index_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\int_literal_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\interpolate_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\invariant_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\let_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\literal_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\location_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\loop_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\member_accessor_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\module_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\must_use_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\node_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\override_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\parameter.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\phony_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\pipeline_stage.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\requires.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\return_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\stage_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\struct_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\struct_member.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\struct_member_align_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\struct_member_size_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\subgroup_size_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\switch_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\templated_identifier.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\type_decl.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\unary_op_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\var_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\variable.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\variable_decl_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\while_statement.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ast\workgroup_attribute.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\enums_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\feature_status.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\inspector\entry_point.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\inspector\inspector.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\inspector\resource_binding.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\inspector\scalar_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\intrinsic\ctor_conv_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\intrinsic\data_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ir\atomic_vec2u_to_from_u64.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ir\builtin_call_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\ir\unary_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\program\program.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\program\program_builder.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\lower\lower.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\parser\lexer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\parser\parser.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\parser\token.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\program_to_ir\program_to_ir.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reader\reader.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\reserved_words.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\dependency_graph.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\incomplete_type.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\resolve.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\resolver.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\sem_helper.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\uniformity.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\unresolved_identifier.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\resolver\validator_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\accessor_expression_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\array_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\array_count_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\behavior.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\block_statement_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\break_if_statement_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\builtin_enum_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\builtin_fn.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\call_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\call_target.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\expression_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\for_loop_statement_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\function_rtc_shim_3.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\function_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\if_statement_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\index_accessor_expression_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\info.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\load_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\loop_statement_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\materialize.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\member_accessor_expression_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\module_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\node_rtc_shim_3.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\statement_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\struct_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\switch_statement_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\type_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\value_constructor.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\value_conversion.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\value_expression.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\variable_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\sem\while_statement_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\ast_printer\ast_printer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\common\common.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\ir_to_program\ir_to_program.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\output_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\raise\ptr_to_ref.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\raise\raise_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\raise\value_to_let_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\wgsl\writer\writer_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\bytes\buffer_reader.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\bytes\reader_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\command\args.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\command\cli.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\containers\containers.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\diagnostic\diagnostic.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\diagnostic\formatter.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\diagnostic\source.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\ice\debugger.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\ice\ice.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\macros\macros.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\math\math_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\memory\memory.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\reflection\reflection_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\result_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\rtti\switch_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\strconv\float_to_string.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\strconv\parse_num.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\symbol\generation_id.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\symbol\symbol.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\symbol\symbol_table.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\system\env_other.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\base64.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\color_mode.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\string_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\string_stream.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\styled_text.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\styled_text_printer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\styled_text_printer_ansi.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\styled_text_theme.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\unicode.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text_generator\text_generator.cc">
+    </ClCompile>
+    <ClCompile Include="src\utils\log.cc">
+    </ClCompile>
+    <ClCompile Include="src\dawn\common\WindowsUtils.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\SpirvValidation_rtc_shim_1.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\utils\WindowsDebugLogger.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\utils\WindowsTimer.cpp">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\command\command_windows.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\file\tmpfile_windows.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\system\env_windows.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\system\executable_path_windows.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\system\terminal_windows.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\utils\text\styled_text_printer_windows.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\builtin_fn_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\intrinsic\data_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\ir\builtin_call_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\ir\member_builtin_call_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\ir\ternary.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\type\byte_address_buffer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\type\int8_t4_packed.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\type\matrix_layout.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\type\rasterizer_ordered_texture_2d.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\type\uint8_t4_packed.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\validate\validate.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\common\option_helpers.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\common\options_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\common\output_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\printer\printer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\array_offset_from_immediate.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\array_offset_from_uniform.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\binary_polyfill_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\builtin_polyfill_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\decompose_storage_access.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\extract_ternary_values.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\localize_struct_array_assignment.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\pixel_local.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\promote_initializers.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\raise_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\replace_default_only_switch.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\replace_non_indexable_mat_vec_stores.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\replace_subgroup_matrix_init.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\resource_table_helper_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\raise\shader_io_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\hlsl\writer\writer_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\builtin_fn_rtc_shim_3.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\intrinsic\data_rtc_shim_4.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\ir\binary_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\ir\builtin_call_rtc_shim_4.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\ir\copy_logical.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\common\common_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\atomics.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\builtins.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\decompose_strided_array.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\decompose_strided_matrix.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\lower_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\shader_io_rtc_shim_3.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\texture_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\transpose_row_major.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\lower\vector_element_pointer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\parser\parser_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\reader\reader_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\type\explicit_layout_array.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\type\image.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\type\literal.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\type\sampled_image.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\validate\validate_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\analysis\relaxed_precision_decorations.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\binary_writer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\function_rtc_shim_4.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\instruction_rtc_shim_1.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\module_rtc_shim_3.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\operand.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\option_helper.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\common\output_rtc_shim_4.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\printer\printer_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\builtin_polyfill_rtc_shim_3.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\case_switch_to_if_else.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\expand_implicit_splats.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\fork_explicit_layout_types.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\handle_matrix_arithmetic.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\keep_binding_array_as_pointer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\merge_return.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\pass_matrix_by_pointer.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\raise_rtc_shim_4.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\remove_unreachable_in_loop_continuing.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\resource_table_helper_rtc_shim_2.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\shader_io_rtc_shim_4.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\unary_polyfill.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\raise\var_for_dynamic_index.cc">
+    </ClCompile>
+    <ClCompile Include="src\tint\lang\spirv\writer\writer_rtc_shim_4.cc">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\BackendD3D.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\BlobD3D.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\D3DBackend.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\D3DError.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\DeviceD3D.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\KeyedMutex.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\PhysicalDeviceD3D.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\PlatformFunctions.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\QueueD3D.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\ShaderUtils.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\SharedFenceD3D.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\SharedTextureMemoryD3D.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\SwapChainD3D.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d\UtilsD3D.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\BackendD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\BindGroupD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\BindGroupLayoutD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\BufferD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\CPUDescriptorHeapAllocationD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\CommandBufferD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\CommandRecordingContext.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ComputePipelineD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\D3D12Backend.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\D3D12Info.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\DeviceD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\GPUDescriptorHeapAllocationD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\HeapAllocatorD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\HeapD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\PageableD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\PhysicalDeviceD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\PipelineLayoutD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\PlatformFunctionsD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\QuerySetD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\QueueD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\RenderPassBuilderD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\RenderPipelineD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ResidencyManagerD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ResourceAllocatorManagerD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ResourceHeapAllocationD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ResourceTableD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SamplerD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SamplerHeapCacheD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ShaderModuleD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\ShaderVisibleDescriptorAllocatorD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SharedBufferMemoryD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SharedFenceD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SharedTextureMemoryD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\StagingDescriptorAllocatorD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\StreamImplD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\SwapChainD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\TextureCopySplitter.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\TextureD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\d3d12\UtilsD3D12.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\BackendVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\BindGroupLayoutVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\BindGroupVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\BufferVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\CommandBufferVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\CommandRecordingContextVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ComputePipelineVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\DescriptorSetAllocator.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\DeviceVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\FencedDeleter.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\FramebufferCache.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\FramebufferFetchHelper.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\MemoryTypeSelector.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\PhysicalDeviceVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\PipelineCacheVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\PipelineLayoutVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\QuerySetVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\QueueVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\RenderPassCache.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\RenderPipelineVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ResolveTextureLoadingUtilsVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ResourceHeapVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ResourceMemoryAllocatorVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ResourceTableVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\SamplerVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\ShaderModuleVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\SharedFenceVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\SharedTextureMemoryVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\StreamImplVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\SwapChainVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\TexelBufferViewVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\TextureVk.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\UtilsVulkan.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\VulkanBackend.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\VulkanError.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\VulkanExtensions.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\VulkanFunctions.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\VulkanInfo.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\external_memory\MemoryService.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\external_memory\MemoryServiceImplementation.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\external_semaphore\SemaphoreService.cpp">
+    </ClCompile>
+    <ClCompile Include="src\dawn\native\vulkan\external_semaphore\SemaphoreServiceImplementation.cpp">
+    </ClCompile>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

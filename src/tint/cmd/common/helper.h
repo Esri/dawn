@@ -25,11 +25,6 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifdef UNSAFE_BUFFERS_BUILD
-// TODO(crbug.com/439062058): Remove this and convert code to safer constructs.
-#pragma allow_unsafe_buffers
-#endif
-
 #ifndef SRC_TINT_CMD_COMMON_HELPER_H_
 #define SRC_TINT_CMD_COMMON_HELPER_H_
 
@@ -41,6 +36,7 @@
 
 #include "src/tint/lang/wgsl/inspector/inspector.h"
 #include "src/tint/utils/diagnostic/source.h"
+#include "src/utils/compiler.h"
 
 #if TINT_BUILD_SPV_READER
 #include "src/tint/lang/spirv/reader/common/options.h"
@@ -53,7 +49,7 @@
 // Forward declarations
 namespace tint {
 class Program;
-class InternalCompilerError;
+class StyledTextPrinter;
 }  // namespace tint
 
 namespace tint::cmd {
@@ -63,6 +59,12 @@ enum class InputFormat {
     kWgsl,
     kSpirvBin,
     kSpirvAsm,
+};
+
+/// The formatting mode for program diagnostics.
+enum class DiagnosticsFormat {
+    kPlain,
+    kJson,
 };
 
 /// Information on a loaded program
@@ -103,6 +105,8 @@ struct LoadProgramOptions {
 #endif
     /// The text printer to use for output
     StyledTextPrinter* printer = nullptr;
+    /// The diagnostics format to use
+    DiagnosticsFormat diagnostics_format = DiagnosticsFormat::kPlain;
 };
 
 /// Loads the source and program information for the given file.
@@ -110,6 +114,14 @@ struct LoadProgramOptions {
 /// returning.
 /// @param opts the loading options
 ProgramInfo LoadProgramInfo(const LoadProgramOptions& opts);
+
+/// Prints diagnostics to standard error using the specified format.
+/// @param diagnostics the diagnostics to print
+/// @param format the format to use
+/// @param printer the plain text printer (optional, used for plain format)
+void PrintDiagnostics(const tint::diag::List& diagnostics,
+                      DiagnosticsFormat format,
+                      StyledTextPrinter* printer);
 
 /// @param stage the pipeline stage
 /// @returns the string representation
@@ -122,6 +134,10 @@ std::string TextureDimensionToString(tint::inspector::ResourceBinding::TextureDi
 /// @param kind the sample kind
 /// @returns the text name
 std::string SampledKindToString(tint::inspector::ResourceBinding::SampledKind kind);
+
+/// @param type the sampler type
+/// @returns the text name
+std::string SamplerTypeToString(tint::inspector::ResourceBinding::SamplerType type);
 
 /// @param format the texel format
 /// @returns the text name
@@ -168,13 +184,14 @@ void SetStdinModeBinary();
 /// @private
 template <typename ContainerT>
 bool WriteStdoutImpl(const ContainerT& buffer) {
-    size_t written =
-        fwrite(buffer.data(), sizeof(typename ContainerT::value_type), buffer.size(), stdout);
+    FILE* out_file = stdout;
+    size_t written = DAWN_UNSAFE_TODO(
+        fwrite(buffer.data(), sizeof(typename ContainerT::value_type), buffer.size(), out_file));
     if (buffer.size() != written) {
         std::cerr << "Could not write all output to standard output\n";
         return false;
     }
-    fflush(stdout);
+    fflush(out_file);
     return true;
 }
 
@@ -199,8 +216,8 @@ bool WriteFileImpl(const std::string& output_file,
         return false;
     }
 
-    size_t written =
-        fwrite(buffer.data(), sizeof(typename ContainerT::value_type), buffer.size(), file);
+    size_t written = DAWN_UNSAFE_TODO(
+        fwrite(buffer.data(), sizeof(typename ContainerT::value_type), buffer.size(), file));
     if (buffer.size() != written) {
         std::cerr << "Could not write to file " << output_file << "\n";
         fclose(file);
@@ -257,7 +274,7 @@ bool ReadFileImpl(const std::string& input_file, std::vector<T>* buffer) {
     buffer->clear();
     buffer->resize(file_size / sizeof(T));
 
-    size_t bytes_read = fread(buffer->data(), 1, file_size, file);
+    size_t bytes_read = DAWN_UNSAFE_TODO(fread(buffer->data(), 1, file_size, file));
     fclose(file);
     if (bytes_read != file_size) {
         std::cerr << "Failed to read " << input_file << "\n";
@@ -279,10 +296,11 @@ bool ReadStdinImpl(std::vector<T>* buffer) {
     constexpr size_t kItemsPerChunk = 1024;
     constexpr size_t kBytesPerChunk = sizeof(T) * kItemsPerChunk;
     std::vector<T> chunk(kItemsPerChunk);
-    while (!std::feof(stdin)) {
-        size_t bytes_read = std::fread(chunk.data(), 1, kBytesPerChunk, stdin);
+    FILE* in_file = stdin;
+    while (!std::feof(in_file)) {
+        size_t bytes_read = DAWN_UNSAFE_TODO(std::fread(chunk.data(), 1, kBytesPerChunk, in_file));
         if (bytes_read == 0) {
-            if (std::ferror(stdin)) {
+            if (std::ferror(in_file)) {
                 std::perror("Error reading from standard input");
                 return false;
             }

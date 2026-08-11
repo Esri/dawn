@@ -25,18 +25,20 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/metal/UtilsMetal.h"
+#include "src/dawn/native/metal/UtilsMetal.h"
+
 #include <Metal/Metal.h>
 
-#include "dawn/common/Assert.h"
-#include "dawn/common/Math.h"
-#include "dawn/native/Buffer.h"
-#include "dawn/native/CommandBuffer.h"
-#include "dawn/native/EnumMaskIterator.h"
-#include "dawn/native/Pipeline.h"
-#include "dawn/native/ShaderModule.h"
-#include "dawn/native/dawn_platform.h"
-#include "dawn/native/metal/BufferMTL.h"
+#include "src/dawn/common/Math.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/CommandBuffer.h"
+#include "src/dawn/native/EnumMaskIterator.h"
+#include "src/dawn/native/Pipeline.h"
+#include "src/dawn/native/ShaderModule.h"
+#include "src/dawn/native/dawn_platform.h"
+#include "src/dawn/native/metal/BufferMTL.h"
+#include "src/utils/assert.h"
 
 namespace dawn::native::metal {
 
@@ -82,6 +84,7 @@ struct SavedMetalAttachment {
     id<MTLTexture> texture = nil;
     NSUInteger level;
     NSUInteger slice;
+    NSUInteger depthPlane;
 
     NSPRef<id<MTLTexture>> temporary;
 
@@ -95,7 +98,7 @@ struct SavedMetalAttachment {
                     toTexture:texture
              destinationSlice:slice
              destinationLevel:level
-            destinationOrigin:MTLOriginMake(0, 0, 0)];
+            destinationOrigin:MTLOriginMake(0, 0, depthPlane)];
     }
 
     void CopyFromAttachmentToTemporary(CommandRecordingContext* commandContext) {
@@ -103,7 +106,7 @@ struct SavedMetalAttachment {
               copyFromTexture:texture
                   sourceSlice:slice
                   sourceLevel:level
-                 sourceOrigin:MTLOriginMake(0, 0, 0)
+                 sourceOrigin:MTLOriginMake(0, 0, depthPlane)
                    sourceSize:MTLSizeMake([temporary.Get() width], [temporary.Get() height], 1)
                     toTexture:temporary.Get()
              destinationSlice:0
@@ -116,12 +119,14 @@ struct SavedMetalAttachment {
 ResultOrError<SavedMetalAttachment> SaveAttachmentCreateTemporary(Device* device,
                                                                   id<MTLTexture> attachmentTexture,
                                                                   NSUInteger attachmentLevel,
-                                                                  NSUInteger attachmentSlice) {
+                                                                  NSUInteger attachmentSlice,
+                                                                  NSUInteger attachmentDepthPlane) {
     // Save the attachment.
     SavedMetalAttachment result;
     result.texture = attachmentTexture;
     result.level = attachmentLevel;
     result.slice = attachmentSlice;
+    result.depthPlane = attachmentDepthPlane;
 
     // Create the temporary texture.
     NSRef<MTLTextureDescriptor> mtlDescRef = AcquireNSRef([MTLTextureDescriptor new]);
@@ -153,13 +158,15 @@ ResultOrError<SavedMetalAttachment> PatchAttachmentWithTemporary(
     Device* device,
     MTLRenderPassAttachmentDescriptor* attachment) {
     SavedMetalAttachment result;
-    DAWN_TRY_ASSIGN(result, SaveAttachmentCreateTemporary(device, attachment.texture,
-                                                          attachment.level, attachment.slice));
+    DAWN_TRY_ASSIGN(result,
+                    SaveAttachmentCreateTemporary(device, attachment.texture, attachment.level,
+                                                  attachment.slice, attachment.depthPlane));
 
     // Replace the attachment with the temporary
     attachment.texture = result.temporary.Get();
     attachment.level = 0;
     attachment.slice = 0;
+    attachment.depthPlane = 0;
 
     return result;
 }
@@ -253,11 +260,13 @@ void MakeResourcesResident(Encoder encoder, const SyncScopeResourceUsage& resour
             continue;
         }
 
+        // The texture is either a normal one, or a planar texture with up to 3 planes.
         // There are at most three planes. Call useResource for each plane that is used.
-        const Aspect kAspectsCorrespondingToPlane0{~(Aspect::Plane1 | Aspect::Plane2)};
-        for (Aspect plane : {kAspectsCorrespondingToPlane0, Aspect::Plane1, Aspect::Plane2}) {
-            if (aspects & plane) {
-                MakeResourceResident(encoder, texture->GetMTLTexture(plane),
+        const Aspect kNonPlanarAspects{~(Aspect::Plane0 | Aspect::Plane1 | Aspect::Plane2)};
+        for (Aspect plane : {kNonPlanarAspects, Aspect::Plane0, Aspect::Plane1, Aspect::Plane2}) {
+            auto aspect = aspects & plane;
+            if (aspect) {
+                MakeResourceResident(encoder, texture->GetMTLTexture(aspect),
                                      ToMTLResourceUsage(usages), stages);
             }
         }
@@ -265,6 +274,26 @@ void MakeResourcesResident(Encoder encoder, const SyncScopeResourceUsage& resour
 }
 
 }  // anonymous namespace
+
+MTLTextureType MetalTextureViewType(wgpu::TextureViewDimension dimension, bool multisampled) {
+    switch (dimension) {
+        case wgpu::TextureViewDimension::e1D:
+            return MTLTextureType1D;
+        case wgpu::TextureViewDimension::e2D:
+            return multisampled ? MTLTextureType2DMultisample : MTLTextureType2D;
+        case wgpu::TextureViewDimension::e2DArray:
+            return MTLTextureType2DArray;
+        case wgpu::TextureViewDimension::Cube:
+            return MTLTextureTypeCube;
+        case wgpu::TextureViewDimension::CubeArray:
+            return MTLTextureTypeCubeArray;
+        case wgpu::TextureViewDimension::e3D:
+            return MTLTextureType3D;
+        case wgpu::TextureViewDimension::Undefined:
+            break;
+    }
+    DAWN_UNREACHABLE();
+}
 
 MTLPixelFormat MetalPixelFormat(const DeviceBase* device, wgpu::TextureFormat format) {
     switch (format) {
@@ -423,122 +452,122 @@ MTLPixelFormat MetalPixelFormat(const DeviceBase* device, wgpu::TextureFormat fo
 #endif
 
         case wgpu::TextureFormat::ETC2RGB8Unorm:
-                return MTLPixelFormatETC2_RGB8;
+            return MTLPixelFormatETC2_RGB8;
 
         case wgpu::TextureFormat::ETC2RGB8UnormSrgb:
 
-                return MTLPixelFormatETC2_RGB8_sRGB;
+            return MTLPixelFormatETC2_RGB8_sRGB;
 
         case wgpu::TextureFormat::ETC2RGB8A1Unorm:
-                return MTLPixelFormatETC2_RGB8A1;
+            return MTLPixelFormatETC2_RGB8A1;
 
         case wgpu::TextureFormat::ETC2RGB8A1UnormSrgb:
 
-                return MTLPixelFormatETC2_RGB8A1_sRGB;
+            return MTLPixelFormatETC2_RGB8A1_sRGB;
 
         case wgpu::TextureFormat::ETC2RGBA8Unorm:
-                return MTLPixelFormatEAC_RGBA8;
+            return MTLPixelFormatEAC_RGBA8;
 
         case wgpu::TextureFormat::ETC2RGBA8UnormSrgb:
 
-                return MTLPixelFormatEAC_RGBA8_sRGB;
+            return MTLPixelFormatEAC_RGBA8_sRGB;
 
         case wgpu::TextureFormat::EACR11Unorm:
 
-                return MTLPixelFormatEAC_R11Unorm;
+            return MTLPixelFormatEAC_R11Unorm;
 
         case wgpu::TextureFormat::EACR11Snorm:
-                return MTLPixelFormatEAC_R11Snorm;
+            return MTLPixelFormatEAC_R11Snorm;
 
         case wgpu::TextureFormat::EACRG11Unorm:
 
-                return MTLPixelFormatEAC_RG11Unorm;
+            return MTLPixelFormatEAC_RG11Unorm;
 
         case wgpu::TextureFormat::EACRG11Snorm:
 
-                return MTLPixelFormatEAC_RG11Snorm;
+            return MTLPixelFormatEAC_RG11Snorm;
 
         case wgpu::TextureFormat::ASTC4x4Unorm:
-                return MTLPixelFormatASTC_4x4_LDR;
+            return MTLPixelFormatASTC_4x4_LDR;
 
         case wgpu::TextureFormat::ASTC4x4UnormSrgb:
-                return MTLPixelFormatASTC_4x4_sRGB;
+            return MTLPixelFormatASTC_4x4_sRGB;
 
         case wgpu::TextureFormat::ASTC5x4Unorm:
 
-                return MTLPixelFormatASTC_5x4_LDR;
+            return MTLPixelFormatASTC_5x4_LDR;
 
         case wgpu::TextureFormat::ASTC5x4UnormSrgb:
-                return MTLPixelFormatASTC_5x4_sRGB;
+            return MTLPixelFormatASTC_5x4_sRGB;
 
         case wgpu::TextureFormat::ASTC5x5Unorm:
-                return MTLPixelFormatASTC_5x5_LDR;
+            return MTLPixelFormatASTC_5x5_LDR;
 
         case wgpu::TextureFormat::ASTC5x5UnormSrgb:
-                return MTLPixelFormatASTC_5x5_sRGB;
+            return MTLPixelFormatASTC_5x5_sRGB;
 
         case wgpu::TextureFormat::ASTC6x5Unorm:
-                return MTLPixelFormatASTC_6x5_LDR;
+            return MTLPixelFormatASTC_6x5_LDR;
 
         case wgpu::TextureFormat::ASTC6x5UnormSrgb:
-                return MTLPixelFormatASTC_6x5_sRGB;
+            return MTLPixelFormatASTC_6x5_sRGB;
 
         case wgpu::TextureFormat::ASTC6x6Unorm:
-                return MTLPixelFormatASTC_6x6_LDR;
+            return MTLPixelFormatASTC_6x6_LDR;
 
         case wgpu::TextureFormat::ASTC6x6UnormSrgb:
-                return MTLPixelFormatASTC_6x6_sRGB;
+            return MTLPixelFormatASTC_6x6_sRGB;
 
         case wgpu::TextureFormat::ASTC8x5Unorm:
-                return MTLPixelFormatASTC_8x5_LDR;
+            return MTLPixelFormatASTC_8x5_LDR;
 
         case wgpu::TextureFormat::ASTC8x5UnormSrgb:
-                return MTLPixelFormatASTC_8x5_sRGB;
+            return MTLPixelFormatASTC_8x5_sRGB;
 
         case wgpu::TextureFormat::ASTC8x6Unorm:
-                return MTLPixelFormatASTC_8x6_LDR;
+            return MTLPixelFormatASTC_8x6_LDR;
 
         case wgpu::TextureFormat::ASTC8x6UnormSrgb:
-                return MTLPixelFormatASTC_8x6_sRGB;
+            return MTLPixelFormatASTC_8x6_sRGB;
 
         case wgpu::TextureFormat::ASTC8x8Unorm:
-                return MTLPixelFormatASTC_8x8_LDR;
+            return MTLPixelFormatASTC_8x8_LDR;
 
         case wgpu::TextureFormat::ASTC8x8UnormSrgb:
-                return MTLPixelFormatASTC_8x8_sRGB;
+            return MTLPixelFormatASTC_8x8_sRGB;
 
         case wgpu::TextureFormat::ASTC10x5Unorm:
-                return MTLPixelFormatASTC_10x5_LDR;
+            return MTLPixelFormatASTC_10x5_LDR;
 
         case wgpu::TextureFormat::ASTC10x5UnormSrgb:
-                return MTLPixelFormatASTC_10x5_sRGB;
+            return MTLPixelFormatASTC_10x5_sRGB;
 
         case wgpu::TextureFormat::ASTC10x6Unorm:
-                return MTLPixelFormatASTC_10x6_LDR;
+            return MTLPixelFormatASTC_10x6_LDR;
 
         case wgpu::TextureFormat::ASTC10x6UnormSrgb:
-                return MTLPixelFormatASTC_10x6_sRGB;
+            return MTLPixelFormatASTC_10x6_sRGB;
 
         case wgpu::TextureFormat::ASTC10x8Unorm:
-                return MTLPixelFormatASTC_10x8_LDR;
+            return MTLPixelFormatASTC_10x8_LDR;
         case wgpu::TextureFormat::ASTC10x8UnormSrgb:
-                return MTLPixelFormatASTC_10x8_sRGB;
+            return MTLPixelFormatASTC_10x8_sRGB;
 
         case wgpu::TextureFormat::ASTC10x10Unorm:
-                return MTLPixelFormatASTC_10x10_LDR;
+            return MTLPixelFormatASTC_10x10_LDR;
 
         case wgpu::TextureFormat::ASTC10x10UnormSrgb:
-                return MTLPixelFormatASTC_10x10_sRGB;
+            return MTLPixelFormatASTC_10x10_sRGB;
         case wgpu::TextureFormat::ASTC12x10Unorm:
-                return MTLPixelFormatASTC_12x10_LDR;
+            return MTLPixelFormatASTC_12x10_LDR;
 
         case wgpu::TextureFormat::ASTC12x10UnormSrgb:
-                return MTLPixelFormatASTC_12x10_sRGB;
+            return MTLPixelFormatASTC_12x10_sRGB;
         case wgpu::TextureFormat::ASTC12x12Unorm:
-                return MTLPixelFormatASTC_12x12_LDR;
+            return MTLPixelFormatASTC_12x12_LDR;
 
         case wgpu::TextureFormat::ASTC12x12UnormSrgb:
-                return MTLPixelFormatASTC_12x12_sRGB;
+            return MTLPixelFormatASTC_12x12_sRGB;
 
         case wgpu::TextureFormat::R8BG8Biplanar420Unorm:
         case wgpu::TextureFormat::R8BG8Biplanar422Unorm:
@@ -547,7 +576,7 @@ MTLPixelFormat MetalPixelFormat(const DeviceBase* device, wgpu::TextureFormat fo
         case wgpu::TextureFormat::R10X6BG10X6Biplanar422Unorm:
         case wgpu::TextureFormat::R10X6BG10X6Biplanar444Unorm:
         case wgpu::TextureFormat::R8BG8A8Triplanar420Unorm:
-        case wgpu::TextureFormat::External:
+        case wgpu::TextureFormat::OpaqueYCbCrAndroid:
         case wgpu::TextureFormat::Undefined:
             DAWN_UNREACHABLE();
     }
@@ -605,18 +634,29 @@ MTLCompareFunction ToMetalCompareFunction(wgpu::CompareFunction compareFunction)
     }
 }
 
+MTLSize ToMTLSize(const TexelExtent3D& extent) {
+    return MTLSizeMake(dchecked_cast<uint32_t>(extent.width),
+                       dchecked_cast<uint32_t>(extent.height),
+                       dchecked_cast<uint32_t>(extent.depthOrArrayLayers));
+}
+
+MTLOrigin ToMTLOrigin(const TexelOrigin3D& origin) {
+    return MTLOriginMake(dchecked_cast<uint32_t>(origin.x), dchecked_cast<uint32_t>(origin.y),
+                         dchecked_cast<uint32_t>(origin.z));
+}
+
 TextureBufferCopySplit ComputeTextureBufferCopySplit(const Texture* texture,
                                                      uint32_t mipLevel,
-                                                     Origin3D origin,
-                                                     Extent3D copyExtent,
+                                                     BlockOrigin3D origin,
+                                                     BlockExtent3D copyExtent,
                                                      uint64_t bufferSize,
                                                      uint64_t bufferOffset,
-                                                     uint32_t bytesPerRow,
-                                                     uint32_t rowsPerImage,
+                                                     BlockCount blocksPerRow,
+                                                     BlockCount rowsPerImage,
                                                      Aspect aspect) {
     TextureBufferCopySplit copy;
     const Format textureFormat = texture->GetFormat();
-    const TexelBlockInfo& blockInfo = textureFormat.GetAspectInfo(aspect).block;
+    const TypedTexelBlockInfo& blockInfo = textureFormat.GetAspectInfo(aspect).block;
 
     // When copying textures from/to an unpacked buffer, the Metal validation layer has 3
     // issues.
@@ -645,13 +685,13 @@ TextureBufferCopySplit ComputeTextureBufferCopySplit(const Texture* texture,
     // 3. Some Metal Drivers (Intel Pre MacOS 13.1?) Incorrectly calculation the size
     // needed for the destination buffer. Their calculation is something like
     //
-    //   sizeNeeded = bufferOffset + desintationBytesPerImage * numImages +
+    //   sizeNeeded = bufferOffset + destinationBytesPerImage * numImages +
     //                destinationBytesPerRow * (numRows - 1) +
     //                bytesPerPixel * width
     //
     // where as it should be
     //
-    //   sizeNeeded = bufferOffset + desintationBytesPerImage * (numImages - 1) +
+    //   sizeNeeded = bufferOffset + destinationBytesPerImage * (numImages - 1) +
     //                destinationBytesPerRow * (numRows - 1) +
     //                bytesPerPixel * width
     //
@@ -660,14 +700,13 @@ TextureBufferCopySplit ComputeTextureBufferCopySplit(const Texture* texture,
     // The workaround is if you're only copying a single row then pass 0 for
     // destinationBytesPerImage
 
-    uint32_t bytesPerImage = bytesPerRow * rowsPerImage;
-
     // Metal validation layer requires that if the texture's pixel format is a compressed
     // format, the sourceSize must be a multiple of the pixel format's block size or be
     // clamped to the edge of the texture if the block extends outside the bounds of a
     // texture.
-    const Extent3D clampedCopyExtent =
-        texture->ClampToMipLevelVirtualSize(mipLevel, aspect, origin, copyExtent);
+    const TexelExtent3D clampedCopyExtent = texture->ClampToMipLevelVirtualSize(
+        mipLevel, aspect, blockInfo.ToTexel(origin).ToOrigin3D(),
+        blockInfo.ToTexel(copyExtent).ToExtent3D());
 
     // Note: all current GPUs have a 3D texture size limit of 2048 and otherwise 16348
     // for non-3D textures except for Apple2 GPUs (iPhone6) which has a non-3D texture
@@ -675,43 +714,51 @@ TextureBufferCopySplit ComputeTextureBufferCopySplit(const Texture* texture,
     // See: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
     const uint32_t kMetalMax3DTextureDimensions = 2048u;
     const uint32_t kMetalMaxNon3DTextureDimensions = 16384u;
-    uint32_t maxTextureDimension = texture->GetDimension() == wgpu::TextureDimension::e3D
-                                       ? kMetalMax3DTextureDimensions
-                                       : kMetalMaxNon3DTextureDimensions;
-    uint32_t bytesPerPixel = blockInfo.byteSize;
-    uint32_t maxBytesPerRow = maxTextureDimension * bytesPerPixel;
+    const uint32_t maxTextureDimension = texture->GetDimension() == wgpu::TextureDimension::e3D
+                                             ? kMetalMax3DTextureDimensions
+                                             : kMetalMaxNon3DTextureDimensions;
+    const uint32_t maxBytesPerRow = maxTextureDimension * blockInfo.byteSize;
 
-    bool needCopyRowByRow = bytesPerRow > maxBytesPerRow;
+    const bool needCopyRowByRow = blockInfo.ToBytes(blocksPerRow) > maxBytesPerRow;
     if (needCopyRowByRow) {
         // handle workaround case 2
         // Since we're copying a row at a time bytesPerRow shouldn't matter but just to
-        // try to have it make sense, pass correct or max valid value
-        const uint32_t localBytesPerRow = std::min(bytesPerRow, maxBytesPerRow);
+        // try to have it make sense, pass the max valid value
+        const uint32_t localBytesPerRow = maxBytesPerRow;
         const uint32_t localBytesPerImage = 0;  // workaround case 3
-        DAWN_ASSERT(copyExtent.height % blockInfo.height == 0);
-        DAWN_ASSERT(copyExtent.width % blockInfo.width == 0);
-        const uint32_t blockRows = copyExtent.height / blockInfo.height;
-        for (uint32_t slice = 0; slice < copyExtent.depthOrArrayLayers; ++slice) {
-            for (uint32_t blockRow = 0; blockRow < blockRows; ++blockRow) {
+        const TexelExtent3D localCopySize = {clampedCopyExtent.width, blockInfo.height,
+                                             TexelCount(1u)};
+
+        for (BlockCount slice : Range(copyExtent.depthOrArrayLayers)) {
+            for (BlockCount row : Range(copyExtent.height)) {
+                const uint64_t additionalOffset =
+                    blockInfo.ToBytes((slice * rowsPerImage + row) * blocksPerRow);
+                const BlockOrigin3D rowOrigin = {origin.x, origin.y + row, origin.z + slice};
+
                 copy.push_back(TextureBufferCopySplit::CopyInfo(
-                    bufferOffset + slice * rowsPerImage * bytesPerRow + blockRow * bytesPerRow,
-                    localBytesPerRow, localBytesPerImage,
-                    {origin.x, origin.y + blockRow * blockInfo.height, origin.z + slice},
-                    {clampedCopyExtent.width, blockInfo.height, 1}));
+                    bufferOffset + additionalOffset, localBytesPerRow, localBytesPerImage,
+                    blockInfo.ToTexel(rowOrigin), localCopySize));
             }
         }
         return copy;
     }
 
+    const BlockCount blocksPerImage = blocksPerRow * rowsPerImage;
+    const uint32_t bytesPerRow = blockInfo.ToBytes(blocksPerRow);
+    const uint32_t bytesPerImage = blockInfo.ToBytes(blocksPerImage);
+
     // Check whether buffer size is big enough.
-    bool needCopyLastImageAndLastRowSeparately =
-        bufferSize - bufferOffset < bytesPerImage * copyExtent.depthOrArrayLayers;
+    const uint64_t sizeRequiredByValidation =
+        blockInfo.ToBytes(blocksPerImage * copyExtent.depthOrArrayLayers);
+    const bool needCopyLastImageAndLastRowSeparately =
+        bufferSize - bufferOffset < sizeRequiredByValidation;
     if (!needCopyLastImageAndLastRowSeparately) {
-        const uint32_t localBytesPerImage =
-            copyExtent.depthOrArrayLayers == 1 ? 0 : bytesPerImage;  // workaround case 3
-        copy.push_back(TextureBufferCopySplit::CopyInfo(
-            bufferOffset, bytesPerRow, localBytesPerImage, origin,
-            {clampedCopyExtent.width, clampedCopyExtent.height, copyExtent.depthOrArrayLayers}));
+        const uint32_t localBytesPerImage = copyExtent.depthOrArrayLayers == BlockCount(1u)
+                                                ? 0
+                                                : bytesPerImage;  // workaround case 3
+        copy.push_back(
+            TextureBufferCopySplit::CopyInfo(bufferOffset, bytesPerRow, localBytesPerImage,
+                                             blockInfo.ToTexel(origin), clampedCopyExtent));
         return copy;
     }
 
@@ -719,45 +766,51 @@ TextureBufferCopySplit ComputeTextureBufferCopySplit(const Texture* texture,
     uint64_t currentOffset = bufferOffset;
 
     // Doing all the copy except the last image.
-    if (copyExtent.depthOrArrayLayers > 1) {
-        const uint32_t localDepthOrArrayLayers = copyExtent.depthOrArrayLayers - 1;
+    if (copyExtent.depthOrArrayLayers > BlockCount(1u)) {
+        const BlockCount localDepthOrArrayLayers = copyExtent.depthOrArrayLayers - BlockCount(1u);
         const uint32_t localBytesPerImage =
-            localDepthOrArrayLayers == 1 ? 0 : bytesPerImage;  // workaround case 3
+            localDepthOrArrayLayers == BlockCount(1u) ? 0 : bytesPerImage;  // workaround case 3
+        const TexelExtent3D localSize = {clampedCopyExtent.width, clampedCopyExtent.height,
+                                         blockInfo.ToTexelDepth(localDepthOrArrayLayers)};
         copy.push_back(TextureBufferCopySplit::CopyInfo(
-            currentOffset, bytesPerRow, localBytesPerImage, origin,
-            {clampedCopyExtent.width, clampedCopyExtent.height, localDepthOrArrayLayers}));
+            currentOffset, bytesPerRow, localBytesPerImage, blockInfo.ToTexel(origin), localSize));
+
         // Update offset to copy to the last image.
-        currentOffset += (copyExtent.depthOrArrayLayers - 1) * bytesPerImage;
+        const BlockCount copiedBlocks =
+            (copyExtent.depthOrArrayLayers - BlockCount(1u)) * blocksPerImage;
+        currentOffset += blockInfo.ToBytes(copiedBlocks);
     }
 
     // Doing all the copy in last image except the last row.
-    uint32_t copyBlockRowCount = copyExtent.height / blockInfo.height;
-    if (copyBlockRowCount > 1) {
-        DAWN_ASSERT(copyExtent.height - blockInfo.height <
-                    texture->GetMipLevelSingleSubresourceVirtualSize(mipLevel, aspect).height);
+    if (copyExtent.height > BlockCount(1u)) {
         const uint32_t localBytesPerImage = 0;  // workaround case 3
-        copy.push_back(TextureBufferCopySplit::CopyInfo(
-            currentOffset, bytesPerRow, localBytesPerImage,
-            {origin.x, origin.y, origin.z + copyExtent.depthOrArrayLayers - 1},
-            {clampedCopyExtent.width, copyExtent.height - blockInfo.height, 1}));
+        const BlockOrigin3D localOrigin = {
+            origin.x, origin.y, origin.z + copyExtent.depthOrArrayLayers - BlockCount(1u)};
+        const TexelExtent3D localSize = {
+            clampedCopyExtent.width, blockInfo.ToTexelHeight(copyExtent.height - BlockCount(1u)),
+            TexelCount(1u)};
+        copy.push_back(TextureBufferCopySplit::CopyInfo(currentOffset, bytesPerRow,
+                                                        localBytesPerImage,
+                                                        blockInfo.ToTexel(localOrigin), localSize));
 
         // Update offset to copy to the last row.
-        currentOffset += (copyBlockRowCount - 1) * bytesPerRow;
+        const BlockCount copiedBlocks = (copyExtent.height - BlockCount(1u)) * blocksPerRow;
+        currentOffset += blockInfo.ToBytes(copiedBlocks);
     }
 
     // Doing the last row copy with the exact number of bytes in last row.
     // Workaround this issue in a way just like the copy to a 1D texture.
-    uint32_t lastRowDataSize = (copyExtent.width / blockInfo.width) * blockInfo.byteSize;
-    uint32_t lastImageDataSize = 0;  // workaround case 3
-    uint32_t lastRowCopyExtentHeight =
-        blockInfo.height + clampedCopyExtent.height - copyExtent.height;
+    const uint32_t lastRowDataSize = blockInfo.ToBytes(copyExtent.width);
+    const uint32_t lastImageDataSize = 0;  // workaround case 3
+    const TexelCount lastRowCopyExtentHeight =
+        clampedCopyExtent.height - blockInfo.ToTexelHeight(copyExtent.height - BlockCount(1u));
     DAWN_ASSERT(lastRowCopyExtentHeight <= blockInfo.height);
 
-    copy.push_back(
-        TextureBufferCopySplit::CopyInfo(currentOffset, lastRowDataSize, lastImageDataSize,
-                                         {origin.x, origin.y + copyExtent.height - blockInfo.height,
-                                          origin.z + copyExtent.depthOrArrayLayers - 1},
-                                         {clampedCopyExtent.width, lastRowCopyExtentHeight, 1}));
+    const BlockOrigin3D localOrigin = {origin.x, origin.y + copyExtent.height - BlockCount(1u),
+                                       origin.z + copyExtent.depthOrArrayLayers - BlockCount(1u)};
+    copy.push_back(TextureBufferCopySplit::CopyInfo(
+        currentOffset, lastRowDataSize, lastImageDataSize, blockInfo.ToTexel(localOrigin),
+        {clampedCopyExtent.width, lastRowCopyExtentHeight, TexelCount(1u)}));
 
     return copy;
 }

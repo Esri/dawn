@@ -25,12 +25,12 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/wire/client/Texture.h"
+#include "src/dawn/wire/client/Texture.h"
 
 #include <utility>
 
-#include "dawn/wire/client/Client.h"
-#include "dawn/wire/client/Device.h"
+#include "src/dawn/wire/client/Client.h"
+#include "src/dawn/wire/client/Device.h"
 
 namespace dawn::wire::client {
 
@@ -81,10 +81,10 @@ Texture::Texture(const ObjectBaseParams& params,
     if (!device->APIHasFeature(WGPUFeatureName_CoreFeaturesAndLimits)) {
         for (auto* chain = descriptor->nextInChain; chain; chain = chain->next) {
             switch (chain->sType) {
-                case WGPUSType_TextureBindingViewDimensionDescriptor:
+                case WGPUSType_TextureBindingViewDimension:
                     if (!device->APIHasFeature(WGPUFeatureName_CoreFeaturesAndLimits)) {
                         WGPUTextureViewDimension viewDimension =
-                            reinterpret_cast<WGPUTextureBindingViewDimensionDescriptor*>(chain)
+                            reinterpret_cast<WGPUTextureBindingViewDimension*>(chain)
                                 ->textureBindingViewDimension;
                         mTextureBindingViewDimension = viewDimension;
                     }

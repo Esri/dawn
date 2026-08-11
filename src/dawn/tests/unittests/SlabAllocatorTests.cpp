@@ -28,9 +28,9 @@
 #include <set>
 #include <vector>
 
-#include "dawn/common/Math.h"
-#include "dawn/common/SlabAllocator.h"
 #include "gtest/gtest.h"
+#include "src/dawn/common/Math.h"
+#include "src/dawn/common/SlabAllocator.h"
 
 namespace dawn {
 namespace {
@@ -246,6 +246,18 @@ TEST(SlabAllocatorTests, AllocateDeallocateMany) {
     for (Foo* object : objects) {
         allocator.Deallocate(object);
     }
+}
+
+// Regression test for https://issues.chromium.org/489482634 where a slab allocator with objects
+// larger that the totalObjectBytes would allocate space for no objects but still attempt to fulfill
+// requests.
+TEST(SlabAllocatorTests, TotalObjectBytesTooSmall) {
+    SlabAllocator<AlignedFoo> allocator(sizeof(AlignedFoo) - 1);
+
+    AlignedFoo* obj = allocator.Allocate(4);
+    EXPECT_EQ(obj->value, 4);
+
+    allocator.Deallocate(obj);
 }
 
 }  // anonymous namespace

@@ -25,20 +25,20 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/vulkan/ResourceMemoryAllocatorVk.h"
+#include "src/dawn/native/vulkan/ResourceMemoryAllocatorVk.h"
 
 #include <algorithm>
 #include <utility>
 
-#include "dawn/common/Math.h"
-#include "dawn/native/BuddyMemoryAllocator.h"
-#include "dawn/native/Queue.h"
-#include "dawn/native/ResourceHeapAllocator.h"
-#include "dawn/native/vulkan/DeviceVk.h"
-#include "dawn/native/vulkan/FencedDeleter.h"
-#include "dawn/native/vulkan/ResourceHeapVk.h"
-#include "dawn/native/vulkan/VulkanError.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "src/dawn/common/Math.h"
+#include "src/dawn/native/BuddyMemoryAllocator.h"
+#include "src/dawn/native/Queue.h"
+#include "src/dawn/native/ResourceHeapAllocator.h"
+#include "src/dawn/native/vulkan/DeviceVk.h"
+#include "src/dawn/native/vulkan/FencedDeleter.h"
+#include "src/dawn/native/vulkan/ResourceHeapVk.h"
+#include "src/dawn/native/vulkan/VulkanError.h"
 
 namespace dawn::native::vulkan {
 
@@ -134,28 +134,6 @@ class ResourceMemoryAllocator::SingleTypeAllocator : public ResourceHeapAllocato
     BuddyMemoryAllocator mBuddySystem;
 };
 
-void ResourceMemoryAllocator::AllocationSizeTracker::Increment(VkDeviceSize incrementSize) {
-    mTotalSize += incrementSize;
-}
-
-void ResourceMemoryAllocator::AllocationSizeTracker::Decrement(ExecutionSerial currentSerial,
-                                                               VkDeviceSize decrementSize) {
-    DAWN_ASSERT(mTotalSize >= decrementSize);
-    mMemoryToDecrement[currentSerial] += decrementSize;
-}
-
-void ResourceMemoryAllocator::AllocationSizeTracker::Tick(ExecutionSerial completedSerial) {
-    auto it = mMemoryToDecrement.begin();
-    while (it != mMemoryToDecrement.end() && it->first <= completedSerial) {
-        // Update tracking for allocation/used memory that will be deallocated.
-        DAWN_ASSERT(mTotalSize >= it->second);
-        mTotalSize -= it->second;
-        it++;
-    }
-    // Erase the map serials up to the completed serial.
-    mMemoryToDecrement.erase(mMemoryToDecrement.begin(), it);
-}
-
 VkDeviceSize ResourceMemoryAllocator::GetHeapBlockSize(const DawnDeviceAllocatorControl* control) {
     static constexpr VkDeviceSize kDefaultHeapBlockSize = 8ull * 1024ull * 1024ull;  // 8MiB
     VkDeviceSize heapBlockSize = kDefaultHeapBlockSize;
@@ -167,7 +145,9 @@ VkDeviceSize ResourceMemoryAllocator::GetHeapBlockSize(const DawnDeviceAllocator
 }
 
 // Implementation of ResourceMemoryAllocator
-ResourceMemoryAllocator::ResourceMemoryAllocator(Device* device, VkDeviceSize heapBlockSize)
+ResourceMemoryAllocator::ResourceMemoryAllocator(Device* device,
+                                                 VkDeviceSize heapBlockSize,
+                                                 QueueBase* queue)
     : mDevice(device),
       mMaxSizeForSuballocation(GetMaxSuballocationSize(heapBlockSize)),
       mMemoryTypeSelector(mDevice->GetDeviceInfo()) {
@@ -182,6 +162,20 @@ ResourceMemoryAllocator::ResourceMemoryAllocator(Device* device, VkDeviceSize he
             mDevice, i, isLazyMemoryType, info.memoryHeaps[memoryType.heapIndex].size,
             heapBlockSize, this));
     }
+
+    mAllocatedMemoryTracker = AcquireRef(new AllocationSizeTracker());
+    mUsedMemoryTracker = AcquireRef(new AllocationSizeTracker());
+    mLazyAllocatedMemoryTracker = AcquireRef(new AllocationSizeTracker());
+    mLazyUsedMemoryTracker = AcquireRef(new AllocationSizeTracker());
+
+    queue->RegisterSerialProcessor(QueuePriority::BestEffort,
+                                   Ref<AllocationSizeTracker>(mAllocatedMemoryTracker));
+    queue->RegisterSerialProcessor(QueuePriority::BestEffort,
+                                   Ref<AllocationSizeTracker>(mUsedMemoryTracker));
+    queue->RegisterSerialProcessor(QueuePriority::BestEffort,
+                                   Ref<AllocationSizeTracker>(mLazyAllocatedMemoryTracker));
+    queue->RegisterSerialProcessor(QueuePriority::BestEffort,
+                                   Ref<AllocationSizeTracker>(mLazyUsedMemoryTracker));
 }
 
 ResourceMemoryAllocator::~ResourceMemoryAllocator() = default;
@@ -230,8 +224,8 @@ ResultOrError<ResourceMemoryAllocation> ResourceMemoryAllocator::Allocate(
         DAWN_TRY_ASSIGN(subAllocation, mAllocatorsPerType[memoryType]->AllocateMemory(
                                            requirements.size, alignment));
         if (subAllocation.GetInfo().mMethod != AllocationMethod::kInvalid) {
-            mUsedMemory.Increment(requirements.size);
-            mLazyUsedMemory.Increment(isLazyMemoryType ? requirements.size : 0);
+            mUsedMemoryTracker->Increment(requirements.size);
+            mLazyUsedMemoryTracker->Increment(isLazyMemoryType ? requirements.size : 0);
             return subAllocation;
         }
     }
@@ -250,8 +244,8 @@ ResultOrError<ResourceMemoryAllocation> ResourceMemoryAllocator::Allocate(
             { mAllocatorsPerType[memoryType]->DeallocateResourceHeap(std::move(resourceHeap)); });
     }
 
-    mUsedMemory.Increment(size);
-    mLazyUsedMemory.Increment(isLazyMemoryType ? size : 0);
+    mUsedMemoryTracker->Increment(size);
+    mLazyUsedMemoryTracker->Increment(isLazyMemoryType ? size : 0);
 
     AllocationInfo info;
     info.mMethod = AllocationMethod::kDirect;
@@ -275,9 +269,9 @@ void ResourceMemoryAllocator::Deallocate(ResourceMemoryAllocation* allocation) {
             ResourceHeap* heap = ToBackend(allocation->GetResourceHeap());
             auto currentDeletionSerial = mDevice->GetFencedDeleter()->GetCurrentDeletionSerial();
             // Track the direct allocation that will be deallocated used memory sizes.
-            mUsedMemory.Decrement(currentDeletionSerial, info.mRequestedSize);
+            mUsedMemoryTracker->Decrement(currentDeletionSerial, info.mRequestedSize);
             if (info.mIsLazyAllocated) {
-                mLazyUsedMemory.Decrement(currentDeletionSerial, info.mRequestedSize);
+                mLazyUsedMemoryTracker->Decrement(currentDeletionSerial, info.mRequestedSize);
             }
             allocation->Invalidate();
             DeallocateResourceHeap(heap, info.mIsLazyAllocated);
@@ -294,9 +288,9 @@ void ResourceMemoryAllocator::Deallocate(ResourceMemoryAllocation* allocation) {
                 mDevice->GetFencedDeleter()->GetCurrentDeletionSerial();
             mSubAllocationsToDelete.Enqueue(*allocation, deletionSerial);
             // Track suballocation that will be deallocated for used memory sizes.
-            mUsedMemory.Decrement(deletionSerial, info.mRequestedSize);
+            mUsedMemoryTracker->Decrement(deletionSerial, info.mRequestedSize);
             if (info.mIsLazyAllocated) {
-                mLazyUsedMemory.Decrement(deletionSerial, info.mRequestedSize);
+                mLazyUsedMemoryTracker->Decrement(deletionSerial, info.mRequestedSize);
             }
             break;
         }
@@ -323,19 +317,19 @@ ExecutionSerial ResourceMemoryAllocator::GetLastPendingDeletionSerial() {
 }
 
 void ResourceMemoryAllocator::RecordHeapAllocation(VkDeviceSize size, bool isLazyMemoryType) {
-    mAllocatedMemory.Increment(size);
-    mLazyAllocatedMemory.Increment(isLazyMemoryType ? size : 0);
+    mAllocatedMemoryTracker->Increment(size);
+    mLazyAllocatedMemoryTracker->Increment(isLazyMemoryType ? size : 0);
 }
 
 void ResourceMemoryAllocator::DeallocateResourceHeap(ResourceHeap* heap, bool isLazyMemoryType) {
     VkDeviceSize heapSize = heap->GetSize();
-    MutexProtected<FencedDeleter>& fencedDeleter = mDevice->GetFencedDeleter();
+    auto& fencedDeleter = mDevice->GetFencedDeleter();
     auto currentDeletionSerial = fencedDeleter->GetCurrentDeletionSerial();
 
     // Track heap that will be deallocated for allocated memory sizes.
-    mAllocatedMemory.Decrement(currentDeletionSerial, heapSize);
+    mAllocatedMemoryTracker->Decrement(currentDeletionSerial, heapSize);
     if (isLazyMemoryType) {
-        mLazyAllocatedMemory.Decrement(currentDeletionSerial, heapSize);
+        mLazyAllocatedMemoryTracker->Decrement(currentDeletionSerial, heapSize);
     }
     fencedDeleter->DeleteWhenUnused(heap->GetMemory());
 }
@@ -348,12 +342,6 @@ void ResourceMemoryAllocator::Tick(ExecutionSerial completedSerial) {
         mAllocatorsPerType[memoryType]->DeallocateMemory(allocation);
     }
     mSubAllocationsToDelete.ClearUpTo(completedSerial);
-
-    // Update the allocation sizes after completed serials.
-    mAllocatedMemory.Tick(completedSerial);
-    mUsedMemory.Tick(completedSerial);
-    mLazyAllocatedMemory.Tick(completedSerial);
-    mLazyUsedMemory.Tick(completedSerial);
 }
 
 int ResourceMemoryAllocator::FindBestTypeIndex(VkMemoryRequirements requirements, MemoryKind kind) {
@@ -367,19 +355,19 @@ void ResourceMemoryAllocator::FreeRecycledMemory() {
 }
 
 uint64_t ResourceMemoryAllocator::GetTotalUsedMemory() const {
-    return mUsedMemory.Size();
+    return mUsedMemoryTracker->GetSize();
 }
 
 uint64_t ResourceMemoryAllocator::GetTotalAllocatedMemory() const {
-    return mAllocatedMemory.Size();
+    return mAllocatedMemoryTracker->GetSize();
 }
 
 uint64_t ResourceMemoryAllocator::GetTotalLazyAllocatedMemory() const {
-    return mLazyAllocatedMemory.Size();
+    return mLazyAllocatedMemoryTracker->GetSize();
 }
 
 uint64_t ResourceMemoryAllocator::GetTotalLazyUsedMemory() const {
-    return mLazyUsedMemory.Size();
+    return mLazyUsedMemoryTracker->GetSize();
 }
 
 }  // namespace dawn::native::vulkan

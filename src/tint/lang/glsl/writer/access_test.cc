@@ -25,9 +25,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/tint/lang/glsl/writer/helper_test.h"
-
 #include "gmock/gmock.h"
+#include "src/tint/lang/glsl/writer/helper_test.h"
 
 using namespace tint::core::number_suffixes;  // NOLINT
 using namespace tint::core::fluent_types;     // NOLINT
@@ -44,7 +43,8 @@ TEST_F(GlslWriterTest, AccessArray) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
@@ -71,7 +71,8 @@ TEST_F(GlslWriterTest, AccessStruct) {
         b.Return(f);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 
 struct S {
@@ -96,7 +97,8 @@ TEST_F(GlslWriterTest, AccessVector) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
@@ -116,7 +118,8 @@ TEST_F(GlslWriterTest, AccessMatrix) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
@@ -134,7 +137,8 @@ TEST_F(GlslWriterTest, AccessStoreVectorElementConstantIndex) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
@@ -160,7 +164,8 @@ TEST_F(GlslWriterTest, AccessStoreVectorElementDynamicIndex) {
         b.Return(eb);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 void foo(int idx) {
   ivec4 vec = ivec4(0);
@@ -200,7 +205,8 @@ TEST_F(GlslWriterTest, AccessNested) {
         b.Return(f);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 
 struct A {
@@ -231,7 +237,8 @@ TEST_F(GlslWriterTest, AccessSwizzle) {
         b.Return(f);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
@@ -250,7 +257,8 @@ TEST_F(GlslWriterTest, AccessSwizzleMulti) {
         b.Return(f);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
@@ -275,7 +283,8 @@ TEST_F(GlslWriterTest, AccessStorageVector) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -308,7 +317,8 @@ TEST_F(GlslWriterTest, AccessStorageVectorF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -341,7 +351,8 @@ TEST_F(GlslWriterTest, AccessStorageMatrix) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -369,7 +380,8 @@ TEST_F(GlslWriterTest, AccessStorageArray) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -401,7 +413,8 @@ TEST_F(GlslWriterTest, AccessStorageStruct) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -451,7 +464,8 @@ TEST_F(GlslWriterTest, AccessStorageNested) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -502,7 +516,8 @@ TEST_F(GlslWriterTest, AccessStorageStoreVector) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -543,7 +558,8 @@ TEST_F(GlslWriterTest, AccessDirectVariable) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -591,7 +607,8 @@ TEST_F(GlslWriterTest, AccessChainFromUnnamedAccessChain) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -640,7 +657,8 @@ TEST_F(GlslWriterTest, AccessChainFromLetAccessChain) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -697,7 +715,8 @@ TEST_F(GlslWriterTest, AccessComplexDynamicAccessChain) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -775,7 +794,8 @@ TEST_F(GlslWriterTest, AccessComplexDynamicAccessChainSplit) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -844,7 +864,8 @@ TEST_F(GlslWriterTest, AccessUniformChainFromUnnamedAccessChain) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -885,7 +906,8 @@ TEST_F(GlslWriterTest, AccessUniformChainFromLetAccessChain) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -911,7 +933,8 @@ TEST_F(GlslWriterTest, AccessUniformScalar) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -937,7 +960,8 @@ TEST_F(GlslWriterTest, AccessUniformScalarF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -946,12 +970,12 @@ layout(binding = 0, std140)
 uniform f_v_block_ubo {
   uvec4 inner[1];
 } v_1;
-f16vec2 tint_bitcast_to_f16(uint src) {
+f16vec2 tint_bitcast_to_16bit(uint src) {
   return unpackFloat2x16(src);
 }
 void main() {
   uvec4 v_2 = v_1.inner[0u];
-  float16_t a = tint_bitcast_to_f16(v_2.x).x;
+  float16_t a = tint_bitcast_to_16bit(v_2.x).x;
 }
 )");
 }
@@ -971,7 +995,8 @@ TEST_F(GlslWriterTest, AccessUniformVector) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1009,7 +1034,8 @@ TEST_F(GlslWriterTest, AccessUniformVectorF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1018,24 +1044,24 @@ layout(binding = 0, std140)
 uniform f_v_block_ubo {
   uvec4 inner[1];
 } v_1;
-f16vec2 tint_bitcast_to_f16(uint src) {
+f16vec2 tint_bitcast_to_16bit(uint src) {
   return unpackFloat2x16(src);
 }
-f16vec4 tint_bitcast_to_f16_1(uvec2 src) {
+f16vec4 tint_bitcast_to_16bit_1(uvec2 src) {
   return f16vec4(unpackFloat2x16(src.x), unpackFloat2x16(src.y));
 }
 void main() {
   uint x = 1u;
-  f16vec4 a = tint_bitcast_to_f16_1(v_1.inner[0u].xy);
+  f16vec4 a = tint_bitcast_to_16bit_1(v_1.inner[0u].xy);
   uvec4 v_2 = v_1.inner[0u];
-  float16_t b = tint_bitcast_to_f16(v_2.x).x;
+  float16_t b = tint_bitcast_to_16bit(v_2.x).x;
   uint v_3 = (min(x, 3u) * 2u);
   uvec4 v_4 = v_1.inner[(v_3 / 16u)];
-  float16_t c = tint_bitcast_to_f16(v_4[((v_3 & 15u) >> 2u)])[mix(1u, 0u, ((v_3 % 4u) == 0u))];
+  float16_t c = tint_bitcast_to_16bit(v_4[((v_3 & 15u) >> 2u)])[mix(1u, 0u, ((v_3 % 4u) == 0u))];
   uvec4 v_5 = v_1.inner[0u];
-  float16_t d = tint_bitcast_to_f16(v_5.y).x;
+  float16_t d = tint_bitcast_to_16bit(v_5.y).x;
   uvec4 v_6 = v_1.inner[0u];
-  float16_t e = tint_bitcast_to_f16(v_6.y).y;
+  float16_t e = tint_bitcast_to_16bit(v_6.y).y;
 }
 )");
 }
@@ -1054,7 +1080,8 @@ TEST_F(GlslWriterTest, AccessUniformMatrix) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1088,7 +1115,8 @@ TEST_F(GlslWriterTest, AccessUniformMatrix2x3) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1121,7 +1149,8 @@ TEST_F(GlslWriterTest, AccessUniformMat2x3F16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1130,23 +1159,24 @@ layout(binding = 0, std140)
 uniform f_v_block_ubo {
   uvec4 inner[1];
 } v_1;
-f16vec2 tint_bitcast_to_f16(uint src) {
+f16vec2 tint_bitcast_to_16bit(uint src) {
   return unpackFloat2x16(src);
 }
-f16vec4 tint_bitcast_to_f16_1(uvec2 src) {
+f16vec4 tint_bitcast_to_16bit_1(uvec2 src) {
   return f16vec4(unpackFloat2x16(src.x), unpackFloat2x16(src.y));
 }
 f16mat2x3 v_2(uint start_byte_offset) {
   uvec4 v_3 = v_1.inner[(start_byte_offset / 16u)];
-  f16vec3 v_4 = tint_bitcast_to_f16_1(mix(v_3.xy, v_3.zw, bvec2((((start_byte_offset & 15u) >> 2u) == 2u)))).xyz;
-  uvec4 v_5 = v_1.inner[((8u + start_byte_offset) / 16u)];
-  return f16mat2x3(v_4, tint_bitcast_to_f16_1(mix(v_5.xy, v_5.zw, bvec2(((((8u + start_byte_offset) & 15u) >> 2u) == 2u)))).xyz);
+  f16vec3 v_4 = tint_bitcast_to_16bit_1(mix(v_3.xy, v_3.zw, bvec2((((start_byte_offset & 15u) >> 2u) == 2u)))).xyz;
+  uint v_5 = (8u + start_byte_offset);
+  uvec4 v_6 = v_1.inner[(v_5 / 16u)];
+  return f16mat2x3(v_4, tint_bitcast_to_16bit_1(mix(v_6.xy, v_6.zw, bvec2((((v_5 & 15u) >> 2u) == 2u)))).xyz);
 }
 void main() {
   f16mat2x3 a = v_2(0u);
-  f16vec3 b = tint_bitcast_to_f16_1(v_1.inner[0u].zw).xyz;
-  uvec4 v_6 = v_1.inner[0u];
-  float16_t c = tint_bitcast_to_f16(v_6.w).x;
+  f16vec3 b = tint_bitcast_to_16bit_1(v_1.inner[0u].zw).xyz;
+  uvec4 v_7 = v_1.inner[0u];
+  float16_t c = tint_bitcast_to_16bit(v_7.w).x;
 }
 )");
 }
@@ -1165,7 +1195,8 @@ TEST_F(GlslWriterTest, AccessUniformMatrix3x2) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1176,16 +1207,18 @@ uniform f_v_block_ubo {
 mat3x2 v_2(uint start_byte_offset) {
   uvec4 v_3 = v_1.inner[(start_byte_offset / 16u)];
   vec2 v_4 = uintBitsToFloat(mix(v_3.xy, v_3.zw, bvec2((((start_byte_offset & 15u) >> 2u) == 2u))));
-  uvec4 v_5 = v_1.inner[((8u + start_byte_offset) / 16u)];
-  vec2 v_6 = uintBitsToFloat(mix(v_5.xy, v_5.zw, bvec2(((((8u + start_byte_offset) & 15u) >> 2u) == 2u))));
-  uvec4 v_7 = v_1.inner[((16u + start_byte_offset) / 16u)];
-  return mat3x2(v_4, v_6, uintBitsToFloat(mix(v_7.xy, v_7.zw, bvec2(((((16u + start_byte_offset) & 15u) >> 2u) == 2u)))));
+  uint v_5 = (8u + start_byte_offset);
+  uvec4 v_6 = v_1.inner[(v_5 / 16u)];
+  vec2 v_7 = uintBitsToFloat(mix(v_6.xy, v_6.zw, bvec2((((v_5 & 15u) >> 2u) == 2u))));
+  uint v_8 = (16u + start_byte_offset);
+  uvec4 v_9 = v_1.inner[(v_8 / 16u)];
+  return mat3x2(v_4, v_7, uintBitsToFloat(mix(v_9.xy, v_9.zw, bvec2((((v_8 & 15u) >> 2u) == 2u)))));
 }
 void main() {
   mat3x2 a = v_2(0u);
   vec2 b = uintBitsToFloat(v_1.inner[0u].zw);
-  uvec4 v_8 = v_1.inner[0u];
-  float c = uintBitsToFloat(v_8.w);
+  uvec4 v_10 = v_1.inner[0u];
+  float c = uintBitsToFloat(v_10.w);
 }
 )");
 }
@@ -1204,7 +1237,8 @@ TEST_F(GlslWriterTest, AccessUniformMatrix2x2) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1215,14 +1249,15 @@ uniform f_v_block_ubo {
 mat2 v_2(uint start_byte_offset) {
   uvec4 v_3 = v_1.inner[(start_byte_offset / 16u)];
   vec2 v_4 = uintBitsToFloat(mix(v_3.xy, v_3.zw, bvec2((((start_byte_offset & 15u) >> 2u) == 2u))));
-  uvec4 v_5 = v_1.inner[((8u + start_byte_offset) / 16u)];
-  return mat2(v_4, uintBitsToFloat(mix(v_5.xy, v_5.zw, bvec2(((((8u + start_byte_offset) & 15u) >> 2u) == 2u)))));
+  uint v_5 = (8u + start_byte_offset);
+  uvec4 v_6 = v_1.inner[(v_5 / 16u)];
+  return mat2(v_4, uintBitsToFloat(mix(v_6.xy, v_6.zw, bvec2((((v_5 & 15u) >> 2u) == 2u)))));
 }
 void main() {
   mat2 a = v_2(0u);
   vec2 b = uintBitsToFloat(v_1.inner[0u].zw);
-  uvec4 v_6 = v_1.inner[0u];
-  float c = uintBitsToFloat(v_6.w);
+  uvec4 v_7 = v_1.inner[0u];
+  float c = uintBitsToFloat(v_7.w);
 }
 )");
 }
@@ -1241,7 +1276,8 @@ TEST_F(GlslWriterTest, AccessUniformMatrix2x2F16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1250,18 +1286,19 @@ layout(binding = 0, std140)
 uniform f_v_block_ubo {
   uvec4 inner[1];
 } v_1;
-f16vec2 tint_bitcast_to_f16(uint src) {
+f16vec2 tint_bitcast_to_16bit(uint src) {
   return unpackFloat2x16(src);
 }
 f16mat2 v_2(uint start_byte_offset) {
-  f16vec2 v_3 = tint_bitcast_to_f16(v_1.inner[(start_byte_offset / 16u)][((start_byte_offset & 15u) >> 2u)]);
-  return f16mat2(v_3, tint_bitcast_to_f16(v_1.inner[((4u + start_byte_offset) / 16u)][(((4u + start_byte_offset) & 15u) >> 2u)]));
+  f16vec2 v_3 = tint_bitcast_to_16bit(v_1.inner[(start_byte_offset / 16u)][((start_byte_offset & 15u) >> 2u)]);
+  uint v_4 = (4u + start_byte_offset);
+  return f16mat2(v_3, tint_bitcast_to_16bit(v_1.inner[(v_4 / 16u)][((v_4 & 15u) >> 2u)]));
 }
 void main() {
   f16mat2 a = v_2(0u);
-  f16vec2 b = tint_bitcast_to_f16(v_1.inner[0u].y);
-  uvec4 v_4 = v_1.inner[0u];
-  float16_t c = tint_bitcast_to_f16(v_4.y).y;
+  f16vec2 b = tint_bitcast_to_16bit(v_1.inner[0u].y);
+  uvec4 v_5 = v_1.inner[0u];
+  float16_t c = tint_bitcast_to_16bit(v_5.y).y;
 }
 )");
 }
@@ -1278,7 +1315,8 @@ TEST_F(GlslWriterTest, AccessUniformArray) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1300,7 +1338,6 @@ vec3[5] v_2(uint start_byte_offset) {
       {
         v_3 = (v_4 + 1u);
       }
-      continue;
     }
   }
   return a;
@@ -1324,7 +1361,8 @@ TEST_F(GlslWriterTest, AccessUniformArrayF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1333,7 +1371,7 @@ layout(binding = 0, std140)
 uniform f_v_block_ubo {
   uvec4 inner[3];
 } v_1;
-f16vec4 tint_bitcast_to_f16(uvec2 src) {
+f16vec4 tint_bitcast_to_16bit(uvec2 src) {
   return f16vec4(unpackFloat2x16(src.x), unpackFloat2x16(src.y));
 }
 f16vec3[5] v_2(uint start_byte_offset) {
@@ -1346,19 +1384,19 @@ f16vec3[5] v_2(uint start_byte_offset) {
       if ((v_4 >= 5u)) {
         break;
       }
-      uvec4 v_5 = v_1.inner[((start_byte_offset + (v_4 * 8u)) / 16u)];
-      a[v_4] = tint_bitcast_to_f16(mix(v_5.xy, v_5.zw, bvec2(((((start_byte_offset + (v_4 * 8u)) & 15u) >> 2u) == 2u)))).xyz;
+      uint v_5 = (start_byte_offset + (v_4 * 8u));
+      uvec4 v_6 = v_1.inner[(v_5 / 16u)];
+      a[v_4] = tint_bitcast_to_16bit(mix(v_6.xy, v_6.zw, bvec2((((v_5 & 15u) >> 2u) == 2u)))).xyz;
       {
         v_3 = (v_4 + 1u);
       }
-      continue;
     }
   }
   return a;
 }
 void main() {
   f16vec3 a[5] = v_2(0u);
-  f16vec3 b = tint_bitcast_to_f16(v_1.inner[1u].zw).xyz;
+  f16vec3 b = tint_bitcast_to_16bit(v_1.inner[1u].zw).xyz;
 }
 )");
 }
@@ -1375,7 +1413,8 @@ TEST_F(GlslWriterTest, AccessUniformArrayWhichCanHaveSizesOtherThenFive) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1397,7 +1436,6 @@ vec3[42] v_2(uint start_byte_offset) {
       {
         v_3 = (v_4 + 1u);
       }
-      continue;
     }
   }
   return a;
@@ -1426,7 +1464,8 @@ TEST_F(GlslWriterTest, AccessUniformStruct) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1443,13 +1482,14 @@ uniform f_v_block_ubo {
 SB v_2(uint start_byte_offset) {
   uvec4 v_3 = v_1.inner[(start_byte_offset / 16u)];
   int v_4 = int(v_3[((start_byte_offset & 15u) >> 2u)]);
-  uvec4 v_5 = v_1.inner[((4u + start_byte_offset) / 16u)];
-  return SB(v_4, uintBitsToFloat(v_5[(((4u + start_byte_offset) & 15u) >> 2u)]));
+  uint v_5 = (4u + start_byte_offset);
+  uvec4 v_6 = v_1.inner[(v_5 / 16u)];
+  return SB(v_4, uintBitsToFloat(v_6[((v_5 & 15u) >> 2u)]));
 }
 void main() {
   SB a = v_2(0u);
-  uvec4 v_6 = v_1.inner[0u];
-  float b = uintBitsToFloat(v_6.y);
+  uvec4 v_7 = v_1.inner[0u];
+  float b = uintBitsToFloat(v_7.y);
 }
 )");
 }
@@ -1471,7 +1511,8 @@ TEST_F(GlslWriterTest, AccessUniformStructF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1486,19 +1527,20 @@ layout(binding = 0, std140)
 uniform f_v_block_ubo {
   uvec4 inner[1];
 } v_1;
-f16vec2 tint_bitcast_to_f16(uint src) {
+f16vec2 tint_bitcast_to_16bit(uint src) {
   return unpackFloat2x16(src);
 }
 SB v_2(uint start_byte_offset) {
   uvec4 v_3 = v_1.inner[(start_byte_offset / 16u)];
   int v_4 = int(v_3[((start_byte_offset & 15u) >> 2u)]);
-  uvec4 v_5 = v_1.inner[((4u + start_byte_offset) / 16u)];
-  return SB(v_4, tint_bitcast_to_f16(v_5[(((4u + start_byte_offset) & 15u) >> 2u)])[mix(1u, 0u, (((4u + start_byte_offset) % 4u) == 0u))]);
+  uint v_5 = (4u + start_byte_offset);
+  uvec4 v_6 = v_1.inner[(v_5 / 16u)];
+  return SB(v_4, tint_bitcast_to_16bit(v_6[((v_5 & 15u) >> 2u)])[mix(1u, 0u, ((v_5 % 4u) == 0u))]);
 }
 void main() {
   SB a = v_2(0u);
-  uvec4 v_6 = v_1.inner[0u];
-  float16_t b = tint_bitcast_to_f16(v_6.y).x;
+  uvec4 v_7 = v_1.inner[0u];
+  float16_t b = tint_bitcast_to_16bit(v_7.y).x;
 }
 )");
 }
@@ -1532,7 +1574,8 @@ TEST_F(GlslWriterTest, AccessUniformStructNested) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1570,7 +1613,6 @@ vec3[5] v_2(uint start_byte_offset) {
       {
         v_3 = (v_4 + 1u);
       }
-      continue;
     }
   }
   return a;
@@ -1610,7 +1652,8 @@ TEST_F(GlslWriterTest, AccessStoreScalar) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1635,7 +1678,8 @@ TEST_F(GlslWriterTest, AccessStoreScalarF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1661,7 +1705,8 @@ TEST_F(GlslWriterTest, AccessStoreVectorElement) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1686,7 +1731,8 @@ TEST_F(GlslWriterTest, AccessStoreVectorElementF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1712,7 +1758,8 @@ TEST_F(GlslWriterTest, AccessStoreVector) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1737,7 +1784,8 @@ TEST_F(GlslWriterTest, AccessStoreVectorF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1764,7 +1812,8 @@ TEST_F(GlslWriterTest, AccessStoreMatrixElement) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1790,7 +1839,8 @@ TEST_F(GlslWriterTest, AccessStoreMatrixElementF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1817,7 +1867,8 @@ TEST_F(GlslWriterTest, AccessStoreMatrixColumn) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1843,7 +1894,8 @@ TEST_F(GlslWriterTest, AccessStoreMatrixColumnF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1869,7 +1921,8 @@ TEST_F(GlslWriterTest, AccessStoreMatrix) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1894,7 +1947,8 @@ TEST_F(GlslWriterTest, AccessStoreMatrixF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1920,7 +1974,8 @@ TEST_F(GlslWriterTest, AccessStoreArrayElement) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1945,7 +2000,8 @@ TEST_F(GlslWriterTest, AccessStoreArrayElementF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -1972,7 +2028,8 @@ TEST_F(GlslWriterTest, AccessStoreArray) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1993,7 +2050,6 @@ void tint_store_and_preserve_padding(vec3 value_param[5]) {
       {
         v_2 = (v_3 + 1u);
       }
-      continue;
     }
   }
 }
@@ -2020,7 +2076,8 @@ TEST_F(GlslWriterTest, AccessStoreStructMember) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2056,7 +2113,8 @@ TEST_F(GlslWriterTest, AccessStoreStructMemberF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
@@ -2103,7 +2161,8 @@ TEST_F(GlslWriterTest, AccessStoreStructNested) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2165,7 +2224,8 @@ TEST_F(GlslWriterTest, AccessStoreStruct) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2245,7 +2305,8 @@ TEST_F(GlslWriterTest, AccessStoreStructComplex) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2288,7 +2349,6 @@ void tint_store_and_preserve_padding_4(vec3 value_param[5]) {
       {
         v_2 = (v_3 + 1u);
       }
-      continue;
     }
   }
 }
@@ -2334,7 +2394,8 @@ TEST_F(GlslWriterTest, AccessChainReused) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2377,7 +2438,8 @@ TEST_F(GlslWriterTest, AccessUniformChainReused) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2413,7 +2475,8 @@ TEST_F(GlslWriterTest, AccessToLetWithFunctionParams) {
         b.Return(foo);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 int f() {
   return 0;
@@ -2451,7 +2514,8 @@ TEST_F(GlslWriterTest, AccessToLetWithNestedFunctionParams) {
         b.Return(foo);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 int f() {
   return 0;

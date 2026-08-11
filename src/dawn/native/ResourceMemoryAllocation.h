@@ -30,6 +30,8 @@
 
 #include <cstdint>
 
+#include "partition_alloc/pointers/raw_ptr.h"
+
 namespace dawn::native {
 
 class ResourceHeapBase;
@@ -88,10 +90,12 @@ class ResourceMemoryAllocation {
     virtual void Invalidate();
 
   private:
-    AllocationInfo mInfo;
-    uint64_t mOffset;
-    ResourceHeapBase* mResourceHeap;
-    uint8_t* mMappedPointer;
+    AllocationInfo mInfo = {};
+    uint64_t mOffset = 0;
+    // TODO(crbug.com/485825675): Investigate why this pointer is dangling.
+    raw_ptr<ResourceHeapBase, DanglingUntriaged> mResourceHeap = nullptr;
+    // TODO(crbug.com/485825675): Investigate why this pointer is dangling.
+    raw_ptr<uint8_t, DanglingUntriaged | AllowPtrArithmetic> mMappedPointer = nullptr;
 };
 }  // namespace dawn::native
 

@@ -41,11 +41,10 @@ void main_inner(float x) {
         uint const tint_carry = uint((tint_low_inc == 4294967295u));
         tint_loop_idx.y = (tint_loop_idx.y - tint_carry);
       }
-      continue;
     }
   }
 }
 
 fragment void v_2(main_inputs inputs [[stage_in]]) {
-  main_inner(inputs.x);
+  (main_inner(inputs.x));
 }

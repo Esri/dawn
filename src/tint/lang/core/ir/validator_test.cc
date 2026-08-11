@@ -30,7 +30,6 @@
 #include <string>
 
 #include "gtest/gtest.h"
-
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/function_param.h"
 #include "src/tint/lang/core/ir/type/array_count.h"
@@ -38,6 +37,7 @@
 #include "src/tint/lang/core/number.h"
 #include "src/tint/lang/core/type/abstract_float.h"
 #include "src/tint/lang/core/type/abstract_int.h"
+#include "src/tint/lang/core/type/buffer.h"
 #include "src/tint/lang/core/type/manager.h"
 #include "src/tint/lang/core/type/matrix.h"
 #include "src/tint/lang/core/type/reference.h"
@@ -50,6 +50,8 @@ namespace tint::core::ir {
 
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
+
+using IR_ValidatorDeathTest = IR_ValidatorTest;
 
 Function* IR_ValidatorTest::ComputeEntryPoint(const std::string& name) {
     return b.ComputeFunction(name);
@@ -147,7 +149,8 @@ TEST_F(IR_ValidatorTest, RootBlock_Let) {
 TEST_F(IR_ValidatorTest, RootBlock_LetWithAllowModuleScopeLets) {
     mod.root_block->Append(b.Let("a", 1_f));
 
-    auto res = ir::Validate(mod, Capabilities{Capability::kAllowModuleScopeLets});
+    mod.properties.Add(ir::Property::kAllowModuleScopeLets);
+    auto res = ir::Validate(mod);
     ASSERT_EQ(res, Success) << res.Failure();
 }
 
@@ -168,7 +171,8 @@ TEST_F(IR_ValidatorTest, RootBlock_Construct) {
 TEST_F(IR_ValidatorTest, RootBlock_ConstructWithAllowModuleScopeLets) {
     mod.root_block->Append(b.Construct(ty.vec2f(), 1_f, 2_f));
 
-    auto res = ir::Validate(mod, Capabilities{Capability::kAllowModuleScopeLets});
+    mod.properties.Add(ir::Property::kAllowModuleScopeLets);
+    auto res = ir::Validate(mod);
     ASSERT_EQ(res, Success) << res.Failure();
 }
 
@@ -192,13 +196,15 @@ TEST_F(IR_ValidatorTest, RootBlock_VarBlockMismatch) {
 }
 
 TEST_F(IR_ValidatorTest, RootBlock_ModuleScopeRuntimeExpression) {
+    mod.properties.Add(Property::kAllowOverrides);
+
     auto* v = b.Var("v", ty.ptr(workgroup, ty.atomic(ty.u32())));
     mod.root_block->Append(v);
 
     auto* load = b.Call(ty.u32(), core::BuiltinFn::kAtomicLoad, v->Result(0));
     mod.root_block->Append(load);
 
-    auto res = ir::Validate(mod, Capabilities{Capability::kAllowOverrides});
+    auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_THAT(
         res.Failure().reason,
@@ -210,6 +216,8 @@ TEST_F(IR_ValidatorTest, RootBlock_ModuleScopeRuntimeExpression) {
 }
 
 TEST_F(IR_ValidatorTest, RootBlock_VarWithRuntimeInitializer) {
+    mod.properties.Add(Property::kAllowOverrides);
+
     auto* v = b.Var("v", ty.ptr(workgroup, ty.atomic(ty.u32())));
     mod.root_block->Append(v);
 
@@ -219,7 +227,7 @@ TEST_F(IR_ValidatorTest, RootBlock_VarWithRuntimeInitializer) {
     mod.root_block->Append(init);
     mod.root_block->Append(b.Var("a", init));
 
-    auto res = ir::Validate(mod, Capabilities{Capability::kAllowOverrides});
+    auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_THAT(res.Failure().reason,
                 testing::HasSubstr(
@@ -267,7 +275,8 @@ TEST_F(IR_ValidatorTest, Construct_Scalar_TooManyArguments) {
 TEST_F(IR_ValidatorTest, Construct_SubgroupMatrix_WrongArgType) {
     auto* f = b.Function("f", ty.void_());
     b.Append(f->Block(), [&] {
-        b.Construct(ty.subgroup_matrix_left(ty.f32(), 2, 3), f);
+        auto* l = b.Let("x", b.Zero(ty.i32()));
+        b.Construct(ty.subgroup_matrix_left(ty.f32(), 2, 3), l);
         b.Return(f);
     });
 
@@ -276,8 +285,8 @@ TEST_F(IR_ValidatorTest, Construct_SubgroupMatrix_WrongArgType) {
     EXPECT_THAT(
         res.Failure().reason,
         testing::HasSubstr(
-            R"(:3:42 error: construct: subgroup matrix construct argument type '<function>' does not match matrix shader scalar type 'f32'
-    %2:subgroup_matrix_left<f32, 2, 3> = construct %f
+            R"(:4:42 error: construct: subgroup matrix construct argument type 'i32' does not match matrix shader scalar type 'f32'
+    %3:subgroup_matrix_left<f32, 2, 3> = construct %x
                                          ^^^^^^^^^
 )")) << res.Failure();
 }
@@ -631,7 +640,7 @@ TEST_F(IR_ValidatorTest, Construct_Texture) {
 )")) << res.Failure();
 }
 
-TEST_F(IR_ValidatorTest, Construct_TextureInStruct_WithCapability) {
+TEST_F(IR_ValidatorTest, Construct_TextureInStruct_WithProperty) {
     auto* tex_ty = ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32());
     auto* str_ty = ty.Struct(mod.symbols.New("MyStruct"), {
                                                               {mod.symbols.New("a"), tex_ty},
@@ -643,18 +652,20 @@ TEST_F(IR_ValidatorTest, Construct_TextureInStruct_WithCapability) {
         b.Return(f);
     });
 
-    auto res = ir::Validate(mod, Capabilities{Capability::kMslAllowEntryPointInterface});
+    mod.properties.Add(Property::kAllowMslEntryPointInterface);
+    auto res = ir::Validate(mod);
     ASSERT_EQ(res, Success) << res.Failure();
 }
 
-TEST_F(IR_ValidatorTest, Construct_NonConstructible_WithStructCapability) {
+TEST_F(IR_ValidatorTest, Construct_NonConstructible_WithStructProperty) {
     auto* f = b.Function("f", ty.void_());
     b.Append(f->Block(), [&] {
         b.Construct(ty.void_());
         b.Return(f);
     });
 
-    auto res = ir::Validate(mod, Capabilities{Capability::kMslAllowEntryPointInterface});
+    mod.properties.Add(Property::kAllowMslEntryPointInterface);
+    auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_THAT(res.Failure().reason, testing::HasSubstr(
                                           R"(:3:15 error: construct: type is not constructible
@@ -726,6 +737,23 @@ TEST_F(IR_ValidatorTest, Convert_NullResult) {
     EXPECT_THAT(res.Failure().reason, testing::HasSubstr(R"(:3:5 error: convert: result is undefined
     undef = convert 1.0f
     ^^^^^
+)")) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Convert_MultipleResults) {
+    auto* f = b.Function("f", ty.void_());
+    b.Append(f->Block(), [&] {
+        auto* c = b.Convert(ty.i32(), 1_f);
+        c->SetResults(Vector{b.InstructionResult(ty.i32()), b.InstructionResult(ty.i32())});
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(R"(:3:22 error: convert: expected exactly 1 results, got 2
+    %2:i32, %3:i32 = convert 1.0f
+                     ^^^^^^^
 )")) << res.Failure();
 }
 
@@ -1498,13 +1526,61 @@ TEST_F(IR_ValidatorTest, Binary_TooManyOperands) {
 )")) << res.Failure();
 }
 
+TEST_F(IR_ValidatorTest, Binary_MismatchedResultType) {
+    auto* fn = b.Function("my_func", ty.void_());
+    b.Append(fn->Block(), [&] {
+        b.Binary(BinaryOp::kAdd, ty.f32(), 1_i, 2_i);
+        b.Return(fn);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(
+                    "error: binary: result value type 'f32' does not match '+' result type 'i32'"))
+        << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Return_TooManyOperands) {
+    auto* f = b.Function("my_func", ty.void_());
+    b.Append(f->Block(), [&] {
+        auto* r = b.Return(f);
+        r->SetOperands(Vector{b.Value(f), b.Value(1_i), b.Value(2_i)});
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr("error: return: expected between 1 and 2 operands, got 3"))
+        << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, Let_HandlePointer) {
+    auto* f = b.Function("my_func", ty.void_());
+    b.Append(f->Block(), [&] {
+        auto* tex_ty = ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32());
+        auto* ptr = ty.ptr(core::AddressSpace::kHandle, tex_ty, core::Access::kRead);
+        auto* v = b.Var(ptr);
+        v->SetBindingPoint(0, 0);
+
+        b.Let("l", v->Result(0));
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr("error: let: handle pointer cannot be captured in a let"))
+        << res.Failure();
+}
+
 TEST_F(IR_ValidatorTest, Binary_OperandWrongType_Func) {
     auto* func = b.Function("foo", ty.void_());
     auto* other_func = b.Function("other", ty.void_());
     b.Append(other_func->Block(), [&] { b.Return(other_func); });
 
     b.Append(func->Block(), [&] {
-        b.Add(b.Constant(1_i), other_func);
+        b.Add(b.Constant(1_i), b.Zero(ty.mat4x4<f32>()));
         b.Return(func);
     });
 
@@ -1512,7 +1588,7 @@ TEST_F(IR_ValidatorTest, Binary_OperandWrongType_Func) {
     ASSERT_NE(res, Success);
     EXPECT_THAT(res.Failure().reason,
                 testing::HasSubstr(
-                    R"(:3:5 error: binary: no matching overload for 'operator + (i32, <function>)'
+                    R"(:3:5 error: binary: no matching overload for 'operator + (i32, mat4x4<f32>)'
 )")) << res.Failure();
 }
 
@@ -1571,7 +1647,7 @@ TEST_F(IR_ValidatorTest, Unary_ResultTypeNotMatchValueType) {
     EXPECT_THAT(
         res.Failure().reason,
         testing::HasSubstr(
-            R"(:3:5 error: unary: result value type 'f32' does not match complement result type 'i32'
+            R"(:3:5 error: unary: result value type 'f32' does not match '~' result type 'i32'
     %2:f32 = complement 2i
     ^^^^^^^^^^^^^^^^^^^^^^
 )")) << res.Failure();
@@ -1643,12 +1719,10 @@ TEST_F(IR_ValidatorTest, Unary_TooManyOperands) {
 }
 
 TEST_F(IR_ValidatorTest, Unary_OperandWrongType) {
-    auto* other_func = b.Function("other", ty.void_());
-    b.Append(other_func->Block(), [&] { b.Return(other_func); });
-
     auto* func = b.Function("foo", ty.void_());
     b.Append(func->Block(), [&] {
-        b.Negation(other_func);
+        auto* l = b.Let("x", b.Zero(ty.mat4x4<f32>()));
+        b.Negation(l->Result());
         b.Return(func);
     });
 
@@ -1656,7 +1730,7 @@ TEST_F(IR_ValidatorTest, Unary_OperandWrongType) {
     ASSERT_NE(res, Success);
     EXPECT_THAT(
         res.Failure().reason,
-        testing::HasSubstr(R"(:8:5 error: unary: no matching overload for 'operator - (<function>)'
+        testing::HasSubstr(R"(:4:5 error: unary: no matching overload for 'operator - (mat4x4<f32>)'
 )")) << res.Failure();
 }
 
@@ -1748,6 +1822,25 @@ TEST_F(IR_ValidatorTest, OverrideWithoutCapability) {
 )")) << res.Failure();
 }
 
+TEST_F(IR_ValidatorTest, OverrideNotAtModuleScope) {
+    mod.properties.Add(Property::kAllowOverrides);
+
+    auto* f = b.Function("my_func", ty.void_());
+    b.Append(f->Block(), [&] {
+        b.Override("a", 1_u);
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr(
+                    R"(:3:14 error: override: override must be declared at module scope
+    %a:u32 = override 1u
+             ^^^^^^^^
+)")) << res.Failure();
+}
+
 TEST_F(IR_ValidatorTest, InstructionInRootBlockWithoutOverrideCap) {
     b.Append(mod.root_block, [&] { b.Add(3_u, 2_u); });
 
@@ -1763,16 +1856,20 @@ TEST_F(IR_ValidatorTest, InstructionInRootBlockWithoutOverrideCap) {
 }
 
 TEST_F(IR_ValidatorTest, OverrideWithCapability) {
+    mod.properties.Add(Property::kAllowOverrides);
+
     b.Append(mod.root_block, [&] {
         auto* o = b.Override(ty.u32());
         o->SetOverrideId(OverrideId{1});
     });
 
-    auto res = ir::Validate(mod, core::ir::Capabilities{core::ir::Capability::kAllowOverrides});
+    auto res = ir::Validate(mod);
     ASSERT_EQ(res, Success) << res.Failure();
 }
 
 TEST_F(IR_ValidatorTest, OverrideWithValue) {
+    mod.properties.Add(Property::kAllowOverrides);
+
     b.Append(mod.root_block, [&] {
         auto* z = b.Override(ty.u32());
         z->SetOverrideId(OverrideId{2});
@@ -1781,14 +1878,16 @@ TEST_F(IR_ValidatorTest, OverrideWithValue) {
         b.Override("a", init);
     });
 
-    auto res = ir::Validate(mod, core::ir::Capabilities{core::ir::Capability::kAllowOverrides});
+    auto res = ir::Validate(mod);
     ASSERT_EQ(res, Success) << res.Failure();
 }
 
 TEST_F(IR_ValidatorTest, OverrideWithInvalidType) {
+    mod.properties.Add(Property::kAllowOverrides);
+
     b.Append(mod.root_block, [&] { b.Override(ty.vec3u()); });
 
-    auto res = ir::Validate(mod, core::ir::Capabilities{core::ir::Capability::kAllowOverrides});
+    auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_THAT(
         res.Failure().reason,
@@ -1799,13 +1898,15 @@ TEST_F(IR_ValidatorTest, OverrideWithInvalidType) {
 }
 
 TEST_F(IR_ValidatorTest, OverrideWithMismatchedInitializerType) {
+    mod.properties.Add(Property::kAllowOverrides);
+
     b.Append(mod.root_block, [&] {
         auto* init = b.Constant(1_i);
         auto* o = b.Override(ty.u32());
         o->SetInitializer(init);
     });
 
-    auto res = ir::Validate(mod, core::ir::Capabilities{core::ir::Capability::kAllowOverrides});
+    auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_THAT(
         res.Failure().reason,
@@ -1817,6 +1918,8 @@ TEST_F(IR_ValidatorTest, OverrideWithMismatchedInitializerType) {
 }
 
 TEST_F(IR_ValidatorTest, OverrideDuplicateId) {
+    mod.properties.Add(Property::kAllowOverrides);
+
     b.Append(mod.root_block, [&] {
         auto* o = b.Override(ty.u32());
         o->SetOverrideId(OverrideId{2});
@@ -1825,7 +1928,7 @@ TEST_F(IR_ValidatorTest, OverrideDuplicateId) {
         o2->SetOverrideId(OverrideId{2});
     });
 
-    auto res = ir::Validate(mod, core::ir::Capabilities{core::ir::Capability::kAllowOverrides});
+    auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_THAT(res.Failure().reason,
                 testing::HasSubstr(R"(:3:12 error: override: duplicate override id encountered: 2
@@ -1835,6 +1938,8 @@ TEST_F(IR_ValidatorTest, OverrideDuplicateId) {
 }
 
 TEST_F(IR_ValidatorTest, InstructionInRootBlockOnlyUsedInRootBlock) {
+    mod.properties.Add(Property::kAllowOverrides);
+
     core::ir::Value* init = nullptr;
     b.Append(mod.root_block, [&] {
         auto* z = b.Override(ty.u32());
@@ -1849,7 +1954,7 @@ TEST_F(IR_ValidatorTest, InstructionInRootBlockOnlyUsedInRootBlock) {
         b.Return(f);
     });
 
-    auto res = ir::Validate(mod, core::ir::Capabilities{core::ir::Capability::kAllowOverrides});
+    auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_THAT(
         res.Failure().reason,
@@ -1861,6 +1966,8 @@ TEST_F(IR_ValidatorTest, InstructionInRootBlockOnlyUsedInRootBlock) {
 }
 
 TEST_F(IR_ValidatorTest, OverrideArrayInvalidValue) {
+    mod.properties.Add(Property::kAllowOverrides);
+
     core::ir::Override* o = nullptr;
     b.Append(mod.root_block, [&] {
         o = b.Override(ty.u32());
@@ -1872,7 +1979,7 @@ TEST_F(IR_ValidatorTest, OverrideArrayInvalidValue) {
     });
     o->Destroy();
 
-    auto res = ir::Validate(mod, core::ir::Capabilities{core::ir::Capability::kAllowOverrides});
+    auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_THAT(res.Failure().reason, testing::HasSubstr(R"(:2:51 error: var: %2 is not in scope
   %a:ptr<workgroup, array<i32, %2>, read_write> = var undef
@@ -1880,16 +1987,189 @@ TEST_F(IR_ValidatorTest, OverrideArrayInvalidValue) {
 )")) << res.Failure();
 }
 
+template <typename T>
+class IR_ValidatorTestWithParam : public IR_ValidatorTest, public testing::WithParamInterface<T> {};
+
+using IR_ValidatorValueArrayCountScopeTest = IR_ValidatorTestWithParam<core::AddressSpace>;
+TEST_P(IR_ValidatorValueArrayCountScopeTest, OutOfScope) {
+    auto addr = GetParam();
+    if (addr == core::AddressSpace::kUndefined || addr == core::AddressSpace::kHandle ||
+        addr == core::AddressSpace::kIn || addr == core::AddressSpace::kOut) {
+        return;
+    }
+    mod.properties.Add(Property::kAllowOverrides);
+
+    core::ir::Override* o = nullptr;
+    b.Append(mod.root_block, [&] {
+        o = b.Override(ty.u32());
+
+        auto* cnt = ty.Get<core::ir::type::ValueArrayCount>(o->Result());
+        auto* a1 = ty.Get<core::type::Array>(ty.i32(), cnt, 4u);
+
+        auto* v = b.Var("a", ty.ptr(addr, a1, core::Access::kReadWrite));
+        if (addr == core::AddressSpace::kUniform || addr == core::AddressSpace::kStorage) {
+            v->SetBindingPoint(0, 0);
+        }
+    });
+    o->Destroy();
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason, testing::HasSubstr("is not in scope")) << res.Failure();
+}
+INSTANTIATE_TEST_SUITE_P(IR_ValidatorTest,
+                         IR_ValidatorValueArrayCountScopeTest,
+                         testing::Values(core::AddressSpace::kWorkgroup,
+                                         core::AddressSpace::kPrivate,
+                                         core::AddressSpace::kFunction,
+                                         core::AddressSpace::kStorage,
+                                         core::AddressSpace::kUniform));
+
+struct ValueArrayCountTypeCase {
+    std::string name;
+    TypeBuilderFn get_type;
+    bool expected_pass;
+};
+
+using IR_ValidatorValueArrayCountTypeTest = IR_ValidatorTestWithParam<ValueArrayCountTypeCase>;
+TEST_P(IR_ValidatorValueArrayCountTypeTest, TypeValidation) {
+    auto& tc = GetParam();
+    mod.properties.Add(Property::kAllowOverrides);
+
+    b.Append(mod.root_block, [&] {
+        auto* o = b.Override(tc.get_type(ty));
+        o->SetOverrideId({1});
+        auto* cnt = ty.Get<core::ir::type::ValueArrayCount>(o->Result());
+        auto* a1 = ty.Get<core::type::Array>(ty.i32(), cnt, 4u);
+        b.Var("a", ty.ptr(workgroup, a1, core::Access::kReadWrite));
+    });
+
+    auto res = ir::Validate(mod);
+    if (tc.expected_pass) {
+        EXPECT_EQ(res, Success) << res.Failure();
+    } else {
+        ASSERT_NE(res, Success);
+        EXPECT_THAT(res.Failure().reason,
+                    testing::HasSubstr("ValueArrayCount must be an integer scalar type"))
+            << res.Failure();
+    }
+}
+INSTANTIATE_TEST_SUITE_P(
+    IR_ValidatorTest,
+    IR_ValidatorValueArrayCountTypeTest,
+    testing::Values(ValueArrayCountTypeCase{"i32", TypeBuilder<i32>, true},
+                    ValueArrayCountTypeCase{"u32", TypeBuilder<u32>, true},
+                    ValueArrayCountTypeCase{"f32", TypeBuilder<f32>, false},
+                    ValueArrayCountTypeCase{"bool", TypeBuilder<core::type::Bool>, false},
+                    ValueArrayCountTypeCase{"vec2_i32", TypeBuilder<vec2i>, false}));
+
+TEST_F(IR_ValidatorTest, ValueArrayCount_NotInRootBlock) {
+    mod.properties.Add(Property::kAllowOverrides);
+
+    core::ir::Value* count_val = nullptr;
+    auto* func = b.Function("func", ty.void_());
+    b.Append(func->Block(), [&] {
+        count_val = b.Add(2_u, 3_u)->Result();
+        b.Return(func);
+    });
+
+    b.Append(mod.root_block, [&] {
+        auto* cnt = ty.Get<core::ir::type::ValueArrayCount>(count_val);
+        auto* a1 = ty.Get<core::type::Array>(ty.i32(), cnt, 4u);
+        b.Var("a", ty.ptr(workgroup, a1, core::Access::kReadWrite));
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason,
+                testing::HasSubstr("ValueArrayCount must be a module-scoped override expression"))
+        << res.Failure();
+}
+
 TEST_F(IR_ValidatorTest, OverrideWithoutIdOrInitializer) {
+    mod.properties.Add(Property::kAllowOverrides);
+
     b.Append(mod.root_block, [&] { b.Override(ty.u32()); });
 
-    auto res = ir::Validate(mod, core::ir::Capabilities{core::ir::Capability::kAllowOverrides});
+    auto res = ir::Validate(mod);
     ASSERT_NE(res, Success);
     EXPECT_THAT(res.Failure().reason,
                 testing::HasSubstr(R"(:2:12 error: override: must have an id or an initializer
   %1:u32 = override undef
            ^^^^^^^^
 )")) << res.Failure();
+}
+
+TEST_F(IR_ValidatorTest, ValidateIfNeeded_Disabled) {
+    auto* l = b.Loop();
+    l->Body()->Append(b.Continue(l));
+    mod.root_block->Append(l);
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+
+    // The module is invalid but the assertion should not fire when the flag is disabled.
+    mod.enable_validation_asserts = false;
+    AssertValid(mod);
+}
+
+TEST_F(IR_ValidatorDeathTest, ValidateIfNeeded_Enabled) {
+    auto* l = b.Loop();
+    l->Body()->Append(b.Continue(l));
+    mod.root_block->Append(l);
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+
+    mod.enable_validation_asserts = true;
+
+#if TINT_ENABLE_IR_VALIDATION_ASSERTS
+    // The module is invalid and the assertion should trigger an ICE because the flag is enabled.
+    EXPECT_DEATH_IF_SUPPORTED(
+        {  //
+            AssertValid(mod);
+        },
+        "internal compiler error");
+#else
+    // If validation assertions are disabled at build time, this should have no effect.
+    AssertValid(mod);
+#endif
+}
+
+TEST_F(IR_ValidatorTest, Scoping_LoopResultUsedInBody) {
+    auto* f = b.Function("my_func", ty.void_());
+    b.Append(f->Block(), [&] {
+        auto* loop = b.Loop();
+        loop->AddResult(b.InstructionResult(ty.u32()));
+        b.Append(loop->Body(), [&] {
+            auto* s = b.Switch(loop->Result(0));
+            b.Case(s, {b.Constant(0_u)});
+            b.Continue(loop);
+        });
+        b.Unreachable();
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason, testing::HasSubstr("error: switch: %2 is not in scope"));
+}
+
+TEST_F(IR_ValidatorTest, Scoping_IfResultUsedInTrueBlock) {
+    auto* f = b.Function("my_func", ty.void_());
+    b.Append(f->Block(), [&] {
+        auto* if_ = b.If(true);
+        if_->AddResult(b.InstructionResult(ty.u32()));
+        b.Append(if_->True(), [&] {
+            b.Add(if_->Result(0), 1_u);
+            b.ExitIf(if_, b.Value(0_u));
+        });
+        b.Return(f);
+    });
+
+    auto res = ir::Validate(mod);
+    ASSERT_NE(res, Success);
+    EXPECT_THAT(res.Failure().reason, testing::HasSubstr("error: binary: %2 is not in scope"));
 }
 
 }  // namespace tint::core::ir

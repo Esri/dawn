@@ -36,10 +36,10 @@
 #include <utility>
 #include <vector>
 
-#include "dawn/common/RefCounted.h"
-#include "dawn/common/Time.h"
-#include "dawn/native/SystemEvent.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "src/dawn/common/RefCounted.h"
+#include "src/dawn/common/Time.h"
+#include "src/dawn/native/SystemEvent.h"
 
 namespace dawn::native {
 
@@ -89,8 +89,8 @@ bool WaitListEvent::WaitAny(It eventAndReadyStateBegin,
     }
 
     struct EventState {
-        WaitListEvent* event = nullptr;
-        size_t origIndex;
+        raw_ptr<WaitListEvent> event = nullptr;
+        size_t origIndex = 0;
         bool isReady = false;
     };
     std::vector<EventState> events(count);

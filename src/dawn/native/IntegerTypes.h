@@ -30,8 +30,9 @@
 
 #include <cstdint>
 
-#include "dawn/common/Constants.h"
-#include "dawn/common/TypedInteger.h"
+#include "src/dawn/common/Constants.h"
+#include "src/dawn/native/dawn_platform.h"
+#include "src/utils/typed_integer.h"
 
 namespace dawn::ityp {
 template <typename Index, typename Value, size_t Size>
@@ -74,12 +75,10 @@ using PerBindGroup = ityp::array<BindGroupIndex, Value, kMaxBindGroups>;
 using ResourceTableSlot = TypedInteger<struct ResourceTableSlotT, uint32_t>;
 
 // Immediate data constant index get mapped to a packed range of indices
-using ImmediateConstantIndex = TypedInteger<struct ImmediateConstantIndexT, uint32_t>;
-constexpr ImmediateConstantIndex kMaxImmediateConstantIndexTyped =
-    ImmediateConstantIndex(kMaxImmediateConstantsPerPipeline);
+using ImmediateIndex = TypedInteger<struct ImmediateIndexT, uint32_t>;
+constexpr ImmediateIndex kMaxImmediateIndexTyped = ImmediateIndex(kMaxImmediateMaskBits);
 
-using ImmediateConstantMask =
-    ityp::bitset<ImmediateConstantIndex, kMaxImmediateConstantsPerPipeline>;
+using ImmediateMask = ityp::bitset<ImmediateIndex, kMaxImmediateMaskBits>;
 
 // Color attachment indices represent the index in the wgpu::FragmentState::targets array, the
 // wgpu::RenderPassDescriptor::colorAttachments arry and other similar arrays.
@@ -109,6 +108,10 @@ using VertexAttributeMask = ityp::bitset<VertexAttributeLocation, kMaxVertexAttr
 template <typename Value>
 using PerVertexAttribute = ityp::array<VertexAttributeLocation, Value, kMaxVertexAttributes>;
 
+// Indices of queries in a QuerySet.
+using QueryIndex = TypedInteger<struct QueryIndexT, uint32_t>;
+constexpr QueryIndex kQuerySetIndexUndefinedTyped = QueryIndex{wgpu::kQuerySetIndexUndefined};
+
 // Serials are 64bit integers that are incremented by one each time to produce unique values.
 // Some serials (like queue serials) are compared numerically to know which one is before
 // another, while some serials are only checked for equality. We call serials only checked
@@ -129,14 +132,18 @@ using FenceAPISerial = TypedInteger<struct FenceAPISerialT, uint64_t>;
 // compare its serial with the currently completed serial.
 using ExecutionSerial = TypedInteger<struct QueueSerialT, uint64_t>;
 constexpr ExecutionSerial kMaxExecutionSerial = ExecutionSerial(~uint64_t(0));
-constexpr ExecutionSerial kBeginningOfGPUTime = ExecutionSerial(0);
+constexpr ExecutionSerial kBeginningOfGPUTime = ExecutionSerial(0u);
 
 // An identifier that indicates which Pipeline a BindGroupLayout is compatible with. Pipelines
 // created with a default layout will produce BindGroupLayouts with a non-zero compatibility
 // token, which prevents them (and any BindGroups created with them) from being used with any
 // other pipelines.
 using PipelineCompatibilityToken = TypedInteger<struct PipelineCompatibilityTokenT, uint64_t>;
-constexpr PipelineCompatibilityToken kExplicitPCT = PipelineCompatibilityToken(0);
+constexpr PipelineCompatibilityToken kExplicitPCT = PipelineCompatibilityToken(0u);
+
+// An identifier that indicates the index of a RenderPass or ComputePass in a command buffer.
+// Used to look up additional information related to the pass, such a resource usages.
+using PassIndex = TypedInteger<struct PassIndexT, uint32_t>;
 
 }  // namespace dawn::native
 

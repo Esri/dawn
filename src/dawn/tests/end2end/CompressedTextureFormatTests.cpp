@@ -27,14 +27,15 @@
 
 #include <vector>
 
-#include "dawn/common/Assert.h"
-#include "dawn/common/Constants.h"
-#include "dawn/common/Math.h"
-#include "dawn/tests/DawnTest.h"
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/TestUtils.h"
-#include "dawn/utils/TextureUtils.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/common/Constants.h"
+#include "src/dawn/common/Math.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/TestUtils.h"
+#include "src/dawn/utils/TextureUtils.h"
+#include "src/dawn/utils/WGPUHelpers.h"
+#include "src/utils/assert.h"
+#include "src/utils/compiler.h"
 
 namespace dawn {
 namespace {
@@ -55,6 +56,12 @@ DAWN_TEST_PARAM_STRUCT(CompressedTextureFormatTestParams, TextureFormat);
 
 class CompressedTextureFormatTest : public DawnTestWithParams<CompressedTextureFormatTestParams> {
   protected:
+    void SetUp() override {
+        DawnTestWithParams<CompressedTextureFormatTestParams>::SetUp();
+        // TODO(crbug.com/518857263): Produces incorrect result on Pixel 10.
+        DAWN_SUPPRESS_TEST_IF(IsAndroid() && IsImgTec() && IsVulkan());
+    }
+
     std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
         const wgpu::TextureFormat format = GetParam().mTextureFormat;
         if (utils::IsBCTextureFormat(format) &&
@@ -114,8 +121,9 @@ class CompressedTextureFormatTest : public DawnTestWithParams<CompressedTextureF
                     uint32_t uploadBufferOffset = copyConfig.bufferOffset +
                                                   copyBytesPerImage * layer + copyBytesPerRow * h +
                                                   oneBlockCompressedTextureData.size() * w;
-                    std::memcpy(&data[uploadBufferOffset], oneBlockCompressedTextureData.data(),
-                                oneBlockCompressedTextureData.size() * sizeof(uint8_t));
+                    DAWN_UNSAFE_TODO(
+                        std::memcpy(&data[uploadBufferOffset], oneBlockCompressedTextureData.data(),
+                                    oneBlockCompressedTextureData.size() * sizeof(uint8_t)));
                 }
             }
         }
@@ -765,7 +773,7 @@ TEST_P(CompressedTextureFormatTest, Cube) {
         config.copyExtent3D.width / BlockWidthInTexels() * utils::GetTexelBlockSizeInBytes(format),
         kTextureBytesPerRowAlignment);
     config.rowsPerImage = kLayers;
-    wgpu::TextureBindingViewDimensionDescriptor textureBindingViewDimensionDesc;
+    wgpu::TextureBindingViewDimension textureBindingViewDimensionDesc;
     if (IsCompatibilityMode()) {
         textureBindingViewDimensionDesc.textureBindingViewDimension =
             wgpu::TextureViewDimension::Cube;

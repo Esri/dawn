@@ -25,7 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d11/BindGroupTrackerD3D11.h"
+#include "src/dawn/native/d3d11/BindGroupTrackerD3D11.h"
 
 #include <algorithm>
 #include <tuple>
@@ -33,18 +33,18 @@
 #include <utility>
 #include <vector>
 
-#include "dawn/common/Assert.h"
-#include "dawn/common/MatchVariant.h"
-#include "dawn/common/Range.h"
-#include "dawn/native/Format.h"
-#include "dawn/native/d3d/D3DError.h"
-#include "dawn/native/d3d11/BindGroupD3D11.h"
-#include "dawn/native/d3d11/BufferD3D11.h"
-#include "dawn/native/d3d11/CommandRecordingContextD3D11.h"
-#include "dawn/native/d3d11/DeviceD3D11.h"
-#include "dawn/native/d3d11/PipelineLayoutD3D11.h"
-#include "dawn/native/d3d11/SamplerD3D11.h"
-#include "dawn/native/d3d11/TextureD3D11.h"
+#include "src/dawn/common/MatchVariant.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/native/Format.h"
+#include "src/dawn/native/d3d/D3DError.h"
+#include "src/dawn/native/d3d11/BindGroupD3D11.h"
+#include "src/dawn/native/d3d11/BufferD3D11.h"
+#include "src/dawn/native/d3d11/CommandRecordingContextD3D11.h"
+#include "src/dawn/native/d3d11/DeviceD3D11.h"
+#include "src/dawn/native/d3d11/PipelineLayoutD3D11.h"
+#include "src/dawn/native/d3d11/SamplerD3D11.h"
+#include "src/dawn/native/d3d11/TextureD3D11.h"
+#include "src/utils/assert.h"
 
 namespace dawn::native::d3d11 {
 namespace {
@@ -114,7 +114,7 @@ std::tuple<const BindingInfo&, BufferBinding> ExtractBufferBindingInfo(
     BindGroupBase* group,
     BindingIndex bindingIndex,
     const BufferBindingInfo& layout,
-    const ityp::span<BindingIndex, uint64_t>& dynamicOffsets) {
+    const ityp::span<BindingIndex, uint32_t>& dynamicOffsets) {
     const BindingInfo& bindingInfo = group->GetLayout()->GetBindingInfo(bindingIndex);
 
     BufferBinding binding = group->GetBindingAsBufferBinding(bindingIndex);
@@ -336,7 +336,7 @@ ResultOrError<BindGroupTracker::ConstantBufferBinding> BindGroupTracker::GetCons
     BindGroupBase* group,
     BindingIndex bindingIndex,
     const BufferBindingInfo& layout,
-    const ityp::span<BindingIndex, uint64_t>& dynamicOffsets) {
+    const ityp::span<BindingIndex, uint32_t>& dynamicOffsets) {
     const auto& [bindingInfo, binding] =
         ExtractBufferBindingInfo(group, bindingIndex, layout, dynamicOffsets);
 
@@ -364,7 +364,7 @@ ResultOrError<ComPtr<T>> BindGroupTracker::GetBufferD3DView(
     BindGroupBase* group,
     BindingIndex bindingIndex,
     const BufferBindingInfo& layout,
-    const ityp::span<BindingIndex, uint64_t>& dynamicOffsets) {
+    const ityp::span<BindingIndex, uint32_t>& dynamicOffsets) {
     const auto& [bindingInfo, binding] =
         ExtractBufferBindingInfo(group, bindingIndex, layout, dynamicOffsets);
 
@@ -462,7 +462,7 @@ MaybeError BindGroupTracker::ApplyBindGroup(BindGroupIndex index) {
     constexpr wgpu::ShaderStage kVisibleCompute = wgpu::ShaderStage::Compute & kVisibleStage;
 
     BindGroupBase* group = mBindGroups[index];
-    const ityp::span<BindingIndex, uint64_t>& dynamicOffsets = GetDynamicOffsets(index);
+    const ityp::span<BindingIndex, uint32_t>& dynamicOffsets = GetDynamicOffsets(index);
     const auto& indices = ToBackend(mPipelineLayout)->GetBindingTableIndexMap()[index];
 
     for (BindingIndex bindingIndex : Range(group->GetLayout()->GetBindingCount())) {
@@ -762,7 +762,7 @@ MaybeError RenderPassBindGroupTracker::Apply() {
 
     for (BindGroupIndex index : uavBindGroups) {
         BindGroupBase* group = mBindGroups[index];
-        const ityp::span<BindingIndex, uint64_t>& dynamicOffsets = GetDynamicOffsets(index);
+        const ityp::span<BindingIndex, uint32_t>& dynamicOffsets = GetDynamicOffsets(index);
         const auto& indices = ToBackend(mPipelineLayout)->GetBindingTableIndexMap()[index];
 
         // D3D11 uav slot allocated in reverse order.

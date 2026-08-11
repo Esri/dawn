@@ -25,7 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d11/QueueD3D11.h"
+#include "src/dawn/native/d3d11/QueueD3D11.h"
 
 #include <algorithm>
 #include <chrono>
@@ -37,18 +37,19 @@
 #include <vector>
 
 #include "absl/container/inlined_vector.h"
-#include "dawn/common/Log.h"
-#include "dawn/native/WaitAnySystemEvent.h"
-#include "dawn/native/d3d/D3DError.h"
-#include "dawn/native/d3d11/BufferD3D11.h"
-#include "dawn/native/d3d11/CommandBufferD3D11.h"
-#include "dawn/native/d3d11/DeviceD3D11.h"
-#include "dawn/native/d3d11/DeviceInfoD3D11.h"
-#include "dawn/native/d3d11/PhysicalDeviceD3D11.h"
-#include "dawn/native/d3d11/SharedFenceD3D11.h"
-#include "dawn/native/d3d11/TextureD3D11.h"
 #include "dawn/platform/DawnPlatform.h"
-#include "dawn/platform/tracing/TraceEvent.h"
+#include "src/dawn/native/WaitAnySystemEvent.h"
+#include "src/dawn/native/d3d/D3DError.h"
+#include "src/dawn/native/d3d11/BufferD3D11.h"
+#include "src/dawn/native/d3d11/CommandBufferD3D11.h"
+#include "src/dawn/native/d3d11/DeviceD3D11.h"
+#include "src/dawn/native/d3d11/DeviceInfoD3D11.h"
+#include "src/dawn/native/d3d11/PhysicalDeviceD3D11.h"
+#include "src/dawn/native/d3d11/SharedFenceD3D11.h"
+#include "src/dawn/native/d3d11/TextureD3D11.h"
+#include "src/dawn/platform/tracing/TraceEvent.h"
+#include "src/utils/compiler.h"
+#include "src/utils/log.h"
 
 namespace dawn::native::d3d11 {
 namespace {
@@ -323,7 +324,7 @@ MaybeError Queue::SubmitImpl(uint32_t commandCount, CommandBufferBase* const* co
         auto commandContext =
             GetScopedSwapStatePendingCommandContext(QueueBase::SubmitMode::Normal);
         for (uint32_t i = 0; i < commandCount; ++i) {
-            DAWN_TRY(ToBackend(commands[i])->Execute(&commandContext));
+            DAWN_TRY(ToBackend(DAWN_UNSAFE_TODO(commands[i]))->Execute(&commandContext));
         }
     }
     DAWN_TRY(SubmitPendingCommandsImpl());
@@ -354,19 +355,65 @@ ResultOrError<ExecutionSerial> Queue::CheckAndUpdateCompletedSerials() {
 MaybeError Queue::CheckScheduledBufferMappings(ExecutionSerial completedSerial) {
     auto commandContext = GetScopedPendingCommandContext(QueueBase::SubmitMode::Passive);
     return mPendingMapBuffers.Use([&](auto pendingMapBuffers) -> MaybeError {
-        for (const auto& bufferEntry : pendingMapBuffers->IterateUpTo(completedSerial)) {
-            DAWN_TRY(
-                bufferEntry.buffer->TryMapNow(&commandContext, completedSerial, bufferEntry.mode));
+        auto& serialQueue = pendingMapBuffers->serialQueue;
+        auto& requestMap = pendingMapBuffers->requestMap;
+
+        // Process all serials up to and including completedSerial
+        auto it = serialQueue.begin();
+        while (it != serialQueue.end() && it->first <= completedSerial) {
+            LinkedList<BufferMapRequest>& list = it->second;
+
+            // Process all buffers in this serial's list
+            while (!list.empty()) {
+                LinkNode<BufferMapRequest>* node = list.head();
+                BufferMapRequest* request = node->value();
+                Buffer* buffer = request->buffer;
+
+                DAWN_ASSERT(buffer);
+                DAWN_TRY(buffer->TryMapNow(&commandContext, completedSerial, request->mode));
+
+                request->RemoveFromList();
+                requestMap.erase(buffer);
+            }
+
+            // Erase this serial's entry and advance iterator
+            it = serialQueue.erase(it);
         }
-        pendingMapBuffers->ClearUpTo(completedSerial);
+
         return {};
     });
 }
 
-void Queue::ScheduleBufferMapping(Ref<Buffer>&& buffer,
-                                  wgpu::MapMode mode,
-                                  ExecutionSerial readySerial) {
-    mPendingMapBuffers->Enqueue({buffer, mode}, readySerial);
+void Queue::ScheduleBufferMapping(BufferMapRequest* request, ExecutionSerial readySerial) {
+    DAWN_ASSERT(request->buffer != nullptr);
+    mPendingMapBuffers.Use([&](auto pendingMapBuffers) {
+        auto& serialQueue = pendingMapBuffers->serialQueue;
+        auto& requestMap = pendingMapBuffers->requestMap;
+
+        auto& storedRequest = requestMap[request->buffer];
+        // Cancel old schedule if any. This is because we only allow one schedule per buffer.
+        // Any new schedule will overwrite the old one.
+        if (storedRequest) {
+            storedRequest->RemoveFromList();
+        }
+        storedRequest = request;
+
+        DAWN_ASSERT(!request->IsInList());
+        serialQueue[readySerial].Append(request);
+    });
+}
+
+void Queue::CancelScheduledBufferMapping(Buffer* buffer) {
+    mPendingMapBuffers.Use([&](auto pendingMapBuffers) {
+        auto& requestMap = pendingMapBuffers->requestMap;
+
+        auto it = requestMap.find(buffer);
+        if (it != requestMap.end()) {
+            BufferMapRequest* entry = it->second;
+            entry->RemoveFromList();
+            requestMap.erase(it);
+        }
+    });
 }
 
 MaybeError Queue::WriteBufferImpl(BufferBase* buffer,
@@ -404,7 +451,7 @@ MaybeError Queue::WriteTextureImpl(const TexelCopyTextureInfo& destination,
     Texture* texture = ToBackend(destination.texture);
     DAWN_TRY(texture->SynchronizeTextureBeforeUse(&commandContext));
     return texture->Write(&commandContext, subresources, destination.origin, writeSizePixel,
-                          static_cast<const uint8_t*>(data) + dataLayout.offset,
+                          DAWN_UNSAFE_TODO(static_cast<const uint8_t*>(data) + dataLayout.offset),
                           dataLayout.bytesPerRow, dataLayout.rowsPerImage);
 }
 
@@ -755,7 +802,7 @@ ResultOrError<ExecutionSerial> DelayFlushQueue::WaitForQueueSerialImpl(Execution
 
     bool done;
     DAWN_TRY_ASSIGN(done, IsQueryCompleted(&commandContext, /*requireFlush=*/false, &(*it)));
-    if (timeout == Nanoseconds(0)) {
+    if (timeout == Nanoseconds(0u)) {
         if (!done) {
             // Return timed-out immediately without using a timer.
             return kWaitSerialTimeout;

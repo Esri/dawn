@@ -25,11 +25,12 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "src/tint/lang/hlsl/writer/raise/shader_io.h"
+
 #include <utility>
 
 #include "src/tint/lang/core/ir/transform/helper_test.h"
 #include "src/tint/lang/core/type/struct.h"
-#include "src/tint/lang/hlsl/writer/raise/shader_io.h"
 
 namespace tint::hlsl::writer::raise {
 namespace {
@@ -2154,7 +2155,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2230,7 +2230,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2307,7 +2306,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2385,7 +2383,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2465,7 +2462,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2547,7 +2543,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2630,7 +2625,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2715,7 +2709,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2795,7 +2788,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -4668,6 +4660,503 @@ foo_inputs = struct @align(4) {
 
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
+    Run(ShaderIO, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, ShaderIOParameters_WorkgroupIndex_ReuseExistingBuiltins) {
+    auto* workgroup_id = b.FunctionParam("wgid", ty.vec3u());
+    workgroup_id->SetBuiltin(core::BuiltinValue::kWorkgroupId);
+
+    auto* num_workgroups = b.FunctionParam("numwgs", ty.vec3u());
+    num_workgroups->SetBuiltin(core::BuiltinValue::kNumWorkgroups);
+
+    auto* workgroup_index = b.FunctionParam("wgindex", ty.u32());
+    workgroup_index->SetBuiltin(core::BuiltinValue::kWorkgroupIndex);
+
+    auto* ep = b.ComputeFunction("foo", 3_u, 2_u, 1_u);
+    ep->SetParams({workgroup_id, num_workgroups, workgroup_index});
+    b.Append(ep->Block(), [&] {
+        b.Let("x", b.Add(workgroup_index, 0_u));
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%wgid:vec3<u32> [@workgroup_id], %numwgs:vec3<u32> [@num_workgroups], %wgindex:u32 [@workgroup_index]):void {
+  $B1: {
+    %5:u32 = add %wgindex, 0u
+    %x:u32 = let %5
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(16) {
+  wgid:vec3<u32> @offset(0), @builtin(workgroup_id)
+}
+
+$B1: {  # root
+  %tint_num_workgroups:ptr<uniform, vec3<u32>, read> = var undef @binding_point(0, 0)
+}
+
+%foo_inner = func(%wgid:vec3<u32>, %numwgs:vec3<u32>, %wgindex:u32):void {
+  $B2: {
+    %6:u32 = add %wgindex, 0u
+    %x:u32 = let %6
+    ret
+  }
+}
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%inputs:foo_inputs):void {
+  $B3: {
+    %10:vec3<u32> = access %inputs, 0u
+    %11:vec3<u32> = load %tint_num_workgroups
+    %12:vec3<u32> = access %inputs, 0u
+    %13:u32 = access %11, 0u
+    %14:u32 = access %11, 1u
+    %15:u32 = mul %13, %14
+    %16:u32 = access %12, 2u
+    %17:u32 = mul %16, %15
+    %18:u32 = access %12, 1u
+    %19:u32 = mul %18, %13
+    %20:u32 = access %12, 0u
+    %21:u32 = add %20, %19
+    %22:u32 = add %21, %17
+    %23:void = call %foo_inner, %10, %11, %22
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data;
+    ShaderIOConfig config{immediate_data};
+    Run(ShaderIO, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, SampleMaskPolyfill) {
+    auto* sample_mask = b.FunctionParam("sample_mask", ty.u32());
+    sample_mask->SetBuiltin(core::BuiltinValue::kSampleMask);
+
+    auto* ep = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    ep->SetParams({sample_mask});
+
+    b.Append(ep->Block(), [&] {
+        b.Let("mask", sample_mask);
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @fragment func(%sample_mask:u32 [@sample_mask]):void {
+  $B1: {
+    %mask:u32 = let %sample_mask
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(4) {
+  sample_index:u32 @offset(0), @builtin(sample_index)
+  sample_mask:u32 @offset(4), @builtin(sample_mask)
+}
+
+%foo_inner = func(%sample_mask:u32):void {
+  $B1: {
+    %mask:u32 = let %sample_mask
+    ret
+  }
+}
+%foo = @fragment func(%inputs:foo_inputs):void {
+  $B2: {
+    %6:u32 = access %inputs, 1u
+    %7:u32 = access %inputs, 0u
+    %8:u32 = shl 1u, %7
+    %9:u32 = and %6, %8
+    %10:void = call %foo_inner, %9
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data_2;
+    ShaderIOConfig config_2{immediate_data_2};
+    config_2.polyfill_sample_mask = true;
+    Run(ShaderIO, config_2);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, ShaderIOParameters_WorkgroupIndex_AddMissingBuiltins) {
+    auto* workgroup_index = b.FunctionParam("wgindex", ty.u32());
+    workgroup_index->SetBuiltin(core::BuiltinValue::kWorkgroupIndex);
+
+    auto* ep = b.ComputeFunction("foo", 3_u, 2_u, 1_u);
+    ep->SetParams({workgroup_index});
+    b.Append(ep->Block(), [&] {
+        b.Let("x", b.Add(workgroup_index, 0_u));
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%wgindex:u32 [@workgroup_index]):void {
+  $B1: {
+    %3:u32 = add %wgindex, 0u
+    %x:u32 = let %3
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(16) {
+  workgroup_id:vec3<u32> @offset(0), @builtin(workgroup_id)
+}
+
+$B1: {  # root
+  %tint_num_workgroups:ptr<uniform, vec3<u32>, read> = var undef @binding_point(0, 0)
+}
+
+%foo_inner = func(%wgindex:u32):void {
+  $B2: {
+    %4:u32 = add %wgindex, 0u
+    %x:u32 = let %4
+    ret
+  }
+}
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%inputs:foo_inputs):void {
+  $B3: {
+    %8:vec3<u32> = access %inputs, 0u
+    %9:vec3<u32> = load %tint_num_workgroups
+    %10:u32 = access %9, 0u
+    %11:u32 = access %9, 1u
+    %12:u32 = mul %10, %11
+    %13:u32 = access %8, 2u
+    %14:u32 = mul %13, %12
+    %15:u32 = access %8, 1u
+    %16:u32 = mul %15, %10
+    %17:u32 = access %8, 0u
+    %18:u32 = add %17, %16
+    %19:u32 = add %18, %14
+    %20:void = call %foo_inner, %19
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data;
+    ShaderIOConfig config{immediate_data};
+    Run(ShaderIO, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, ShaderIOParameters_GlobalInvocationIndex_ReuseExistingBuiltins) {
+    auto* num_workgroups = b.FunctionParam("numwgs", ty.vec3u());
+    num_workgroups->SetBuiltin(core::BuiltinValue::kNumWorkgroups);
+
+    auto* global_index = b.FunctionParam("gindex", ty.u32());
+    global_index->SetBuiltin(core::BuiltinValue::kGlobalInvocationIndex);
+
+    auto* ep = b.ComputeFunction("foo", 3_u, 2_u, 1_u);
+    ep->SetParams({num_workgroups, global_index});
+    b.Append(ep->Block(), [&] {
+        b.Let("x", b.Add(global_index, 0_u));
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%numwgs:vec3<u32> [@num_workgroups], %gindex:u32 [@global_invocation_index]):void {
+  $B1: {
+    %4:u32 = add %gindex, 0u
+    %x:u32 = let %4
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(16) {
+  global_invocation_id:vec3<u32> @offset(0), @builtin(global_invocation_id)
+}
+
+$B1: {  # root
+  %tint_num_workgroups:ptr<uniform, vec3<u32>, read> = var undef @binding_point(0, 0)
+}
+
+%foo_inner = func(%numwgs:vec3<u32>, %gindex:u32):void {
+  $B2: {
+    %5:u32 = add %gindex, 0u
+    %x:u32 = let %5
+    ret
+  }
+}
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%inputs:foo_inputs):void {
+  $B3: {
+    %9:vec3<u32> = load %tint_num_workgroups
+    %10:vec3<u32> = access %inputs, 0u
+    %11:u32 = access %10, 0u
+    %12:u32 = access %10, 1u
+    %13:u32 = access %10, 2u
+    %14:u32 = access %9, 0u
+    %15:u32 = access %9, 1u
+    %16:u32 = mul %14, 3u
+    %17:u32 = mul %15, 2u
+    %18:u32 = mul %16, %17
+    %19:u32 = mul %13, %18
+    %20:u32 = mul %12, %16
+    %21:u32 = add %11, %20
+    %22:u32 = add %21, %19
+    %23:void = call %foo_inner, %9, %22
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data;
+    ShaderIOConfig config{immediate_data};
+    Run(ShaderIO, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, ShaderIOParameters_GlobalInvocationIndex_AddMissingBuiltins) {
+    auto* global_index = b.FunctionParam("gindex", ty.u32());
+    global_index->SetBuiltin(core::BuiltinValue::kGlobalInvocationIndex);
+
+    auto* ep = b.ComputeFunction("foo", 3_u, 2_u, 1_u);
+    ep->SetParams({global_index});
+    b.Append(ep->Block(), [&] {
+        b.Let("x", b.Add(global_index, 0_u));
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%gindex:u32 [@global_invocation_index]):void {
+  $B1: {
+    %3:u32 = add %gindex, 0u
+    %x:u32 = let %3
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(16) {
+  global_invocation_id:vec3<u32> @offset(0), @builtin(global_invocation_id)
+}
+
+$B1: {  # root
+  %tint_num_workgroups:ptr<uniform, vec3<u32>, read> = var undef @binding_point(0, 0)
+}
+
+%foo_inner = func(%gindex:u32):void {
+  $B2: {
+    %4:u32 = add %gindex, 0u
+    %x:u32 = let %4
+    ret
+  }
+}
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%inputs:foo_inputs):void {
+  $B3: {
+    %8:vec3<u32> = load %tint_num_workgroups
+    %9:vec3<u32> = access %inputs, 0u
+    %10:u32 = access %9, 0u
+    %11:u32 = access %9, 1u
+    %12:u32 = access %9, 2u
+    %13:u32 = access %8, 0u
+    %14:u32 = access %8, 1u
+    %15:u32 = mul %13, 3u
+    %16:u32 = mul %14, 2u
+    %17:u32 = mul %15, %16
+    %18:u32 = mul %12, %17
+    %19:u32 = mul %11, %15
+    %20:u32 = add %10, %19
+    %21:u32 = add %20, %18
+    %22:void = call %foo_inner, %21
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data;
+    ShaderIOConfig config{immediate_data};
+    Run(ShaderIO, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, SampleMaskPolyfill_WithExistingSampleIndex) {
+    auto* sample_mask = b.FunctionParam("sample_mask", ty.u32());
+    sample_mask->SetBuiltin(core::BuiltinValue::kSampleMask);
+
+    auto* sample_index = b.FunctionParam("sample_index", ty.u32());
+    sample_index->SetBuiltin(core::BuiltinValue::kSampleIndex);
+
+    auto* ep = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    ep->SetParams({sample_mask, sample_index});
+
+    b.Append(ep->Block(), [&] {
+        b.Let("mask", sample_mask);
+        b.Let("idx", sample_index);
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @fragment func(%sample_mask:u32 [@sample_mask], %sample_index:u32 [@sample_index]):void {
+  $B1: {
+    %mask:u32 = let %sample_mask
+    %idx:u32 = let %sample_index
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(4) {
+  sample_index:u32 @offset(0), @builtin(sample_index)
+  sample_mask:u32 @offset(4), @builtin(sample_mask)
+}
+
+%foo_inner = func(%sample_mask:u32, %sample_index:u32):void {
+  $B1: {
+    %mask:u32 = let %sample_mask
+    %idx:u32 = let %sample_index
+    ret
+  }
+}
+%foo = @fragment func(%inputs:foo_inputs):void {
+  $B2: {
+    %8:u32 = access %inputs, 1u
+    %9:u32 = access %inputs, 0u
+    %10:u32 = shl 1u, %9
+    %11:u32 = and %8, %10
+    %12:u32 = access %inputs, 0u
+    %13:void = call %foo_inner, %11, %12
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data;
+    ShaderIOConfig config{immediate_data};
+    config.polyfill_sample_mask = true;
+    Run(ShaderIO, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, SampleMaskPolyfill_Disabled) {
+    auto* sample_mask = b.FunctionParam("sample_mask", ty.u32());
+    sample_mask->SetBuiltin(core::BuiltinValue::kSampleMask);
+
+    auto* ep = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    ep->SetParams({sample_mask});
+
+    b.Append(ep->Block(), [&] {
+        b.Let("mask", sample_mask);
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @fragment func(%sample_mask:u32 [@sample_mask]):void {
+  $B1: {
+    %mask:u32 = let %sample_mask
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(4) {
+  sample_mask:u32 @offset(0), @builtin(sample_mask)
+}
+
+%foo_inner = func(%sample_mask:u32):void {
+  $B1: {
+    %mask:u32 = let %sample_mask
+    ret
+  }
+}
+%foo = @fragment func(%inputs:foo_inputs):void {
+  $B2: {
+    %6:u32 = access %inputs, 0u
+    %7:void = call %foo_inner, %6
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data;
+    ShaderIOConfig config{immediate_data};
+    config.polyfill_sample_mask = false;
+    Run(ShaderIO, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, SampleMaskPolyfill_Disabled_WithExistingSampleIndex) {
+    auto* sample_mask = b.FunctionParam("sample_mask", ty.u32());
+    sample_mask->SetBuiltin(core::BuiltinValue::kSampleMask);
+
+    auto* sample_index = b.FunctionParam("sample_index", ty.u32());
+    sample_index->SetBuiltin(core::BuiltinValue::kSampleIndex);
+
+    auto* ep = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
+    ep->SetParams({sample_mask, sample_index});
+
+    b.Append(ep->Block(), [&] {
+        b.Let("mask", sample_mask);
+        b.Let("idx", sample_index);
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @fragment func(%sample_mask:u32 [@sample_mask], %sample_index:u32 [@sample_index]):void {
+  $B1: {
+    %mask:u32 = let %sample_mask
+    %idx:u32 = let %sample_index
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(4) {
+  sample_index:u32 @offset(0), @builtin(sample_index)
+  sample_mask:u32 @offset(4), @builtin(sample_mask)
+}
+
+%foo_inner = func(%sample_mask:u32, %sample_index:u32):void {
+  $B1: {
+    %mask:u32 = let %sample_mask
+    %idx:u32 = let %sample_index
+    ret
+  }
+}
+%foo = @fragment func(%inputs:foo_inputs):void {
+  $B2: {
+    %8:u32 = access %inputs, 1u
+    %9:u32 = access %inputs, 0u
+    %10:void = call %foo_inner, %8, %9
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data;
+    ShaderIOConfig config{immediate_data};
+    config.polyfill_sample_mask = false;
     Run(ShaderIO, config);
 
     EXPECT_EQ(expect, str());

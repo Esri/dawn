@@ -28,6 +28,7 @@
 #include "src/tint/lang/wgsl/reader/parser/parser.h"
 
 #include <limits>
+#include <span>
 #include <utility>
 
 #include "src/tint/lang/core/enums.h"
@@ -56,7 +57,6 @@
 #include "src/tint/lang/wgsl/ast/var.h"
 #include "src/tint/lang/wgsl/ast/variable_decl_statement.h"
 #include "src/tint/lang/wgsl/ast/workgroup_attribute.h"
-#include "src/tint/lang/wgsl/reader/parser/classify_template_args.h"
 #include "src/tint/lang/wgsl/reader/parser/lexer.h"
 #include "src/tint/lang/wgsl/reserved_words.h"
 #include "src/tint/utils/containers/reverse.h"
@@ -288,7 +288,6 @@ Source Parser::last_source() const {
 void Parser::InitializeLex() {
     Lexer l{file_};
     tokens_ = l.Lex();
-    ClassifyTemplateArguments(tokens_);
 }
 
 bool Parser::Parse() {
@@ -880,7 +879,7 @@ Maybe<ast::Type> Parser::type_specifier() {
 template <typename ENUM>
 Expect<ENUM> Parser::expect_enum(std::string_view name,
                                  ENUM (*parse)(std::string_view str),
-                                 Slice<const std::string_view> strings,
+                                 std::span<const std::string_view> strings,
                                  std::string_view use) {
     auto& t = peek();
     auto ident = t.to_str();
@@ -907,7 +906,8 @@ Expect<ENUM> Parser::expect_enum(std::string_view name,
     }
     err << "\n";
 
-    if (strings == wgsl::kExtensionStrings && !ident.starts_with("chromium")) {
+    if (strings.data() == std::span(wgsl::kExtensionStrings).data() &&
+        strings.size() == std::size(wgsl::kExtensionStrings) && !ident.starts_with("chromium")) {
         // Filter out 'chromium' prefixed extensions. We don't want to advertise experimental
         // extensions to end users (unless it looks like they've actually mis-typed a chromium
         // extension name)
@@ -917,7 +917,7 @@ Expect<ENUM> Parser::expect_enum(std::string_view name,
                 filtered.Push(str);
             }
         }
-        tint::SuggestAlternatives(ident, filtered.Slice(), err);
+        tint::SuggestAlternatives(ident, filtered.AsSpan(), err);
     } else {
         tint::SuggestAlternatives(ident, strings, err);
     }
@@ -2725,11 +2725,39 @@ Maybe<core::BinaryOp> Parser::compound_assignment_operator() {
 
 // core_lhs_expression
 //   : ident
+//   | template_elaborated_ident argument_expression_list
 //   | PAREN_LEFT lhs_expression PAREN_RIGHT
 Maybe<const ast::Expression*> Parser::core_lhs_expression() {
     auto& t = peek();
     if (t.IsIdentifier()) {
+        MultiTokenSource source(this);
         next();
+
+        if (peek_is(Token::Type::kTemplateArgsLeft)) {
+            auto tmpl_args = expect_template_arg_block("template arguments", [&] {
+                return expect_expression_list("template argument list",
+                                              Token::Type::kTemplateArgsRight);
+            });
+            const auto* ident = builder_.Ident(source(), t.to_str(), std::move(tmpl_args.value));
+
+            auto params = expect_argument_expression_list("function call");
+            if (params.errored) {
+                return Failure::kErrored;
+            }
+
+            return builder_.Call(source(), ident, std::move(params.value));
+        }
+
+        if (peek_is(Token::Type::kParenLeft)) {
+            const auto* ident = builder_.Ident(source(), t.to_str());
+
+            auto params = expect_argument_expression_list("function call");
+            if (params.errored) {
+                return Failure::kErrored;
+            }
+
+            return builder_.Call(source(), ident, std::move(params.value));
+        }
 
         return builder_.Expr(t.source(), t.to_str());
     }
@@ -2755,14 +2783,6 @@ Maybe<const ast::Expression*> Parser::core_lhs_expression() {
 //   | AND lhs_expression
 //   | STAR lhs_expression
 Maybe<const ast::Expression*> Parser::lhs_expression() {
-    auto core_expr = core_lhs_expression();
-    if (core_expr.errored) {
-        return Failure::kErrored;
-    }
-    if (core_expr.matched) {
-        return component_or_swizzle_specifier(core_expr.value);
-    }
-
     // Gather up all the `*`, `&` and `&&` tokens into a list and create all of the unary ops at
     // once instead of recursing. This handles the case where the fuzzer decides >8k `*`s would be
     // fun.
@@ -2788,25 +2808,34 @@ Maybe<const ast::Expression*> Parser::lhs_expression() {
             ops.Push({t.source(), core::UnaryOp::kIndirection});
         }
     }
-    if (ops.IsEmpty()) {
-        return Failure::kNoMatch;
+
+    // The AND and STAR cases.
+    auto& t = peek();
+    if (!ops.IsEmpty()) {
+        auto expr = lhs_expression();
+        if (expr.errored) {
+            return Failure::kErrored;
+        }
+        if (!expr.matched) {
+            return AddError(t, "missing expression");
+        }
+        const ast::Expression* ret = expr.value;
+        // Consume the ops in reverse order so we have the correct AST ordering.
+        for (auto& info : tint::Reverse(ops)) {
+            ret = create<ast::UnaryOpExpression>(info.source, info.op, ret);
+        }
+        return ret;
     }
 
-    auto& t = peek();
-    auto expr = lhs_expression();
-    if (expr.errored) {
+    // core_lhs_expression case
+    auto core_expr = core_lhs_expression();
+    if (core_expr.errored) {
         return Failure::kErrored;
     }
-    if (!expr.matched) {
-        return AddError(t, "missing expression");
+    if (core_expr.matched) {
+        return component_or_swizzle_specifier(core_expr.value);
     }
-
-    const ast::Expression* ret = expr.value;
-    // Consume the ops in reverse order so we have the correct AST ordering.
-    for (auto& info : tint::Reverse(ops)) {
-        ret = create<ast::UnaryOpExpression>(info.source, info.op, ret);
-    }
-    return ret;
+    return Failure::kNoMatch;
 }
 
 // variable_updating_statement

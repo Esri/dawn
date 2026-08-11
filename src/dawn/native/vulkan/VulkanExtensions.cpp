@@ -25,13 +25,13 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/vulkan/VulkanExtensions.h"
+#include "src/dawn/native/vulkan/VulkanExtensions.h"
 
 #include <array>
 #include <limits>
 
-#include "dawn/common/Assert.h"
-#include "dawn/common/vulkan_platform.h"
+#include "src/dawn/common/vulkan_platform.h"
+#include "src/utils/assert.h"
 
 namespace dawn::native::vulkan {
 
@@ -123,6 +123,7 @@ static constexpr std::array<DeviceExtInfo, kDeviceExtCount> sDeviceExtInfos{{
     {DeviceExt::ImageFormatList, "VK_KHR_image_format_list"},
     {DeviceExt::ShaderFloat16Int8, "VK_KHR_shader_float16_int8"},
     {DeviceExt::ShaderSubgroupExtendedTypes, "VK_KHR_shader_subgroup_extended_types"},
+    {DeviceExt::ShaderBufferInt64Atomics, "VK_KHR_shader_atomic_int64"},
     {DeviceExt::DrawIndirectCount, "VK_KHR_draw_indirect_count"},
     {DeviceExt::VulkanMemoryModel, "VK_KHR_vulkan_memory_model"},
     {DeviceExt::ShaderFloatControls, "VK_KHR_shader_float_controls"},
@@ -138,6 +139,7 @@ static constexpr std::array<DeviceExtInfo, kDeviceExtCount> sDeviceExtInfos{{
     {DeviceExt::Maintenance4, "VK_KHR_maintenance4"},
     {DeviceExt::SubgroupSizeControl, "VK_EXT_subgroup_size_control"},
     {DeviceExt::DynamicRendering, "VK_KHR_dynamic_rendering"},
+    {DeviceExt::ExtendedDynamicState, "VK_EXT_extended_dynamic_state"},
 
     // Promoted in 1.4
     {DeviceExt::PipelineRobustness, "VK_EXT_pipeline_robustness"},
@@ -152,6 +154,8 @@ static constexpr std::array<DeviceExtInfo, kDeviceExtCount> sDeviceExtInfos{{
     {DeviceExt::DisplayTiming, "VK_GOOGLE_display_timing"},
     {DeviceExt::CooperativeMatrix, "VK_KHR_cooperative_matrix"},
     {DeviceExt::MultisampledRenderToSingleSampled, "VK_EXT_multisampled_render_to_single_sampled"},
+    {DeviceExt::PhysicalDeviceDrm, "VK_EXT_physical_device_drm"},
+    {DeviceExt::RasterizationOrderAttachmentAccess, "VK_EXT_rasterization_order_attachment_access"},
 
     {DeviceExt::ExternalMemoryAndroidHardwareBuffer,
      "VK_ANDROID_external_memory_android_hardware_buffer"},
@@ -215,8 +219,10 @@ DeviceExtSet EnsureDependencies(const DeviceExtSet& advertisedExts,
             case DeviceExt::Robustness2:
             case DeviceExt::SubgroupSizeControl:
             case DeviceExt::ShaderSubgroupExtendedTypes:
+            case DeviceExt::ShaderBufferInt64Atomics:
             case DeviceExt::VulkanMemoryModel:
             case DeviceExt::CooperativeMatrix:
+            case DeviceExt::RasterizationOrderAttachmentAccess:
             case DeviceExt::ShaderFloatControls:
             case DeviceExt::DescriptorIndexing:
             case DeviceExt::CreateRenderPass2:
@@ -226,6 +232,8 @@ DeviceExtSet EnsureDependencies(const DeviceExtSet& advertisedExts,
             case DeviceExt::ExternalSemaphoreFD:
             case DeviceExt::ExternalSemaphoreZirconHandle:
             case DeviceExt::QueueFamilyForeign:
+            case DeviceExt::PhysicalDeviceDrm:
+            case DeviceExt::ExtendedDynamicState:
                 hasDependencies = true;
                 break;
 

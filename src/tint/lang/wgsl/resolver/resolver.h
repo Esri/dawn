@@ -59,7 +59,6 @@
 namespace tint::ast {
 class IndexAccessorExpression;
 class BinaryExpression;
-class BitcastExpression;
 class CallExpression;
 class CallStatement;
 class CaseStatement;
@@ -83,7 +82,6 @@ class ForLoopStatement;
 class IfStatement;
 class LoopStatement;
 class Statement;
-class StructMember;
 class SwitchStatement;
 class ValueConstructor;
 class ValueConversion;
@@ -309,9 +307,16 @@ class Resolver {
     /// perform alias analysis.
     void RegisterLoad(const sem::ValueExpression* expr);
 
+    /// Register a bufferView or bufferArrayView call to track size compatibility.
+    void RegisterBufferView(const sem::Call* call, wgsl::BuiltinFn fn);
+
     /// Perform pointer alias analysis for `call`.
     /// @returns true is the call arguments are free from aliasing issues, false otherwise.
     bool AliasAnalysis(const sem::Call* call);
+
+    /// Perform an analysis of buffer sizes for `call`.
+    /// @returns true if the call arguments are all appropriately sized.
+    bool CheckBufferViews(const sem::Call* call);
 
     /// If `expr` is of a reference type, then Load will create and return a sem::Load node wrapping
     /// `expr`. If `expr` is not of a reference type, then Load will just return `expr`.
@@ -333,18 +338,11 @@ class Resolver {
     const sem::ValueExpression* Materialize(const sem::ValueExpression* expr,
                                             const core::type::Type* target_type = nullptr);
 
-    /// For each argument in `args`:
-    /// * Calls Materialize() passing the argument and the corresponding parameter type.
-    /// * Calls Load() passing the argument, iff the corresponding parameter type is not a
-    ///   reference type.
+    /// Call Materialize on each argument for the corresponding parameter type.
     /// @returns true on success, false on failure.
     template <size_t N>
-    bool MaybeMaterializeAndLoadArguments(Vector<const sem::ValueExpression*, N>& args,
-                                          const sem::CallTarget* target);
-
-    /// @returns true if an argument of an abstract numeric type, passed to a parameter of type
-    /// `parameter_ty` should be materialized.
-    bool ShouldMaterializeArgument(const core::type::Type* parameter_ty) const;
+    bool MaybeMaterializeArguments(Vector<const sem::ValueExpression*, N>& args,
+                                   const sem::CallTarget* target);
 
     /// Converts `c` to `target_ty`
     /// @returns true on success, false on failure.
@@ -577,10 +575,6 @@ class Resolver {
     /// @returns true on success, false on error
     bool AllocateOverridableConstantIds();
 
-    /// Set the shadowing information on variable declarations.
-    /// @note this method must only be called after all semantic nodes are built.
-    void SetShadows();
-
     /// StatementScope() does the following:
     /// * Creates the AST -> SEM mapping.
     /// * Assigns `sem` to #current_statement_
@@ -616,13 +610,14 @@ class Resolver {
     void ErrorInvalidAttribute(const ast::Attribute* attr, StyledText use);
 
     /// @returns a new error message added to the program's diagnostics
+    diag::Diagnostic& AddError(const ast::Node* node) const;
     diag::Diagnostic& AddError(const Source& source) const;
 
     /// @returns a new warning message added to the program's diagnostics
-    diag::Diagnostic& AddWarning(const Source& source) const;
+    diag::Diagnostic& AddWarning(const ast::Node* node) const;
 
     /// @returns a new note message added to the program's diagnostics
-    diag::Diagnostic& AddNote(const Source& source) const;
+    diag::Diagnostic& AddNote(const ast::Node* node) const;
 
     /// @returns the core::type::Type for the builtin type @p builtin_ty with the identifier @p
     /// ident
@@ -671,6 +666,12 @@ class Resolver {
         Hashset<const sem::Variable*, 4> parameter_reads;
     };
 
+    // BufferViewInfo tracks info for invalid buffer sizes.
+    struct BufferViewInfo {
+        uint64_t size = 0;
+        const ast::Node* node = nullptr;
+    };
+
     ProgramBuilder& b;
     diag::List& diagnostics_;
     core::constant::Eval const_eval_;
@@ -690,6 +691,7 @@ class Resolver {
     Hashmap<ArrayConstructorSig, sem::CallTarget*, 8> array_ctors_;
     Hashmap<StructConstructorSig, sem::CallTarget*, 8> struct_ctors_;
     Hashmap<SubgroupMatrixConstructorSig, sem::CallTarget*, 8> subgroup_matrix_ctors_;
+    Hashmap<const sem::Variable*, BufferViewInfo, 8> buffer_view_sizes_;
     sem::Function* current_function_ = nullptr;
     sem::Statement* current_statement_ = nullptr;
     sem::CompoundStatement* current_compound_statement_ = nullptr;

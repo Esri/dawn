@@ -25,21 +25,23 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/ProgrammableEncoder.h"
+#include "src/dawn/native/ProgrammableEncoder.h"
 
 #include <cstring>
 
-#include "dawn/common/ityp_array.h"
-#include "dawn/native/BindGroup.h"
-#include "dawn/native/Buffer.h"
-#include "dawn/native/CommandBuffer.h"
-#include "dawn/native/Commands.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/Instance.h"
 #include "dawn/native/ObjectType_autogen.h"
-#include "dawn/native/PhysicalDevice.h"
 #include "dawn/native/ValidationUtils_autogen.h"
-#include "dawn/native/utils/WGPUHelpers.h"
+#include "src/dawn/common/ityp_array.h"
+#include "src/dawn/native/BindGroup.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/CommandBuffer.h"
+#include "src/dawn/native/Commands.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/Instance.h"
+#include "src/dawn/native/PhysicalDevice.h"
+#include "src/dawn/native/ResourceTable.h"
+#include "src/dawn/native/utils/WGPUHelpers.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native {
 
@@ -48,7 +50,6 @@ ProgrammableEncoder::ProgrammableEncoder(DeviceBase* device,
                                          EncodingContext* encodingContext)
     : ApiObjectBase(device, label),
       mEncodingContext(encodingContext),
-      mValidationEnabled(device->IsValidationEnabled()),
       mNeedsIndirectGPUValidation(device->NeedsIndirectGPUValidation()) {}
 
 ProgrammableEncoder::ProgrammableEncoder(DeviceBase* device,
@@ -57,11 +58,12 @@ ProgrammableEncoder::ProgrammableEncoder(DeviceBase* device,
                                          StringView label)
     : ApiObjectBase(device, errorTag, label),
       mEncodingContext(encodingContext),
-      mValidationEnabled(device->IsValidationEnabled()),
       mNeedsIndirectGPUValidation(device->NeedsIndirectGPUValidation()) {}
 
 bool ProgrammableEncoder::IsValidationEnabled() const {
-    return mValidationEnabled;
+    // The flag can be changed dynamically inside the device (e.g. re-enabled after device loss
+    // or OOM), so always forward the call to the device rather than caching it.
+    return GetDevice()->IsValidationEnabled();
 }
 
 bool ProgrammableEncoder::NeedsIndirectGPUValidation() const {
@@ -169,7 +171,7 @@ MaybeError ProgrammableEncoder::ValidateSetBindGroup(BindGroupIndex index,
         "in %s.",
         dynamicOffsets.size(), layout->GetDynamicBufferCount(), layout);
 
-    for (BindingIndex i{0}; i < dynamicOffsets.size(); ++i) {
+    for (BindingIndex i{0u}; i < dynamicOffsets.size(); ++i) {
         const BindingInfo& bindingInfo = layout->GetBindingInfo(i);
 
         // BGL creation sorts bindings such that the dynamic buffer bindings are first.
@@ -237,8 +239,28 @@ void ProgrammableEncoder::RecordSetBindGroup(CommandAllocator* allocator,
     cmd->dynamicOffsetCount = dynamicOffsetCount;
     if (dynamicOffsetCount > 0) {
         uint32_t* offsets = allocator->AllocateData<uint32_t>(cmd->dynamicOffsetCount);
-        memcpy(offsets, dynamicOffsets, dynamicOffsetCount * sizeof(uint32_t));
+        DAWN_UNSAFE_TODO(memcpy(offsets, dynamicOffsets, dynamicOffsetCount * sizeof(uint32_t)));
     }
+}
+
+MaybeError ProgrammableEncoder::SetResourceTable(ResourceTableBase* table,
+                                                 CommandAllocator* allocator) {
+    DAWN_ASSERT(allocator);
+
+    if (GetDevice()->IsValidationEnabled()) {
+        if (table) {
+            DAWN_TRY(GetDevice()->ValidateObject(table));
+        }
+        DAWN_INVALID_IF(
+            !GetDevice()->HasFeature(Feature::ChromiumExperimentalSamplingResourceTable),
+            "setResourceTable requires the %s feature enabled.",
+            wgpu::FeatureName::ChromiumExperimentalSamplingResourceTable);
+    }
+
+    SetResourceTableCmd* cmd = allocator->Allocate<SetResourceTableCmd>(Command::SetResourceTable);
+    cmd->table = table;
+
+    return {};
 }
 
 }  // namespace dawn::native
