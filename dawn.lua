@@ -1105,6 +1105,10 @@ if (_PLATFORM_WINDOWS) then
     "/Zc:preprocessor",
   }
 
+  defines {
+    "DAWN_USE_BUILT_DXC=1"
+  }
+
   -- Use the same build options for Test as for Release to overcome D8040
   -- error in Test builds.
 
