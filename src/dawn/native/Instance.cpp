@@ -29,6 +29,8 @@
 
 #include <utility>
 
+#include <filesystem>
+#include <string>
 #include "dawn/common/Assert.h"
 #include "dawn/common/FutureUtils.h"
 #include "dawn/common/GPUInfo.h"
@@ -279,6 +281,27 @@ MaybeError InstanceBase::Initialize(const UnpackedPtr<InstanceDescriptor>& descr
     }
     if (auto p = GetExecutableDirectory()) {
         mRuntimeSearchPaths.push_back(std::move(*p));
+    }
+
+    namespace fs = std::filesystem;
+    fs::path sdkBase = "C:\\Program Files (x86)\\Windows Kits\\10\\bin";
+    if (fs::exists(sdkBase)) {
+        fs::path newestSdkPath;
+
+        for (const auto& entry : fs::directory_iterator(sdkBase)) {
+            fs::path x64Path = entry.path() / "x64";
+
+            if (fs::exists(x64Path / "dxcompiler.dll") && fs::exists(x64Path / "dxil.dll")) {
+                if (newestSdkPath.empty() ||
+                    entry.path().filename() > newestSdkPath.parent_path().filename()) {
+                    newestSdkPath = x64Path;
+                }
+            }
+        }
+
+        if (!newestSdkPath.empty()) {
+            mRuntimeSearchPaths.push_back(newestSdkPath.string());
+        }
     }
     mRuntimeSearchPaths.push_back("");
 
