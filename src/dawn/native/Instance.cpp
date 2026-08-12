@@ -298,6 +298,7 @@ MaybeError InstanceBase::Initialize(const UnpackedPtr<InstanceDescriptor>& descr
                 }
             }
         }
+        newestSdkPath /= "";
 
         if (!newestSdkPath.empty()) {
             mRuntimeSearchPaths.push_back(newestSdkPath.string());
