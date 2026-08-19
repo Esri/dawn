@@ -28,19 +28,22 @@
 #ifndef SRC_DAWN_NATIVE_OBJECTBASE_H_
 #define SRC_DAWN_NATIVE_OBJECTBASE_H_
 
+#include <atomic>
 #include <mutex>
 #include <optional>
 #include <string>
 
 #include "absl/strings/str_format.h"
-#include "dawn/common/LinkedList.h"
-#include "dawn/common/MutexProtected.h"
-#include "dawn/common/Ref.h"
-#include "dawn/common/RefCounted.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/dawn_platform.h"
+#include "src/dawn/common/LinkedList.h"
+#include "src/dawn/common/MutexProtected.h"
+#include "src/dawn/common/Ref.h"
+#include "src/dawn/common/RefCounted.h"
+#include "src/dawn/native/Forward.h"
+#include "src/dawn/native/dawn_platform.h"
 
 namespace dawn::native {
+
+class ObjectLabel;
 
 namespace detail {
 
@@ -156,7 +159,7 @@ class ApiObjectBase : public ObjectBase, public LinkNode<ApiObjectBase> {
 
     virtual ObjectType GetType() const = 0;
     void SetLabel(std::string label);
-    const std::string& GetLabel() const;
+    std::string GetLabel() const;
 
     virtual void FormatLabel(absl::FormatSink* s) const;
 
@@ -201,7 +204,7 @@ class ApiObjectBase : public ObjectBase, public LinkNode<ApiObjectBase> {
   private:
     friend class ApiObjectList;
 
-    std::string mLabel;
+    std::atomic<ObjectLabel*> mLabel{nullptr};
 };
 
 template <typename T>

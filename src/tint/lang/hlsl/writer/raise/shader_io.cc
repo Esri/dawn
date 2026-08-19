@@ -74,6 +74,10 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
     std::optional<uint32_t> local_invocation_index_index;
     std::optional<uint32_t> first_clip_distance_index;
     std::optional<uint32_t> second_clip_distance_index;
+    std::optional<uint32_t> global_invocation_id_index;
+    std::optional<uint32_t> global_invocation_index_index;
+    std::optional<uint32_t> workgroup_index_index;
+    std::optional<uint32_t> workgroup_id_index;
     Hashset<uint32_t, 4> truncated_indices;
 
     // If set, points to a var of type struct with fields for offsets to apply to vertex_index and
@@ -84,6 +88,8 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
     core::ir::Var* tint_subgroup_id_counter = nullptr;
     // If set, holds a function var that contains the subgroup_id value.
     core::ir::Var* tint_subgroup_id = nullptr;
+    // If set, holds a function var that contains the num_workgroups value.
+    core::ir::Value* tint_num_workgroups = nullptr;
     // If the entry point has a linear workgroup size, this will hold that linearized size.
     std::optional<uint32_t> linear_workgroup_size = std::nullopt;
 
@@ -92,6 +98,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         : ShaderIOBackendState(mod, f), config(c) {
         // Check if we have a linear workgroup size.
         if (auto wgsize = func->WorkgroupSizeAsConst()) {
+            workgroup_size = wgsize;
             linear_workgroup_size = 1;
             for (uint32_t i = 0; i < 3; i++) {
                 if (wgsize->at(i) > 1u) {
@@ -149,6 +156,8 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             case core::BuiltinValue::kSubgroupInvocationId:
             case core::BuiltinValue::kSubgroupSize:
             case core::BuiltinValue::kNumSubgroups:
+            case core::BuiltinValue::kGlobalInvocationIndex:
+            case core::BuiltinValue::kWorkgroupIndex:
                 // These are sorted, but don't actually end up as members. Value doesn't really
                 // matter, so just make it larger than the rest.
                 return std::numeric_limits<uint32_t>::max();
@@ -221,31 +230,37 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
     }
 
     /// @copydoc ShaderIO::BackendState::FinalizeInputs
-    Vector<core::ir::FunctionParam*, 4> FinalizeInputs() override {
+    Result<Vector<core::ir::FunctionParam*, 4>> FinalizeInputs() override {
         if (config.add_input_position_member) {
-            const bool has_position_member = inputs.Any([](auto& struct_mem_desc) {
-                return struct_mem_desc.attributes.builtin == core::BuiltinValue::kPosition;
-            });
-            if (!has_position_member) {
-                core::IOAttributes attrs;
-                attrs.builtin = core::BuiltinValue::kPosition;
-                AddInput(ir.symbols.New("pos"), ty.vec4f(), attrs);
-            }
+            RequireBuiltinInput(core::BuiltinValue::kPosition, ty.vec4f(), "pos");
         }
 
-        // Check if we need to add local_invocation_index to polyfill subgroup_id.
-        // We use local_invocation_index when the workgroup size is linear.
-        const bool has_subgroup_id = inputs.Any([](auto& struct_mem_desc) {
-            return struct_mem_desc.attributes.builtin == core::BuiltinValue::kSubgroupId;
-        });
-        const bool has_local_invocation_index = inputs.Any([](auto& struct_mem_desc) {
-            return struct_mem_desc.attributes.builtin == core::BuiltinValue::kLocalInvocationIndex;
-        });
-        if (has_subgroup_id && linear_workgroup_size && !has_local_invocation_index) {
-            core::IOAttributes attrs{
-                .builtin = core::BuiltinValue::kLocalInvocationIndex,
-            };
-            AddInput(ir.symbols.New("local_invocation_index"), ty.u32(), attrs);
+        // Check if we need to add certain builtins for polyfills:
+        // * local_invocation_index for global_invocation_index or subgroup_id (with linear
+        // workgroup size)
+        // * workgroup_id for workgroup_index or global_invocation_index
+        // * num_workgroups for workgroup_index or global_invocation_index
+        const bool has_subgroup_id = HasBuiltinInput(core::BuiltinValue::kSubgroupId);
+        const bool has_global_invocation_index =
+            HasBuiltinInput(core::BuiltinValue::kGlobalInvocationIndex);
+        const bool has_workgroup_index = HasBuiltinInput(core::BuiltinValue::kWorkgroupIndex);
+        const bool needs_local_invocation_index = has_subgroup_id && linear_workgroup_size;
+        if (needs_local_invocation_index) {
+            RequireBuiltinInput(core::BuiltinValue::kLocalInvocationIndex, ty.u32(),
+                                "local_invocation_index");
+        }
+        const bool needs_workgroup_id = has_workgroup_index;
+        if (needs_workgroup_id) {
+            RequireBuiltinInput(core::BuiltinValue::kWorkgroupId, ty.vec3u(), "workgroup_id");
+        }
+        const bool needs_num_workgroups = has_workgroup_index || has_global_invocation_index;
+        if (needs_num_workgroups) {
+            RequireBuiltinInput(core::BuiltinValue::kNumWorkgroups, ty.vec3u(), "num_workgroups");
+        }
+        const bool needs_global_invocation_id = has_global_invocation_index;
+        if (needs_global_invocation_id) {
+            RequireBuiltinInput(core::BuiltinValue::kGlobalInvocationId, ty.vec3u(),
+                                "global_invocation_id");
         }
 
         Vector<MemberInfo, 4> input_data;
@@ -271,6 +286,14 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                     has_vertex_or_instance_index = true;
                 } else if (*builtin == core::BuiltinValue::kInstanceIndex) {
                     has_vertex_or_instance_index = true;
+                } else if (*builtin == core::BuiltinValue::kGlobalInvocationIndex) {
+                    global_invocation_index_index = i;
+                } else if (*builtin == core::BuiltinValue::kWorkgroupIndex) {
+                    workgroup_index_index = i;
+                } else if (*builtin == core::BuiltinValue::kWorkgroupId) {
+                    workgroup_id_index = i;
+                } else if (*builtin == core::BuiltinValue::kGlobalInvocationId) {
+                    global_invocation_id_index = i;
                 }
             }
 
@@ -304,11 +327,13 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         Vector<core::type::Manager::StructMemberDesc, 4> input_struct_members;
         for (auto& input : input_data) {
             // Don't add members for certain builtins
-            if (input.idx == subgroup_id_index ||             //
-                input.idx == subgroup_invocation_id_index ||  //
-                input.idx == subgroup_size_index ||           //
-                input.idx == num_subgroups_index ||           //
-                input.idx == num_workgroups_index) {
+            if (input.idx == subgroup_id_index ||              //
+                input.idx == subgroup_invocation_id_index ||   //
+                input.idx == subgroup_size_index ||            //
+                input.idx == num_subgroups_index ||            //
+                input.idx == num_workgroups_index ||           //
+                input.idx == global_invocation_index_index ||  //
+                input.idx == workgroup_index_index) {
                 // Invalid value, should not be indexed
                 input_indices[input.idx] = std::numeric_limits<uint32_t>::max();
                 continue;
@@ -334,14 +359,14 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                     TINT_IR_UNREACHABLE(ir);
             }
             input_param = b.FunctionParam("inputs", input_struct);
-            return {input_param};
+            return Vector<core::ir::FunctionParam*, 4>{input_param};
         }
 
-        return tint::Empty;
+        return Vector<core::ir::FunctionParam*, 4>{};
     }
 
     /// @copydoc ShaderIO::BackendState::FinalizeOutputs
-    const core::type::Type* FinalizeOutputs() override {
+    Result<const core::type::Type*> FinalizeOutputs() override {
         if (outputs.IsEmpty()) {
             return ty.void_();
         }
@@ -351,6 +376,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         // is translated to SV_ClipDistanceN in the printer.
         for (uint32_t i = 0; i < outputs.Length(); ++i) {
             if (outputs[i].attributes.builtin == core::BuiltinValue::kClipDistances) {
+                ir.properties.Add(core::ir::Property::kAllowClipDistancesOnF32ScalarAndVector);
                 auto* const type = outputs[i].type;
                 auto const name = outputs[i].name;
                 auto const attributes = outputs[i].attributes;
@@ -437,6 +463,10 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
     /// Handles kNumWorkgroups builtin by emitting a UBO to hold the num_workgroups value,
     /// along with the load of the value. Returns the loaded value.
     core::ir::Value* GetInputForNumWorkgroups(core::ir::Builder& builder) {
+        if (tint_num_workgroups) {
+            return tint_num_workgroups;
+        }
+
         // Create uniform var that will receive the number of workgroups
         core::ir::Var* num_wg_var = nullptr;
         builder.Append(ir.root_block, [&] {
@@ -462,7 +492,8 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             num_wg_var->SetBindingPoint(group, 0);
         }
         auto* load = builder.Load(num_wg_var);
-        return load->Result();
+        tint_num_workgroups = load->Result();
+        return tint_num_workgroups;
     }
 
     /// Create the atomic counter used to polyfill subgroup_id and num_subgroups, and add the code
@@ -564,6 +595,14 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         if (num_subgroups_index == idx) {
             return PolyfillNumSubgroups(builder);
         }
+        if (global_invocation_index_index == idx) {
+            return PolyfillGlobalInvocationIndex(builder, global_invocation_id_index.value(),
+                                                 num_workgroups_index.value());
+        }
+        if (workgroup_index_index == idx) {
+            return PolyfillWorkgroupIndex(builder, workgroup_id_index.value(),
+                                          num_workgroups_index.value());
+        }
         if (subgroup_invocation_id_index == idx) {
             return builder
                 .Call<hlsl::ir::BuiltinCall>(ty.u32(), hlsl::BuiltinFn::kWaveGetLaneIndex)
@@ -577,9 +616,21 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                 auto* immediate_data = config.immediate_data_layout.var;
                 auto num_workgroup_idx = u32(config.immediate_data_layout.IndexOf(
                     config.num_workgroups_start_offset.value()));
-                auto* load = builder.Load(
-                    builder.Access<ptr<immediate, vec3<u32>>>(immediate_data, num_workgroup_idx));
-                return load->Result();
+                // num_workgroups is stored as a struct of three u32 members (4-byte aligned); load
+                // each member and reconstruct the vec3<u32> value the builtin expects.
+                auto* immediate_struct = config.immediate_data_layout.var->Result()
+                                             ->Type()
+                                             ->As<core::type::Pointer>()
+                                             ->StoreType()
+                                             ->As<core::type::Struct>();
+                auto* num_workgroups_type = immediate_struct->Members()[num_workgroup_idx]->Type();
+                auto* str = builder.Access(ty.ptr(immediate, num_workgroups_type), immediate_data,
+                                           num_workgroup_idx);
+                auto* e0 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 0_u));
+                auto* e1 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 1_u));
+                auto* e2 = builder.Load(builder.Access<ptr<immediate, u32>>(str, 2_u));
+                return builder.Construct(ty.vec3u(), e0->Result(), e1->Result(), e2->Result())
+                    ->Result();
             }
             return GetInputForNumWorkgroups(builder);
         }
@@ -696,13 +747,12 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
 }  // namespace
 
 Result<SuccessType> ShaderIO(core::ir::Module& ir, const ShaderIOConfig& config) {
-    TINT_CHECK_RESULT(ValidateAndDumpIfNeeded(
-        ir, "hlsl.ShaderIO",
-        core::ir::Capabilities{core::ir::Capability::kAllowDuplicateBindings}));
+    core::ir::AssertValid(ir, "before hlsl.ShaderIO");
 
-    core::ir::transform::RunShaderIOBase(ir, [&](core::ir::Module& mod, core::ir::Function* func) {
-        return std::make_unique<StateImpl>(mod, func, config);
-    });
+    TINT_CHECK_RESULT(core::ir::transform::RunShaderIOBase(
+        ir, [&](core::ir::Module& mod, core::ir::Function* func) {
+            return std::make_unique<StateImpl>(mod, func, config);
+        }));
 
     return Success;
 }

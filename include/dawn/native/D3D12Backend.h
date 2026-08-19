@@ -28,8 +28,26 @@
 #ifndef INCLUDE_DAWN_NATIVE_D3D12BACKEND_H_
 #define INCLUDE_DAWN_NATIVE_D3D12BACKEND_H_
 
-#include <d3d11on12.h>
+// d3d12.h must be included first, before other d3d headers that may include it, to ensure
+// we pick up the one from the Agility SDK when enabled.
+#if defined(DAWN_USE_AGILITY_SDK)
+// clang-format off
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmicrosoft-enum-value"
+#pragma clang diagnostic ignored "-Wnested-anon-types"
+#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
+#endif
+#include "third_party/agility-sdk/src/build/native/include/d3d12.h"
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+#else  // defined(DAWN_USE_AGILITY_SDK)
 #include <d3d12.h>
+#endif  // defined(DAWN_USE_AGILITY_SDK)
+// clang-format on
+
+#include <d3d11on12.h>
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 
@@ -68,22 +86,6 @@ struct DAWN_NATIVE_EXPORT SharedBufferMemoryD3D12ResourceDescriptor : wgpu::Chai
     // This ID3D12Resource object must be created from the same ID3D12Device used in the
     // WGPUDevice.
     Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-};
-
-// May be chained on SharedBufferMemoryDescriptor
-struct DAWN_NATIVE_EXPORT SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor
-    : wgpu::ChainedStruct {
-    SharedBufferMemoryD3D12SharedMemoryFileHandleDescriptor() {
-        sType = static_cast<wgpu::SType>(
-            WGPUSType_SharedBufferMemoryD3D12SharedMemoryFileMappingHandleDescriptor);
-    }
-    // A handle to a shared memory file created with CreateFileMapping. The handle must be closed
-    // outside of Dawn with CloseHandle when it is no longer needed.
-    HANDLE handle = nullptr;
-    uint64_t size = 0u;
-
-    // The size must be a multiple of this alignment to hold a D3D12 buffer resource.
-    constexpr static uint32_t kRequiredAlignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
 };
 
 // May be chained on SharedTextureMemoryDescriptor.

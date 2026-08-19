@@ -25,13 +25,13 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/vulkan/VulkanFunctions.h"
+#include "src/dawn/native/vulkan/VulkanFunctions.h"
 
 #include <string>
 #include <utility>
 
-#include "dawn/common/DynamicLib.h"
-#include "dawn/native/vulkan/VulkanInfo.h"
+#include "src/dawn/common/DynamicLib.h"
+#include "src/dawn/native/vulkan/VulkanInfo.h"
 
 namespace dawn::native::vulkan {
 
@@ -396,6 +396,17 @@ MaybeError VulkanFunctions::LoadDeviceProcs(VkInstance instance,
         GET_DEVICE_PROC(CmdEndRenderingKHR);
     }
 
+    if (deviceInfo.HasExt(DeviceExt::ExtendedDynamicState)) {
+        GET_DEVICE_PROC(CmdSetCullModeEXT);
+        GET_DEVICE_PROC(CmdSetDepthCompareOpEXT);
+        GET_DEVICE_PROC(CmdSetDepthTestEnableEXT);
+        GET_DEVICE_PROC(CmdSetDepthWriteEnableEXT);
+        GET_DEVICE_PROC(CmdSetFrontFaceEXT);
+        GET_DEVICE_PROC(CmdSetPrimitiveTopologyEXT);
+        GET_DEVICE_PROC(CmdSetStencilOpEXT);
+        GET_DEVICE_PROC(CmdSetStencilTestEnableEXT);
+    }
+
     // Not promoted to core in any version
     if (deviceInfo.HasExt(DeviceExt::ExternalMemoryFD)) {
         GET_DEVICE_PROC(GetMemoryFdKHR);
@@ -419,7 +430,7 @@ MaybeError VulkanFunctions::LoadDeviceProcs(VkInstance instance,
         GET_DEVICE_PROC(QueuePresentKHR);
     }
 
-#if VK_USE_PLATFORM_FUCHSIA
+#if defined(VK_USE_PLATFORM_FUCHSIA)
     if (deviceInfo.HasExt(DeviceExt::ExternalMemoryZirconHandle)) {
         GET_DEVICE_PROC(GetMemoryZirconHandleFUCHSIA);
         GET_DEVICE_PROC(GetMemoryZirconHandlePropertiesFUCHSIA);

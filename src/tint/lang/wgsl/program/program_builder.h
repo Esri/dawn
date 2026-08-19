@@ -33,7 +33,6 @@
 #include <utility>
 
 #include "src/tint/api/common/override_id.h"
-
 #include "src/tint/lang/core/constant/manager.h"
 #include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/fluent_types.h"
@@ -84,7 +83,7 @@ class ProgramBuilder : public ast::Builder {
     ProgramBuilder(ProgramBuilder&& rhs);
 
     /// Destructor
-    ~ProgramBuilder();
+    ~ProgramBuilder() override;
 
     /// Move assignment operator
     /// @param rhs the builder to move
@@ -113,12 +112,6 @@ class ProgramBuilder : public ast::Builder {
     const SemNodeAllocator& SemNodes() const {
         AssertNotMoved();
         return sem_nodes_;
-    }
-
-    /// @returns a reference to the program's AST root Module
-    ast::Module& AST() {
-        AssertNotMoved();
-        return *ast_;
     }
 
     /// @returns a reference to the program's semantic info
@@ -191,7 +184,7 @@ class ProgramBuilder : public ast::Builder {
 
   protected:
     /// Asserts that the builder has not been moved.
-    void AssertNotMoved() const;
+    void AssertNotMoved() const override;
 
   private:
     SemNodeAllocator sem_nodes_;

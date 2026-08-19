@@ -3,16 +3,16 @@
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
 //
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
+//  1. Redistributions of source code must retain the above copyright notice, this
+//     list of conditions and the following disclaimer.
 //
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
+//  2. Redistributions in binary form must reproduce the above copyright notice,
+//     this list of conditions and the following disclaimer in the documentation
+//     and/or other materials provided with the distribution.
 //
-// 3. Neither the name of the copyright holder nor the names of its
-//    contributors may be used to endorse or promote products derived from
-//    this software without specific prior written permission.
+//  3. Neither the name of the copyright holder nor the names of its
+//     contributors may be used to endorse or promote products derived from
+//     this software without specific prior written permission.
 //
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -153,9 +153,9 @@ func run(fsReaderWriter oswrapper.FilesystemReaderWriter) error {
 	flag.BoolVar(&verbose, "verbose", false, "print all run tests, including rows that all pass")
 	flag.BoolVar(&generateExpected, "generate-expected", false, "create or update all expected outputs")
 	flag.BoolVar(&generateSkip, "generate-skip", false, "create new expected outputs that fail with SKIP")
-	flag.BoolVar(&generateSkip, "generate-skips", false, "create new expected outputs that fail with SKIP")
+	flag.BoolVar(&generateSkip, "generate-skips", false, "alias for -generate-skip")
 	flag.BoolVar(&updateSkip, "update-skip", false, "update all expected outputs that fail with SKIP")
-	flag.BoolVar(&updateSkip, "update-skips", false, "update all expected outputs that fail with SKIP")
+	flag.BoolVar(&updateSkip, "update-skips", false, "alias for -update-skip")
 	flag.BoolVar(&server, "server", true, "run Tint in server mode")
 	flag.IntVar(&numCPU, "j", numCPU, "maximum number of concurrent threads to run tests")
 	flag.IntVar(&maxTableWidth, "table-width", terminalWidth, "maximum width of the results table")
@@ -573,6 +573,7 @@ func run(fsReaderWriter oswrapper.FilesystemReaderWriter) error {
 	}
 	fmt.Println()
 
+	failed_files := []string{}
 	for _, f := range failures {
 		color.Set(color.FgBlue)
 		fmt.Printf("%s ", f.file)
@@ -582,8 +583,12 @@ func run(fsReaderWriter oswrapper.FilesystemReaderWriter) error {
 		fmt.Println("FAIL")
 		color.Unset()
 		fmt.Println(indent(f.err.Error(), 4))
+
+		failed_files = append(failed_files, f.file)
 	}
 	if len(failures) > 0 {
+		fmt.Println("Failed Files")
+		fmt.Println(strings.Join(failed_files, "\n"))
 		fmt.Println()
 	}
 
@@ -695,11 +700,13 @@ var reFXCErrorStringHash = regexp.MustCompile(`(?:.*?)(\(.*?\): (?:warning|error
 // unittest coverage for functions that can be tested.
 func (j job) run(cfg runConfig, fsReaderWriter oswrapper.FilesystemReaderWriter, tintServer *tintServerState) {
 	j.result <- func() status {
+		isErrorTest := strings.HasPrefix(filepath.ToSlash(j.file), filepath.ToSlash(fileutils.DawnRoot(fsReaderWriter))+"/test/tint/errors/")
+
 		// expectedFilePath is the path to the expected output file for the given test
 		expectedFilePath := j.file + ".expected."
 
-		// Only attempt to generate WGSL for SPVASM input files
-		if strings.HasSuffix(j.file, ".spvasm") && j.format != wgsl {
+		// Only attempt to generate WGSL for SPVASM input files or for cases that expect an error.
+		if (strings.HasSuffix(j.file, ".spvasm") || isErrorTest) && j.format != wgsl {
 			return status{code: skip, timeTaken: 0}
 		}
 
@@ -808,6 +815,12 @@ func (j job) run(cfg runConfig, fsReaderWriter oswrapper.FilesystemReaderWriter,
 		out = strings.ReplaceAll(out, "\r\n", "\n")
 		out = strings.ReplaceAll(out, filepath.ToSlash(fileutils.DawnRoot(fsReaderWriter)), "<dawn>")
 		out, hashes := extractValidationHashes(out)
+		if isErrorTest && !ok {
+			// Strip the error message from the output for expected test files, since it may differ depending on the platform.
+			if idx := strings.LastIndex(out, "\ntint executable returned error:"); idx != -1 {
+				out = out[:idx] + "\n"
+			}
+		}
 		matched := expected == "" || expected == out
 
 		canEmitPassExpectationFile := true
@@ -823,8 +836,8 @@ func (j job) run(cfg runConfig, fsReaderWriter oswrapper.FilesystemReaderWriter,
 		}
 
 		// Do not update expected if test is marked as SKIP: TIMEOUT
-		if ok && cfg.generateExpected && !isSkipTimeoutTest && (validate || !isSkipTest) {
-			// User requested to update PASS expectations, and test passed.
+		if (ok == !isErrorTest) && cfg.generateExpected && !isSkipTimeoutTest && (validate || !isSkipTest) {
+			// User requested to update expectations, and test met success/failure expectation.
 			if canEmitPassExpectationFile {
 				saveExpectedFile(expectedFilePath, out)
 			} else if expectedFileExists {
@@ -845,7 +858,7 @@ func (j job) run(cfg runConfig, fsReaderWriter oswrapper.FilesystemReaderWriter,
 			skipStr = "TIMEOUT"
 		}
 
-		passed := ok && (matched || isSkipTimeoutTest)
+		passed := (ok == !isErrorTest) && (matched || isSkipTimeoutTest)
 		if !passed {
 			if j.format == hlslFXC {
 				out = reFXCErrorStringHash.ReplaceAllString(out, `<scrubbed_path>${1}`)

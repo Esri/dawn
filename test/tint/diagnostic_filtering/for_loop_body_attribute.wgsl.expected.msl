@@ -41,12 +41,11 @@ void main_inner(float x, tint_module_vars_struct tint_module_vars) {
         uint const tint_carry = uint((tint_low_inc == 4294967295u));
         tint_loop_idx.y = (tint_loop_idx.y - tint_carry);
       }
-      continue;
     }
   }
 }
 
 fragment void v_1(main_inputs inputs [[stage_in]], texture2d<float, access::sample> t [[texture(0)]], sampler s [[sampler(0)]]) {
   tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.t=t, .s=s};
-  main_inner(inputs.x, tint_module_vars);
+  (main_inner(inputs.x, tint_module_vars));
 }

@@ -28,6 +28,8 @@
 #ifndef INCLUDE_DAWN_WIRE_WIRESERVER_H_
 #define INCLUDE_DAWN_WIRE_WIRESERVER_H_
 
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <span>
 
@@ -54,7 +56,7 @@ class DAWN_WIRE_EXPORT WireServer : public CommandHandler {
     explicit WireServer(const WireServerDescriptor& descriptor);
     ~WireServer() override;
 
-    const volatile char* HandleCommands(const volatile char* commands, size_t size) override;
+    bool HandleCommands(std::span<const volatile std::byte> commands) override;
 
     bool InjectBuffer(WGPUBuffer buffer, const Handle& handle, const Handle& deviceHandle);
     bool InjectTexture(WGPUTexture texture, const Handle& handle, const Handle& deviceHandle);
@@ -75,6 +77,8 @@ class DAWN_WIRE_EXPORT WireServer : public CommandHandler {
     // them periodically to ensure progress on asynchronous work is made.
     bool IsDeviceKnown(WGPUDevice device) const;
 
+    server::Server* GetImplForTesting();
+
   private:
     std::shared_ptr<server::Server> mImpl;
 };
@@ -85,72 +89,59 @@ class DAWN_WIRE_EXPORT MemoryTransferService {
     MemoryTransferService();
     virtual ~MemoryTransferService();
 
-    class ReadHandle;
-    class WriteHandle;
+    // Returns a MemoryHandle from the parameters in creationData. May return nullptr on failure.
+    class MemoryHandle;
+    virtual std::unique_ptr<MemoryHandle> DeserializeMemoryHandle(
+        std::span<const std::byte> creationData) = 0;
 
-    // Deserialize data to create Read/Write handles. These handles are for the client
-    // to Read/Write data.
-    virtual bool DeserializeReadHandle(const void* deserializePointer,
-                                       size_t deserializeSize,
-                                       ReadHandle** readHandle) = 0;
-    virtual bool DeserializeWriteHandle(const void* deserializePointer,
-                                        size_t deserializeSize,
-                                        WriteHandle** writeHandle) = 0;
-
-    class DAWN_WIRE_EXPORT ReadHandle {
+    class DAWN_WIRE_EXPORT MemoryHandle {
       public:
-        ReadHandle();
-        virtual ~ReadHandle();
+        MemoryHandle();
+        virtual ~MemoryHandle();
 
-        // Return the size of the command serialized if
-        // SerializeDataUpdate is called with the same offset/size args
-        virtual size_t SizeOfSerializeDataUpdate(size_t offset, size_t size) = 0;
+        // Return a direct view of the memory if this MemoryHandle supports it, nullptr when not
+        // supported.
+        virtual std::span<std::byte> GetSource() const { return {}; }
 
-        // Gets called when a MapReadCallback resolves.
-        // Serialize the data update for the range (offset, offset + size) into
-        // |serializePointer| to the client There could be nothing to be serialized (if
-        // using shared memory)
-        virtual void SerializeDataUpdate(const void* data,
+        // Get the required serialization size for SerializeDataUpdate for the range [offset, offset
+        // + size)
+        virtual size_t GetSerializeDataUpdateSize(size_t offset, size_t size) const = 0;
+
+        // Serializes into |serializeData| the modification of the contents in the range [offset,
+        // offset + size). The modified contents is passed in |data|.
+        //
+        // Parameters:
+        //  - `serializeData`: The output buffer to write the serialized payload into.
+        //  - `offset`: The byte offset of data.data() within the whole allocation..
+        //  - `size`: The size of the range to update (must be <= data.size()).
+        //  - `data`: The new contents for the range [offset, offset + data.size()).
+        virtual void SerializeDataUpdate(std::span<volatile std::byte> serializeData,
                                          size_t offset,
                                          size_t size,
-                                         void* serializePointer) = 0;
+                                         std::span<const std::byte> data) const = 0;
 
-      private:
-        ReadHandle(const ReadHandle&) = delete;
-        ReadHandle& operator=(const ReadHandle&) = delete;
-    };
-
-    class DAWN_WIRE_EXPORT WriteHandle {
-      public:
-        WriteHandle();
-        virtual ~WriteHandle();
-
-        // Set the target for writes from the client. DeserializeFlush should copy data
-        // into the target.
-        void SetTarget(void* data);
-        // Set Staging data length for OOB check
-        void SetDataLength(size_t dataLength);
-
-        // This function takes in the serialized result of
-        // client::MemoryTransferService::WriteHandle::SerializeDataUpdate.
-        // Needs to check potential offset/size OOB and overflow
-        virtual bool DeserializeDataUpdate(const void* deserializePointer,
-                                           size_t deserializeSize,
+        // Applies a data update for the range [offset, offset + size) that was produced by
+        // `client::MemoryTransferService::MemoryHandle::SerializeDataUpdate`.
+        //
+        // For hardening, the implementation must return false if offset + size overflows the size
+        // of the memory (or if offset + size overflows a size_t), or if size > target.size().
+        //
+        // Parameters:
+        //  - `deserializeData`: The serialized payload from the client specifying the updated
+        //    buffer contents.
+        //  - `offset`: The byte offset for target.data() within the whole allocation.
+        //  - `size`: The size of the range to update.
+        //  - `target`: The range of data that is written by the update.
+        //
+        // Returns true on success, or false if the deserialization is invalid (e.g. OOB access).
+        virtual bool DeserializeDataUpdate(std::span<const std::byte> deserializeData,
                                            size_t offset,
-                                           size_t size) = 0;
-        std::span<uint8_t> GetTarget() const;
-
-        // Returns a direct pointer to the source data that will
-        // be copied into Target in DeserializeDataUpdate if accessible, nullptr
-        // otherwise.
-        virtual uint8_t* GetSourceData() const { return nullptr; }
+                                           size_t size,
+                                           std::span<std::byte> target) = 0;
 
       private:
-        WriteHandle(const WriteHandle&) = delete;
-        WriteHandle& operator=(const WriteHandle&) = delete;
-
-        uint8_t* mTargetData = nullptr;
-        size_t mDataLength = 0;
+        MemoryHandle(const MemoryHandle&) = delete;
+        MemoryHandle& operator=(const MemoryHandle&) = delete;
     };
 
   private:

@@ -27,8 +27,8 @@
 
 #include "src/tint/lang/msl/ir/member_builtin_call.h"
 
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
-
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/ir/ir_helper_test.h"
 #include "src/tint/lang/core/ir/validator.h"
@@ -65,9 +65,25 @@ TEST_F(IR_MslMemberBuiltinCallTest, Clone) {
     EXPECT_TRUE(new_b->Object()->Type()->Is<core::type::SampledTexture>());
 
     auto args = new_b->Args();
-    ASSERT_EQ(2u, args.Length());
+    ASSERT_EQ(2u, args.size());
     EXPECT_TRUE(args[0]->Type()->Is<core::type::Sampler>());
     EXPECT_TRUE(args[1]->Type()->Is<core::type::Vector>());
+}
+
+TEST_F(IR_MslMemberBuiltinCallTest, CloneWithExplicitParams) {
+    auto* t = b.FunctionParam("t", ty.sampled_texture(core::type::TextureDimension::k2d, ty.f32()));
+    auto* s = b.FunctionParam("s", ty.sampler());
+    auto* coords = b.FunctionParam("coords", ty.vec2f());
+    auto* builtin =
+        b.MemberCall<MemberBuiltinCall>(mod.Types().void_(), BuiltinFn::kSample, t, s, coords);
+    builtin->SetExplicitTemplateParams(Vector<core::ir::TemplateParameter, 1>{mod.Types().i32()});
+
+    auto* new_b = clone_ctx.Clone(builtin);
+    EXPECT_NE(builtin->Result(), new_b->Result());
+    EXPECT_EQ(mod.Types().void_(), new_b->Result()->Type());
+
+    EXPECT_EQ(BuiltinFn::kSample, new_b->Func());
+    EXPECT_THAT(new_b->ExplicitTemplateParams(), testing::ElementsAre(mod.Types().i32()));
 }
 
 TEST_F(IR_MslMemberBuiltinCallTest, DoesNotMatchNonMemberFunction) {

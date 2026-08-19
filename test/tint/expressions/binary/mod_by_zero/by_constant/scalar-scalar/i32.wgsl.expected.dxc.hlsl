@@ -1,6 +1,6 @@
 
 int tint_mod_i32(int lhs, int rhs) {
-  int v = ((((rhs == int(0)) | ((lhs == int(-2147483648)) & (rhs == int(-1))))) ? (int(1)) : (rhs));
+  int v = select(((rhs == int(0)) | ((lhs == int(-2147483648)) & (rhs == int(-1)))), int(1), rhs);
   return asint((asuint(lhs) - asuint(asint((asuint((lhs / v)) * asuint(v))))));
 }
 

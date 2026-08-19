@@ -27,10 +27,10 @@
 
 #include <vector>
 
-#include "dawn/common/Math.h"
-#include "dawn/tests/DawnTest.h"
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/common/Math.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/WGPUHelpers.h"
 
 namespace dawn {
 namespace {
@@ -222,8 +222,8 @@ TEST_P(MultisampledSamplingTest, SamplePositions) {
 
             wgpu::RenderPassEncoder renderPassEncoder = commandEncoder.BeginRenderPass(&renderPass);
             renderPassEncoder.SetPipeline(drawPipeline);
-            renderPassEncoder.SetVertexBuffer(0, vBuffer, kQuadNumBytes * sampleOffset,
-                                              kQuadNumBytes);
+            renderPassEncoder.SetVertexBuffer(
+                0, vBuffer, static_cast<uint64_t>(kQuadNumBytes) * sampleOffset, kQuadNumBytes);
             renderPassEncoder.Draw(4);
             renderPassEncoder.End();
 

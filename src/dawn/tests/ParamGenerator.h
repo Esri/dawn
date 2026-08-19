@@ -36,9 +36,8 @@
 #include <utility>
 #include <vector>
 
-#include "dawn/common/Preprocessor.h"
-
 #include "gtest/gtest.h"
+#include "src/dawn/common/Preprocessor.h"
 
 namespace dawn {
 namespace detail {
@@ -97,15 +96,16 @@ void PrintParamStructField(std::ostream& o, const T& param, const char* type) {
     }                                                                                              \
     struct StructName : BaseStructName, DAWN_PP_CONCATENATE(_Dawn_, StructName) {                  \
         template <typename... Args>                                                                \
-        StructName(const BaseStructName& param, Args&&... args)                                    \
+        explicit StructName(const BaseStructName& param, Args&&... args)                           \
             : BaseStructName(param), DAWN_PP_CONCATENATE(_Dawn_, StructName) {                     \
             std::forward<Args>(args)...                                                            \
         }                                                                                          \
-        {}                                                                                         \
+        {                                                                                          \
+        }                                                                                          \
     };                                                                                             \
     inline std::ostream& operator<<(std::ostream& o, const StructName& param) {                    \
         o << static_cast<const BaseStructName&>(param);                                            \
-        o << static_cast<const DAWN_PP_CONCATENATE(_Dawn_, StructName)&>(param);                   \
+        o << static_cast<const DAWN_PP_CONCATENATE(_Dawn_, StructName) &>(param);                  \
         return o;                                                                                  \
     }                                                                                              \
     static_assert(true, "require semicolon")
@@ -133,13 +133,14 @@ struct Placeholder {};
     }                                                                                              \
     struct StructName : DAWN_PP_CONCATENATE(_Dawn_, StructName) {                                  \
         template <typename... Args>                                                                \
-        StructName(Args&&... args) : DAWN_PP_CONCATENATE(_Dawn_, StructName) {                     \
+        explicit StructName(Args&&... args) : DAWN_PP_CONCATENATE(_Dawn_, StructName) {            \
             std::forward<Args>(args)...                                                            \
         }                                                                                          \
-        {}                                                                                         \
+        {                                                                                          \
+        }                                                                                          \
     };                                                                                             \
     inline std::ostream& operator<<(std::ostream& o, const StructName& param) {                    \
-        o << static_cast<const DAWN_PP_CONCATENATE(_Dawn_, StructName)&>(param);                   \
+        o << static_cast<const DAWN_PP_CONCATENATE(_Dawn_, StructName) &>(param);                  \
         return o;                                                                                  \
     }                                                                                              \
     static_assert(true, "require semicolon")
@@ -201,7 +202,7 @@ class ParamGenerator {
         Iterator& operator++() {
             // Increment the Index by 1. If the i'th place reaches the maximum,
             // reset it to 0 and continue with the i+1'th place.
-            for (int i = mIndex.size() - 1; i >= 0; --i) {
+            for (int i = static_cast<int>(mIndex.size()) - 1; i >= 0; --i) {
                 if (mIndex[i] >= mLastIndex[i]) {
                     mIndex[i] = 0;
                 } else {

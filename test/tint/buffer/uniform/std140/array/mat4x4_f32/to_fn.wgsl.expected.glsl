@@ -37,7 +37,6 @@ mat4[4] v_4(uint start_byte_offset) {
       {
         v_5 = (v_6 + 1u);
       }
-      continue;
     }
   }
   return a_2;
@@ -47,5 +46,6 @@ void main() {
   float v_7 = a(v_4(0u));
   float v_8 = (v_7 + b(v_3(64u)));
   float v_9 = (v_8 + c(uintBitsToFloat(v_1.inner[4u]).ywxz));
-  v_2.inner = (v_9 + d(uintBitsToFloat(v_1.inner[4u]).ywxz.x));
+  uvec4 v_10 = v_1.inner[4u];
+  v_2.inner = (v_9 + d(uintBitsToFloat(v_10.y)));
 }

@@ -28,13 +28,12 @@
 #ifndef SRC_DAWN_NATIVE_SAMPLER_H_
 #define SRC_DAWN_NATIVE_SAMPLER_H_
 
-#include "dawn/common/ContentLessObjectCacheable.h"
-#include "dawn/native/CachedObject.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/ObjectBase.h"
-
-#include "dawn/native/dawn_platform.h"
+#include "src/dawn/common/ContentLessObjectCacheable.h"
+#include "src/dawn/native/CachedObject.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/Forward.h"
+#include "src/dawn/native/ObjectBase.h"
+#include "src/dawn/native/dawn_platform.h"
 
 namespace dawn::native {
 
@@ -56,8 +55,20 @@ class SamplerBase : public ApiObjectBase,
 
     ObjectType GetType() const override;
 
+    wgpu::AddressMode GetAddressModeU() const { return mAddressModeU; }
+    wgpu::AddressMode GetAddressModeV() const { return mAddressModeV; }
+    wgpu::AddressMode GetAddressModeW() const { return mAddressModeW; }
+    wgpu::FilterMode GetMagFilter() const { return mMagFilter; }
+    wgpu::FilterMode GetMinFilter() const { return mMinFilter; }
+    wgpu::MipmapFilterMode GetMipmapFilter() const { return mMipmapFilter; }
+    float GetLodMinClamp() const { return mLodMinClamp; }
+    float GetLodMaxClamp() const { return mLodMaxClamp; }
+    wgpu::CompareFunction GetCompareFunction() const { return mCompareFunction; }
+    uint16_t GetMaxAnisotropy() const { return mMaxAnisotropy; }
+
     bool IsComparison() const;
     bool IsFiltering() const;
+    wgpu::SamplerBindingType GetBindingType() const;
     bool IsYCbCr() const;
     // Valid to call only if `IsYCbCr()` is true.
     YCbCrVkDescriptor GetYCbCrVkDescriptor() const;
@@ -69,25 +80,22 @@ class SamplerBase : public ApiObjectBase,
         bool operator()(const SamplerBase* a, const SamplerBase* b) const;
     };
 
-    uint16_t GetMaxAnisotropy() const { return mMaxAnisotropy; }
-
   protected:
     void DestroyImpl(DestroyReason reason) override;
 
   private:
     SamplerBase(DeviceBase* device, ObjectBase::ErrorTag tag, StringView label);
 
-    // TODO(cwallez@chromium.org): Store a crypto hash of the items instead?
-    wgpu::AddressMode mAddressModeU;
-    wgpu::AddressMode mAddressModeV;
-    wgpu::AddressMode mAddressModeW;
-    wgpu::FilterMode mMagFilter;
-    wgpu::FilterMode mMinFilter;
-    wgpu::MipmapFilterMode mMipmapFilter;
-    float mLodMinClamp;
-    float mLodMaxClamp;
-    wgpu::CompareFunction mCompareFunction;
-    uint16_t mMaxAnisotropy;
+    wgpu::AddressMode mAddressModeU = wgpu::AddressMode::Undefined;
+    wgpu::AddressMode mAddressModeV = wgpu::AddressMode::Undefined;
+    wgpu::AddressMode mAddressModeW = wgpu::AddressMode::Undefined;
+    wgpu::FilterMode mMagFilter = wgpu::FilterMode::Undefined;
+    wgpu::FilterMode mMinFilter = wgpu::FilterMode::Undefined;
+    wgpu::MipmapFilterMode mMipmapFilter = wgpu::MipmapFilterMode::Undefined;
+    float mLodMinClamp = 0.0f;
+    float mLodMaxClamp = 0.0f;
+    wgpu::CompareFunction mCompareFunction = wgpu::CompareFunction::Undefined;
+    uint16_t mMaxAnisotropy = 1;
     bool mIsYCbCr = false;
     YCbCrVkDescriptor mYCbCrVkDescriptor = {};
 };
