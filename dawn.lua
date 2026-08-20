@@ -559,7 +559,7 @@ files {
   "src/tint/lang/wgsl/ast/unary_op_expression.cc",
   "src/tint/lang/wgsl/ast/var_rtc_shim_1.cc",
   "src/tint/lang/wgsl/ast/variable.cc",
-  "src/tint/lang/wgsl/ast/variable_decl_statement.cc",
+  "src/tint/lang/wgsl/ast/variable_decl_statement.cc", 
   "src/tint/lang/wgsl/ast/while_statement.cc",
   "src/tint/lang/wgsl/ast/workgroup_attribute.cc",
   "src/tint/lang/wgsl/enums_rtc_shim_1.cc",
@@ -664,6 +664,7 @@ files {
   "src/tint/utils/text/unicode.cc",
   "src/tint/utils/text_generator/text_generator.cc",
 
+  "src/utils/log.cc"
 }
 
 --
@@ -914,6 +915,9 @@ if (enable_d3d12) then
   defines {
     "DAWN_ENABLE_BACKEND_D3D12",
     "D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE))",
+    "D3D_SHADER_MODEL_6_7=static_cast<D3D_SHADER_MODEL>(0x67)",
+    "D3D_SHADER_MODEL_6_8=static_cast<D3D_SHADER_MODEL>(0x68)",
+    "D3D_SHADER_MODEL_6_9=static_cast<D3D_SHADER_MODEL>(0x69)",
   }
 
   files {
