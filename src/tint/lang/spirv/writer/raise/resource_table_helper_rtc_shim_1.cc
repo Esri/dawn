@@ -1,0 +1,1 @@
+#include "resource_table_helper.cc"
