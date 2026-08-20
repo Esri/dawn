@@ -36,6 +36,39 @@
 #include "src/dawn/native/d3d12/PhysicalDeviceD3D12.h"
 #include "src/dawn/native/d3d12/PlatformFunctionsD3D12.h"
 
+typedef struct D3D12_FEATURE_DATA_D3D12_OPTIONS8 {
+  BOOL UnalignedBlockTexturesSupported;
+} D3D12_FEATURE_DATA_D3D12_OPTIONS8;
+
+auto D3D12_FEATURE_D3D12_OPTIONS8 = static_cast<D3D12_FEATURE>(36);
+
+typedef enum D3D12_WAVE_MMA_TIER {
+  D3D12_WAVE_MMA_TIER_NOT_SUPPORTED = 0,
+  D3D12_WAVE_MMA_TIER_1_0 = 10
+} ;
+typedef struct D3D12_FEATURE_DATA_D3D12_OPTIONS9 {
+  BOOL                MeshShaderPipelineStatsSupported;
+  BOOL                MeshShaderSupportsFullRangeRenderTargetArrayIndex;
+  BOOL                AtomicInt64OnTypedResourceSupported;
+  BOOL                AtomicInt64OnGroupSharedSupported;
+  BOOL                DerivativesInMeshAndAmplificationShadersSupported;
+  D3D12_WAVE_MMA_TIER WaveMMATier;
+} D3D12_FEATURE_DATA_D3D12_OPTIONS9;
+
+auto D3D12_FEATURE_D3D12_OPTIONS9 = static_cast<D3D12_FEATURE>(37);
+
+typedef struct D3D12_FEATURE_DATA_D3D12_OPTIONS13 {
+    BOOL UnrestrictedBufferTextureCopyPitchSupported;
+    BOOL UnrestrictedVertexElementAlignmentSupported;
+    BOOL InvertedViewportHeightFlipsYSupported;
+    BOOL InvertedViewportDepthFlipsZSupported;
+    BOOL TextureCopyBetweenDimensionsSupported;
+    BOOL AlphaBlendFactorSupported;
+  } D3D12_FEATURE_DATA_D3D12_OPTIONS13;
+
+auto D3D12_FEATURE_D3D12_OPTIONS13 = static_cast<D3D12_FEATURE>(42);
+
+
 namespace dawn::native::d3d12 {
 
 namespace {
