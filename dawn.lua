@@ -752,6 +752,40 @@ if (enable_hlsl) then
 
   files {
     -- /hlsl/
+    "src/tint/lang/hlsl/builtin_fn_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/intrinsic/data_rtc_shim_2.cc",
+    "src/tint/lang/hlsl/ir/builtin_call_rtc_shim_2.cc",
+    "src/tint/lang/hlsl/ir/member_builtin_call_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/ir/ternary.cc",
+    "src/tint/lang/hlsl/type/byte_address_buffer.cc",
+    "src/tint/lang/hlsl/type/int8_t4_packed.cc",
+    "src/tint/lang/hlsl/type/matrix_layout.cc",
+    "src/tint/lang/hlsl/type/rasterizer_ordered_texture_2d.cc",
+    "src/tint/lang/hlsl/type/uint8_t4_packed.cc",
+    "src/tint/lang/hlsl/validate/validate.cc",
+    "src/tint/lang/hlsl/writer/common/option_helpers.cc",
+    "src/tint/lang/hlsl/writer/common/options_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/common/output_rtc_shim_2.cc",
+    "src/tint/lang/hlsl/writer/printer/printer.cc",
+    "src/tint/lang/hlsl/writer/raise/array_offset_from_immediate.cc",
+    "src/tint/lang/hlsl/writer/raise/array_offset_from_uniform.cc",
+    "src/tint/lang/hlsl/writer/raise/binary_polyfill_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/raise/builtin_polyfill_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/raise/decompose_snorm10_10_10_2.cc",
+    "src/tint/lang/hlsl/writer/raise/decompose_storage_access.cc",
+    "src/tint/lang/hlsl/writer/raise/extract_ternary_values.cc",
+    "src/tint/lang/hlsl/writer/raise/localize_struct_array_assignment.cc",
+    "src/tint/lang/hlsl/writer/raise/pixel_local.cc",
+    "src/tint/lang/hlsl/writer/raise/promote_initializers.cc",
+    "src/tint/lang/hlsl/writer/raise/raise_rtc_shim_2.cc",
+    "src/tint/lang/hlsl/writer/raise/replace_default_only_switch.cc",
+    "src/tint/lang/hlsl/writer/raise/replace_non_indexable_mat_vec_stores.cc",
+    "src/tint/lang/hlsl/writer/raise/replace_subgroup_matrix_init.cc",
+    "src/tint/lang/hlsl/writer/raise/resource_table_helper_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/raise/shader_io_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/raise/split_workgroup_atomics.cc",
+    "src/tint/lang/hlsl/writer/writer_rtc_shim_2.cc",
+
 }
 
 end
@@ -785,10 +819,10 @@ if (enable_spirv) then
 
   files {
     -- /spirv/
-    "src/tint/lang/spirv/builtin_fn_rtc_shim_1.cc",
-    "src/tint/lang/spirv/intrinsic/data_rtc_shim_2.cc",
+    "src/tint/lang/spirv/builtin_fn_rtc_shim_2.cc",
+    "src/tint/lang/spirv/intrinsic/data_rtc_shim_3.cc",
     "src/tint/lang/spirv/ir/binary_rtc_shim_1.cc",
-    "src/tint/lang/spirv/ir/builtin_call_rtc_shim_2.cc",
+    "src/tint/lang/spirv/ir/builtin_call_rtc_shim_3.cc",
     "src/tint/lang/spirv/ir/copy_logical.cc",
     "src/tint/lang/spirv/reader/common/common_rtc_shim_1.cc",
     "src/tint/lang/spirv/reader/lower/atomics.cc",
@@ -796,7 +830,7 @@ if (enable_spirv) then
     "src/tint/lang/spirv/reader/lower/decompose_strided_array.cc",
     "src/tint/lang/spirv/reader/lower/decompose_strided_matrix.cc",
     "src/tint/lang/spirv/reader/lower/lower_rtc_shim_1.cc",
-    "src/tint/lang/spirv/reader/lower/shader_io_rtc_shim_1.cc",
+    "src/tint/lang/spirv/reader/lower/shader_io_rtc_shim_2.cc",
     "src/tint/lang/spirv/reader/lower/texture_rtc_shim_2.cc",
     "src/tint/lang/spirv/reader/lower/transpose_row_major.cc",
     "src/tint/lang/spirv/reader/lower/vector_element_pointer.cc",
@@ -806,7 +840,7 @@ if (enable_spirv) then
     "src/tint/lang/spirv/type/image.cc",
     "src/tint/lang/spirv/type/literal.cc",
     "src/tint/lang/spirv/type/sampled_image.cc",
-    "src/tint/lang/spirv/validate/validate.cc",
+    "src/tint/lang/spirv/validate/validate_rtc_shim_1.cc",
     "src/tint/lang/spirv/writer/analysis/relaxed_precision_decorations.cc",
     "src/tint/lang/spirv/writer/common/binary_writer.cc",
     "src/tint/lang/spirv/writer/common/function_rtc_shim_4.cc",
@@ -814,9 +848,9 @@ if (enable_spirv) then
     "src/tint/lang/spirv/writer/common/module_rtc_shim_3.cc",
     "src/tint/lang/spirv/writer/common/operand.cc",
     "src/tint/lang/spirv/writer/common/option_helper.cc",
-    "src/tint/lang/spirv/writer/common/output_rtc_shim_2.cc",
-    "src/tint/lang/spirv/writer/printer/printer.cc",
-    "src/tint/lang/spirv/writer/raise/builtin_polyfill_rtc_shim_1.cc",
+    "src/tint/lang/spirv/writer/common/output_rtc_shim_3.cc",
+    "src/tint/lang/spirv/writer/printer/printer_rtc_shim_1.cc",
+    "src/tint/lang/spirv/writer/raise/builtin_polyfill_rtc_shim_2.cc",
     "src/tint/lang/spirv/writer/raise/case_switch_to_if_else.cc",
     "src/tint/lang/spirv/writer/raise/expand_implicit_splats.cc",
     "src/tint/lang/spirv/writer/raise/fork_explicit_layout_types.cc",
@@ -824,13 +858,13 @@ if (enable_spirv) then
     "src/tint/lang/spirv/writer/raise/keep_binding_array_as_pointer.cc",
     "src/tint/lang/spirv/writer/raise/merge_return.cc",
     "src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.cc",
-    "src/tint/lang/spirv/writer/raise/raise_rtc_shim_2.cc",
+    "src/tint/lang/spirv/writer/raise/raise_rtc_shim_3.cc",
     "src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.cc",
-    "src/tint/lang/spirv/writer/raise/resource_table_helper_rtc_shim_1.cc",
-    "src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_2.cc",
+    "src/tint/lang/spirv/writer/raise/resource_table_helper_rtc_shim_2.cc",
+    "src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_3.cc",
     "src/tint/lang/spirv/writer/raise/unary_polyfill.cc",
     "src/tint/lang/spirv/writer/raise/var_for_dynamic_index.cc",
-    "src/tint/lang/spirv/writer/writer_rtc_shim_2.cc",
+    "src/tint/lang/spirv/writer/writer_rtc_shim_3.cc",
 
 }
 
@@ -856,6 +890,21 @@ if (enable_d3d12) then -- or d3d11
 
   files {
     -- /d3d/
+    "src/dawn/native/d3d/BackendD3D.cpp",
+    "src/dawn/native/d3d/BlobD3D.cpp",
+    "src/dawn/native/d3d/D3DBackend.cpp",
+    "src/dawn/native/d3d/D3DError.cpp",
+    "src/dawn/native/d3d/DeviceD3D.cpp",
+    "src/dawn/native/d3d/KeyedMutex.cpp",
+    "src/dawn/native/d3d/PhysicalDeviceD3D.cpp",
+    "src/dawn/native/d3d/PlatformFunctions.cpp",
+    "src/dawn/native/d3d/QueueD3D.cpp",
+    "src/dawn/native/d3d/ShaderUtils.cpp",
+    "src/dawn/native/d3d/SharedFenceD3D.cpp",
+    "src/dawn/native/d3d/SharedTextureMemoryD3D.cpp",
+    "src/dawn/native/d3d/SwapChainD3D.cpp",
+    "src/dawn/native/d3d/UtilsD3D.cpp",
+
 }
 
 end
@@ -869,6 +918,47 @@ if (enable_d3d12) then
 
   files {
     -- /d3d12/
+    "src/dawn/native/d3d12/BackendD3D12.cpp",
+    "src/dawn/native/d3d12/BindGroupD3D12.cpp",
+    "src/dawn/native/d3d12/BindGroupLayoutD3D12.cpp",
+    "src/dawn/native/d3d12/BufferD3D12.cpp",
+    "src/dawn/native/d3d12/CPUDescriptorHeapAllocationD3D12.cpp",
+    "src/dawn/native/d3d12/CommandBufferD3D12.cpp",
+    "src/dawn/native/d3d12/CommandRecordingContext.cpp",
+    "src/dawn/native/d3d12/ComputePipelineD3D12.cpp",
+    "src/dawn/native/d3d12/D3D12Backend.cpp",
+    "src/dawn/native/d3d12/D3D12Info.cpp",
+    "src/dawn/native/d3d12/DeviceD3D12.cpp",
+    "src/dawn/native/d3d12/GPUDescriptorHeapAllocationD3D12.cpp",
+    "src/dawn/native/d3d12/HeapAllocatorD3D12.cpp",
+    "src/dawn/native/d3d12/HeapD3D12.cpp",
+    "src/dawn/native/d3d12/PageableD3D12.cpp",
+    "src/dawn/native/d3d12/PhysicalDeviceD3D12.cpp",
+    "src/dawn/native/d3d12/PipelineLayoutD3D12.cpp",
+    "src/dawn/native/d3d12/PipelineLayoutHandle.cpp",
+    "src/dawn/native/d3d12/PlatformFunctionsD3D12.cpp",
+    "src/dawn/native/d3d12/QuerySetD3D12.cpp",
+    "src/dawn/native/d3d12/QueueD3D12.cpp",
+    "src/dawn/native/d3d12/RenderPassBuilderD3D12.cpp",
+    "src/dawn/native/d3d12/RenderPipelineD3D12.cpp",
+    "src/dawn/native/d3d12/ResidencyManagerD3D12.cpp",
+    "src/dawn/native/d3d12/ResourceAllocatorManagerD3D12.cpp",
+    "src/dawn/native/d3d12/ResourceHeapAllocationD3D12.cpp",
+    "src/dawn/native/d3d12/ResourceTableD3D12.cpp",
+    "src/dawn/native/d3d12/SamplerD3D12.cpp",
+    "src/dawn/native/d3d12/SamplerHeapCacheD3D12.cpp",
+    "src/dawn/native/d3d12/ShaderModuleD3D12.cpp",
+    "src/dawn/native/d3d12/ShaderVisibleDescriptorAllocatorD3D12.cpp",
+    "src/dawn/native/d3d12/SharedBufferMemoryD3D12.cpp",
+    "src/dawn/native/d3d12/SharedFenceD3D12.cpp",
+    "src/dawn/native/d3d12/SharedTextureMemoryD3D12.cpp",
+    "src/dawn/native/d3d12/StagingDescriptorAllocatorD3D12.cpp",
+    "src/dawn/native/d3d12/StreamImplD3D12.cpp",
+    "src/dawn/native/d3d12/SwapChainD3D12.cpp",
+    "src/dawn/native/d3d12/TextureCopySplitter.cpp",
+    "src/dawn/native/d3d12/TextureD3D12.cpp",
+    "src/dawn/native/d3d12/UtilsD3D12.cpp",
+
 }
 
 end
