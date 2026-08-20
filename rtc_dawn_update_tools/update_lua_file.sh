@@ -77,6 +77,10 @@ if [ "${os}" == "linux" ]; then
   command_options+=( "-DCMAKE_C_COMPILER=/usr/local/rtc/llvm/${llvm_version}/bin/clang" )
   command_options+=( "-DCMAKE_CXX_COMPILER=/usr/local/rtc/llvm/${llvm_version}/bin/clang++" )
 fi
+if [[ "${os}" == "windows" ]]; then
+  command_options+=( "-DDAWN_ENABLE_VULKAN=OFF" )
+fi
+
 for ((i=0; i<${#command_options[@]}; i++)) do
   command+="${command_options[${i}]} "
 done
