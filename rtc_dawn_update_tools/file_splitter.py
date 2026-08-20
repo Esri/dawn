@@ -10,7 +10,7 @@ overwrite = int(sys.argv[2])
 os_includes = {
     "linux" : ["/vulkan/", "/spirv/"],
     "macos" : ["/metal/", "/msl/"],
-    "windows" : ["/vulkan/", "/spirv/", "/d3d/", "/d3d12/", "/hlsl/"]
+    "windows" : ["/d3d/", "/d3d12/", "/hlsl/"]
 }
 
 # Parent directories that all the platforms include.
