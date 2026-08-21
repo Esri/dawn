@@ -51,7 +51,9 @@ ResultOrError<UploadReservation> DynamicUploader::Reserve(uint64_t allocationSiz
     uint64_t alignedAllocationSize = Align(allocationSize, 8);
 
     // Disable further sub-allocation should the request be too large.
+    printf("DAWN kRingBufferSize %llu\n", kRingBufferSize);
     if (allocationSize > kRingBufferSize) {
+        printf("DAWN larger alloc size %llu\n", allocationSize);
         BufferDescriptor bufferDesc = {};
         bufferDesc.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::MapWrite;
         bufferDesc.size = alignedAllocationSize;
@@ -64,6 +66,8 @@ ResultOrError<UploadReservation> DynamicUploader::Reserve(uint64_t allocationSiz
 
         UploadReservation reservation;
         reservation.mappedData = stagingBuffer->GetMappedRange();
+        reservation.mappedData = reservation.mappedData.subspan(0, allocationSize);
+        printf("DAWN size %llu\n", reservation.mappedData.size());
         reservation.offsetInBuffer = 0;
         reservation.buffer = std::move(stagingBuffer);
         return reservation;
@@ -124,6 +128,7 @@ ResultOrError<UploadReservation> DynamicUploader::Reserve(uint64_t allocationSiz
 
     UploadReservation reservation;
     reservation.buffer = targetRingBuffer->mStagingBuffer;
+    printf("created range: %llu %llu\n", startOffset, allocationSize);
     reservation.mappedData = reservation.buffer
                                  ->GetMappedRange(checked_cast<size_t>(startOffset),
                                                   checked_cast<size_t>(alignedAllocationSize))
