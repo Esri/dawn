@@ -707,6 +707,7 @@ if (enable_linux) then
   }
 
   files {
+    "src/dawn/utils/SystemUtils.cpp",
     "src/dawn/native/SpirvValidation.cpp",
     "src/dawn/native/X11Functions.cpp",
     "src/tint/utils/command/command_posix.cc",
