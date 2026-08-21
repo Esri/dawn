@@ -168,6 +168,7 @@ includedirs {
 -- grep '\.c.*' dawn.lua | sed 's/^\ *\".*\/\([a-zA-Z0-9_]*\)\.[cp]*\"\,/\L\1/' | sort | uniq -d
 
 files {
+    "src/utils/log.cc",
     "src/tint/utils/rtti/castable_rtc_shim_1.cc",
     "src/dawn/native/utils/RenderDoc.cpp"
 }
@@ -559,7 +560,7 @@ files {
   "src/tint/lang/wgsl/ast/unary_op_expression.cc",
   "src/tint/lang/wgsl/ast/var_rtc_shim_1.cc",
   "src/tint/lang/wgsl/ast/variable.cc",
-  "src/tint/lang/wgsl/ast/variable_decl_statement.cc", 
+  "src/tint/lang/wgsl/ast/variable_decl_statement.cc",
   "src/tint/lang/wgsl/ast/while_statement.cc",
   "src/tint/lang/wgsl/ast/workgroup_attribute.cc",
   "src/tint/lang/wgsl/enums_rtc_shim_1.cc",
@@ -663,8 +664,6 @@ files {
   "src/tint/utils/text/styled_text_theme.cc",
   "src/tint/utils/text/unicode.cc",
   "src/tint/utils/text_generator/text_generator.cc",
-
-  "src/utils/log.cc"
 }
 
 --
@@ -799,6 +798,38 @@ if (enable_msl) then
 
   files {
     -- /msl/
+    "src/tint/lang/msl/builtin_fn_rtc_shim_2.cc",
+    "src/tint/lang/msl/intrinsic/data_rtc_shim_3.cc",
+    "src/tint/lang/msl/ir/builtin_call_rtc_shim_3.cc",
+    "src/tint/lang/msl/ir/component.cc",
+    "src/tint/lang/msl/ir/member_builtin_call_rtc_shim_2.cc",
+    "src/tint/lang/msl/ir/memory_order.cc",
+    "src/tint/lang/msl/type/bias.cc",
+    "src/tint/lang/msl/type/gradient.cc",
+    "src/tint/lang/msl/type/level.cc",
+    "src/tint/lang/msl/validate/validate_rtc_shim_1.cc",
+    "src/tint/lang/msl/validate/validate_metal.mm",
+    "src/tint/lang/msl/writer/common/option_helpers_rtc_shim_1.cc",
+    "src/tint/lang/msl/writer/common/options_rtc_shim_2.cc",
+    "src/tint/lang/msl/writer/common/output_rtc_shim_3.cc",
+    "src/tint/lang/msl/writer/common/printer_support.cc",
+    "src/tint/lang/msl/writer/printer/printer_rtc_shim_1.cc",
+    "src/tint/lang/msl/writer/raise/argument_buffers.cc",
+    "src/tint/lang/msl/writer/raise/binary_polyfill_rtc_shim_2.cc",
+    "src/tint/lang/msl/writer/raise/builtin_polyfill_rtc_shim_2.cc",
+    "src/tint/lang/msl/writer/raise/convert_print_to_log.cc",
+    "src/tint/lang/msl/writer/raise/decompose_buffer.cc",
+    "src/tint/lang/msl/writer/raise/fix_type_layout.cc",
+    "src/tint/lang/msl/writer/raise/module_constant.cc",
+    "src/tint/lang/msl/writer/raise/module_scope_vars.cc",
+    "src/tint/lang/msl/writer/raise/polyfill_bool_vector_dynamic_stores.cc",
+    "src/tint/lang/msl/writer/raise/raise_rtc_shim_3.cc",
+    "src/tint/lang/msl/writer/raise/shader_io_rtc_shim_2.cc",
+    "src/tint/lang/msl/writer/raise/simd_ballot.cc",
+    "src/tint/lang/msl/writer/raise/switch_return.cc",
+    "src/tint/lang/msl/writer/raise/validate_subgroup_matrix.cc",
+    "src/tint/lang/msl/writer/writer_rtc_shim_3.cc",
+
 }
 
 end
@@ -820,10 +851,10 @@ if (enable_spirv) then
 
   files {
     -- /spirv/
-    "src/tint/lang/spirv/builtin_fn_rtc_shim_2.cc",
-    "src/tint/lang/spirv/intrinsic/data_rtc_shim_3.cc",
+    "src/tint/lang/spirv/builtin_fn_rtc_shim_3.cc",
+    "src/tint/lang/spirv/intrinsic/data_rtc_shim_4.cc",
     "src/tint/lang/spirv/ir/binary_rtc_shim_1.cc",
-    "src/tint/lang/spirv/ir/builtin_call_rtc_shim_3.cc",
+    "src/tint/lang/spirv/ir/builtin_call_rtc_shim_4.cc",
     "src/tint/lang/spirv/ir/copy_logical.cc",
     "src/tint/lang/spirv/reader/common/common_rtc_shim_1.cc",
     "src/tint/lang/spirv/reader/lower/atomics.cc",
@@ -831,7 +862,7 @@ if (enable_spirv) then
     "src/tint/lang/spirv/reader/lower/decompose_strided_array.cc",
     "src/tint/lang/spirv/reader/lower/decompose_strided_matrix.cc",
     "src/tint/lang/spirv/reader/lower/lower_rtc_shim_1.cc",
-    "src/tint/lang/spirv/reader/lower/shader_io_rtc_shim_2.cc",
+    "src/tint/lang/spirv/reader/lower/shader_io_rtc_shim_3.cc",
     "src/tint/lang/spirv/reader/lower/texture_rtc_shim_2.cc",
     "src/tint/lang/spirv/reader/lower/transpose_row_major.cc",
     "src/tint/lang/spirv/reader/lower/vector_element_pointer.cc",
@@ -841,7 +872,7 @@ if (enable_spirv) then
     "src/tint/lang/spirv/type/image.cc",
     "src/tint/lang/spirv/type/literal.cc",
     "src/tint/lang/spirv/type/sampled_image.cc",
-    "src/tint/lang/spirv/validate/validate_rtc_shim_1.cc",
+    "src/tint/lang/spirv/validate/validate_rtc_shim_2.cc",
     "src/tint/lang/spirv/writer/analysis/relaxed_precision_decorations.cc",
     "src/tint/lang/spirv/writer/common/binary_writer.cc",
     "src/tint/lang/spirv/writer/common/function_rtc_shim_4.cc",
@@ -849,9 +880,9 @@ if (enable_spirv) then
     "src/tint/lang/spirv/writer/common/module_rtc_shim_3.cc",
     "src/tint/lang/spirv/writer/common/operand.cc",
     "src/tint/lang/spirv/writer/common/option_helper.cc",
-    "src/tint/lang/spirv/writer/common/output_rtc_shim_3.cc",
-    "src/tint/lang/spirv/writer/printer/printer_rtc_shim_1.cc",
-    "src/tint/lang/spirv/writer/raise/builtin_polyfill_rtc_shim_2.cc",
+    "src/tint/lang/spirv/writer/common/output_rtc_shim_4.cc",
+    "src/tint/lang/spirv/writer/printer/printer_rtc_shim_2.cc",
+    "src/tint/lang/spirv/writer/raise/builtin_polyfill_rtc_shim_3.cc",
     "src/tint/lang/spirv/writer/raise/case_switch_to_if_else.cc",
     "src/tint/lang/spirv/writer/raise/expand_implicit_splats.cc",
     "src/tint/lang/spirv/writer/raise/fork_explicit_layout_types.cc",
@@ -859,13 +890,13 @@ if (enable_spirv) then
     "src/tint/lang/spirv/writer/raise/keep_binding_array_as_pointer.cc",
     "src/tint/lang/spirv/writer/raise/merge_return.cc",
     "src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.cc",
-    "src/tint/lang/spirv/writer/raise/raise_rtc_shim_3.cc",
+    "src/tint/lang/spirv/writer/raise/raise_rtc_shim_4.cc",
     "src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.cc",
     "src/tint/lang/spirv/writer/raise/resource_table_helper_rtc_shim_2.cc",
-    "src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_3.cc",
+    "src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_4.cc",
     "src/tint/lang/spirv/writer/raise/unary_polyfill.cc",
     "src/tint/lang/spirv/writer/raise/var_for_dynamic_index.cc",
-    "src/tint/lang/spirv/writer/writer_rtc_shim_3.cc",
+    "src/tint/lang/spirv/writer/writer_rtc_shim_4.cc",
 
 }
 
@@ -975,6 +1006,29 @@ if (enable_metal) then
 
   files {
     -- /metal/
+    "src/dawn/native/metal/BackendMTL.mm",
+    "src/dawn/native/metal/BindGroupLayoutMTL.mm",
+    "src/dawn/native/metal/BindGroupMTL.mm",
+    "src/dawn/native/metal/BufferMTL.mm",
+    "src/dawn/native/metal/CommandBufferMTL.mm",
+    "src/dawn/native/metal/CommandRecordingContext.mm",
+    "src/dawn/native/metal/ComputePipelineMTL.mm",
+    "src/dawn/native/metal/DeviceMTL.mm",
+    "src/dawn/native/metal/MetalBackend.mm",
+    "src/dawn/native/metal/MultiDrawEncoder.mm",
+    "src/dawn/native/metal/PhysicalDeviceMTL.mm",
+    "src/dawn/native/metal/PipelineLayoutMTL.mm",
+    "src/dawn/native/metal/QuerySetMTL.mm",
+    "src/dawn/native/metal/QueueMTL.mm",
+    "src/dawn/native/metal/RenderPipelineMTL.mm",
+    "src/dawn/native/metal/SamplerMTL.mm",
+    "src/dawn/native/metal/ShaderModuleMTL.mm",
+    "src/dawn/native/metal/SharedFenceMTL.mm",
+    "src/dawn/native/metal/SharedTextureMemoryMTL.mm",
+    "src/dawn/native/metal/SwapChainMTL.mm",
+    "src/dawn/native/metal/TextureMTL.mm",
+    "src/dawn/native/metal/UtilsMetal.mm",
+
 }
 
 end
