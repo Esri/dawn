@@ -169,7 +169,7 @@ includedirs {
 
 files {
     "src/utils/log.cc",
-    "src/tint/utils/rtti/castable_rtc_shim_1.cc",
+    "src/tint/utils/rtti/castable.cc",
     "src/dawn/native/utils/RenderDoc.cpp"
 }
 
@@ -294,8 +294,8 @@ files {
   "src/dawn/native/ValidationUtils.cpp",
   "src/dawn/native/WaitListEvent.cpp",
   "src/dawn/native/dawn_platform.cpp",
-  "src/dawn/native/null/DeviceNull_rtc_shim_1.cpp",
-  "src/dawn/native/null/NullBackend_rtc_shim_1.cpp",
+  "src/dawn/native/null/DeviceNull.cpp",
+  "src/dawn/native/null/NullBackend.cpp",
   "src/dawn/native/stream/BlobSource.cpp",
   "src/dawn/native/stream/ByteVectorSink.cpp",
   "src/dawn/native/utils/RenderDoc.cpp",
@@ -646,7 +646,7 @@ files {
   "src/tint/utils/memory/memory.cc",
   "src/tint/utils/reflection/reflection_rtc_shim_1.cc",
   "src/tint/utils/result_rtc_shim_1.cc",
-  "src/tint/utils/rtti/castable_rtc_shim_1.cc",
+  "src/tint/utils/rtti/castable.cc",
   "src/tint/utils/rtti/switch_rtc_shim_1.cc",
   "src/tint/utils/strconv/float_to_string.cc",
   "src/tint/utils/strconv/parse_num.cc",
@@ -664,6 +664,7 @@ files {
   "src/tint/utils/text/styled_text_theme.cc",
   "src/tint/utils/text/unicode.cc",
   "src/tint/utils/text_generator/text_generator.cc",
+
 }
 
 --
@@ -674,7 +675,7 @@ if (enable_android) then
 
   files {
     "src/dawn/native/AHBFunctions.cpp",
-    "src/dawn/native/SpirvValidation_rtc_shim_1.cpp",
+    "src/dawn/native/SpirvValidation.cpp",
   }
 
 end
@@ -689,11 +690,11 @@ if (enable_apple) then
     "src/dawn/common/IOSurfaceUtils.cpp",
     "src/dawn/common/SystemUtils_mac.mm",
     "src/dawn/native/Surface_metal.mm",
-    "src/tint/utils/command/command_posix_rtc_shim_1.cc",
-    "src/tint/utils/file/tmpfile_posix_rtc_shim_1.cc",
+    "src/tint/utils/command/command_posix.cc",
+    "src/tint/utils/file/tmpfile_posix.cc",
     "src/tint/utils/system/executable_file_mac.cc",
-    "src/tint/utils/system/terminal_posix_rtc_shim_1.cc",
-    "src/tint/utils/text/styled_text_printer_posix_rtc_shim_1.cc",
+    "src/tint/utils/system/terminal_posix.cc",
+    "src/tint/utils/text/styled_text_printer_posix.cc",
   }
 
 end
@@ -706,13 +707,13 @@ if (enable_linux) then
   }
 
   files {
-    "src/dawn/native/SpirvValidation_rtc_shim_1.cpp",
+    "src/dawn/native/SpirvValidation.cpp",
     "src/dawn/native/X11Functions.cpp",
-    "src/tint/utils/command/command_posix_rtc_shim_1.cc",
-    "src/tint/utils/file/tmpfile_posix_rtc_shim_1.cc",
+    "src/tint/utils/command/command_posix.cc",
+    "src/tint/utils/file/tmpfile_posix.cc",
     "src/tint/utils/system/executable_path_linux.cc",
-    "src/tint/utils/system/terminal_posix_rtc_shim_1.cc",
-    "src/tint/utils/text/styled_text_printer_posix_rtc_shim_1.cc",
+    "src/tint/utils/system/terminal_posix.cc",
+    "src/tint/utils/text/styled_text_printer_posix.cc",
   }
 
 end
@@ -1095,7 +1096,7 @@ if (enable_vulkan) then
 
     files {
       "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationAHardwareBuffer.cpp",
-      "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD_rtc_shim_1.cpp",
+      "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD.cpp",
     }
 
   end
@@ -1105,7 +1106,7 @@ if (enable_vulkan) then
     files {
       "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf.cpp",
       "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD.cpp",
-      "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD_rtc_shim_1.cpp",
+      "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD.cpp",
     }
   end
 
@@ -1118,8 +1119,8 @@ if (enable_null) then
   }
 
   files {
-    "src/dawn/native/null/DeviceNull_rtc_shim_1.cpp",
-    "src/dawn/native/null/NullBackend_rtc_shim_1.cpp",
+    "src/dawn/native/null/DeviceNull.cpp",
+    "src/dawn/native/null/NullBackend.cpp",
     }
 end
 
