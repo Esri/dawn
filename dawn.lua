@@ -676,6 +676,7 @@ if (enable_android) then
   files {
     "src/dawn/native/AHBFunctions.cpp",
     "src/dawn/native/SpirvValidation.cpp",
+    "src/dawn/utils/SystemUtils.cpp",
   }
 
 end
@@ -709,6 +710,7 @@ if (enable_linux) then
   files {
     "src/dawn/native/SpirvValidation.cpp",
     "src/dawn/native/X11Functions.cpp",
+    "src/dawn/utils/SystemUtils.cpp",
     "src/tint/utils/command/command_posix.cc",
     "src/tint/utils/file/tmpfile_posix.cc",
     "src/tint/utils/system/executable_path_linux.cc",
