@@ -35,7 +35,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
-// [hlsl-dxc] flags: --hlsl-shader-model 60
+// [hlsl-dxc] flags: --hlsl-shader-model 6.10
 
 
 enable chromium_experimental_subgroup_matrix;
@@ -51,5 +51,5 @@ fn subgroupMatrixScalarAdd_788efe() -> subgroup_matrix_right<i8, 8, 8>{
 }
 @compute @workgroup_size(1)
 fn compute_main() {
-  subgroupMatrixStore(&prevent_dce, 0, subgroupMatrixScalarAdd_788efe(), false, 64);
+  subgroupMatrixStore<row_major>(&prevent_dce, 0, subgroupMatrixScalarAdd_788efe(), 16);
 }

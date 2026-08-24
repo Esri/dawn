@@ -32,7 +32,7 @@
 #include <cstdint>
 #include <limits>
 
-#include "dawn/common/Assert.h"
+#include "src/utils/assert.h"
 
 namespace dawn {
 namespace detail {
@@ -57,26 +57,16 @@ inline constexpr uint32_t u32_sizeof = detail::u32_sizeof<T>();
 template <typename T>
 inline constexpr uint32_t u32_alignof = detail::u32_alignof<T>();
 
-// Only defined for unsigned integers because that is all that is
-// needed at the time of writing.
-template <typename Dst, typename Src>
-    requires std::unsigned_integral<Src>
-inline Dst checked_cast(const Src& value) {
-    DAWN_ASSERT(value <= std::numeric_limits<Dst>::max());
-    return static_cast<Dst>(value);
-}
-
 // Returns if two inclusive integral ranges [x0, x1] and [y0, y1] have overlap.
-template <typename T>
-    requires std::integral<T>
+template <std::integral T>
 bool RangesOverlap(T x0, T x1, T y0, T y1) {
     DAWN_ASSERT(x0 <= x1 && y0 <= y1);
-        // Two ranges DON'T have overlap if and only if:
-        // 1. [x0, x1] [y0, y1], or
-        // 2. [y0, y1] [x0, x1]
-        // which is (x1 < y0 || y1 < x0)
-        // The inverse of which ends in the following statement.
-        return x0 <= y1 && y0 <= x1;
+    // Two ranges DON'T have overlap if and only if:
+    // 1. [x0, x1] [y0, y1], or
+    // 2. [y0, y1] [x0, x1]
+    // which is (x1 < y0 || y1 < x0)
+    // The inverse of which ends in the following statement.
+    return x0 <= y1 && y0 <= x1;
 }
 
 }  // namespace dawn

@@ -25,12 +25,13 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "src/tint/lang/wgsl/writer/raise/raise.h"
+
 #include <utility>
 
 #include "src/tint/lang/core/ir/transform/helper_test.h"
 #include "src/tint/lang/core/ir/validator.h"
 #include "src/tint/lang/core/type/struct.h"
-#include "src/tint/lang/wgsl/writer/raise/raise.h"
 
 namespace tint::wgsl::writer::raise {
 namespace {
@@ -40,10 +41,7 @@ using namespace tint::core::number_suffixes;  // NOLINT
 
 class WgslWriter_RaiseTest : public core::ir::transform::TransformTest {
   public:
-    WgslWriter_RaiseTest() {
-        capabilities.Add(core::ir::Capability::kAllowRefTypes);
-        capabilities.Add(core::ir::Capability::kAllowPhonyInstructions);
-    }
+    WgslWriter_RaiseTest() { mod.properties.Add(core::ir::Property::kAllowRefTypes); }
 };
 
 TEST_F(WgslWriter_RaiseTest, BuiltinConversion) {

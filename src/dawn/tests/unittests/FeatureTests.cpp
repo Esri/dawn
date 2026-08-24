@@ -27,12 +27,14 @@
 
 #include <vector>
 
-#include "dawn/native/Features.h"
-#include "dawn/native/Instance.h"
-#include "dawn/native/Toggles.h"
-#include "dawn/native/null/DeviceNull.h"
-#include "dawn/utils/WGPUHelpers.h"
 #include "gtest/gtest.h"
+#include "src/dawn/native/Features.h"
+#include "src/dawn/native/Instance.h"
+#include "src/dawn/native/Toggles.h"
+#include "src/dawn/native/null/DeviceNull.h"
+#include "src/dawn/utils/WGPUHelpers.h"
+#include "src/utils/compiler.h"
+#include "src/utils/span.h"
 
 namespace dawn {
 namespace {
@@ -45,8 +47,7 @@ class FeatureTests : public testing::Test {
               static constexpr auto kMultipleDevicesPerAdapter =
                   wgpu::InstanceFeatureName::MultipleDevicesPerAdapter;
               dawn::native::InstanceDescriptor instanceDesc = {
-                  .requiredFeatureCount = 1,
-                  .requiredFeatures = &kMultipleDevicesPerAdapter,
+                  .requiredFeatures = SpanFromRef(kMultipleDevicesPerAdapter),
               };
               return dawn::native::APICreateInstance(&instanceDesc);
           }()),
@@ -169,9 +170,8 @@ TEST_F(FeatureTests, RequireAndGetEnabledFeatures) {
                     requiredFeaturesSet.contains(wgpu::FeatureName::CoreFeaturesAndLimits);
                 // wgpu::FeatureName::CoreFeaturesAndLimits is required implicitly in core mode
                 ASSERT_EQ(requiredFeaturesSet.size() + (explicitlyRequireCore ? 0 : 1),
-                          enabledFeatures.featureCount);
-                for (uint32_t i = 0; i < enabledFeatures.featureCount; ++i) {
-                    wgpu::FeatureName enabledFeature = enabledFeatures.features[i];
+                          enabledFeatures.features.size());
+                for (wgpu::FeatureName enabledFeature : enabledFeatures.features) {
                     if (!explicitlyRequireCore &&
                         enabledFeature == wgpu::FeatureName::CoreFeaturesAndLimits) {
                         continue;

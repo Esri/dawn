@@ -30,14 +30,14 @@
 #include <string>
 #include <vector>
 
-#include "dawn/common/Constants.h"
-#include "dawn/tests/DawnTest.h"
-#include "dawn/utils/ComboRenderBundleEncoderDescriptor.h"
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/WGPUHelpers.h"
-#include "webgpu/webgpu_glfw.h"
-
 #include "GLFW/glfw3.h"
+#include "src/dawn/common/Constants.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/utils/ComboRenderBundleEncoderDescriptor.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/WGPUHelpers.h"
+#include "src/utils/compiler.h"
+#include "webgpu/webgpu_glfw.h"
 
 namespace dawn::utils {
 static constexpr std::array<wgpu::CompositeAlphaMode, 5> kAllAlphaModes = {
@@ -111,7 +111,7 @@ class SurfaceConfigurationValidationTests : public DawnTest {
 
     bool SupportsFormat(const wgpu::SurfaceCapabilities& capabilities, wgpu::TextureFormat format) {
         for (size_t i = 0; i < capabilities.formatCount; ++i) {
-            if (capabilities.formats[i] == format) {
+            if (DAWN_UNSAFE_TODO(capabilities.formats[i]) == format) {
                 return true;
             }
         }
@@ -125,7 +125,7 @@ class SurfaceConfigurationValidationTests : public DawnTest {
         }
 
         for (size_t i = 0; i < capabilities.alphaModeCount; ++i) {
-            if (capabilities.alphaModes[i] == mode) {
+            if (DAWN_UNSAFE_TODO(capabilities.alphaModes[i]) == mode) {
                 return true;
             }
         }
@@ -135,7 +135,7 @@ class SurfaceConfigurationValidationTests : public DawnTest {
     bool SupportsPresentMode(const wgpu::SurfaceCapabilities& capabilities,
                              wgpu::PresentMode mode) {
         for (size_t i = 0; i < capabilities.presentModeCount; ++i) {
-            if (capabilities.presentModes[i] == mode) {
+            if (DAWN_UNSAFE_TODO(capabilities.presentModes[i]) == mode) {
                 return true;
             }
         }
@@ -176,7 +176,7 @@ TEST_P(SurfaceConfigurationValidationTests, AlphaModeAuto) {
 
     // Auto is never reported.
     for (size_t i = 0; i < capabilities.alphaModeCount; ++i) {
-        ASSERT_NE(capabilities.alphaModes[i], wgpu::CompositeAlphaMode::Auto);
+        DAWN_UNSAFE_TODO(ASSERT_NE(capabilities.alphaModes[i], wgpu::CompositeAlphaMode::Auto));
     }
 
     // But always supported.
@@ -324,9 +324,9 @@ TEST_P(SurfaceConfigurationValidationTests, StorageRequiresCapableFormat) {
     for (uint32_t i = 0; i < caps.formatCount; i++) {
         wgpu::SurfaceConfiguration config = GetPreferredConfiguration(surface);
         config.usage = wgpu::TextureUsage::StorageBinding;
-        config.format = caps.formats[i];
+        config.format = DAWN_UNSAFE_TODO(caps.formats[i]);
 
-        if (utils::TextureFormatSupportsStorageTexture(config.format, device, false)) {
+        if (utils::TextureFormatSupportsStorageTexture(device, config.format)) {
             surface.Configure(&config);
         } else {
             ASSERT_DEVICE_ERROR_MSG(surface.Configure(&config),

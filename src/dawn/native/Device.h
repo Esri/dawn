@@ -28,46 +28,50 @@
 #ifndef SRC_DAWN_NATIVE_DEVICE_H_
 #define SRC_DAWN_NATIVE_DEVICE_H_
 
-#include <shared_mutex>
-
 #include <atomic>
 #include <memory>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
-#include "dawn/common/ContentLessObjectCache.h"
-#include "dawn/common/Defer.h"
-#include "dawn/common/Mutex.h"
-#include "dawn/common/NonMovable.h"
-#include "dawn/common/RefCountedWithExternalCount.h"
-#include "dawn/common/StackAllocated.h"
-#include "dawn/common/ThreadLocal.h"
-#include "dawn/native/AsyncTask.h"
-#include "dawn/native/CacheKey.h"
-#include "dawn/native/Commands.h"
-#include "dawn/native/ComputePipeline.h"
-#include "dawn/native/CreatePipelineAsyncEvent.h"
-#include "dawn/native/DeviceGuard.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/ErrorSink.h"
-#include "dawn/native/ExecutionQueue.h"
-#include "dawn/native/Features.h"
-#include "dawn/native/Format.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/Limits.h"
-#include "dawn/native/LogEmitter.h"
-#include "dawn/native/ObjectBase.h"
+#include "dawn/native/DawnNative.h"
 #include "dawn/native/ObjectType_autogen.h"
-#include "dawn/native/Toggles.h"
-#include "dawn/native/UsageValidationMode.h"
 #include "partition_alloc/pointers/raw_ptr.h"
 #include "partition_alloc/pointers/raw_ptr_exclusion.h"
+#include "src/dawn/common/ContentLessObjectCache.h"
+#include "src/dawn/common/Defer.h"
+#include "src/dawn/common/Mutex.h"
+#include "src/dawn/common/MutexProtected.h"
+#include "src/dawn/common/RefCountedWithExternalCount.h"
+#include "src/dawn/common/StackAllocated.h"
+#include "src/dawn/common/ThreadLocal.h"
+#include "src/dawn/common/WGPUDeviceCallbackInfos.h"
+#include "src/dawn/native/AsyncTask.h"
+#include "src/dawn/native/CacheKey.h"
+#include "src/dawn/native/Commands.h"
+#include "src/dawn/native/ComputePipeline.h"
+#include "src/dawn/native/CreatePipelineAsyncEvent.h"
+#include "src/dawn/native/DeviceGuard.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/ErrorSink.h"
+#include "src/dawn/native/ExecutionQueue.h"
+#include "src/dawn/native/Features.h"
+#include "src/dawn/native/Format.h"
+#include "src/dawn/native/Forward.h"
+#include "src/dawn/native/Limits.h"
+#include "src/dawn/native/LogEmitter.h"
+#include "src/dawn/native/ObjectBase.h"
+#include "src/dawn/native/Toggles.h"
+#include "src/dawn/native/UsageValidationMode.h"
+#include "src/dawn/native/dawn_platform.h"
+#include "src/utils/non_movable.h"
 
-#include "dawn/native/DawnNative.h"
-#include "dawn/native/dawn_platform.h"
+namespace dawn {
+class MemoryBlockAllocator;
+}  // namespace dawn
 
 namespace dawn::platform {
 class WorkerTaskPool;
@@ -89,6 +93,11 @@ class SharedTextureMemoryBase;
 struct CallbackTask;
 struct InternalPipelineStore;
 struct ShaderModuleParseResult;
+
+enum class ValidationMode {
+    Validate,
+    Skip,
+};
 
 class DeviceBase : public ErrorSink,
                    public RefCountedWithExternalCount<RefCounted>,
@@ -112,12 +121,12 @@ class DeviceBase : public ErrorSink,
 
         void Complete(EventCompletionType completionType) override;
 
-        wgpu::DeviceLostReason mReason;
-        std::string mMessage;
+        wgpu::DeviceLostReason mReason = wgpu::DeviceLostReason::Unknown;
+        std::string mMessage = "";
 
         WGPUDeviceLostCallback mCallback = nullptr;
-        raw_ptr<void> mUserdata1;
-        raw_ptr<void> mUserdata2;
+        raw_ptr<void> mUserdata1 = nullptr;
+        raw_ptr<void> mUserdata2 = nullptr;
     };
 
     DeviceBase(AdapterBase* adapter,
@@ -153,10 +162,11 @@ class DeviceBase : public ErrorSink,
     ResultOrError<const Format*> GetInternalFormat(wgpu::TextureFormat format) const;
 
     // Returns the Format corresponding to the wgpu::TextureFormat and assumes the format is
-    // valid and supported.
+    // valid (such that the FormatTable contains an entry for it).
     // The reference returned has the same lifetime as the device.
     const Format& GetValidInternalFormat(wgpu::TextureFormat format) const;
     const Format& GetValidInternalFormat(FormatIndex formatIndex) const;
+
     // Get compatible view formats. The returned span contains all compatible formats not equal to
     // `format`.
     std::vector<const Format*> GetCompatibleViewFormats(const Format& format) const;
@@ -187,8 +197,9 @@ class DeviceBase : public ErrorSink,
         const UnpackedPtr<BindGroupLayoutDescriptor>& descriptor,
         PipelineCompatibilityToken pipelineCompatibilityToken = kExplicitPCT);
 
-    BindGroupLayoutBase* GetEmptyBindGroupLayout();
-    PipelineLayoutBase* GetEmptyPipelineLayout();
+    BindGroupLayoutBase* GetEmptyBindGroupLayout() const;
+    PipelineLayoutBase* GetEmptyPipelineLayout() const;
+    SamplerBase* GetPlaceholderSampler() const;
 
     ResultOrError<Ref<TextureViewBase>> GetOrCreatePlaceholderTextureViewForExternalTexture();
 
@@ -199,7 +210,7 @@ class DeviceBase : public ErrorSink,
 
     Ref<AttachmentState> GetOrCreateAttachmentState(AttachmentState* blueprint);
     Ref<AttachmentState> GetOrCreateAttachmentState(
-        const RenderBundleEncoderDescriptor* descriptor);
+        const UnpackedPtr<RenderBundleEncoderDescriptor>& descriptor);
     Ref<AttachmentState> GetOrCreateAttachmentState(
         const UnpackedPtr<RenderPipelineDescriptor>& descriptor,
         const PipelineLayoutBase* layout);
@@ -236,7 +247,9 @@ class DeviceBase : public ErrorSink,
         bool allowInternalBinding = false);
     ResultOrError<Ref<ResourceTableBase>> CreateResourceTable(
         const ResourceTableDescriptor* descriptor);
-    ResultOrError<Ref<SamplerBase>> CreateSampler(const SamplerDescriptor* descriptor = nullptr);
+    ResultOrError<Ref<SamplerBase>> CreateSampler(
+        const SamplerDescriptor* descriptor = nullptr,
+        ValidationMode validate = ValidationMode::Validate);
     ResultOrError<Ref<ShaderModuleBase>> CreateShaderModule(
         const ShaderModuleDescriptor* descriptor,
         const std::vector<tint::wgsl::Extension>& internalExtensions = {});
@@ -282,11 +295,13 @@ class DeviceBase : public ErrorSink,
     TextureBase* APICreateTexture(const TextureDescriptor* descriptor);
 
     InternalPipelineStore* GetInternalPipelineStore();
-    ResourceTableDefaultResources* GetResourceTableDefaultResources();
+    ResultOrError<ResourceTableDefaultResources*> GetOrCreateResourceTableDefaultsResource();
 
     // For Dawn Wire
     BufferBase* APICreateErrorBuffer(const BufferDescriptor* desc);
+    ComputePipelineBase* APICreateErrorComputePipeline(StringView label);
     ExternalTextureBase* APICreateErrorExternalTexture();
+    RenderPipelineBase* APICreateErrorRenderPipeline(StringView label);
     TextureBase* APICreateErrorTexture(const TextureDescriptor* desc);
 
     AdapterBase* APIGetAdapter();
@@ -299,7 +314,7 @@ class DeviceBase : public ErrorSink,
     void APIGetFeatures(wgpu::SupportedFeatures* features) const;
     void APIGetFeatures(SupportedFeatures* features) const;
     wgpu::Status APIGetAdapterInfo(AdapterInfo* adapterInfo) const;
-    Future APIGetLostFuture() const;
+    Future APIGetLostFuture();
     void APIInjectError(wgpu::ErrorType type, StringView message);
     bool APITick();
     void APIValidateTextureDescriptor(const TextureDescriptor* desc);
@@ -319,12 +334,15 @@ class DeviceBase : public ErrorSink,
                                                BufferBase* destination,
                                                uint64_t destinationOffset,
                                                uint64_t size) = 0;
+    // TODO(https://issues.chromium.org/424536624): Use BlockExtent3D instead of Extent3D.
     MaybeError CopyFromStagingToTexture(BufferBase* source,
                                         const TexelCopyBufferLayout& src,
                                         const TextureCopy& dst,
                                         const Extent3D& copySizePixels);
 
     DynamicUploader* GetDynamicUploader() const;
+
+    MemoryBlockAllocator* GetMemoryBlockAllocator();
 
     // The device state which is a combination of creation state and loss state.
     //
@@ -334,7 +352,7 @@ class DeviceBase : public ErrorSink,
     //   - Alive: the device is usable and might have work happening on the GPU timeline.
     //   - BeingDisconnected: the device is no longer usable because we are waiting for all
     //     work on the GPU timeline to finish. (this is to make validation prevent the
-    //     application from adding more work during the transition from Available to
+    //     application from adding more work during the transition from Alive to
     //     Disconnected)
     //   - Disconnected: there is no longer work happening on the GPU timeline and the CPU data
     //     structures can be safely destroyed without additional synchronization.
@@ -382,6 +400,7 @@ class DeviceBase : public ErrorSink,
     virtual uint64_t GetBufferCopyOffsetAlignmentForDepthStencil() const;
 
     virtual float GetTimestampPeriodInNS() const = 0;
+    virtual bool AreTimestampsQuantized() const;
 
     virtual bool ShouldDuplicateNumWorkgroupsForDispatchIndirect(
         ComputePipelineBase* computePipeline) const;
@@ -413,8 +432,14 @@ class DeviceBase : public ErrorSink,
                                                               wgpu::BufferUsage originalUsage,
                                                               size_t bufferSize) const;
 
+    // Whether the backend needs to use static samplers to support YCbCr ExternalTextures.
+    virtual bool NeedsStaticSamplerForExternalTexture() const;
+
     // Whether the backend needs to validate the indirect buffer on GPU.
     virtual bool NeedsIndirectGPUValidation() const;
+
+    // Whether the GPU is known to be a tile-based (deferred) renderer, based on vendor/device ID.
+    bool IsTileBasedRenderer() const;
 
     bool HasFeature(Feature feature) const;
 
@@ -477,15 +502,7 @@ class DeviceBase : public ErrorSink,
 
     tint::InternalCompilerErrorCallbackInfo GetTintInternalCompilerErrorCallback();
 
-    // During adapter's creation of devices, if device initialization fails, adapter will trigger
-    // the device lost event. After that, adapter should reset the lost event to avoid double
-    // triggering it when the device object get destructed.
-    void ResetLostEvent();
-
   protected:
-    // Constructor used only for mocking and testing.
-    DeviceBase();
-
     void ForceEnableFeatureForTesting(Feature feature);
 
     MaybeError Initialize(const UnpackedPtr<DeviceDescriptor>& descriptor,
@@ -498,12 +515,6 @@ class DeviceBase : public ErrorSink,
         AHardwareBufferProperties* properties) const {
         DAWN_UNREACHABLE();
     }
-
-    // Device lost event needs to be protected for now because mock device needs it.
-    // TODO(dawn:1702) Make this private and move the class in the implementation file when we mock
-    // the adapter.
-    Ref<DeviceLostEvent> mLostEvent = nullptr;
-    Future mLostFuture = {kNullFutureID};
 
     // Returns a pair of a filename and a boolean indicating whether to start tracing
     // and if so, what filename to save the trace under.
@@ -620,18 +631,18 @@ class DeviceBase : public ErrorSink,
                                                     const TextureCopy& dst,
                                                     const Extent3D& copySizePixels) = 0;
 
-    WGPUUncapturedErrorCallbackInfo mUncapturedErrorCallbackInfo =
-        WGPU_UNCAPTURED_ERROR_CALLBACK_INFO_INIT;
+    Ref<DeviceLostEvent> mLostEvent = nullptr;
+    Future mLostFuture = {kNullFutureID};
 
-    std::shared_mutex mLoggingMutex;
-    WGPULoggingCallbackInfo mLoggingCallbackInfo = WGPU_LOGGING_CALLBACK_INFO_INIT;
+    WGPUDeviceCallbackInfos mCallbackInfos;
 
     // Error scopes need to be thread local, but also need to be cleaned up when the device is
     // destroyed. To do this, we can't use thread_local natively because we wouldn't have a way to
     // clean up stacks on threads aside from the thread that dropped the last reference. By using a
     // unique ThreadUniqueId here, and tracking the stacks as a member, we can reclaim all memory
     // when the Device is destroyed.
-    absl::flat_hash_map<ThreadUniqueId, std::unique_ptr<ErrorScopeStack>> mErrorScopeStacks;
+    MutexProtected<absl::flat_hash_map<ThreadUniqueId, std::unique_ptr<ErrorScopeStack>>>
+        mErrorScopeStacks;
 
     Ref<AdapterBase> mAdapter;
 
@@ -642,10 +653,12 @@ class DeviceBase : public ErrorSink,
 
     Ref<BindGroupLayoutBase> mEmptyBindGroupLayout;
     Ref<PipelineLayoutBase> mEmptyPipelineLayout;
+    Ref<SamplerBase> mPlaceholderSampler;
 
     Ref<TextureViewBase> mExternalTexturePlaceholderView;
 
     std::unique_ptr<DynamicUploader> mDynamicUploader;
+    std::unique_ptr<MemoryBlockAllocator> mMemoryBlockAllocator;
     Ref<QueueBase> mQueue;
 
     std::atomic<uint32_t> mEmittedCompilationLogCount = 0;
@@ -682,8 +695,9 @@ class DeviceBase : public ErrorSink,
     std::string mIsolatedEntryPointName;
     std::unique_ptr<BlobCache> mBlobCache;
 
-    // We cache this toggle so that we can check it without locking the device.
+    // We cache these toggles so that we can check them without locking the device.
     bool mIsImmediateErrorHandlingEnabled = false;
+    std::atomic<bool> mIsValidationEnabled{true};
 
     // This pointer is non-null if Feature::ImplicitDeviceSynchronization is turned on. Note that
     // this is a currently a recursive lock, but should only really be used recursively for error
@@ -709,8 +723,8 @@ class IgnoreLazyClearCountScope : public NonMovable, public StackAllocated {
     ~IgnoreLazyClearCountScope();
 
   private:
-    raw_ptr<DeviceBase> mDevice;
-    size_t mLazyClearCountForTesting;
+    raw_ptr<DeviceBase> mDevice = nullptr;
+    size_t mLazyClearCountForTesting = 0;
 };
 
 }  // namespace dawn::native

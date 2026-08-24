@@ -11,13 +11,13 @@ int i() {
 
 float4x2 v(uint start_byte_offset) {
   uint4 v_1 = a[(start_byte_offset / 16u)];
-  float2 v_2 = asfloat((((((start_byte_offset & 15u) >> 2u) == 2u)) ? (v_1.zw) : (v_1.xy)));
-  uint4 v_3 = a[((8u + start_byte_offset) / 16u)];
-  float2 v_4 = asfloat(((((((8u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_3.zw) : (v_3.xy)));
-  uint4 v_5 = a[((16u + start_byte_offset) / 16u)];
-  float2 v_6 = asfloat(((((((16u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_5.zw) : (v_5.xy)));
-  uint4 v_7 = a[((24u + start_byte_offset) / 16u)];
-  return float4x2(v_2, v_4, v_6, asfloat(((((((24u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_7.zw) : (v_7.xy))));
+  uint v_2 = (8u + start_byte_offset);
+  uint4 v_3 = a[(v_2 / 16u)];
+  uint v_4 = (16u + start_byte_offset);
+  uint4 v_5 = a[(v_4 / 16u)];
+  uint v_6 = (24u + start_byte_offset);
+  uint4 v_7 = a[(v_6 / 16u)];
+  return float4x2(asfloat(select((((start_byte_offset & 15u) >> 2u) == 2u), v_1.zw, v_1.xy)), asfloat(select((((v_2 & 15u) >> 2u) == 2u), v_3.zw, v_3.xy)), asfloat(select((((v_4 & 15u) >> 2u) == 2u), v_5.zw, v_5.xy)), asfloat(select((((v_6 & 15u) >> 2u) == 2u), v_7.zw, v_7.xy)));
 }
 
 typedef float4x2 ary_ret[4];
@@ -35,7 +35,6 @@ ary_ret v_8(uint start_byte_offset) {
       {
         v_9 = (v_10 + 1u);
       }
-      continue;
     }
   }
   float4x2 v_11[4] = a_1;
@@ -48,8 +47,10 @@ void f() {
   uint v_13 = (min(uint(i()), 3u) * 8u);
   float4x2 l_a[4] = v_8(0u);
   float4x2 l_a_i = v(v_12);
-  uint4 v_14 = a[((v_12 + v_13) / 16u)];
-  float2 l_a_i_i = asfloat(((((((v_12 + v_13) & 15u) >> 2u) == 2u)) ? (v_14.zw) : (v_14.xy)));
-  s.Store(0u, asuint((((asfloat(a[((v_12 + v_13) / 16u)][(((v_12 + v_13) & 15u) >> 2u)]) + l_a[0u][0u].x) + l_a_i[0u].x) + l_a_i_i.x)));
+  uint v_14 = (v_12 + v_13);
+  uint4 v_15 = a[(v_14 / 16u)];
+  float2 l_a_i_i = asfloat(select((((v_14 & 15u) >> 2u) == 2u), v_15.zw, v_15.xy));
+  uint v_16 = (v_12 + v_13);
+  s.Store(0u, asuint((((asfloat(a[(v_16 / 16u)][((v_16 & 15u) >> 2u)]) + l_a[0u][0u].x) + l_a_i[0u].x) + l_a_i_i.x)));
 }
 

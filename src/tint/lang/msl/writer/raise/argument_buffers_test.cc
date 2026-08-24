@@ -41,8 +41,8 @@ using namespace tint::core::number_suffixes;  // NOLINT
 class MslWriter_ArgumentBuffersTest : public core::ir::transform::TransformTest {
   public:
     void SetUp() override {
-        capabilities.Add(core::ir::Capability::kMslAllowEntryPointInterface,
-                         core::ir::Capability::kAllowAnyLetType);
+        mod.properties.Add(core::ir::Property::kAllowAnyLetType);
+        mod.properties.Add(core::ir::Property::kAllowMslEntryPointInterface);
     }
 };
 
@@ -1774,7 +1774,6 @@ tint_arg_buffer_struct_1 = struct @align(1), @core.explicit_layout {
 
     ArgumentBufferInfo info{
         .id = 2,
-        .binding_info_to_offset_index = {{2, 3}},
     };
 
     ArgumentBuffersConfig cfg{};
