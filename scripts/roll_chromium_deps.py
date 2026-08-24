@@ -36,6 +36,8 @@ import argparse
 import base64
 import dataclasses
 import datetime
+import functools
+import itertools
 import logging
 import pathlib
 import posixpath
@@ -43,12 +45,28 @@ import re
 import shlex
 import subprocess
 import sys
+import urllib.parse
 from typing import Any, Self, Type
 
 import requests
 
+# depot_tools is DEPSed in at //third_party/depot_tools.
+_DEPOT_TOOLS_DIR = (pathlib.Path(__file__).resolve().parents[1] /
+                    'third_party' / 'depot_tools')
+if _DEPOT_TOOLS_DIR.exists():
+    _DEPOT_TOOLS_DIR_STR = str(_DEPOT_TOOLS_DIR)
+    if _DEPOT_TOOLS_DIR_STR not in sys.path:
+        sys.path.insert(0, _DEPOT_TOOLS_DIR_STR)
+else:
+    logging.warning('depot_tools not found at %s, gerrit_util import may fail',
+                    _DEPOT_TOOLS_DIR)
+
+import gerrit_util  # pylint: disable=import-error
+
 DAWN_ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEPS_FILE = DAWN_ROOT / 'DEPS'
+INFRA_PATH = DAWN_ROOT / 'infra' / 'config' / 'global'
+PACKAGE_STAR = INFRA_PATH / 'PACKAGE.star'
 
 CHROMIUM_GOB_URL = 'https://chromium.googlesource.com'
 CHROMIUM_SRC_URL = posixpath.join(CHROMIUM_GOB_URL, 'chromium', 'src')
@@ -56,22 +74,14 @@ CHROMIUM_REVISION_VAR = 'chromium_revision'
 
 DEFAULT_REVISION_CHARACTERS = 10
 
-# Used to extract/replace the git revision for the chromium-luci entry in a
-# PACKAGE.star file.
-CHROMIUM_LUCI_REVISION_PATTERN = re.compile(
-    #   Group 1: Context prefix to ensure that we're matching the chromium-luci
-    #   entry.
-    r'(name\s*=\s*"@chromium-luci".*?revision\s*=\s*")'
-    #   Group 2: The hexadecimal revision to extract/replace.
-    r'([a-fA-F0-9]+)'
-    #   Positive lookahead: Asserts that a " follows, but does not match/consume
-    #   it.
-    r'(?=")',
-    re.DOTALL)
-
 # GN variables that need to be synced. A map from Dawn variable name to
-# Chromium variable name.
-SYNCED_VARIABLES = {}
+# Chromium variable name (if different).
+SYNCED_VARIABLES = {
+    # For Android builds in standalone.
+    # TODO(crbug.com/528413044): Replace this with a SYNCED_CIPD_DEPS entry on
+    # 'third_party/android_toolchain/ndk' instead to implicitly update this var.
+    'android_ndk_version': None,
+}
 
 # DEPS entries which have dep_type = cipd. In the Chromium DEPS file, these
 # will be prefixed with src/.
@@ -82,6 +92,12 @@ SYNCED_CIPD_DEPS = {
     'buildtools/win',
     'third_party/ninja',
     'third_party/siso/cipd',
+
+    # For Android builds in standalone.
+    'third_party/android_sdk/public',
+    'third_party/jdk/current',
+    'third_party/android_build_tools/aapt2/cipd',
+    'third_party/android_build_tools/manifest_merger/cipd',
 }
 
 # DEPS entries which have dep_type = gcs. In the Chromium DEPS file, these will
@@ -93,6 +109,13 @@ SYNCED_GCS_DEPS = {
     'build/linux/debian_bullseye_mipsel-sysroot',
     'build/linux/debian_bullseye_mips64el-sysroot',
     'build/linux/debian_bullseye_amd64-sysroot',
+}
+
+# Files that are copied from Chromium directly. A map from Dawn file path to
+# Chromium file path (if different).
+SYNCED_TEXT_FILES = {
+    'third_party/cpu_features/BUILD.gn': None,
+    'third_party/jdk/BUILD.gn': None,
 }
 
 # Repos that are independently synced by Chromium and Dawn. A map from Dawn
@@ -117,34 +140,40 @@ SYNCED_REPOS = {
     'third_party/catapult': None,
     'third_party/clang-format/script': None,
     'third_party/depot_tools': None,
-    # third_party/dxheaders is technically used by both Chromium and Dawn, but
-    # for different purposes and on non-overlapping platforms. Thus, there is
-    # no need to sync their revisions.
+    # third_party/directx-headers/src is technically used by both Chromium and
+    # Dawn, but for different purposes and on non-overlapping platforms. Thus,
+    # there is no need to sync their revisions.
     'third_party/google_benchmark/src': None,
-    'third_party/googletest': 'third_party/googletest/src',
-    'third_party/jsoncpp': 'third_party/jsoncpp/source',
+    'third_party/googletest/src': 'third_party/googletest/src',
     'third_party/libc++/src': None,
     'third_party/libc++abi/src': None,
     'third_party/libprotobuf-mutator/src': None,
     'third_party/llvm-libc/src': None,
     'third_party/libdrm/src': None,
     'third_party/libFuzzer/src': None,
+    'third_party/perfetto': None,
     # third_party/vulkan_memory_allocator is shared with Chromium, but is
     # manually rolled since it typically requires additional code changes in
     # the repo.
     # third_party/webgpu-cts is technically used by both Chromium and Dawn, but
     # they are used for different purposes and the CTS roller needs to roll
     # Dawn's copy in order to update expectations.
+
+    # For Android builds in standalone.
+    'third_party/cpu_features/src': None,
+    'third_party/libunwind/src': None,
 }
 
 # Chromium directories that are exported as pseudo-repos in
 # chromium.googlesource.com under chromium/src/. Mapping of Dawn path to
 # Chromium src-relative path. None means that the names are identical.
+# NOTE: These are always rolled to top-of-tree - they ignore --revision.
 EXPORTED_CHROMIUM_REPOS = {
     'build': None,
     'buildtools': None,
     'testing': None,
     'third_party/abseil-cpp': None,
+    'third_party/chromium-tools-build/src': '../tools/build',
     'third_party/jinja2': None,
     'third_party/markupsafe': None,
     'third_party/partition_alloc': 'base/allocator/partition_allocator',
@@ -156,6 +185,11 @@ EXPORTED_CHROMIUM_REPOS = {
     'tools/protoc_wrapper': None,
     'tools/valgrind': None,
     'tools/win': None,
+
+    # For Android builds in standalone.
+    'third_party/android_build_tools': None,
+    'third_party/android_sdk': None,
+    'third_party/ijar': None,
 }
 
 
@@ -271,7 +305,9 @@ class ChangedCipd(ChangedDepsEntry):
         revisions = [
             f'{self.name}:{p.setdep_str()}' for p in self.new_packages
         ]
-        return ['--revision'] + revisions
+        return list(
+            itertools.chain.from_iterable(
+                ('--revision', r) for r in revisions))
 
     def commit_message_lines(self) -> list[str]:
         return [
@@ -329,6 +365,89 @@ class ChangedGcs(ChangedDepsEntry):
         return [
             f'  {self.name}',
         ]
+
+
+class GerritUtilHttpConnAdapter:
+    """Adapter to extract auth headers from gerrit_util."""
+
+    def __init__(self, host: str, uri: str):
+        # Convert Gitiles host into Gerrit host
+        if "review" not in host:
+            subdomain, domain = host.split(".", 1)
+            host = f"{subdomain}-review.{domain}"
+        self.req_host = host
+        self.req_uri = uri
+        self.req_headers = {}
+        self.proxy_info = None
+
+    def has_header(self, header: str) -> bool:
+        return header in self.req_headers
+
+    def get_full_url(self) -> str:
+        return self.req_uri
+
+    def get_header(self, header: str, default: str = None) -> str:
+        return self.req_headers.get(header, default)
+
+    def add_unredirected_header(self, header: str, value: str):
+        self.req_headers[header] = value
+
+    @property
+    def unverifiable(self) -> bool:
+        return False
+
+    @property
+    def origin_req_host(self) -> str:
+        return self.req_host
+
+    @property
+    def type(self) -> str:
+        return urllib.parse.urlparse(self.req_uri).scheme
+
+    @property
+    def host(self) -> str:
+        return self.req_host
+
+
+@functools.cache
+def _get_gitiles_session(host: str) -> requests.Session:
+    """Creates and configures an authenticated requests.Session for Gitiles.
+
+    Args:
+        host: The Gitiles hostname (e.g. 'chromium.googlesource.com').
+
+    Returns:
+        A requests.Session configured with authentication headers and proxy.
+    """
+
+    session = requests.Session()
+    gerrit_adapter = GerritUtilHttpConnAdapter(host, f'https://{host}/a/')
+
+    try:
+        # pylint: disable=protected-access
+        authenticator = gerrit_util._Authenticator.get()
+        # pylint: enable=protected-access
+        authenticator.authenticate(gerrit_adapter)
+    except Exception as e:
+        raise RuntimeError(f'Failed to authenticate for {host}: {e}') from e
+
+    session.headers.update(gerrit_adapter.req_headers)
+
+    # Apply proxy if set for SSO.
+    if gerrit_adapter.proxy_info:
+        proxy_host = gerrit_adapter.proxy_info.proxy_host
+        if isinstance(proxy_host, bytes):
+            proxy_host = proxy_host.decode('utf-8')
+        proxy_url = f'http://{proxy_host}:{gerrit_adapter.proxy_info.proxy_port}'
+        session.proxies = {
+            'http': proxy_url,
+            'https': proxy_url,
+        }
+        logging.debug('Using SSO proxy: %s', proxy_url)
+
+    # Store the base URL (potentially rewritten by SSO).
+    session.gitiles_base_url = gerrit_adapter.req_uri.rstrip('/')
+    return session
 
 
 def _parse_deps_file(deps_content: str) -> dict[str, Any]:
@@ -454,8 +573,11 @@ def _get_remote_head_revision(remote_url: str) -> str:
     cmd = [
         'git',
         'ls-remote',
+        '--branches',
         remote_url,
-        'HEAD',
+        # main and HEAD should be equivalent in this case and main allows usage
+        # of --branches, which significantly speeds this up.
+        'main',
     ]
     proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
     head_revision = proc.stdout.strip().split()[0]
@@ -494,8 +616,19 @@ def _read_gitiles_content(file_url: str) -> str:
     Returns:
         The string content of the specified file.
     """
-    file_url = file_url + '?format=TEXT'
-    r = requests.get(file_url)
+    parsed = urllib.parse.urlparse(file_url)
+    session = _get_gitiles_session(parsed.netloc)
+
+    path = parsed.path
+    if path.startswith('/a/'):
+        path = path[2:]
+
+    query = 'format=TEXT'
+    if parsed.query:
+        query = f'{parsed.query}&{query}'
+
+    auth_url = f'{session.gitiles_base_url}{path}?{query}'
+    r = session.get(auth_url)
     r.raise_for_status()
     return base64.b64decode(r.text).decode('utf-8')
 
@@ -549,6 +682,7 @@ def _get_changed_variables(dawn_deps: dict,
     """
     changed_variables = []
     for dawn_var, chromium_var in SYNCED_VARIABLES.items():
+        chromium_var = chromium_var or dawn_var
         dawn_value = dawn_deps['vars'].get(dawn_var)
         chromium_value = chromium_deps['vars'].get(chromium_var)
         if not dawn_value:
@@ -845,10 +979,6 @@ def _generate_command_section() -> list[str]:
     script = script.relative_to(DAWN_ROOT)
     relative_command = [str(script)] + sys.argv[1:]
     command_lines.append(f'  {shlex.join(relative_command)}')
-    command_lines.extend([
-        'Test specs were then regenerated by syncing and running:',
-        '  infra/specs/generate_test_spec_json.py',
-    ])
     return command_lines
 
 
@@ -975,80 +1105,174 @@ def _apply_changed_deps(changed_entries: list[ChangedDepsEntry]) -> None:
     subprocess.run(cmd, check=True)
 
 
-def _sync_chromium_luci_revision(chromium_revision: str) -> ChangedRepo:
-    """Syncs the chromium-luci revision used by //infra/config.
+def _sync_starlark_packages(chromium_revision: str) -> list[ChangedRepo]:
+    """Syncs Starlark packages shared with Chromium.
+
+    These are used by //infra/config and stored in
+    //infra/config/global/PACKAGE.star.
+
+    Note: The returned entries are technically not DEPS entries (ChangedRepo
+    inherits from ChangedDepsEntry), but they similar enough that they can
+    treated as such as long as the returned ChangedRepos are not actually
+    applied to the DEPS file.
 
     Args:
-        chromium_revision: The Chromium revision to read the chromium-luci revision at.
+        chromium_revision: The Chromium revision to sync Starlark packages to.
 
     Returns:
-        A ChangedRepo specifying the old and new chromium-luci revisions.
+        A list of ChangedRepo specifying the old and new revisions for Starlark
+        packages.
     """
-    infra_path = DAWN_ROOT / 'infra' / 'config' / 'global'
-    dawn_package = infra_path / 'PACKAGE.star'
-    with open(dawn_package, encoding='utf-8') as infile:
-        dawn_package_contents = infile.read()
-
-    old_revision = _extract_chromium_luci_revision(dawn_package_contents)
-    if not old_revision:
-        raise RuntimeError(
-            "Unable to extract chromium-luci revision from Dawn's "
-            '//infra/config/global/PACKAGE.star')
-
     chromium_package_contents = _read_remote_chromium_file(
         'infra/config/PACKAGE.star', chromium_revision)
-    new_revision = _extract_chromium_luci_revision(chromium_package_contents)
-    if not new_revision:
-        raise RuntimeError(
-            "Unable to extract chromium-luci revision from Chromium's "
-            '//infra/config/PACKAGE.star')
+    chromium_luci_package = '@chromium-luci'
+    new_chromium_luci_revision = _extract_starlark_package_revision(
+        chromium_luci_package, chromium_package_contents)
 
-    # Replace the match with Group 1 (matched content before the revision) and
-    # the new revision itself.
-    dawn_package_contents = CHROMIUM_LUCI_REVISION_PATTERN.sub(
-        rf'\g<1>{new_revision}', dawn_package_contents)
-    with open(dawn_package, 'w', encoding='utf-8') as outfile:
+    with open(PACKAGE_STAR, encoding='utf-8') as infile:
+        dawn_package_contents = infile.read()
+    dawn_package_contents, old_chromium_luci_revision = (
+        _exchange_starlark_package_revision(chromium_luci_package,
+                                            dawn_package_contents,
+                                            new_chromium_luci_revision))
+    dawn_package_contents, old_chromium_targets_revision = (
+        _exchange_starlark_package_revision('@chromium-targets',
+                                            dawn_package_contents,
+                                            chromium_revision))
+    with open(PACKAGE_STAR, 'w', encoding='utf-8') as outfile:
         outfile.write(dawn_package_contents)
 
-    # We are able to generate files now unlike with
-    # infra/specs/generate_test_spec_json.py because this does not require a
-    # `gclient sync` to pull in updated dependencies.
+    # Automatically stage any changes to be consistent with DEPS modifications.
+    _run_lucicfg_and_stage_changes()
+
+    changed_packages = [
+        ChangedRepo(name='chromium-luci (Starlark)',
+                    url=posixpath.join(CHROMIUM_GOB_URL, 'infra', 'chromium'),
+                    old_revision=old_chromium_luci_revision,
+                    new_revision=new_chromium_luci_revision),
+        # The chromium-targets package is not reported since the revision is
+        # identical to Chromium's revision, which is already reported.
+    ]
+
+    # Only report actual changes so that unchanged packages are omitted from the
+    # CL description.
+    return [p for p in changed_packages if p.old_revision != p.new_revision]
+
+
+def _run_lucicfg_and_stage_changes() -> None:
+    """Runs lucicfg on Dawn's Starlark files and stages any changes."""
     subprocess.check_call(
         ['lucicfg', 'generate',
-         str(infra_path / 'main.star')],
+         str(INFRA_PATH / 'main.star')],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL)
 
-    # Automatically add any changed files to be consistent with DEPS
-    # modifications.
-    subprocess.check_call(['git', 'add', str(infra_path)],
+    subprocess.check_call(['git', 'add', str(INFRA_PATH)],
                           stdout=subprocess.DEVNULL,
                           stderr=subprocess.DEVNULL)
 
-    # This is technically not a DEPS entry (ChangedRepo inherits from
-    # ChangedDepsEntry), but it's similar enough that it can treated as such.
-    return ChangedRepo(name='chromium-luci (Starlark)',
-                       url=posixpath.join(CHROMIUM_GOB_URL, 'infra',
-                                          'chromium'),
-                       old_revision=old_revision,
-                       new_revision=new_revision)
 
-
-def _extract_chromium_luci_revision(package_star_contents: str) -> str | None:
-    """Extracts the revision for chromium-luci from a PACKAGE.star file.
+def _exchange_starlark_package_revision(package_name: str,
+                                        package_star_contents: str,
+                                        new_revision: str) -> tuple[str, str]:
+    """Exchanges the revision for a Starlark package.
 
     Args:
-        package_star_contents: A string containing the contents of a
-            PACKAGE.star file.
+        package_name: The Starlark package name to exchange the revision for,
+            including the leading @.
+        package_star_contents: The contents of a PACKAGE.star file to modify.
+        new_revision: The new revision to put in the file contents.
 
     Returns:
-        The git revision for the chromium-luci entry, or None if it could not
-        be extracted.
+        A tuple (exchanged_contents, old_revision). |exchanged_contents| is a
+        copy of |package_star_contents| with the revision for |package_name|
+        replaced with |new_revision|. |old_revision| is the revision for
+        |package_name| that was present before the exchange.
     """
-    match = CHROMIUM_LUCI_REVISION_PATTERN.search(package_star_contents)
+    old_revision = _extract_starlark_package_revision(package_name,
+                                                      package_star_contents)
+    package_star_contents = _replace_starlark_package_revision(
+        package_name, new_revision, package_star_contents)
+    return package_star_contents, old_revision
+
+
+@functools.cache
+def _get_starlark_package_regex_for(package_name: str) -> re.Pattern:
+    """Get a Pattern to match the given Starlark package definition.
+
+    This Pattern is suitable for either extracting a revision or replacing it
+    with a new one.
+
+    Args:
+        package_name: The Starlark package name to search for, including the
+            leading @.
+
+    Returns:
+        A Pattern that matches |package_name| in PACKAGE.star.
+    """
+    revision_pattern = re.compile(
+        #   Group 1: Context prefix to ensure that we're matching the correct
+        #   package entry.
+        rf'(name\s*=\s*"{package_name}".*?revision\s*=\s*")'
+        #   Group 2: The hexadecimal revision to extract/replace.
+        r'([a-fA-F0-9]+)'
+        #   Positive lookahead: Asserts that a " follows, but does not
+        #   match/consume it.
+        r'(?=")',
+        re.DOTALL)
+
+    return revision_pattern
+
+
+def _extract_starlark_package_revision(package_name: str,
+                                       package_star_contents: str) -> str:
+    """Extract a Starlark package revision from PACKAGE.star content.
+
+    Args:
+        package_name: The Starlark package name to search for, including the
+            leading @.
+        package_star_contents: The contents of a PACKAGE.star file to search.
+
+    Returns:
+        The git revision of the requested package.
+    """
+    revision_pattern = _get_starlark_package_regex_for(package_name)
+    match = revision_pattern.search(package_star_contents)
     if not match:
-        return None
+        raise RuntimeError(
+            f'Unable to extract {package_name} revision from PACKAGE.star '
+            f'contents')
     return match.group(2)
+
+
+def _replace_starlark_package_revision(package_name: str, new_revision: str,
+                                       package_star_contents: str) -> str:
+    """Replace a Starlark package revision in PACKAGE.star content.
+
+    package_name: The Starlark package name to search for, including the
+            leading @.
+    new_revision: The new revision to update the package to.
+    package_star_contents: The contents of a PACKAGE.star file to
+        find/replace in.
+
+    Returns:
+        A copy of |package_star_contents| with the revision for |package_name|
+        updated to |new_revision|.
+    """
+    revision_pattern = _get_starlark_package_regex_for(package_name)
+    # Replace the match with Group 1 (matched content before the revision) and
+    # the new revision itself.
+    updated_contents = revision_pattern.sub(rf'\g<1>{new_revision}',
+                                            package_star_contents)
+    return updated_contents
+
+
+def _sync_text_files(new_revision):
+    for dawn_file, chromium_file in SYNCED_TEXT_FILES.items():
+        chromium_file = chromium_file or dawn_file
+        content = _read_remote_chromium_file(chromium_file, new_revision)
+        with open(dawn_file, 'w', encoding='utf-8') as outfile:
+            outfile.write(content)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -1098,15 +1322,11 @@ def main() -> None:
         _read_remote_chromium_file('DEPS', revision_range.new_revision))
     changed_entries = _get_changed_deps_entries(dawn_deps, chromium_deps)
 
-    # We want this entry to be in the commit message, but we do not want it to
-    # be present for _apply_changed_deps() since it is not actually a DEPS
-    # entry.
-    # TODO(crbug.com/452840620): Re-enable chromium-luci syncing once
-    # roller-specific issues with it are ironed out.
-    # chromium_luci_entry = _sync_chromium_luci_revision(
-    #     revision_range.new_revision)
-    # entries_for_commit_message = changed_entries + [chromium_luci_entry]
-    entries_for_commit_message = changed_entries
+    # We want these entries to be in the commit message, but we do not want them
+    # to be present for _apply_changed_deps() since they are not actually DEPS
+    # entries.
+    changed_packages = _sync_starlark_packages(revision_range.new_revision)
+    entries_for_commit_message = changed_entries + changed_packages
 
     # Create the commit message before adding the entry for the Chromium
     # revision since Chromium information is explicitly added to the message.
@@ -1128,6 +1348,7 @@ def main() -> None:
         _create_roll_branch()
 
     _apply_changed_deps(changed_entries)
+    _sync_text_files(revision_range.new_revision)
 
     if args.autoroll:
         _amend_commit(commit_message)

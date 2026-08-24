@@ -25,12 +25,12 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d11/DeviceInfoD3D11.h"
+#include "src/dawn/native/d3d11/DeviceInfoD3D11.h"
 
 #include <utility>
 
-#include "dawn/native/d3d/D3DError.h"
-#include "dawn/native/d3d11/PlatformFunctionsD3D11.h"
+#include "src/dawn/native/d3d/D3DError.h"
+#include "src/dawn/native/d3d11/PlatformFunctionsD3D11.h"
 
 namespace dawn::native::d3d11 {
 
@@ -46,6 +46,12 @@ ResultOrError<DeviceInfo> GatherDeviceInfo(const ComPtr<IDXGIAdapter3>& adapter,
         options.MapNoOverwriteOnDynamicBufferSRV && options.MapNoOverwriteOnDynamicConstantBuffer;
 
     info.supportsPartialConstantBufferUpdate = options.ConstantBufferPartialUpdate;
+
+    D3D11_FEATURE_DATA_D3D11_OPTIONS1 options1 = {};
+    if (SUCCEEDED(device->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS1, &options1,
+                                              sizeof(options1)))) {
+        info.supportsMapOnDefaultBuffer = options1.MapOnDefaultBuffers != 0;
+    }
 
     // TODO(405401229): Return error if the device doesn't support binding constant buffers with
     // non-zero offsets.

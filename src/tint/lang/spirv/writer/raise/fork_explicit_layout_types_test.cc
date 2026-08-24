@@ -32,6 +32,7 @@
 #include "src/tint/lang/core/ir/transform/helper_test.h"
 #include "src/tint/lang/core/type/struct.h"
 #include "src/tint/lang/spirv/ir/builtin_call.h"
+#include "src/tint/lang/spirv/type/literal.h"
 #include "src/tint/lang/spirv/writer/common/options.h"
 
 namespace tint::spirv::writer::raise {
@@ -40,7 +41,13 @@ namespace {
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
 
-using SpirvWriter_ForkExplicitLayoutTypesTest = core::ir::transform::TransformTest;
+class SpirvWriter_ForkExplicitLayoutTypesTest : public core::ir::transform::TransformTest {
+  protected:
+    void SetUp() override {
+        core::ir::transform::TransformTest::SetUp();
+        mod.properties.Add(core::ir::Property::kAllowNonCoreTypes);
+    }
+};
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, NoModify_Struct_NotInHostShareable) {
     auto* structure = ty.Struct(mod.symbols.New("MyStruct"), {
@@ -194,10 +201,6 @@ $B1: {  # root
 // Test that we always modify arrays that require explicit layout decorations, since the type is
 // used to signal to the printer that layout decorations are required.
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, Array_InHostShareable_NotShared) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* buffer = b.Var("buffer", ty.ptr<storage, array<u32, 4>>());
     buffer->SetBindingPoint(0, 0);
     mod.root_block->Append(buffer);
@@ -559,10 +562,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, Storage_SharedWithInOut) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* array = ty.array<u32, 1>();
     b.Append(mod.root_block, [&] {
         auto* buffer = b.Var("buffer", ty.ptr(storage, array));
@@ -1953,10 +1952,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, LoadFromStorage_Array_Shared) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* buffer = b.Var("buffer", ty.ptr<storage, array<u32, 4>>());
     buffer->SetBindingPoint(0, 0);
     mod.root_block->Append(buffer);
@@ -2031,10 +2026,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, LoadFromStorage_NestedArray_Shared) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* buffer = b.Var("buffer", ty.ptr<storage, array<array<u32, 4>, 3>>());
     buffer->SetBindingPoint(0, 0);
     mod.root_block->Append(buffer);
@@ -2138,10 +2129,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, StoreToStorage_Array_Shared) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* buffer = b.Var("buffer", ty.ptr<storage, array<u32, 4>, read_write>());
     buffer->SetBindingPoint(0, 0);
     mod.root_block->Append(buffer);
@@ -2219,10 +2206,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, StoreToStorage_NestedArray_Shared) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* buffer = b.Var("buffer", ty.ptr<storage, array<array<u32, 4>, 3>, read_write>());
     buffer->SetBindingPoint(0, 0);
     mod.root_block->Append(buffer);
@@ -2329,10 +2312,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, SharedArray_UsesViaLet) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* array = ty.array<u32, 4>();
     auto* buffer = b.Var("buffer", ty.ptr(storage, array));
     buffer->SetBindingPoint(0, 0);
@@ -2444,10 +2423,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, SharedArray_AccessScalarMember) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* array = ty.array<u32, 4>();
     auto* buffer = b.Var("buffer", ty.ptr(storage, array, read_write));
     buffer->SetBindingPoint(0, 0);
@@ -2502,10 +2477,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, SharedArray_AccessNestedArray) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* inner = ty.array<u32, 4>();
     auto* outer = ty.array(inner, 4);
     auto* buffer = b.Var("buffer", ty.ptr(storage, outer, read_write));
@@ -2619,10 +2590,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, SharedArray_MultipleVars) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* array = ty.array<u32, 4>();
     auto* buffer_0 = b.Var("buffer_0", ty.ptr(storage, array));
     auto* buffer_1 = b.Var("buffer_1", ty.ptr(storage, array));
@@ -2723,10 +2690,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, ArrayLength) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* structure =
         ty.Struct(mod.symbols.New("MyStruct"), {
                                                    {mod.symbols.New("i"), ty.u32()},
@@ -2739,7 +2702,9 @@ TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, ArrayLength) {
 
     auto* func = b.Function("foo", ty.void_());
     b.Append(func->Block(), [&] {
-        b.Call<spirv::ir::BuiltinCall>(ty.u32(), BuiltinFn::kArrayLength, buffer, 1_u);
+        auto* literal_index = b.Constant(
+            mod.constant_values.Get<core::constant::Scalar<u32>>(ty.Get<type::Literal>(), 1_u));
+        b.Call<spirv::ir::BuiltinCall>(ty.u32(), BuiltinFn::kArrayLength, buffer, literal_index);
         b.Return(func);
     });
 
@@ -2935,10 +2900,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, Spv14_CopyLogical_ArrayRemoveLayout) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* array_ty = ty.array(ty.u32(), 4);
     auto* ssbo = b.Var("ssbo", ty.ptr(storage, array_ty));
     ssbo->SetBindingPoint(0, 0);
@@ -2992,10 +2953,6 @@ $B1: {  # root
 }
 
 TEST_F(SpirvWriter_ForkExplicitLayoutTypesTest, Spv14_CopyLogical_ArrayAddLayout) {
-    capabilities = core::ir::Capabilities{
-        core::ir::Capability::kAllowNonCoreTypes,
-    };
-
     auto* array_ty = ty.array(ty.u32(), 4);
     auto* ssbo = b.Var("ssbo", ty.ptr(storage, array_ty));
     ssbo->SetBindingPoint(0, 0);

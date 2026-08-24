@@ -31,29 +31,29 @@
 #include <utility>
 #include <vector>
 
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/Toggles.h"
-#include "dawn/native/utils/WGPUHelpers.h"
-#include "dawn/tests/DawnNativeTest.h"
-#include "dawn/tests/MockCallback.h"
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/TestUtils.h"
-#include "dawn/utils/WGPUHelpers.h"
-#include "mocks/BindGroupLayoutMock.h"
-#include "mocks/BindGroupMock.h"
-#include "mocks/BufferMock.h"
-#include "mocks/CommandBufferMock.h"
-#include "mocks/ComputePipelineMock.h"
-#include "mocks/DawnMockTest.h"
-#include "mocks/DeviceMock.h"
-#include "mocks/ExternalTextureMock.h"
-#include "mocks/PipelineLayoutMock.h"
-#include "mocks/QuerySetMock.h"
-#include "mocks/RenderPipelineMock.h"
-#include "mocks/SamplerMock.h"
-#include "mocks/ShaderModuleMock.h"
-#include "mocks/TextureMock.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/Toggles.h"
+#include "src/dawn/native/utils/WGPUHelpers.h"
+#include "src/dawn/tests/DawnNativeTest.h"
+#include "src/dawn/tests/MockCallback.h"
+#include "src/dawn/tests/unittests/native/mocks/BindGroupLayoutMock.h"
+#include "src/dawn/tests/unittests/native/mocks/BindGroupMock.h"
+#include "src/dawn/tests/unittests/native/mocks/BufferMock.h"
+#include "src/dawn/tests/unittests/native/mocks/CommandBufferMock.h"
+#include "src/dawn/tests/unittests/native/mocks/ComputePipelineMock.h"
+#include "src/dawn/tests/unittests/native/mocks/DawnMockTest.h"
+#include "src/dawn/tests/unittests/native/mocks/DeviceMock.h"
+#include "src/dawn/tests/unittests/native/mocks/ExternalTextureMock.h"
+#include "src/dawn/tests/unittests/native/mocks/PipelineLayoutMock.h"
+#include "src/dawn/tests/unittests/native/mocks/QuerySetMock.h"
+#include "src/dawn/tests/unittests/native/mocks/RenderPipelineMock.h"
+#include "src/dawn/tests/unittests/native/mocks/SamplerMock.h"
+#include "src/dawn/tests/unittests/native/mocks/ShaderModuleMock.h"
+#include "src/dawn/tests/unittests/native/mocks/TextureMock.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/TestUtils.h"
+#include "src/dawn/utils/WGPUHelpers.h"
 
 namespace dawn::native {
 namespace {
@@ -66,7 +66,6 @@ using testing::MockCppCallback;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::StrictMock;
-using ::testing::Test;
 
 using MockMapAsyncCallback =
     StrictMock<MockCppCallback<void (*)(wgpu::MapAsyncStatus, wgpu::StringView)>>;
@@ -84,6 +83,11 @@ static constexpr std::string_view kVertexShader = R"(
 static constexpr std::string_view kFragmentShader = R"(
         @fragment fn main() {}
     )";
+
+// Use a sampler that's not the default as it would reuse the placeholder sampler, which only gets
+// destroyed during device destruction.
+static constexpr SamplerDescriptor kSamplerDesc = {.label = "",
+                                                   .minFilter = wgpu::FilterMode::Linear};
 
 // Stores and scopes a raw mock object ptr expectation. This is particularly useful on objects that
 // are expected to be destroyed at the end of the scope. In most cases, when the validation in this
@@ -110,8 +114,7 @@ class DestroyObjectTests : public DawnMockTest {
 TEST_F(DestroyObjectTests, BindGroupNativeExplicit) {
     BindGroupDescriptor desc = {};
     desc.layout = mDeviceMock->GetEmptyBindGroupLayout();
-    desc.entryCount = 0;
-    desc.entries = nullptr;
+    desc.entries = {};
 
     Ref<BindGroupMock> bindGroupMock = AcquireRef(new BindGroupMock(mDeviceMock, Unpack(&desc)));
     EXPECT_CALL(*bindGroupMock.Get(), DestroyImpl).Times(1);
@@ -126,8 +129,7 @@ TEST_F(DestroyObjectTests, BindGroupNativeExplicit) {
 TEST_F(DestroyObjectTests, BindGroupImplicit) {
     BindGroupDescriptor desc = {};
     desc.layout = mDeviceMock->GetEmptyBindGroupLayout();
-    desc.entryCount = 0;
-    desc.entries = nullptr;
+    desc.entries = {};
 
     Ref<BindGroupMock> bindGroupMock = AcquireRef(new BindGroupMock(mDeviceMock, Unpack(&desc)));
     EXPECT_CALL(*bindGroupMock.Get(), DestroyImpl).Times(1);
@@ -148,8 +150,7 @@ TEST_F(DestroyObjectTests, BindGroupLayoutNativeExplicit) {
     std::vector<BindGroupLayoutEntry> entries;
     entries.push_back(utils::BindingLayoutEntryInitializationHelper(
         0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Uniform));
-    desc.entryCount = entries.size();
-    desc.entries = entries.data();
+    desc.entries = entries;
 
     Ref<BindGroupLayoutMock> bindGroupLayoutMock =
         AcquireRef(new BindGroupLayoutMock(mDeviceMock, Unpack(&desc)));
@@ -168,8 +169,7 @@ TEST_F(DestroyObjectTests, BindGroupLayoutImplicit) {
     std::vector<BindGroupLayoutEntry> entries;
     entries.push_back(utils::BindingLayoutEntryInitializationHelper(
         0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Uniform));
-    desc.entryCount = entries.size();
-    desc.entries = entries.data();
+    desc.entries = entries;
 
     Ref<BindGroupLayoutMock> bindGroupLayoutMock =
         AcquireRef(new BindGroupLayoutMock(mDeviceMock, Unpack(&desc)));
@@ -380,11 +380,13 @@ TEST_F(DestroyObjectTests, ExternalTextureNativeExplicit) {
         AcquireRef(new NiceMock<TextureViewMock>(textureMock.Get(), Unpack(&textureViewDesc)));
 
     ExternalTextureDescriptor desc = {};
-    std::array<float, 12> placeholderConstantArray;
-    desc.yuvToRgbConversionMatrix = placeholderConstantArray.data();
-    desc.gamutConversionMatrix = placeholderConstantArray.data();
-    desc.srcTransferFunctionParameters = placeholderConstantArray.data();
-    desc.dstTransferFunctionParameters = placeholderConstantArray.data();
+    std::array<float, 12> placeholderConstantArray12 = {};
+    std::array<float, 9> placeholderConstantArray9 = {};
+    std::array<float, 7> placeholderConstantArray7 = {};
+    desc.yuvToRgbConversionMatrix = placeholderConstantArray12;
+    desc.gamutConversionMatrix = placeholderConstantArray9;
+    desc.srcTransferFunctionParameters = placeholderConstantArray7;
+    desc.dstTransferFunctionParameters = placeholderConstantArray7;
     desc.cropSize = {1, 1};
     desc.apparentSize = {1, 1};
     desc.plane0 = textureViewMock.Get();
@@ -411,11 +413,13 @@ TEST_F(DestroyObjectTests, ExternalTextureApiExplicit) {
         AcquireRef(new NiceMock<TextureViewMock>(textureMock.Get(), Unpack(&textureViewDesc)));
 
     ExternalTextureDescriptor desc = {};
-    std::array<float, 12> placeholderConstantArray;
-    desc.yuvToRgbConversionMatrix = placeholderConstantArray.data();
-    desc.gamutConversionMatrix = placeholderConstantArray.data();
-    desc.srcTransferFunctionParameters = placeholderConstantArray.data();
-    desc.dstTransferFunctionParameters = placeholderConstantArray.data();
+    std::array<float, 12> placeholderConstantArray12 = {};
+    std::array<float, 9> placeholderConstantArray9 = {};
+    std::array<float, 7> placeholderConstantArray7 = {};
+    desc.yuvToRgbConversionMatrix = placeholderConstantArray12;
+    desc.gamutConversionMatrix = placeholderConstantArray9;
+    desc.srcTransferFunctionParameters = placeholderConstantArray7;
+    desc.dstTransferFunctionParameters = placeholderConstantArray7;
     desc.cropSize = {1, 1};
     desc.apparentSize = {1, 1};
     desc.plane0 = textureViewMock.Get();
@@ -446,11 +450,13 @@ TEST_F(DestroyObjectTests, ExternalTextureImplicit) {
         AcquireRef(new NiceMock<TextureViewMock>(textureMock.Get(), Unpack(&textureViewDesc)));
 
     ExternalTextureDescriptor desc = {};
-    std::array<float, 12> placeholderConstantArray;
-    desc.yuvToRgbConversionMatrix = placeholderConstantArray.data();
-    desc.gamutConversionMatrix = placeholderConstantArray.data();
-    desc.srcTransferFunctionParameters = placeholderConstantArray.data();
-    desc.dstTransferFunctionParameters = placeholderConstantArray.data();
+    std::array<float, 12> placeholderConstantArray12 = {};
+    std::array<float, 9> placeholderConstantArray9 = {};
+    std::array<float, 7> placeholderConstantArray7 = {};
+    desc.yuvToRgbConversionMatrix = placeholderConstantArray12;
+    desc.gamutConversionMatrix = placeholderConstantArray9;
+    desc.srcTransferFunctionParameters = placeholderConstantArray7;
+    desc.dstTransferFunctionParameters = placeholderConstantArray7;
     desc.cropSize = {1, 1};
     desc.apparentSize = {1, 1};
     desc.plane0 = textureViewMock.Get();
@@ -469,11 +475,9 @@ TEST_F(DestroyObjectTests, ExternalTextureImplicit) {
 }
 
 TEST_F(DestroyObjectTests, PipelineLayoutNativeExplicit) {
+    BindGroupLayoutBase* bgl = mDeviceMock->GetEmptyBindGroupLayout();
     PipelineLayoutDescriptor desc = {};
-    std::vector<BindGroupLayoutBase*> bindGroupLayouts;
-    bindGroupLayouts.push_back(mDeviceMock->GetEmptyBindGroupLayout());
-    desc.bindGroupLayoutCount = bindGroupLayouts.size();
-    desc.bindGroupLayouts = bindGroupLayouts.data();
+    desc.bindGroupLayouts = SpanFromRef<BindGroupIndex>(bgl);
 
     Ref<PipelineLayoutMock> pipelineLayoutMock =
         AcquireRef(new PipelineLayoutMock(mDeviceMock, &desc));
@@ -496,8 +500,7 @@ TEST_F(DestroyObjectTests, PipelineLayoutImplicit) {
         std::vector<BindGroupLayoutEntry> entries;
         entries.push_back(utils::BindingLayoutEntryInitializationHelper(
             0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Uniform));
-        desc.entryCount = entries.size();
-        desc.entries = entries.data();
+        desc.entries = entries;
 
         ScopedRawPtrExpectation scoped(mDeviceMock);
         bindGroupLayoutMock = AcquireRef(new BindGroupLayoutMock(mDeviceMock, Unpack(&desc)));
@@ -505,11 +508,9 @@ TEST_F(DestroyObjectTests, PipelineLayoutImplicit) {
         bindGroupLayout = device.CreateBindGroupLayout(ToCppAPI(&desc));
     }
 
+    BindGroupLayoutBase* bgl = FromAPI(bindGroupLayout.Get());
     PipelineLayoutDescriptor desc = {};
-    std::vector<BindGroupLayoutBase*> bindGroupLayouts;
-    bindGroupLayouts.push_back(reinterpret_cast<BindGroupLayoutBase*>(bindGroupLayout.Get()));
-    desc.bindGroupLayoutCount = bindGroupLayouts.size();
-    desc.bindGroupLayouts = bindGroupLayouts.data();
+    desc.bindGroupLayouts = SpanFromRef<BindGroupIndex>(bgl);
 
     Ref<PipelineLayoutMock> pipelineLayoutMock =
         AcquireRef(new PipelineLayoutMock(mDeviceMock, &desc));
@@ -613,9 +614,7 @@ TEST_F(DestroyObjectTests, RenderPipelineImplicit) {
 }
 
 TEST_F(DestroyObjectTests, SamplerNativeExplicit) {
-    SamplerDescriptor desc = {};
-
-    Ref<SamplerMock> samplerMock = AcquireRef(new SamplerMock(mDeviceMock, &desc));
+    Ref<SamplerMock> samplerMock = AcquireRef(new SamplerMock(mDeviceMock, &kSamplerDesc));
     EXPECT_CALL(*samplerMock.Get(), DestroyImpl).Times(1);
 
     EXPECT_TRUE(samplerMock->IsAlive());
@@ -626,16 +625,14 @@ TEST_F(DestroyObjectTests, SamplerNativeExplicit) {
 // If the reference count on API objects reach 0, they should delete themselves. Note that GTest
 // will also complain if there is a memory leak.
 TEST_F(DestroyObjectTests, SamplerImplicit) {
-    SamplerDescriptor desc = {};
-
-    Ref<SamplerMock> samplerMock = AcquireRef(new SamplerMock(mDeviceMock, &desc));
+    Ref<SamplerMock> samplerMock = AcquireRef(new SamplerMock(mDeviceMock, &kSamplerDesc));
     EXPECT_CALL(*samplerMock.Get(), DestroyImpl).Times(1);
     {
         ScopedRawPtrExpectation scoped(samplerMock.Get());
 
         EXPECT_CALL(*mDeviceMock, CreateSamplerImpl)
             .WillOnce(Return(ByMove(std::move(samplerMock))));
-        wgpu::Sampler sampler = device.CreateSampler(ToCppAPI(&desc));
+        wgpu::Sampler sampler = device.CreateSampler(ToCppAPI(&kSamplerDesc));
 
         EXPECT_TRUE(FromAPI(sampler.Get())->IsAlive());
     }
@@ -820,8 +817,7 @@ TEST_F(DestroyObjectTests, DestroyObjectsApiExplicit) {
     {
         BindGroupDescriptor desc = {};
         desc.layout = mDeviceMock->GetEmptyBindGroupLayout();
-        desc.entryCount = 0;
-        desc.entries = nullptr;
+        desc.entries = {};
 
         ScopedRawPtrExpectation scoped(mDeviceMock);
         bindGroupMock = AcquireRef(new BindGroupMock(mDeviceMock, Unpack(&desc)));
@@ -838,8 +834,7 @@ TEST_F(DestroyObjectTests, DestroyObjectsApiExplicit) {
         std::vector<BindGroupLayoutEntry> entries;
         entries.push_back(utils::BindingLayoutEntryInitializationHelper(
             0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Uniform));
-        desc.entryCount = entries.size();
-        desc.entries = entries.data();
+        desc.entries = entries;
 
         ScopedRawPtrExpectation scoped(mDeviceMock);
         bindGroupLayoutMock = AcquireRef(new BindGroupLayoutMock(mDeviceMock, Unpack(&desc)));
@@ -923,11 +918,9 @@ TEST_F(DestroyObjectTests, DestroyObjectsApiExplicit) {
     {
         // Use an non-empty bind group layout to avoid hitting the internal empty pipeline layout in
         // the cache.
+        BindGroupLayoutBase* bgl = FromAPI(bindGroupLayout.Get());
         PipelineLayoutDescriptor desc = {};
-        std::vector<BindGroupLayoutBase*> bindGroupLayouts;
-        bindGroupLayouts.push_back(reinterpret_cast<BindGroupLayoutBase*>(bindGroupLayout.Get()));
-        desc.bindGroupLayoutCount = bindGroupLayouts.size();
-        desc.bindGroupLayouts = bindGroupLayouts.data();
+        desc.bindGroupLayouts = SpanFromRef<BindGroupIndex>(bgl);
 
         ScopedRawPtrExpectation scoped(mDeviceMock);
         pipelineLayoutMock = AcquireRef(new PipelineLayoutMock(mDeviceMock, &desc));
@@ -965,12 +958,10 @@ TEST_F(DestroyObjectTests, DestroyObjectsApiExplicit) {
     Ref<SamplerMock> samplerMock;
     wgpu::Sampler sampler;
     {
-        SamplerDescriptor desc = {};
-
         ScopedRawPtrExpectation scoped(mDeviceMock);
-        samplerMock = AcquireRef(new SamplerMock(mDeviceMock, &desc));
+        samplerMock = AcquireRef(new SamplerMock(mDeviceMock, &kSamplerDesc));
         EXPECT_CALL(*mDeviceMock, CreateSamplerImpl).WillOnce(Return(samplerMock));
-        sampler = device.CreateSampler(ToCppAPI(&desc));
+        sampler = device.CreateSampler(ToCppAPI(&kSamplerDesc));
     }
 
     Ref<TextureMock> textureMock;
@@ -1004,11 +995,13 @@ TEST_F(DestroyObjectTests, DestroyObjectsApiExplicit) {
     wgpu::ExternalTexture externalTexture;
     {
         ExternalTextureDescriptor desc = {};
-        std::array<float, 12> placeholderConstantArray;
-        desc.yuvToRgbConversionMatrix = placeholderConstantArray.data();
-        desc.gamutConversionMatrix = placeholderConstantArray.data();
-        desc.srcTransferFunctionParameters = placeholderConstantArray.data();
-        desc.dstTransferFunctionParameters = placeholderConstantArray.data();
+        std::array<float, 12> placeholderConstantArray12 = {};
+        std::array<float, 9> placeholderConstantArray9 = {};
+        std::array<float, 7> placeholderConstantArray7 = {};
+        desc.yuvToRgbConversionMatrix = placeholderConstantArray12;
+        desc.gamutConversionMatrix = placeholderConstantArray9;
+        desc.srcTransferFunctionParameters = placeholderConstantArray7;
+        desc.dstTransferFunctionParameters = placeholderConstantArray7;
         desc.cropSize = {1, 1};
         desc.apparentSize = {1, 1};
         desc.plane0 = textureViewMock.Get();

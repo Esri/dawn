@@ -29,11 +29,12 @@
 #define WEBGPU_JNI_JNICONTEXT_H_
 
 #include <jni.h>
+
 #include <type_traits>
 #include <utility>
 #include <vector>
 
-#include "dawn/common/NonMovable.h"
+#include "src/utils/non_movable.h"
 
 namespace dawn::kotlin_api {
 

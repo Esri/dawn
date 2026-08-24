@@ -33,7 +33,7 @@
 
 #include "src/tint/api/common/binding_point.h"
 #include "src/tint/api/common/resource_type.h"
-#include "src/tint/utils/reflection.h"
+#include "src/tint/utils/reflection/reflection.h"
 
 namespace tint {
 
@@ -58,6 +58,7 @@ struct ResourceTableConfig {
     BindingPoint resource_table_binding;
 
     // The binding point for the supporting storage buffer. This is a post-remapping binding point.
+    // TODO(crbug.com/435317394): Rename to metadata_buffer_binding
     BindingPoint storage_buffer_binding;
 
     // The ordering of default bindings which are placed after the user bindings. These will be used
@@ -87,10 +88,23 @@ struct ResourceTableConfig {
     //
     std::vector<ResourceType> default_binding_type_order;
 
+    // If true, the sampler index is stored in the metadata table alongside the type id: sampler
+    // index in the high 16 bits, type id in the low 16 bits. This is used on backends that limit
+    // the number of bound shader samplers.
+    bool get_sampler_index_from_metadata = false;
+
+    // Map from a post-remap binding-point to the ResourceType which is bound to that binding point.
+    // The table must contain entries for any bind-ful entry which is used with a bindless resource.
+    // (In practise, adding all bind-ful texture and sampler entries is sufficient)
+    std::unordered_map<BindingPoint, ResourceType> binding_to_resource_type;
+
     TINT_REFLECT(ResourceTableConfig,
                  resource_table_binding,
                  storage_buffer_binding,
-                 default_binding_type_order);
+                 default_binding_type_order,
+                 get_sampler_index_from_metadata,
+                 binding_to_resource_type);
+    bool operator==(const ResourceTableConfig&) const = default;
 };
 
 }  // namespace tint

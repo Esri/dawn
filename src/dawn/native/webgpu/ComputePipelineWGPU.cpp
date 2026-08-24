@@ -25,17 +25,20 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/webgpu/ComputePipelineWGPU.h"
+#include "src/dawn/native/webgpu/ComputePipelineWGPU.h"
 
 #include <string>
 #include <vector>
-#include "dawn/common/StringViewUtils.h"
-#include "dawn/native/webgpu/BindGroupLayoutWGPU.h"
-#include "dawn/native/webgpu/CaptureContext.h"
-#include "dawn/native/webgpu/DeviceWGPU.h"
-#include "dawn/native/webgpu/PipelineLayoutWGPU.h"
-#include "dawn/native/webgpu/ShaderModuleWGPU.h"
-#include "dawn/native/webgpu/ToWGPU.h"
+
+#include "src/dawn/common/StringViewUtils.h"
+#include "src/dawn/native/TintUtils.h"
+#include "src/dawn/native/webgpu/BindGroupLayoutWGPU.h"
+#include "src/dawn/native/webgpu/CaptureContext.h"
+#include "src/dawn/native/webgpu/DeviceWGPU.h"
+#include "src/dawn/native/webgpu/PipelineLayoutWGPU.h"
+#include "src/dawn/native/webgpu/ShaderModuleWGPU.h"
+#include "src/dawn/native/webgpu/ToWGPU.h"
+#include "tint/tint.h"
 
 namespace dawn::native::webgpu {
 
@@ -50,12 +53,13 @@ ComputePipeline::ComputePipeline(Device* device,
                                  const UnpackedPtr<ComputePipelineDescriptor>& descriptor)
     : ComputePipelineBase(device, descriptor),
       RecordableObject(schema::ObjectType::ComputePipeline),
-      ObjectWGPU(device->wgpu.computePipelineRelease) {}
+      ObjectWGPU(device->wgpu->computePipelineRelease) {}
 
-MaybeError ComputePipeline::InitializeImpl() {
+ResultOrError<Extent3D> ComputePipeline::InitializeImpl() {
+    std::string label = GetLabel();
     WGPUComputePipelineDescriptor desc;
     desc.nextInChain = nullptr;
-    desc.label = ToOutputStringView(GetLabel());
+    desc.label = ToOutputStringView(label);
     const PipelineLayoutBase* layout = GetLayout();
     DAWN_ASSERT(layout != nullptr);
     desc.layout = ToBackend(layout)->GetInnerHandle();
@@ -72,9 +76,38 @@ MaybeError ComputePipeline::InitializeImpl() {
     desc.compute.constantCount = constants.size();
 
     auto device = ToBackend(GetDevice());
-    mInnerHandle = device->wgpu.deviceCreateComputePipeline(device->GetInnerHandle(), &desc);
+    mInnerHandle = device->wgpu->deviceCreateComputePipeline(device->GetInnerHandle(), &desc);
     DAWN_ASSERT(mInnerHandle);
-    return {};
+
+    // Shader reflection after the application of overrides is required by the frontend for the
+    // workgroup size.
+    const ProgrammableStage& computeStage = GetStage(SingleShaderStage::Compute);
+
+    tint::null::writer::Options tintOptions;
+    tintOptions.entry_point_name = computeStage.entryPoint;
+    tintOptions.substitute_overrides_config = {
+        .map = BuildSubstituteOverridesTransformConfig(computeStage),
+    };
+
+    tint::wgsl::reader::IROptions irOptions{
+        .dump_ir_when_validating = device->IsToggleEnabled(Toggle::DumpTintIR),
+        .enable_validation_asserts = device->IsToggleEnabled(Toggle::EnableTintIRValidationAsserts),
+    };
+
+    // Convert the AST program to an IR module.
+    auto ir = tint::wgsl::reader::ProgramToLoweredIR(computeStage.module->GetTintProgram()->program,
+                                                     irOptions);
+    DAWN_INVALID_IF(ir != tint::Success, "An error occurred while generating Tint IR\n%s",
+                    ir.Failure().reason);
+
+    tint::Result<tint::null::writer::Output> tintResult =
+        tint::null::writer::Generate(ir.Get(), tintOptions);
+
+    DAWN_INVALID_IF(tintResult != tint::Success, "An error occurred while running Null writer\n%s",
+                    tintResult.Failure().reason);
+
+    return {
+        {tintResult->workgroup_info.x, tintResult->workgroup_info.y, tintResult->workgroup_info.z}};
 }
 
 void ComputePipeline::SetLabelImpl() {

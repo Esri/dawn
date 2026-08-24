@@ -271,18 +271,14 @@ static std::ostream& operator<<(std::ostream& out, UTF8Case c) {
 
 class UTF8Test : public testing::TestWithParam<UTF8Case> {};
 
-// This is testing a C-style API that will always trigger -Wunsafe-buffer-usage
-TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 TEST_P(UTF8Test, Decode) {
     auto param = GetParam();
-
-    const uint8_t* data = reinterpret_cast<const uint8_t*>(param.string.data());
-    const size_t len = param.string.size();
+    std::span<const uint8_t> data{param.string};
 
     std::vector<CodePointAndWidth> got;
     size_t offset = 0;
-    while (offset < len) {
-        auto [code_point, width] = utf8::Decode(data + offset, len - offset);
+    while (offset < data.size()) {
+        auto [code_point, width] = utf8::Decode(data.subspan(offset));
         if (width == 0) {
             FAIL() << "Decode() failed at byte offset " << offset;
         }
@@ -292,22 +288,21 @@ TEST_P(UTF8Test, Decode) {
 
     EXPECT_THAT(got, ::testing::ElementsAreArray(param.code_points));
 }
-TINT_END_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 
 TEST_P(UTF8Test, Encode) {
     auto param = GetParam();
 
-    Slice<const uint8_t> str{reinterpret_cast<const uint8_t*>(param.string.data()),
-                             param.string.size()};
+    std::span<const uint8_t> str{param.string};
     for (auto codepoint : param.code_points) {
-        EXPECT_EQ(utf8::Encode(codepoint.code_point, nullptr), codepoint.width);
+        EXPECT_EQ(utf8::Encode(codepoint.code_point, {}), codepoint.width);
 
-        uint8_t encoded[4];
+        std::array<uint8_t, 4> encoded{};
         size_t len = utf8::Encode(codepoint.code_point, encoded);
         ASSERT_EQ(len, codepoint.width);
-        EXPECT_THAT(Slice<const uint8_t>(encoded, len),
-                    ::testing::ElementsAreArray(str.Truncate(len)));
-        str = str.Offset(len);
+        for (size_t i = 0; i < len; i++) {
+            EXPECT_EQ(encoded[i], str[i]);
+        }
+        str = str.subspan(len);
     }
 }
 
@@ -515,7 +510,7 @@ INSTANTIATE_TEST_SUITE_P(Random,
 class DecodeUTF8InvalidTest : public testing::TestWithParam<std::vector<uint8_t>> {};
 
 TEST_P(DecodeUTF8InvalidTest, Invalid) {
-    auto [code_point, width] = utf8::Decode(GetParam().data(), GetParam().size());
+    auto [code_point, width] = utf8::Decode(GetParam());
     EXPECT_EQ(code_point, CodePoint(0));
     EXPECT_EQ(width, 0u);
 }
@@ -589,18 +584,14 @@ static std::ostream& operator<<(std::ostream& out, UTF16Case c) {
 
 class UTF16Test : public testing::TestWithParam<UTF16Case> {};
 
-// This is testing a C-style API that will always trigger -Wunsafe-buffer-usage
-TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 TEST_P(UTF16Test, Decode) {
     auto param = GetParam();
-
-    const uint16_t* data = reinterpret_cast<const uint16_t*>(param.string.data());
-    const size_t len = param.string.size();
+    std::span<const uint16_t> data{param.string};
 
     std::vector<CodePointAndWidth> got;
     size_t offset = 0;
-    while (offset < len) {
-        auto [code_point, width] = utf16::Decode(data + offset, len - offset);
+    while (offset < data.size()) {
+        auto [code_point, width] = utf16::Decode(data.subspan(offset));
         if (width == 0) {
             FAIL() << "Decode() failed at byte offset " << offset;
         }
@@ -610,22 +601,21 @@ TEST_P(UTF16Test, Decode) {
 
     EXPECT_THAT(got, ::testing::ElementsAreArray(param.code_points));
 }
-TINT_END_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 
 TEST_P(UTF16Test, Encode) {
     auto param = GetParam();
+    std::span<const uint16_t> str{param.string};
 
-    Slice<const uint16_t> str{reinterpret_cast<const uint16_t*>(param.string.data()),
-                              param.string.size()};
     for (auto codepoint : param.code_points) {
-        EXPECT_EQ(utf16::Encode(codepoint.code_point, nullptr), codepoint.width);
+        EXPECT_EQ(utf16::Encode(codepoint.code_point, {}), codepoint.width);
 
-        uint16_t encoded[2];
+        std::array<uint16_t, 2> encoded{};
         size_t len = utf16::Encode(codepoint.code_point, encoded);
         ASSERT_EQ(len, codepoint.width);
-        EXPECT_THAT(Slice<const uint16_t>(encoded, len),
-                    ::testing::ElementsAreArray(str.Truncate(len)));
-        str = str.Offset(len);
+        for (size_t i = 0; i < len; i++) {
+            EXPECT_EQ(encoded[i], str[i]);
+        }
+        str = str.subspan(len);
     }
 }
 
@@ -841,16 +831,73 @@ INSTANTIATE_TEST_SUITE_P(Random,
 class DecodeUTF16InvalidTest : public testing::TestWithParam<std::vector<uint16_t>> {};
 
 TEST_P(DecodeUTF16InvalidTest, Invalid) {
-    auto [code_point, width] = utf16::Decode(GetParam().data(), GetParam().size());
+    auto [code_point, width] = utf16::Decode(GetParam());
     EXPECT_EQ(code_point, CodePoint(0));
     EXPECT_EQ(width, 0u);
 }
+
 INSTANTIATE_TEST_SUITE_P(Invalid,
                          DecodeUTF16InvalidTest,
                          ::testing::ValuesIn(std::vector<std::vector<uint16_t>>{
                              {0xdc00},          // surrogate, end-of-stream
                              {0xdc00, 0x0040},  // surrogate, non-surrogate
                          }));
+
+////////////////////////////////////////////////////////////////////////////////
+// IsASCII tests
+////////////////////////////////////////////////////////////////////////////////
+TEST(UnicodeTest, IsASCII) {
+    EXPECT_TRUE(utf8::IsASCII(""));
+    EXPECT_TRUE(utf8::IsASCII("abc"));
+    EXPECT_TRUE(utf8::IsASCII("123"));
+    EXPECT_TRUE(utf8::IsASCII("_"));
+    EXPECT_TRUE(utf8::IsASCII(" \t\n"));
+    EXPECT_FALSE(utf8::IsASCII("नमस्ते"));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// IsIdentifier tests
+////////////////////////////////////////////////////////////////////////////////
+TEST(UnicodeTest, IsIdentifier) {
+    EXPECT_FALSE(utf8::IsIdentifier(""));
+    EXPECT_TRUE(utf8::IsIdentifier("a"));
+    EXPECT_TRUE(utf8::IsIdentifier("_"));
+    EXPECT_TRUE(utf8::IsIdentifier("abc"));
+    EXPECT_TRUE(utf8::IsIdentifier("_abc"));
+    EXPECT_TRUE(utf8::IsIdentifier("abc123"));
+    EXPECT_TRUE(utf8::IsIdentifier("_123"));
+    EXPECT_FALSE(utf8::IsIdentifier("1abc"));
+    EXPECT_FALSE(utf8::IsIdentifier("abc&"));
+    EXPECT_FALSE(utf8::IsIdentifier("abc def"));
+    EXPECT_FALSE(utf8::IsIdentifier("abc-def"));
+}
+
+TEST(UnicodeTest, IsWGSLIdentifier) {
+    EXPECT_FALSE(utf8::IsWGSLIdentifier(""));
+    EXPECT_TRUE(utf8::IsWGSLIdentifier("a"));
+    EXPECT_TRUE(utf8::IsWGSLIdentifier("_"));
+    EXPECT_TRUE(utf8::IsWGSLIdentifier("abc"));
+    EXPECT_TRUE(utf8::IsWGSLIdentifier("_abc"));
+    EXPECT_TRUE(utf8::IsWGSLIdentifier("abc123"));
+    EXPECT_TRUE(utf8::IsWGSLIdentifier("_123"));
+    EXPECT_FALSE(utf8::IsWGSLIdentifier("1abc"));
+    EXPECT_FALSE(utf8::IsWGSLIdentifier("abc&"));
+    EXPECT_FALSE(utf8::IsWGSLIdentifier("abc def"));
+    EXPECT_FALSE(utf8::IsWGSLIdentifier("abc-def"));
+
+    // Double underscore rule
+    EXPECT_FALSE(utf8::IsWGSLIdentifier("__"));
+    EXPECT_FALSE(utf8::IsWGSLIdentifier("__abc"));
+    EXPECT_TRUE(utf8::IsWGSLIdentifier("a__bc"));
+    EXPECT_TRUE(utf8::IsWGSLIdentifier("_a_b_c"));
+
+    // Unicode (Greek 'alpha') - XID_Start
+    EXPECT_TRUE(utf8::IsWGSLIdentifier("\xce\xb1"));
+    // Unicode (Mathematical Bold Capital A) - XID_Start (outside BMP)
+    EXPECT_TRUE(utf8::IsWGSLIdentifier("\xf0\x9d\x90\x80"));
+    // Unicode (Emoji) - Not XID_Start/Continue
+    EXPECT_FALSE(utf8::IsWGSLIdentifier("\xf0\x9f\x98\x80"));
+}
 
 }  // namespace utf16_tests
 }  // namespace tint

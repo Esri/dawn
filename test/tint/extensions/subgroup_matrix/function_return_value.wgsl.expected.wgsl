@@ -1,4 +1,4 @@
-enable chromium_experimental_subgroup_matrix;
+enable chromium_experimental_subgroup_matrix, subgroups;
 
 struct S {
   l : subgroup_matrix_left<f32, 8, 8>,
@@ -38,9 +38,9 @@ fn make_nested_struct() -> S_Nested {
 
 @compute @workgroup_size(64)
 fn main() {
-  subgroupMatrixStore(&(buffer), 0, make_matrix(), false, 64);
-  subgroupMatrixStore(&(buffer), 0, make_array()[0], false, 64);
-  subgroupMatrixStore(&(buffer), 0, make_nested_array()[1][2], false, 64);
-  subgroupMatrixStore(&(buffer), 0, make_struct().l, false, 64);
-  subgroupMatrixStore(&(buffer), 0, make_nested_struct().s.r, false, 64);
+  subgroupMatrixStore<row_major>(&(buffer), 0, make_matrix(), 64);
+  subgroupMatrixStore<row_major>(&(buffer), 0, make_array()[0], 64);
+  subgroupMatrixStore<row_major>(&(buffer), 0, make_nested_array()[1][2], 64);
+  subgroupMatrixStore<row_major>(&(buffer), 0, make_struct().l, 64);
+  subgroupMatrixStore<row_major>(&(buffer), 0, make_nested_struct().s.r, 64);
 }

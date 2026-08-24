@@ -32,11 +32,9 @@
 
 #include "src/tint/api/tint.h"
 #include "src/tint/cmd/common/helper.h"
-#include "src/tint/cmd/fuzz/ir/helpers/substitute_overrides_config.h"
 #include "src/tint/lang/core/ir/binary/encode.h"
 #include "src/tint/lang/core/ir/disassembler.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/transform/substitute_overrides.h"
 #include "src/tint/lang/core/ir/validator.h"
 #include "src/tint/lang/wgsl/ast/module.h"
 #include "src/tint/lang/wgsl/reader/reader.h"
@@ -44,6 +42,7 @@
 #include "src/tint/utils/command/cli.h"
 #include "src/tint/utils/containers/transform.h"
 #include "src/tint/utils/macros/defer.h"
+#include "src/tint/utils/text/base64.h"
 #include "src/tint/utils/text/color_mode.h"
 #include "src/tint/utils/text/string.h"
 #include "src/tint/utils/text/styled_text.h"
@@ -183,9 +182,6 @@ tint::Result<tint::core::ir::Module> GenerateIrModule(const tint::Program& progr
 
     TINT_CHECK_RESULT_UNWRAP(ir, tint::wgsl::reader::ProgramToLoweredIR(program));
 
-    auto cfg = tint::fuzz::ir::SubstituteOverridesConfig(ir);
-    TINT_CHECK_RESULT(tint::core::ir::transform::SubstituteOverrides(ir, cfg));
-
     TINT_CHECK_RESULT(tint::core::ir::Validate(ir));
 
     return ir;
@@ -242,6 +238,10 @@ bool WriteTestCaseProto(const tint::cmd::fuzz::ir::pb::Root& proto, const Option
 /// @param options the options that ir_fuzz_as was invoked with
 void DumpTestCaseProtoDebug(const tint::cmd::fuzz::ir::pb::Root& proto, const Options& options) {
     options.printer->Print(tint::StyledText{} << proto.module().DebugString());
+    if (!proto.data().empty()) {
+        options.printer->Print(tint::StyledText{} << "sidecar data: " << proto.data().size()
+                                                  << " bytes\n");
+    }
     options.printer->Print(tint::StyledText{} << "\n");
 }
 
@@ -267,9 +267,15 @@ bool ProcessFile(const Options& options) {
         DumpIR(info.program, options);
     }
 
+    auto data = tint::DecodeBase64FromComments(info.source_file->content.data);
+
     auto proto = GenerateFuzzCaseProto(info.program);
     if (proto != tint::Success) {
         return false;
+    }
+
+    if (!data.IsEmpty()) {
+        proto.Get().set_data(data.AsSpan().data(), data.Length());
     }
 
     if (options.dump_proto) {

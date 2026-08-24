@@ -25,11 +25,11 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "gmock/gmock.h"
+#include "src/tint/lang/core/ir/evaluator.h"
 
+#include "gmock/gmock.h"
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/ir/builder.h"
-#include "src/tint/lang/core/ir/evaluator.h"
 #include "src/tint/lang/core/ir/instruction.h"
 #include "src/tint/lang/core/ir/ir_helper_test.h"
 #include "src/tint/lang/core/type/u32.h"
@@ -105,6 +105,18 @@ TEST_F(IR_EvaluatorTest, ConstructScalar) {
     auto* c = val->As<core::ir::Constant>();
     ASSERT_NE(c, nullptr);
     EXPECT_EQ(1, c->Value()->ValueAs<int32_t>());
+}
+
+TEST_F(IR_EvaluatorTest, ConstructScalarEmpty) {
+    auto* inst = b.Construct(ty.i32());
+    auto res = Eval(b, inst);
+    ASSERT_EQ(res, Success);
+
+    auto* val = res.Get();
+    ASSERT_NE(val, nullptr);
+    auto* c = val->As<core::ir::Constant>();
+    ASSERT_NE(c, nullptr);
+    EXPECT_EQ(0, c->Value()->ValueAs<int32_t>());
 }
 
 TEST_F(IR_EvaluatorTest, ConstructArray_Access) {

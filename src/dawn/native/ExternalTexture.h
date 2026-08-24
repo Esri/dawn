@@ -30,35 +30,55 @@
 
 #include <array>
 
-#include "dawn/native/Error.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/ObjectBase.h"
-#include "dawn/native/Subresource.h"
+#include "src/dawn/common/Algebra.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/Forward.h"
+#include "src/dawn/native/ObjectBase.h"
+#include "src/dawn/native/Subresource.h"
 
 namespace dawn::native {
 
 class TextureViewBase;
 
+// Matches the structure defined in Tint's multiplanar_external_texture.cc transform.
+enum class TransferFunctionMode : uint32_t {
+    Gamma = 0,
+    HLG = 1,
+    PQ = 2,
+};
+struct TransferFunctionParams {
+    TransferFunctionMode mode = TransferFunctionMode::Gamma;
+    float a = 0.0f;
+    float b = 0.0f;
+    float c = 0.0f;
+    float d = 0.0f;
+    float e = 0.0f;
+    float f = 0.0f;
+    float g = 0.0f;
+};
+
+// Matches the structure defined in Tint's multiplanar_external_texture.cc transform.
 struct ExternalTextureParams {
-    uint32_t numPlanes;
+    uint32_t numPlanes = 0;
     // TODO(crbug.com/dawn/1466): Only go as few steps as necessary.
-    uint32_t doYuvToRgbConversionOnly;
-    std::array<uint32_t, 2> padding;
-    std::array<float, 12> yuvToRgbConversionMatrix;
-    std::array<float, 8> gammaDecodingParams = {};
-    std::array<float, 8> gammaEncodingParams = {};
-    std::array<float, 12> gamutConversionMatrix = {};
-    std::array<float, 6> sampleTransform = {};
-    std::array<float, 6> loadTransform = {};
-    std::array<float, 2> samplePlane0RectMin = {};
-    std::array<float, 2> samplePlane0RectMax = {};
-    std::array<float, 2> samplePlane1RectMin = {};
-    std::array<float, 2> samplePlane1RectMax = {};
+    uint32_t doYuvToRgbConversionOnly = 0;
+    // Multiplied with the vector on the left (Mat4x3 would use 16 more bytes).
+    math::Mat3x4f yuvToRgbConversionMatrix;
+    TransferFunctionParams srcTransferFunction;
+    TransferFunctionParams dstTransferFunction;
+    math::Mat3x3f gamutConversionMatrix;
+    math::Mat3x2f sampleTransform;
+    math::Mat3x2f loadTransform;
+    math::Vec2f samplePlane0RectMin;
+    math::Vec2f samplePlane0RectMax;
+    math::Vec2f samplePlane1RectMin;
+    math::Vec2f samplePlane1RectMax;
     // The shader-visible size of the texture for textureLoad and textureDimensions
-    std::array<uint32_t, 2> apparentSize = {};
+    math::Vec2u apparentSize;
     // textureLoad() passes coords in plane0 related size.
     // Use this Factor to calculate plane1 load coord.
-    std::array<float, 2> plane1CoordFactor = {};
+    math::Vec2f plane1CoordFactor;
+    math::Vec4f ootfParam;
 };
 
 MaybeError ValidateExternalTextureDescriptor(const DeviceBase* device,
@@ -78,6 +98,7 @@ class ExternalTextureBase : public ApiObjectBase {
     BufferBase* GetParamsBuffer() const;
     const std::array<Ref<TextureViewBase>, kMaxPlanesPerFormat>& GetTextureViews() const;
     ObjectType GetType() const override;
+    bool HasSingleView() const;
 
     MaybeError ValidateCanUseInSubmitNow() const;
     static Ref<ExternalTextureBase> MakeError(DeviceBase* device, StringView label = {});
@@ -101,10 +122,10 @@ class ExternalTextureBase : public ApiObjectBase {
     MaybeError ValidateRefresh();
     MaybeError ValidateExpire();
 
-    Ref<TextureBase> mPlaceholderTexture;
+    uint32_t mViewCount = 0;
     Ref<BufferBase> mParamsBuffer;
     std::array<Ref<TextureViewBase>, kMaxPlanesPerFormat> mTextureViews;
-    ExternalTextureState mState;
+    ExternalTextureState mState = ExternalTextureState::Active;
 };
 }  // namespace dawn::native
 

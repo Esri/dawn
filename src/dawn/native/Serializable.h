@@ -30,10 +30,10 @@
 
 #include <utility>
 
-#include "dawn/native/VisitableMembers.h"
-#include "dawn/native/stream/BlobSource.h"
-#include "dawn/native/stream/ByteVectorSink.h"
-#include "dawn/native/stream/Stream.h"
+#include "src/dawn/native/VisitableMembers.h"
+#include "src/dawn/native/stream/BlobSource.h"
+#include "src/dawn/native/stream/ByteVectorSink.h"
+#include "src/dawn/native/stream/Stream.h"
 
 namespace dawn::native {
 
@@ -60,7 +60,7 @@ class Serializable {
     Blob ToBlob() const {
         stream::ByteVectorSink sink;
         StreamIn(&sink, static_cast<const Derived&>(*this));
-        return CreateBlob(std::move(sink));
+        return Blob::Create(std::move(sink));
     }
 };
 
@@ -73,7 +73,7 @@ class Serializable {
 template <typename T>
 class UnsafeUnserializedValue {
   public:
-    UnsafeUnserializedValue() = default;
+    UnsafeUnserializedValue() : mValue{} {}
     explicit UnsafeUnserializedValue(T&& value) : mValue(std::forward<T>(value)) {}
     explicit UnsafeUnserializedValue(const T& value) : mValue(value) {}
     UnsafeUnserializedValue(const UnsafeUnserializedValue<T>& other)
@@ -121,6 +121,7 @@ UnsafeUnserializedValue(T&& value) -> UnsafeUnserializedValue<std::decay_t<T>>;
 //   #undef MEMBERS
 #define DAWN_SERIALIZABLE(qualifier, Name, MEMBERS)                     \
     struct Name##__Contents {                                           \
+        using Contents = Name##__Contents;                              \
         DAWN_VISITABLE_MEMBERS(MEMBERS)                                 \
         bool operator==(const Name##__Contents& other) const = default; \
     };                                                                  \
