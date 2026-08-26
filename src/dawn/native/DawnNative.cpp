@@ -27,16 +27,17 @@
 
 #include "dawn/native/DawnNative.h"
 
+#include <string>
 #include <vector>
 
-#include "dawn/common/Log.h"
-#include "dawn/native/Adapter.h"
-#include "dawn/native/BindGroupLayout.h"
-#include "dawn/native/Buffer.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/Instance.h"
-#include "dawn/native/Texture.h"
 #include "dawn/platform/DawnPlatform.h"
+#include "src/dawn/native/Adapter.h"
+#include "src/dawn/native/BindGroupLayout.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/Instance.h"
+#include "src/dawn/native/Texture.h"
+#include "src/utils/log.h"
 #include "tint/tint.h"
 
 // Contains the entry-points into dawn_native
@@ -129,11 +130,11 @@ DawnInstanceDescriptor::DawnInstanceDescriptor() {
 }
 
 bool DawnInstanceDescriptor::operator==(const DawnInstanceDescriptor& rhs) const {
-    return (nextInChain == rhs.nextInChain) &&
-           std::tie(additionalRuntimeSearchPathsCount, additionalRuntimeSearchPaths, platform,
-                    backendValidationLevel, beginCaptureOnStartup) ==
-               std::tie(rhs.additionalRuntimeSearchPathsCount, rhs.additionalRuntimeSearchPaths,
-                        rhs.platform, rhs.backendValidationLevel, rhs.beginCaptureOnStartup);
+    return nextInChain == rhs.nextInChain &&
+           additionalRuntimeSearchPaths.size() == rhs.additionalRuntimeSearchPaths.size() &&
+           additionalRuntimeSearchPaths.data() == rhs.additionalRuntimeSearchPaths.data() &&
+           platform == rhs.platform && backendValidationLevel == rhs.backendValidationLevel &&
+           beginCaptureOnStartup == rhs.beginCaptureOnStartup;
 }
 
 // Instance
@@ -258,9 +259,9 @@ bool CheckIsErrorForTesting(void* objectHandle) {
     return reinterpret_cast<ErrorMonad*>(objectHandle)->IsError();
 }
 
-const char* GetObjectLabelForTesting(void* objectHandle) {
+std::string GetObjectLabelForTesting(void* objectHandle) {
     ApiObjectBase* object = reinterpret_cast<ApiObjectBase*>(objectHandle);
-    return object->GetLabel().c_str();
+    return object->GetLabel();
 }
 
 uint64_t GetAllocatedSizeForTesting(WGPUBuffer buffer) {

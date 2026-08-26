@@ -28,25 +28,25 @@
 #ifndef SRC_DAWN_NATIVE_METAL_DEVICEMTL_H_
 #define SRC_DAWN_NATIVE_METAL_DEVICEMTL_H_
 
+#import <IOSurface/IOSurfaceRef.h>
+#import <Metal/Metal.h>
+#import <QuartzCore/QuartzCore.h>
+
 #include <atomic>
 #include <memory>
 #include <mutex>
 #include <vector>
 
-#include "dawn/native/dawn_platform.h"
-
-#include "dawn/native/Commands.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/metal/CommandRecordingContext.h"
-#include "dawn/native/metal/Forward.h"
-
-#import <IOSurface/IOSurfaceRef.h>
-#import <Metal/Metal.h>
-#import <QuartzCore/QuartzCore.h>
+#include "src/dawn/native/Commands.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/dawn_platform.h"
+#include "src/dawn/native/metal/CommandRecordingContext.h"
+#include "src/dawn/native/metal/Forward.h"
 
 namespace dawn::native::metal {
 
 struct KalmanInfo;
+class CounterSampleBufferAllocator;
 
 class Device final : public DeviceBase {
   public:
@@ -88,6 +88,8 @@ class Device final : public DeviceBase {
     // Get a MTLBuffer that can be used as a mock in a no-op blit encoder based on filling this
     // single-byte buffer
     id<MTLBuffer> GetMockBlitMtlBuffer();
+
+    CounterSampleBufferAllocator* GetCounterSampleBufferAllocator() const;
 
   private:
     Device(AdapterBase* adapter,
@@ -160,6 +162,8 @@ class Device final : public DeviceBase {
     // vertex/fragement stage
     bool mCounterSamplingAtStageBoundary;
     NSPRef<id<MTLBuffer>> mMockBlitMtlBuffer;
+
+    std::unique_ptr<CounterSampleBufferAllocator> mCounterSampleBufferAllocator;
 };
 
 }  // namespace dawn::native::metal

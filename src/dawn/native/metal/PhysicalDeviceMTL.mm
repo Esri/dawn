@@ -25,25 +25,27 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/metal/PhysicalDeviceMTL.h"
+#include "src/dawn/native/metal/PhysicalDeviceMTL.h"
 
-#include "dawn/common/CoreFoundationRef.h"
-#include "dawn/common/GPUInfo.h"
-#include "dawn/common/Log.h"
-#include "dawn/common/NSRef.h"
-#include "dawn/common/Platform.h"
-#include "dawn/common/SystemUtils.h"
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/Instance.h"
 #include "dawn/native/MetalBackend.h"
-#include "dawn/native/metal/BufferMTL.h"
-#include "dawn/native/metal/DeviceMTL.h"
-#include "dawn/native/metal/UtilsMetal.h"
 #include "dawn/platform/DawnPlatform.h"
+#include "src/dawn/common/CoreFoundationRef.h"
+#include "src/dawn/common/GPUInfo.h"
+#include "src/dawn/common/NSRef.h"
+#include "src/dawn/common/SystemUtils.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/Instance.h"
+#include "src/dawn/native/metal/BufferMTL.h"
+#include "src/dawn/native/metal/DeviceMTL.h"
+#include "src/dawn/native/metal/UtilsMetal.h"
+#include "src/utils/compiler.h"
+#include "src/utils/log.h"
+#include "src/utils/platform.h"
 
 #if DAWN_PLATFORM_IS(MACOS)
 #import <IOKit/IOKitLib.h>
-#include "dawn/common/IOKitRef.h"
+
+#include "src/dawn/common/IOKitRef.h"
 #endif
 
 #include <string>
@@ -72,9 +74,9 @@ const Vendor kVendors[] = {
 // Find vendor ID from MTLDevice name.
 MaybeError GetVendorIdFromVendors(id<MTLDevice> device, PCIIDs* ids) {
     uint32_t vendorId = 0;
-    const char* deviceName = [device.name UTF8String];
+    std::string_view deviceName = [device.name UTF8String];
     for (const auto& it : kVendors) {
-        if (strstr(deviceName, it.trademark) != nullptr) {
+        if (deviceName.find(it.trademark) != std::string_view::npos) {
             vendorId = it.vendorId;
             break;
         }
@@ -229,7 +231,7 @@ bool IsGPUCounterSupported(id<MTLDevice> device,
 }
 
 // https://developer.apple.com/documentation/metal/mtlgpufamily/apple9?language=objc
-enum class MTLGPUFamily {
+enum class MTLGPUFamily : uint8_t {
     Apple1,
     Apple2,
     Apple3,
@@ -414,7 +416,12 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         deviceToggles->Default(Toggle::MetalUseArgumentBuffers, false);
 
         bool haveBaseVertexBaseInstance = true;
-#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) && \
+        // The iOS Simulator only advertises the MTLFeatureSet_iOS_GPUFamily2 feature set, but
+        // base vertex/instance draws execute correctly there because Metal commands are serviced
+        // by the host GPU, which always supports them.
+        // NOTE: TARGET_OS_SIMULATOR can be defined but set to false for MacOS builds.
+#if DAWN_PLATFORM_IS(IOS) && !DAWN_PLATFORM_IS(TVOS) &&        \
+    (!defined(TARGET_OS_SIMULATOR) || !TARGET_OS_SIMULATOR) && \
     (!defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0)
         haveBaseVertexBaseInstance = [*mDevice supportsFeatureSet:MTLFeatureSet_iOS_GPUFamily3_v1];
 #endif
@@ -422,6 +429,10 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         deviceToggles->Default(Toggle::DisableBaseVertex, !haveBaseVertexBaseInstance);
         deviceToggles->Default(Toggle::DisableBaseInstance, !haveBaseVertexBaseInstance);
     }
+
+    // Metal queue events are, by default, triggered via the Metal threads, and so are always
+    // spontaneous.
+    deviceToggles->Default(Toggle::SpontaneousQueueEvents, true);
 
     // Vertex buffer robustness is implemented by using programmable vertex pulling. The
     // VertexPulling transform also handles non-4-byte aligned vertex buffer accesses.
@@ -467,10 +478,13 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         deviceToggles->Default(Toggle::MetalPolyfillUnpack2x16snorm, true);
         deviceToggles->Default(Toggle::MetalPolyfillUnpack2x16unorm, true);
     }
-
-    // chromium:407109056: Floating point clamp is slightly inaccurate for subnormal values.
     if (gpu_info::IsAMD(vendorId)) {
+        // chromium:42251267 tanh with f16 is incorrect on AMD.
+        deviceToggles->Default(Toggle::MetalPolyfillTanhF16, true);
+        // chromium:407109056: Floating point clamp is slightly inaccurate for subnormal values.
         deviceToggles->Default(Toggle::MetalPolyfillClampFloat, true);
+        // crbug.com/508265321: Nested subgroupMin/Max operations cause a crash in the AMD driver.
+        deviceToggles->Default(Toggle::CollapseSubgroupMinMax, true);
     }
 
     // On some Intel GPUs vertex only render pipeline get wrong depth result if no fragment
@@ -518,6 +532,10 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         deviceToggles->Default(Toggle::UseBlitForDepthTextureToTextureCopyToNonzeroSubresource,
                                true);
 
+        // Dynamically indexed stores on boolean vectors cause problems on Intel Mac
+        // (crbug.com/540789158).
+        deviceToggles->Default(Toggle::MetalPolyfillBoolVecDynamicStore, true);
+
         if ([NSProcessInfo.processInfo
                 isOperatingSystemAtLeastVersion:NSOperatingSystemVersion{12, 0, 0}]) {
             deviceToggles->ForceSet(
@@ -543,6 +561,9 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         if ([*mDevice supportsFamily:static_cast<::MTLGPUFamily>(1008)]) {
             deviceToggles->Default(Toggle::MetalSerializeTimestampGenerationAndResolution, true);
         }
+
+        // TODO(517225032): Gate on macOS version when a fix is released.
+        deviceToggles->Default(Toggle::MetalFixU32DivMod, true);
     }
 
     // Local testing shows the workaround is needed on AMD Radeon HD 8870M (gcn-1) MacOS 12.1;
@@ -564,6 +585,11 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
             Toggle::MetalUseBothDepthAndStencilAttachmentsForCombinedDepthStencilFormats, true);
     }
 #endif
+
+    // https://crbug.com/42241269: Bool in workgroup storage causes problems on Mac AMD and Intel.
+    if (gpu_info::IsAMD(vendorId) || gpu_info::IsIntel(vendorId)) {
+        deviceToggles->Default(Toggle::MetalReplaceWorkgroupBoolWithU32, true);
+    }
 
     // Enable the integer range analysis for shader robustness by default if the corresponding
     // platform feature is enabled.
@@ -703,6 +729,7 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     EnableFeature(Feature::Float32Blendable);
     EnableFeature(Feature::FlexibleTextureViews);
     EnableFeature(Feature::TextureFormatsTier1);
+    EnableFeature(Feature::TextureCompressionUnaligned);
 
     // SIMD-scoped permute operations is supported by GPU family Metal3, Apple6, Apple7, Apple8,
     // and Mac2.
@@ -717,6 +744,11 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     if (([*mDevice supportsFamily:MTLGPUFamilyApple6] ||
          [*mDevice supportsFamily:MTLGPUFamilyMac2])) {
         EnableFeature(Feature::Subgroups);
+        // Apple doesn't support selecting a subgroup size, but if there is only one possible size
+        // we can trivially enable the feature.
+        if (mSubgroupMinSize == mSubgroupMaxSize) {
+            EnableFeature(Feature::SubgroupSizeControl);
+        }
     }
 
     if ([*mDevice supportsFamily:MTLGPUFamilyApple7]) {
@@ -731,6 +763,8 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     EnableFeature(Feature::SharedFenceMTLSharedEvent);
 
     EnableFeature(Feature::Unorm16TextureFormats);
+    EnableFeature(Feature::Unorm16Filterable);
+    EnableFeature(Feature::Unorm16FormatsForExternalTexture);
 
     EnableFeature(Feature::HostMappedPointer);
 
@@ -744,6 +778,17 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
 
     if (SupportTextureComponentSwizzle(*mDevice)) {
         EnableFeature(Feature::TextureComponentSwizzle);
+    }
+
+    if ([*mDevice supportsFamily:MTLGPUFamilyApple9]) {
+        EnableFeature(Feature::AtomicVec2uMinMax);
+    }
+
+    // Early 64-bit (ulong) support when both mac2 and apple8. (This means the M2)
+    // See footnote 11 of https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
+    if ([*mDevice supportsFamily:MTLGPUFamilyMac2] &&
+        [*mDevice supportsFamily:MTLGPUFamilyApple8]) {
+        EnableFeature(Feature::AtomicVec2uMinMax);
     }
 
     if ([*mDevice readWriteTextureSupport] == MTLReadWriteTextureTier2) {
@@ -912,7 +957,9 @@ MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits)
     limits->v1.minUniformBufferOffsetAlignment = mtlLimits.minBufferOffsetAlignment;
     limits->v1.minStorageBufferOffsetAlignment = mtlLimits.minBufferOffsetAlignment;
 
-    uint64_t maxBufferSize = Buffer::QueryMaxBufferLength(*mDevice);
+    // Hard limit at UINT32_MAX because we pass storage (and vertex) buffer sizes to MSL as u32.
+    uint64_t maxBufferSize = std::min(static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()),
+                                      Buffer::QueryMaxBufferLength(*mDevice));
     limits->v1.maxBufferSize = maxBufferSize;
 
     // Metal has no documented limit on the size of a binding. Use the maximum
@@ -966,9 +1013,7 @@ void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
                                                const TogglesState& toggles) const {
     if (auto* memoryHeapProperties = info.Get<AdapterPropertiesMemoryHeaps>()) {
         if ([*mDevice hasUnifiedMemory]) {
-            auto* heapInfo = new MemoryHeapInfo[1];
-            memoryHeapProperties->heapCount = 1;
-            memoryHeapProperties->heapInfo = heapInfo;
+            auto heapInfo = HeapArray<MemoryHeapInfo>(1);
 
             heapInfo[0].properties =
                 wgpu::HeapProperty::DeviceLocal | wgpu::HeapProperty::HostVisible |
@@ -985,25 +1030,27 @@ void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
                 // excluding the conditional causes build errors.
                 DAWN_UNREACHABLE();
             }
+
+            memoryHeapProperties->heapInfo = std::move(heapInfo).MoveToSpan();
         } else {
 #if DAWN_PLATFORM_IS(MACOS)
-            auto* heapInfo = new MemoryHeapInfo[2];
-            memoryHeapProperties->heapCount = 2;
-            memoryHeapProperties->heapInfo = heapInfo;
+            auto heapInfo = HeapArray<MemoryHeapInfo>(2);
 
             heapInfo[0].properties = wgpu::HeapProperty::DeviceLocal;
             heapInfo[0].size = [*mDevice recommendedMaxWorkingSetSize];
 
             mach_msg_type_number_t hostBasicInfoMsg = HOST_BASIC_INFO_COUNT;
             host_basic_info_data_t hostInfo{};
-            DAWN_CHECK(host_info(mach_host_self(), HOST_BASIC_INFO,
-                                 reinterpret_cast<host_info_t>(&hostInfo),
-                                 &hostBasicInfoMsg) == KERN_SUCCESS);
+            auto status = host_info(mach_host_self(), HOST_BASIC_INFO,
+                                    reinterpret_cast<host_info_t>(&hostInfo), &hostBasicInfoMsg);
+            DAWN_CHECK(status == KERN_SUCCESS);
 
             heapInfo[1].properties = wgpu::HeapProperty::HostVisible |
                                      wgpu::HeapProperty::HostCoherent |
                                      wgpu::HeapProperty::HostCached;
             heapInfo[1].size = hostInfo.max_mem;
+
+            memoryHeapProperties->heapInfo = std::move(heapInfo).MoveToSpan();
 #else
             DAWN_UNREACHABLE();
 #endif
@@ -1012,9 +1059,7 @@ void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
     if (auto* subgroupMatrixConfigs = info.Get<AdapterPropertiesSubgroupMatrixConfigs>()) {
         DAWN_ASSERT([*mDevice supportsFamily:MTLGPUFamilyApple7]);
 
-        auto* configs = new SubgroupMatrixConfig[2];
-        subgroupMatrixConfigs->configCount = 2;
-        subgroupMatrixConfigs->configs = configs;
+        auto configs = HeapArray<SubgroupMatrixConfig>(2);
 
         configs[0].componentType = wgpu::SubgroupMatrixComponentType::F32;
         configs[0].resultComponentType = wgpu::SubgroupMatrixComponentType::F32;
@@ -1027,6 +1072,8 @@ void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
         configs[1].M = 8;
         configs[1].N = 8;
         configs[1].K = 8;
+
+        subgroupMatrixConfigs->configs = std::move(configs).MoveToSpan();
     }
 }
 }  // namespace dawn::native::metal

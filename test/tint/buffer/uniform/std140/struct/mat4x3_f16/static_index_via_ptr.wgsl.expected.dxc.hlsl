@@ -12,37 +12,33 @@ cbuffer cbuffer_a : register(b0) {
 };
 vector<float16_t, 2> tint_bitcast_to_f16_1(uint src) {
   uint v = src;
-  float t_low = f16tof32((v & 65535u));
-  float t_high = f16tof32(((v >> 16u) & 65535u));
-  float16_t v_1 = float16_t(t_low);
-  return vector<float16_t, 2>(v_1, float16_t(t_high));
+  uint2 v_1 = uint2(v, v);
+  vector<uint16_t, 2> v16 = vector<uint16_t, 2>(((v_1 >> uint2(0u, 16u)) & (65535u).xx));
+  return asfloat16(v16);
 }
 
 vector<float16_t, 4> tint_bitcast_to_f16(uint2 src) {
   uint2 v = src;
-  uint2 mask = (65535u).xx;
-  uint2 shift = (16u).xx;
-  float2 t_low = f16tof32((v & mask));
-  float2 t_high = f16tof32(((v >> shift) & mask));
-  float16_t v_2 = float16_t(t_low.x);
-  float16_t v_3 = float16_t(t_high.x);
-  float16_t v_4 = float16_t(t_low.y);
-  return vector<float16_t, 4>(v_2, v_3, v_4, float16_t(t_high.y));
+  vector<uint16_t, 4> v16 = vector<uint16_t, 4>(((v.xxyy >> uint4(0u, 16u, 0u, 16u)) & (65535u).xxxx));
+  return asfloat16(v16);
 }
 
-matrix<float16_t, 4, 3> v_5(uint start_byte_offset) {
-  uint4 v_6 = a[(start_byte_offset / 16u)];
-  vector<float16_t, 3> v_7 = tint_bitcast_to_f16((((((start_byte_offset & 15u) >> 2u) == 2u)) ? (v_6.zw) : (v_6.xy))).xyz;
-  uint4 v_8 = a[((8u + start_byte_offset) / 16u)];
-  vector<float16_t, 3> v_9 = tint_bitcast_to_f16(((((((8u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_8.zw) : (v_8.xy))).xyz;
-  uint4 v_10 = a[((16u + start_byte_offset) / 16u)];
-  vector<float16_t, 3> v_11 = tint_bitcast_to_f16(((((((16u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_10.zw) : (v_10.xy))).xyz;
-  uint4 v_12 = a[((24u + start_byte_offset) / 16u)];
-  return matrix<float16_t, 4, 3>(v_7, v_9, v_11, tint_bitcast_to_f16(((((((24u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_12.zw) : (v_12.xy))).xyz);
+matrix<float16_t, 4, 3> v_2(uint start_byte_offset) {
+  uint4 v_3 = a[(start_byte_offset / 16u)];
+  vector<float16_t, 3> v_4 = tint_bitcast_to_f16(select((((start_byte_offset & 15u) >> 2u) == 2u), v_3.zw, v_3.xy)).xyz;
+  uint v_5 = (8u + start_byte_offset);
+  uint4 v_6 = a[(v_5 / 16u)];
+  vector<float16_t, 3> v_7 = tint_bitcast_to_f16(select((((v_5 & 15u) >> 2u) == 2u), v_6.zw, v_6.xy)).xyz;
+  uint v_8 = (16u + start_byte_offset);
+  uint4 v_9 = a[(v_8 / 16u)];
+  vector<float16_t, 3> v_10 = tint_bitcast_to_f16(select((((v_8 & 15u) >> 2u) == 2u), v_9.zw, v_9.xy)).xyz;
+  uint v_11 = (24u + start_byte_offset);
+  uint4 v_12 = a[(v_11 / 16u)];
+  return matrix<float16_t, 4, 3>(v_4, v_7, v_10, tint_bitcast_to_f16(select((((v_11 & 15u) >> 2u) == 2u), v_12.zw, v_12.xy)).xyz);
 }
 
 Inner v_13(uint start_byte_offset) {
-  Inner v_14 = {v_5(start_byte_offset)};
+  Inner v_14 = {v_2(start_byte_offset)};
   return v_14;
 }
 
@@ -62,7 +58,6 @@ ary_ret v_15(uint start_byte_offset) {
       {
         v_16 = (v_17 + 1u);
       }
-      continue;
     }
   }
   Inner v_19[4] = a_2;
@@ -91,7 +86,6 @@ ary_ret_1 v_23(uint start_byte_offset) {
       {
         v_24 = (v_25 + 1u);
       }
-      continue;
     }
   }
   Outer v_27[4] = a_1;
@@ -104,7 +98,7 @@ void f() {
   Outer l_a_3 = v_20(768u);
   Inner l_a_3_a[4] = v_15(768u);
   Inner l_a_3_a_2 = v_13(896u);
-  matrix<float16_t, 4, 3> l_a_3_a_2_m = v_5(896u);
+  matrix<float16_t, 4, 3> l_a_3_a_2_m = v_2(896u);
   vector<float16_t, 3> l_a_3_a_2_m_1 = tint_bitcast_to_f16(a[56u].zw).xyz;
   float16_t l_a_3_a_2_m_1_0 = tint_bitcast_to_f16_1(a[56u].z).x;
 }

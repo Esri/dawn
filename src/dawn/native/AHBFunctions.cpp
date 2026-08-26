@@ -25,7 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/AHBFunctions.h"
+#include "src/dawn/native/AHBFunctions.h"
 
 namespace dawn::native {
 
@@ -72,18 +72,18 @@ wgpu::TextureFormat FormatFromAHardwareBufferFormat(uint32_t ahbFormat) {
             return wgpu::TextureFormat::RGBA8Unorm;
 
         // YUV formats are sampleable with external Vulkan samplers or as opaque samplers in GLES.
-        // Treat them as External.
+        // Treat them as OpaqueYCbCrAndroid.
         case AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420:
-            return wgpu::TextureFormat::External;
+            return wgpu::TextureFormat::OpaqueYCbCrAndroid;
         case AHARDWAREBUFFER_FORMAT_YCbCr_P010:
-            return wgpu::TextureFormat::External;
+            return wgpu::TextureFormat::OpaqueYCbCrAndroid;
 
-        // RGB formats with no direct representation in WebGPU. Trivially sampleable and renderable
-        // in Vulkan and GLES but data uploads are not currently supported.
+        // RGB formats with no direct representation in WebGPU. They could be sampleable and
+        // renderable in Vulkan and GLES but data uploads couldn't be supported without more work.
         case AHARDWAREBUFFER_FORMAT_R8G8B8_UNORM:
-            return wgpu::TextureFormat::External;
+            return wgpu::TextureFormat::Undefined;
         case AHARDWAREBUFFER_FORMAT_R5G6B5_UNORM:
-            return wgpu::TextureFormat::External;
+            return wgpu::TextureFormat::Undefined;
 
         // R10G10B10A10 maps to Vulkan format VK_FORMAT_R10X6G10X6B10X6A10X6_UNORM_4PACK16 and no
         // GLES format. Not supported with no known use case.
@@ -99,7 +99,7 @@ wgpu::TextureFormat FormatFromAHardwareBufferFormat(uint32_t ahbFormat) {
         // YUV formats used by the camera and video decoder. Treat these all as external and
         // sampleable.
         default:
-            return wgpu::TextureFormat::External;
+            return wgpu::TextureFormat::OpaqueYCbCrAndroid;
     }
 }
 
@@ -120,13 +120,14 @@ bool AHBFunctions::IsValid() const {
     return mNativeWindowLib.Valid();
 }
 
-SharedTextureMemoryProperties GetAHBSharedTextureMemoryProperties(
+AHBSharedTextureMemoryProperties GetAHBSharedTextureMemoryProperties(
     const AHBFunctions* ahbFunctions,
     ::AHardwareBuffer* aHardwareBuffer) {
     AHardwareBuffer_Desc aHardwareBufferDesc{};
     ahbFunctions->Describe(aHardwareBuffer, &aHardwareBufferDesc);
 
-    SharedTextureMemoryProperties properties;
+    AHBSharedTextureMemoryProperties ahbProperties = {};
+    SharedTextureMemoryProperties& properties = ahbProperties.properties;
     properties.size = {aHardwareBufferDesc.width, aHardwareBufferDesc.height,
                        aHardwareBufferDesc.layers};
     properties.usage = wgpu::TextureUsage::CopySrc | wgpu::TextureUsage::CopyDst;
@@ -139,9 +140,12 @@ SharedTextureMemoryProperties GetAHBSharedTextureMemoryProperties(
     if (aHardwareBufferDesc.usage & AHARDWAREBUFFER_USAGE_GPU_DATA_BUFFER) {
         properties.usage |= wgpu::TextureUsage::StorageBinding;
     }
+    if (aHardwareBufferDesc.usage & AHARDWAREBUFFER_USAGE_PROTECTED_CONTENT) {
+        ahbProperties.isProtected = true;
+    }
     properties.format = FormatFromAHardwareBufferFormat(aHardwareBufferDesc.format);
 
-    return properties;
+    return ahbProperties;
 }
 
 }  // namespace dawn::native

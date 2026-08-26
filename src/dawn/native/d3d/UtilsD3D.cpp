@@ -25,11 +25,12 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d/UtilsD3D.h"
+#include "src/dawn/native/d3d/UtilsD3D.h"
 
 #include <utility>
 
-#include "dawn/native/Device.h"
+#include "src/dawn/native/Device.h"
+#include "src/utils/numeric.h"
 
 namespace dawn::native::d3d {
 
@@ -38,15 +39,17 @@ ResultOrError<std::wstring> ConvertStringToWstring(std::string_view s) {
     if (len == 0) {
         return std::wstring();
     }
-    int numChars = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), len, nullptr, 0);
+    size_t numChars = checked_cast<size_t>(MultiByteToWideChar(
+        CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), static_cast<int>(len), nullptr, 0));
     if (numChars == 0) {
         return DAWN_INTERNAL_ERROR("Failed to convert string to wide string");
     }
     std::wstring result;
     result.resize(numChars);
     int numConvertedChars =
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), len, &result[0], numChars);
-    if (numConvertedChars != numChars) {
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), static_cast<int>(len),
+                            &result[0], static_cast<int>(numChars));
+    if (static_cast<size_t>(numConvertedChars) != numChars) {
         return DAWN_INTERNAL_ERROR("Failed to convert string to wide string");
     }
     return std::move(result);
@@ -258,7 +261,7 @@ DXGI_FORMAT DXGITypelessTextureFormat(const DeviceBase* device, wgpu::TextureFor
         case wgpu::TextureFormat::R10X6BG10X6Biplanar420Unorm:
         case wgpu::TextureFormat::R10X6BG10X6Biplanar422Unorm:
         case wgpu::TextureFormat::R10X6BG10X6Biplanar444Unorm:
-        case wgpu::TextureFormat::External:
+        case wgpu::TextureFormat::OpaqueYCbCrAndroid:
         case wgpu::TextureFormat::Undefined:
             DAWN_UNREACHABLE();
     }
@@ -412,7 +415,7 @@ DXGI_FORMAT DXGITextureFormat(const DeviceBase* device, wgpu::TextureFormat form
         case wgpu::TextureFormat::R8BG8A8Triplanar420Unorm:
         case wgpu::TextureFormat::R10X6BG10X6Biplanar422Unorm:
         case wgpu::TextureFormat::R10X6BG10X6Biplanar444Unorm:
-        case wgpu::TextureFormat::External:
+        case wgpu::TextureFormat::OpaqueYCbCrAndroid:
 
         case wgpu::TextureFormat::Undefined:
             DAWN_UNREACHABLE();
@@ -515,6 +518,8 @@ DXGI_FORMAT DXGIVertexFormat(wgpu::VertexFormat format) {
         case wgpu::VertexFormat::Sint32x4:
             return DXGI_FORMAT_R32G32B32A32_SINT;
         case wgpu::VertexFormat::Unorm10_10_10_2:
+            return DXGI_FORMAT_R10G10B10A2_UNORM;
+        case wgpu::VertexFormat::Snorm10_10_10_2:
             return DXGI_FORMAT_R10G10B10A2_UNORM;
         case wgpu::VertexFormat::Unorm8x4BGRA:
             return DXGI_FORMAT_B8G8R8A8_UNORM;

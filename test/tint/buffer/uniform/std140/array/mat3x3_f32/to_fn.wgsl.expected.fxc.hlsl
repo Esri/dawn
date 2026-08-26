@@ -38,7 +38,6 @@ ary_ret v_2(uint start_byte_offset) {
       {
         v_3 = (v_4 + 1u);
       }
-      continue;
     }
   }
   float3x3 v_5[4] = a_2;
@@ -51,6 +50,6 @@ void f() {
   float v_7 = a(v_6);
   float v_8 = (v_7 + b(v_1(48u)));
   float v_9 = (v_8 + c(asfloat(u[3u].xyz).zxy));
-  s.Store(0u, asuint((v_9 + d(asfloat(u[3u].xyz).zxy.x))));
+  s.Store(0u, asuint((v_9 + d(asfloat(u[3u].z)))));
 }
 

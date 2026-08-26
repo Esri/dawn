@@ -25,22 +25,22 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/vulkan/BindGroupLayoutVk.h"
+#include "src/dawn/native/vulkan/BindGroupLayoutVk.h"
 
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"
-#include "dawn/common/MatchVariant.h"
-#include "dawn/common/Range.h"
-#include "dawn/common/ityp_vector.h"
-#include "dawn/native/CacheKey.h"
-#include "dawn/native/vulkan/DescriptorSetAllocator.h"
-#include "dawn/native/vulkan/DeviceVk.h"
-#include "dawn/native/vulkan/FencedDeleter.h"
-#include "dawn/native/vulkan/PhysicalDeviceVk.h"
-#include "dawn/native/vulkan/SamplerVk.h"
-#include "dawn/native/vulkan/UtilsVulkan.h"
-#include "dawn/native/vulkan/VulkanError.h"
+#include "src/dawn/common/MatchVariant.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/common/ityp_vector.h"
+#include "src/dawn/native/CacheKey.h"
+#include "src/dawn/native/vulkan/DescriptorSetAllocator.h"
+#include "src/dawn/native/vulkan/DeviceVk.h"
+#include "src/dawn/native/vulkan/FencedDeleter.h"
+#include "src/dawn/native/vulkan/PhysicalDeviceVk.h"
+#include "src/dawn/native/vulkan/SamplerVk.h"
+#include "src/dawn/native/vulkan/UtilsVulkan.h"
+#include "src/dawn/native/vulkan/VulkanError.h"
 
 namespace dawn::native::vulkan {
 
@@ -51,9 +51,12 @@ namespace {
 struct VulkanStaticBindings {
     ityp::vector<BindingIndex, VkDescriptorSetLayoutBinding> bindings;
     absl::flat_hash_map<VkDescriptorType, uint32_t> descriptorCountPerType;
-    absl::flat_hash_map<BindingIndex, BindingIndex> textureToStaticSamplerIndex;
+    TextureToStaticSamplerMap textureToStaticSampler;
 };
-VulkanStaticBindings ComputeVulkanStaticBindings(const BindGroupLayoutInternalBase* layout) {
+ResultOrError<VulkanStaticBindings> ComputeVulkanStaticBindings(
+    Device* device,
+    const BindGroupLayoutInternalBase* layout,
+    const BindGroupLayout::StaticSamplerSpecializationMap& staticSamplerSpecializations = {}) {
     VulkanStaticBindings res;
 
     // Build a map of texture indices to sampler indices. This maps the texture to
@@ -61,31 +64,40 @@ VulkanStaticBindings ComputeVulkanStaticBindings(const BindGroupLayoutInternalBa
     for (BindingIndex bindingIndex : layout->GetStaticSamplerIndices()) {
         auto samplerBindingInfo =
             std::get<StaticSamplerBindingInfo>(layout->GetBindingInfo(bindingIndex).bindingLayout);
-        if (!samplerBindingInfo.isUsedForSingleTexture) {
-            // The client did not specify that this sampler should be paired
-            // with a single texture binding.
+        // This is a static sampler combined with textures dynamically in the shader.
+        if (samplerBindingInfo.use == StaticSamplerUse::Freestanding) {
             continue;
         }
 
-        res.textureToStaticSamplerIndex[samplerBindingInfo.sampledTextureIndex] = bindingIndex;
+        res.textureToStaticSampler[samplerBindingInfo.sampledTextureIndex] = bindingIndex;
     }
 
     // Compute the bindings that will be chained in the DescriptorSetLayout create info. We add
-    // one entry per binding set. This might be optimized by computing continuous ranges of
+    // one entry per binding set. This could be optimized by computing continuous ranges of
     // bindings of the same type.
     res.bindings.reserve(layout->GetBindingCount());
 
     for (BindingIndex bindingIndex : Range(layout->GetBindingCount())) {
+        const BindingInfo& bindingInfo = layout->GetBindingInfo(bindingIndex);
+
+        // Skip over bindings that cannot be seen by any shaders as they could cause us to create
+        // bindgroups with more bindings than the VkDevice's limits. However keep dynamic buffers
+        // as the amount of dynamic offsets need to stay the same as WebGPU's so we can passthrough
+        // the dynamic offsets.
+        if (bindingInfo.visibility == wgpu::ShaderStage::None &&
+            bindingIndex >= layout->GetDynamicBufferCount()) {
+            continue;
+        }
+
         // This texture will be bound into the VkDescriptorSet at the index for the sampler itself.
-        if (res.textureToStaticSamplerIndex.contains(bindingIndex)) {
+        if (res.textureToStaticSampler.contains(bindingIndex)) {
             continue;
         }
 
         // Vulkan descriptor set layouts have one entry for binding_array. Only handle their first
         // element as subsequent ones will be part of the already added
         // VkDescriptorSetLayoutBinding.
-        const BindingInfo& bindingInfo = layout->GetBindingInfo(bindingIndex);
-        if (bindingInfo.indexInArray != BindingIndex(0)) {
+        if (bindingInfo.indexInArray != BindingIndex(0u)) {
             continue;
         }
 
@@ -102,6 +114,15 @@ VulkanStaticBindings ComputeVulkanStaticBindings(const BindGroupLayoutInternalBa
         if (std::holds_alternative<StaticSamplerBindingInfo>(bindingInfo.bindingLayout)) {
             auto samplerLayout = std::get<StaticSamplerBindingInfo>(bindingInfo.bindingLayout);
             auto sampler = ToBackend(samplerLayout.sampler);
+
+            // Override with the specialization's sampler if there's one. This is used to replace
+            // samplers with the correct YCbCr sampler when JITing pipelines.
+            if (auto it = staticSamplerSpecializations.find(bindingIndex);
+                it != staticSamplerSpecializations.end()) {
+                DAWN_CHECK(samplerLayout.use == StaticSamplerUse::InternalForExternalTexture);
+                DAWN_TRY_ASSIGN(sampler, Sampler::Create(device, it->second));
+            }
+
             vkBinding.pImmutableSamplers = &sampler->GetHandle().GetHandle();
 
             if (sampler->IsYCbCr()) {
@@ -117,7 +138,7 @@ VulkanStaticBindings ComputeVulkanStaticBindings(const BindGroupLayoutInternalBa
                 // the maximum number of planes that an external format can have here. The number
                 // of overall YCbCr descriptors will be relatively small and these pools are not an
                 // overall bottleneck on memory usage.
-                DAWN_ASSERT(bindingInfo.arraySize == BindingIndex(1));
+                DAWN_CHECK(bindingInfo.arraySize == BindingIndex(1u));
                 descriptorCount = 3;
             }
         }
@@ -128,7 +149,7 @@ VulkanStaticBindings ComputeVulkanStaticBindings(const BindGroupLayoutInternalBa
         res.descriptorCountPerType[vkBinding.descriptorType] += descriptorCount;
     }
 
-    return res;
+    return std::move(res);
 }
 
 }  // anonymous namespace
@@ -162,15 +183,28 @@ VkDescriptorType VulkanDescriptorType(const BindingInfo& bindingInfo) {
         [](const StaticSamplerBindingInfo& layout) {
             // Make this entry into a combined image sampler iff the client
             // specified a single texture binding to be paired with it.
-            return (layout.isUsedForSingleTexture) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-                                                   : VK_DESCRIPTOR_TYPE_SAMPLER;
+            return (layout.use == StaticSamplerUse::Freestanding)
+                       ? VK_DESCRIPTOR_TYPE_SAMPLER
+                       : VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         },
         [](const TextureBindingInfo&) { return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE; },
         [](const StorageTextureBindingInfo&) { return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; },
-        [](const TexelBufferBindingInfo&) {
-            // TODO(crbug/382544164): Prototype texel buffer feature
+        [](const TexelBufferBindingInfo& layout) -> VkDescriptorType {
+            switch (layout.access) {
+                case wgpu::TexelBufferAccess::ReadOnly:
+                    // TODO(crbug.com/382544164): Investigate whether read-only texel buffers
+                    // should use VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER for broader format
+                    // support, or stay on VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER for bindless
+                    // compatibility (uniform texel buffers have limited bindless support on
+                    // Vulkan and would require a separate descriptor array in the resource
+                    // table).
+                    [[fallthrough]];
+                case wgpu::TexelBufferAccess::ReadWrite:
+                    return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
+                case wgpu::TexelBufferAccess::Undefined:
+                    DAWN_UNREACHABLE();
+            }
             DAWN_UNREACHABLE();
-            return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
         },
 
         [](const InputAttachmentBindingInfo&) { return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT; },
@@ -196,31 +230,82 @@ BindGroupLayout::~BindGroupLayout() = default;
 MaybeError BindGroupLayout::Initialize() {
     Device* device = ToBackend(GetDevice());
 
-    VulkanStaticBindings bindings = ComputeVulkanStaticBindings(this);
-
-    mDescriptorSetAllocator =
-        DescriptorSetAllocator::Create(device, std::move(bindings.descriptorCountPerType));
-
-    mTextureToStaticSamplerIndex = std::move(bindings.textureToStaticSamplerIndex);
+    VulkanStaticBindings bindings;
+    DAWN_TRY_ASSIGN(bindings, ComputeVulkanStaticBindings(device, this));
+    mTextureToStaticSampler = std::move(bindings.textureToStaticSampler);
 
     VkDescriptorSetLayoutCreateInfo createInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
-        .bindingCount = uint32_t(bindings.bindings.size()),
+        .bindingCount = uint32_t{bindings.bindings.size()},
         .pBindings = bindings.bindings.data(),
     };
 
     // Record cache key information now since the createInfo is not stored.
     StreamIn(&mCacheKey, createInfo);
 
-    DAWN_TRY(CheckVkSuccess(device->fn.CreateDescriptorSetLayout(device->GetVkDevice(), &createInfo,
-                                                                 nullptr, &*mHandle),
-                            "CreateDescriptorSetLayout"));
+    SpecializationResult r;
+    DAWN_TRY_ASSIGN(r, GetOrCreateSpecialization({}));
+
+    mHandle = r.layout;
+    mDescriptorSetAllocator = r.allocator.Get();
 
     SetLabelImpl();
 
     return {};
+}
+
+ResultOrError<BindGroupLayout::SpecializationResult> BindGroupLayout::GetOrCreateSpecialization(
+    const Specialization& specialization) {
+    if (auto specialized = mSpecializations.ConstUse(
+            [&](auto specializations) -> std::optional<SpecializationResult> {
+                if (auto it = specializations->find(specialization); it != specializations->end()) {
+                    return it->second;
+                }
+                return std::nullopt;
+            });
+        specialized) {
+        return *specialized;
+    }
+
+    Device* device = ToBackend(GetDevice());
+    VulkanStaticBindings bindings;
+    DAWN_TRY_ASSIGN(bindings,
+                    ComputeVulkanStaticBindings(device, this, specialization.staticSamplers));
+
+    VkDescriptorSetLayoutCreateInfo createInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .bindingCount = uint32_t{bindings.bindings.size()},
+        .pBindings = bindings.bindings.data(),
+    };
+
+    VkDescriptorSetLayout specialized;
+    DAWN_TRY(CheckVkSuccess(device->fn.CreateDescriptorSetLayout(device->GetVkDevice(), &createInfo,
+                                                                 nullptr, &*specialized),
+                            "CreateDescriptorSetLayout"));
+
+    Ref<DescriptorSetAllocator> allocator =
+        DescriptorSetAllocator::Create(device, std::move(bindings.descriptorCountPerType));
+
+    return mSpecializations.Use([&](auto specializations) -> ResultOrError<SpecializationResult> {
+        SpecializationResult result{.layout = specialized, .allocator = std::move(allocator)};
+        auto [it, inserted] = specializations->insert({specialization, result});
+        if (!inserted) {
+            device->fn.DestroyDescriptorSetLayout(device->GetVkDevice(), specialized, nullptr);
+            return it->second;
+        }
+        return result;
+    });
+}
+
+ResultOrError<VkDescriptorSetLayout> BindGroupLayout::GetOrCreateSpecializedHandle(
+    const Specialization& specialization) {
+    SpecializationResult specialized;
+    DAWN_TRY_ASSIGN(specialized, GetOrCreateSpecialization(specialization));
+    return specialized.layout;
 }
 
 void BindGroupLayout::DestroyImpl(DestroyReason reason) {
@@ -228,14 +313,20 @@ void BindGroupLayout::DestroyImpl(DestroyReason reason) {
 
     Device* device = ToBackend(GetDevice());
 
-    // DescriptorSetLayout aren't used by execution on the GPU and can be deleted at any time,
-    // so we can destroy mHandle immediately instead of using the FencedDeleter.
-    if (mHandle != VK_NULL_HANDLE) {
-        device->fn.DestroyDescriptorSetLayout(device->GetVkDevice(), mHandle, nullptr);
-        mHandle = VK_NULL_HANDLE;
-    }
+    // mHandle is destroyed in the loop below.
+    mHandle = VK_NULL_HANDLE;
 
     mDescriptorSetAllocator = nullptr;
+
+    // DescriptorSetLayouts aren't used by execution on the GPU and can be deleted at any time,
+    // so we can destroy them immediately instead of using the FencedDeleter.
+    mSpecializations.Use([&](auto specializations) {
+        for (auto& [_, specialized] : *specializations) {
+            device->fn.DestroyDescriptorSetLayout(device->GetVkDevice(), specialized.layout,
+                                                  nullptr);
+        }
+        specializations->clear();
+    });
 }
 
 VkDescriptorSetLayout BindGroupLayout::GetHandle() const {
@@ -263,16 +354,42 @@ void BindGroupLayout::ReduceMemoryUsage() {
     mBindGroupAllocator->DeleteEmptySlabs();
 }
 
-std::optional<BindingIndex> BindGroupLayout::GetStaticSamplerIndexForTexture(
-    BindingIndex textureBinding) const {
-    if (mTextureToStaticSamplerIndex.contains(textureBinding)) {
-        return mTextureToStaticSamplerIndex.at(textureBinding);
-    }
-    return {};
+ResultOrError<std::unique_ptr<OwnedDescriptorSet>> BindGroupLayout::GetSpecializedSetFor(
+    const BindGroup* bg,
+    const Specialization& specialization) {
+    DAWN_ASSERT(bg->GetLayout() == this);
+
+    SpecializationResult specialized;
+    DAWN_TRY_ASSIGN(specialized, GetOrCreateSpecialization(specialization));
+
+    DescriptorSetAllocation dsAllocation;
+    DAWN_TRY_ASSIGN(dsAllocation, specialized.allocator->Allocate(specialized.layout));
+
+    bg->WriteDescriptorSet(dsAllocation.set, mTextureToStaticSampler);
+    return std::make_unique<OwnedDescriptorSet>(std::move(specialized.allocator), dsAllocation);
+}
+
+const TextureToStaticSamplerMap& BindGroupLayout::GetTextureToStaticSamplerMap() const {
+    return mTextureToStaticSampler;
 }
 
 void BindGroupLayout::SetLabelImpl() {
     SetDebugName(ToBackend(GetDevice()), mHandle, "Dawn_BindGroupLayout", GetLabel());
+}
+
+// OwnedDescriptorSet
+
+OwnedDescriptorSet::OwnedDescriptorSet(Ref<DescriptorSetAllocator> allocator,
+                                       DescriptorSetAllocation allocation)
+    : mAllocation(allocation), mAllocator(std::move(allocator)) {}
+
+OwnedDescriptorSet::~OwnedDescriptorSet() {
+    mAllocator->Deallocate(&mAllocation);
+    mAllocator = nullptr;
+}
+
+VkDescriptorSet OwnedDescriptorSet::GetHandle() const {
+    return mAllocation.set;
 }
 
 }  // namespace dawn::native::vulkan

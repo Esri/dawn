@@ -28,13 +28,13 @@
 #ifndef SRC_DAWN_NATIVE_D3D12_BINDGROUPD3D12_H_
 #define SRC_DAWN_NATIVE_D3D12_BINDGROUPD3D12_H_
 
-#include "dawn/common/MutexProtected.h"
-#include "dawn/common/PlacementAllocated.h"
-#include "dawn/common/ityp_span.h"
-#include "dawn/common/ityp_stack_vec.h"
-#include "dawn/native/BindGroup.h"
-#include "dawn/native/d3d12/CPUDescriptorHeapAllocationD3D12.h"
-#include "dawn/native/d3d12/GPUDescriptorHeapAllocationD3D12.h"
+#include "src/dawn/common/MutexProtected.h"
+#include "src/dawn/common/PlacementAllocated.h"
+#include "src/dawn/common/ityp_stack_vec.h"
+#include "src/dawn/native/BindGroup.h"
+#include "src/dawn/native/d3d12/CPUDescriptorHeapAllocationD3D12.h"
+#include "src/dawn/native/d3d12/GPUDescriptorHeapAllocationD3D12.h"
+#include "src/utils/span.h"
 
 namespace dawn::native::d3d12 {
 
@@ -51,9 +51,11 @@ class BindGroup final : public BindGroupBase, public PlacementAllocated {
               const UnpackedPtr<BindGroupDescriptor>& descriptor,
               const CPUDescriptorHeapAllocation& viewAllocation);
 
-    // Returns true if the BindGroup was successfully populated.
-    bool PopulateViews(MutexProtected<ShaderVisibleDescriptorAllocator>& viewAllocator);
-    bool PopulateSamplers(MutexProtected<ShaderVisibleDescriptorAllocator>& samplerAllocator);
+    // Returns true if the BindGroup was successfully populated (now or on a previous call)
+    // in the current allocator's heap. If false is returned, caller should
+    // AllocateAndSwitchShaderVisibleHeap and populate again.
+    bool PopulateViews(ShaderVisibleDescriptorAllocator* viewAllocator);
+    bool PopulateSamplers(ShaderVisibleDescriptorAllocator* samplerAllocator);
 
     D3D12_GPU_DESCRIPTOR_HANDLE GetBaseViewDescriptor() const;
     D3D12_GPU_DESCRIPTOR_HANDLE GetBaseSamplerDescriptor() const;

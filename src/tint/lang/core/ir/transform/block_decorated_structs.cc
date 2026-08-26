@@ -118,8 +118,7 @@ void Run(Module& ir) {
 }  // namespace
 
 Result<SuccessType> BlockDecoratedStructs(Module& ir) {
-    TINT_CHECK_RESULT(ValidateAndDumpIfNeeded(ir, "core.BlockDecoratedStructs",
-                                              kBlockDecoratedStructsCapabilities));
+    core::ir::AssertValid(ir, "before core.BlockDecoratedStructs");
 
     Run(ir);
 
