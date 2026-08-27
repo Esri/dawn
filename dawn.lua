@@ -723,6 +723,7 @@ end
 if (enable_win) then
 
   defines {
+    "DAWN_USE_BUILT_DXC",
     "DAWN_USE_WINDOWS_UI",
     "TINT_BUILD_IS_WIN=1",
     "ENABLE_PCH=1",
