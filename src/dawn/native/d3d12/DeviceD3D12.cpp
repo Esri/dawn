@@ -300,8 +300,10 @@ ComPtr<ID3D12CommandSignature> Device::GetDrawIndexedIndirectSignature() const {
 // Ensure DXC if use_dxc toggles are set and validated.
 MaybeError Device::EnsureCompilerLibraries() {
     if (IsToggleEnabled(Toggle::UseDXC)) {
+        printf("Ensuring DXC\n");
         DAWN_TRY(ToBackend(GetPhysicalDevice())->GetBackend()->EnsureDXC());
     } else {
+        printf("Ensuring FXC\n");
         DAWN_TRY(ToBackend(GetPhysicalDevice())->GetBackend()->EnsureFXC());
     }
 
