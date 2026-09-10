@@ -28,11 +28,10 @@
 #ifndef SRC_DAWN_NATIVE_METAL_RENDERPIPELINEMTL_H_
 #define SRC_DAWN_NATIVE_METAL_RENDERPIPELINEMTL_H_
 
-#include "dawn/native/RenderPipeline.h"
-
-#include "dawn/common/NSRef.h"
-
 #import <Metal/Metal.h>
+
+#include "src/dawn/common/NSRef.h"
+#include "src/dawn/native/RenderPipeline.h"
 
 namespace dawn::native::metal {
 

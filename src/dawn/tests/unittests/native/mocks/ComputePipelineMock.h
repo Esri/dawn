@@ -29,9 +29,8 @@
 #define SRC_DAWN_TESTS_UNITTESTS_NATIVE_MOCKS_COMPUTEPIPELINEMOCK_H_
 
 #include "gmock/gmock.h"
-
-#include "dawn/native/ComputePipeline.h"
-#include "dawn/tests/unittests/native/mocks/DeviceMock.h"
+#include "src/dawn/native/ComputePipeline.h"
+#include "src/dawn/tests/unittests/native/mocks/DeviceMock.h"
 
 namespace dawn::native {
 
@@ -46,7 +45,7 @@ class ComputePipelineMock : public ComputePipelineBase {
 
     ~ComputePipelineMock() override;
 
-    MOCK_METHOD(MaybeError, InitializeImpl, (), (override));
+    MOCK_METHOD(ResultOrError<Extent3D>, InitializeImpl, (), (override));
     MOCK_METHOD(void, DestroyImpl, (DestroyReason), (override));
 
   protected:

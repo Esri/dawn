@@ -36,8 +36,8 @@
 #include "src/tint/lang/core/constant/splat.h"
 #include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/ir/access.h"
-#include "src/tint/lang/core/ir/bitcast.h"
 #include "src/tint/lang/core/ir/break_if.h"
+#include "src/tint/lang/core/ir/constexpr_if.h"
 #include "src/tint/lang/core/ir/construct.h"
 #include "src/tint/lang/core/ir/continue.h"
 #include "src/tint/lang/core/ir/convert.h"
@@ -57,11 +57,13 @@
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/multi_in_block.h"
 #include "src/tint/lang/core/ir/next_iteration.h"
+#include "src/tint/lang/core/ir/override.h"
 #include "src/tint/lang/core/ir/return.h"
 #include "src/tint/lang/core/ir/store.h"
 #include "src/tint/lang/core/ir/store_vector_element.h"
 #include "src/tint/lang/core/ir/switch.h"
 #include "src/tint/lang/core/ir/swizzle.h"
+#include "src/tint/lang/core/ir/type/array_count.h"
 #include "src/tint/lang/core/ir/unreachable.h"
 #include "src/tint/lang/core/ir/user_call.h"
 #include "src/tint/lang/core/ir/var.h"
@@ -83,6 +85,7 @@
 #include "src/tint/lang/core/type/sampler.h"
 #include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/lang/core/type/u32.h"
+#include "src/tint/lang/core/type/u64.h"
 #include "src/tint/lang/core/type/u8.h"
 #include "src/tint/lang/core/type/void.h"
 #include "src/tint/utils/internal_limits.h"
@@ -217,13 +220,15 @@ struct Encoder {
         tint::Switch(
             inst_in,  //
             [&](const ir::Access* i) { InstructionAccess(*inst_out.mutable_access(), i); },
-            [&](const ir::Bitcast* i) { InstructionBitcast(*inst_out.mutable_bitcast(), i); },
             [&](const ir::BreakIf* i) { InstructionBreakIf(*inst_out.mutable_break_if(), i); },
             [&](const ir::CoreBinary* i) { InstructionBinary(*inst_out.mutable_binary(), i); },
             [&](const ir::CoreBuiltinCall* i) {
                 InstructionBuiltinCall(*inst_out.mutable_builtin_call(), i);
             },
             [&](const ir::CoreUnary* i) { InstructionUnary(*inst_out.mutable_unary(), i); },
+            [&](const ir::ConstExprIf* i) {
+                InstructionConstExprIf(*inst_out.mutable_const_expr_if(), i);
+            },
             [&](const ir::Construct* i) { InstructionConstruct(*inst_out.mutable_construct(), i); },
             [&](const ir::Continue* i) { InstructionContinue(*inst_out.mutable_continue_(), i); },
             [&](const ir::Convert* i) { InstructionConvert(*inst_out.mutable_convert(), i); },
@@ -243,6 +248,7 @@ struct Encoder {
             [&](const ir::NextIteration* i) {
                 InstructionNextIteration(*inst_out.mutable_next_iteration(), i);
             },
+            [&](const ir::Override* i) { InstructionOverride(*inst_out.mutable_override(), i); },
             [&](const ir::Return* i) { InstructionReturn(*inst_out.mutable_return_(), i); },
             [&](const ir::Store* i) { InstructionStore(*inst_out.mutable_store(), i); },
             [&](const ir::StoreVectorElement* i) {
@@ -262,6 +268,9 @@ struct Encoder {
         for (auto* result : inst_in->Results()) {
             inst_out.add_results(Value(result));
         }
+        if (inst_in->Alignment().has_value()) {
+            inst_out.set_alignment(inst_in->Alignment().value());
+        }
     }
 
     void InstructionAccess(pb::InstructionAccess&, const ir::Access*) {}
@@ -269,8 +278,6 @@ struct Encoder {
     void InstructionBinary(pb::InstructionBinary& binary_out, const ir::CoreBinary* binary_in) {
         binary_out.set_op(BinaryOp(binary_in->Op()));
     }
-
-    void InstructionBitcast(pb::InstructionBitcast&, const ir::Bitcast*) {}
 
     void InstructionBreakIf(pb::InstructionBreakIf& breakif_out, const ir::BreakIf* breakif_in) {
         auto num_next_iter_values = static_cast<uint32_t>(breakif_in->NextIterValues().size());
@@ -280,8 +287,16 @@ struct Encoder {
     void InstructionBuiltinCall(pb::InstructionBuiltinCall& call_out,
                                 const ir::CoreBuiltinCall* call_in) {
         call_out.set_builtin(BuiltinFn(call_in->Func()));
-        for (auto* param : call_in->ExplicitTemplateParams()) {
-            call_out.add_explicit_template_params(Type(param));
+        for (auto param : call_in->ExplicitTemplateParams()) {
+            if (std::holds_alternative<const core::type::Type*>(param)) {
+                auto* p = call_out.add_explicit_template_parameters();
+                p->set_type(Type(std::get<const core::type::Type*>(param)));
+            } else if (std::holds_alternative<core::Majorness>(param)) {
+                auto* p = call_out.add_explicit_template_parameters();
+                p->set_majorness(Majorness(std::get<core::Majorness>(param)));
+            } else {
+                TINT_ICE() << "invalid template parameter kind";
+            }
         }
     }
 
@@ -297,6 +312,16 @@ struct Encoder {
         }
         if (auto* block = if_in->False()) {
             if_out.set_false_(Block(block));
+        }
+    }
+
+    void InstructionConstExprIf(pb::InstructionConstExprIf& const_expr_if_out,
+                                const ir::ConstExprIf* const_expr_if_in) {
+        if (auto* block = const_expr_if_in->True()) {
+            const_expr_if_out.set_true_(Block(block));
+        }
+        if (auto* block = const_expr_if_in->False()) {
+            const_expr_if_out.set_false_(Block(block));
         }
     }
 
@@ -326,6 +351,13 @@ struct Encoder {
     }
 
     void InstructionNextIteration(pb::InstructionNextIteration&, const ir::NextIteration*) {}
+
+    void InstructionOverride(pb::InstructionOverride& override_out,
+                             const ir::Override* override_in) {
+        if (auto id_in = override_in->OverrideId()) {
+            override_out.set_override_id(id_in.value().value);
+        }
+    }
 
     void InstructionReturn(pb::InstructionReturn&, const ir::Return*) {}
 
@@ -387,6 +419,7 @@ struct Encoder {
                 [&](const core::type::U32*) { type_out.set_basic(pb::TypeBasic::u32); },
                 [&](const core::type::F32*) { type_out.set_basic(pb::TypeBasic::f32); },
                 [&](const core::type::F16*) { type_out.set_basic(pb::TypeBasic::f16); },
+                [&](const core::type::U64*) { type_out.set_basic(pb::TypeBasic::u64); },
                 [&](const core::type::I8*) { type_out.set_basic((pb::TypeBasic::i8)); },
                 [&](const core::type::U8*) { type_out.set_basic((pb::TypeBasic::u8)); },
                 [&](const core::type::Vector* v) { TypeVector(*type_out.mutable_vector(), v); },
@@ -505,12 +538,20 @@ struct Encoder {
             array_in->Count(),  //
             [&](const core::type::ConstantArrayCount* c) {
                 array_out.set_count(c->value);
+                array_out.set_count_kind(pb::ArrayCountKind::Constant);
                 if (c->value >= internal_limits::kMaxArrayElementCount) {
                     err_ << "array count (" << c->value << ") must be less than "
                          << internal_limits::kMaxArrayElementCount << "\n";
                 }
             },
-            [&](const core::type::RuntimeArrayCount*) { array_out.set_count(0); },
+            [&](const core::type::RuntimeArrayCount*) {
+                array_out.set_count(0);
+                array_out.set_count_kind(pb::ArrayCountKind::Runtime);
+            },
+            [&](const core::ir::type::ValueArrayCount* c) {
+                array_out.set_count(Value(c->value));
+                array_out.set_count_kind(pb::ArrayCountKind::Override);
+            },
             TINT_ICE_ON_NO_MATCH);
     }
 
@@ -586,13 +627,21 @@ struct Encoder {
         tint::Switch(
             buffer_in->Count(),  //
             [&](const core::type::ConstantArrayCount* c) {
-                buffer_out.set_count(c->value);
+                buffer_out.set_size(c->value);
+                buffer_out.set_size_kind(pb::ArrayCountKind::Constant);
                 if (c->value >= internal_limits::kMaxArrayElementCount) {
-                    err_ << "array count (" << c->value << ") must be less than "
+                    err_ << "buffer size (" << c->value << ") must be less than "
                          << internal_limits::kMaxArrayElementCount << "\n";
                 }
             },
-            [&](const core::type::RuntimeArrayCount*) { buffer_out.set_count(0); },
+            [&](const core::ir::type::ValueArrayCount* c) {
+                buffer_out.set_size(Value(c->value));
+                buffer_out.set_size_kind(pb::ArrayCountKind::Override);
+            },
+            [&](const core::type::RuntimeArrayCount*) {
+                buffer_out.set_size(0);
+                buffer_out.set_size_kind(pb::ArrayCountKind::Runtime);
+            },
             TINT_ICE_ON_NO_MATCH);
     }
 
@@ -849,6 +898,18 @@ struct Encoder {
         TINT_ICE() << "invalid Access: " << in;
     }
 
+    pb::Majorness Majorness(core::Majorness in) {
+        switch (in) {
+            case core::Majorness::kRowMajor:
+                return pb::Majorness::row_major;
+            case core::Majorness::kColMajor:
+                return pb::Majorness::col_major;
+            case core::Majorness::kUndefined:
+                break;
+        }
+        TINT_ICE() << "invalid Majorness: " << in;
+    }
+
     pb::UnaryOp UnaryOp(core::UnaryOp in) {
         switch (in) {
             case core::UnaryOp::kComplement:
@@ -1073,6 +1134,8 @@ struct Encoder {
                 return pb::BuiltinValue::front_facing;
             case core::BuiltinValue::kGlobalInvocationId:
                 return pb::BuiltinValue::global_invocation_id;
+            case core::BuiltinValue::kGlobalInvocationIndex:
+                return pb::BuiltinValue::global_invocation_index;
             case core::BuiltinValue::kInstanceIndex:
                 return pb::BuiltinValue::instance_index;
             case core::BuiltinValue::kLocalInvocationId:
@@ -1099,6 +1162,8 @@ struct Encoder {
                 return pb::BuiltinValue::vertex_index;
             case core::BuiltinValue::kWorkgroupId:
                 return pb::BuiltinValue::workgroup_id;
+            case core::BuiltinValue::kWorkgroupIndex:
+                return pb::BuiltinValue::workgroup_index;
             case core::BuiltinValue::kClipDistances:
                 return pb::BuiltinValue::clip_distances;
             case core::BuiltinValue::kPrimitiveIndex:
@@ -1119,6 +1184,8 @@ struct Encoder {
                 return pb::BuiltinFn::acos;
             case core::BuiltinFn::kAcosh:
                 return pb::BuiltinFn::acosh;
+            case core::BuiltinFn::kAddSat:
+                return pb::BuiltinFn::add_sat;
             case core::BuiltinFn::kAll:
                 return pb::BuiltinFn::all;
             case core::BuiltinFn::kAny:
@@ -1135,6 +1202,8 @@ struct Encoder {
                 return pb::BuiltinFn::atan2;
             case core::BuiltinFn::kAtanh:
                 return pb::BuiltinFn::atanh;
+            case core::BuiltinFn::kBitcast:
+                return pb::BuiltinFn::bitcast;
             case core::BuiltinFn::kCeil:
                 return pb::BuiltinFn::ceil;
             case core::BuiltinFn::kClamp:
@@ -1351,6 +1420,10 @@ struct Encoder {
                 return pb::BuiltinFn::atomic_exchange;
             case core::BuiltinFn::kAtomicCompareExchangeWeak:
                 return pb::BuiltinFn::atomic_compare_exchange_weak;
+            case core::BuiltinFn::kAtomicStoreMin:
+                return pb::BuiltinFn::atomic_store_min;
+            case core::BuiltinFn::kAtomicStoreMax:
+                return pb::BuiltinFn::atomic_store_max;
             case core::BuiltinFn::kSubgroupBallot:
                 return pb::BuiltinFn::subgroup_ballot;
             case core::BuiltinFn::kSubgroupElect:
@@ -1427,6 +1500,8 @@ struct Encoder {
                 return pb::BuiltinFn::buffer_view;
             case core::BuiltinFn::kBufferLength:
                 return pb::BuiltinFn::buffer_length;
+            case core::BuiltinFn::kBufferArrayView:
+                return pb::BuiltinFn::buffer_array_view;
             case core::BuiltinFn::kNone:
                 break;
         }

@@ -25,43 +25,48 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/ApplyClearColorValueWithDrawHelper.h"
+#include "src/dawn/native/ApplyClearColorValueWithDrawHelper.h"
 
 #include <limits>
 #include <string>
 #include <utility>
 
-#include "dawn/common/Enumerator.h"
-#include "dawn/common/Range.h"
-#include "dawn/native/BindGroup.h"
-#include "dawn/native/BindGroupLayout.h"
-#include "dawn/native/Buffer.h"
-#include "dawn/native/CommandEncoder.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/InternalPipelineStore.h"
-#include "dawn/native/ObjectContentHasher.h"
-#include "dawn/native/RenderPassEncoder.h"
-#include "dawn/native/RenderPipeline.h"
-#include "dawn/native/utils/WGPUHelpers.h"
-#include "dawn/native/webgpu_absl_format.h"
+#include "src/dawn/common/Enumerator.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/common/Strings.h"
+#include "src/dawn/native/BindGroup.h"
+#include "src/dawn/native/BindGroupLayout.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/CommandEncoder.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/InternalPipelineStore.h"
+#include "src/dawn/native/ObjectContentHasher.h"
+#include "src/dawn/native/RenderPassEncoder.h"
+#include "src/dawn/native/RenderPipeline.h"
+#include "src/dawn/native/utils/WGPUHelpers.h"
+#include "src/dawn/native/webgpu_absl_format.h"
+#include "src/utils/compiler.h"
+#include "src/utils/numeric.h"
+#include "src/utils/span.h"
 
 namespace dawn::native {
 
 namespace {
 
 // General helper functions and data structures for applying clear values with draw
-static const char kVSSource[] = R"(
-@vertex
-fn main(@builtin(vertex_index) vertexIndex : u32) -> @builtin(position) vec4f {
-    var pos = array(
-        vec2f(-1.0, -1.0),
-        vec2f( 3.0, -1.0),
-        vec2f(-1.0,  3.0));
-    return vec4f(pos[vertexIndex], 0.0, 1.0);
-})";
+static const char kVSSource[] = DAWN_MULTILINE(
+    @vertex
+    fn main(@builtin(vertex_index) vertexIndex : u32) -> @builtin(position) vec4f {
+        var pos = array(
+            vec2f(-1.0, -1.0),
+            vec2f( 3.0, -1.0),
+            vec2f(-1.0,  3.0));
+        return vec4f(pos[vertexIndex], 0.0, 1.0);
+    }
+);
 
 const char* GetTextureComponentTypeString(DeviceBase* device, wgpu::TextureFormat format) {
-    DAWN_ASSERT(format != wgpu::TextureFormat::Undefined);
+    DAWN_CHECK(format != wgpu::TextureFormat::Undefined);
 
     const Format& formatInfo = device->GetValidInternalFormat(format);
     switch (formatInfo.GetAspectInfo(Aspect::Color).baseType) {
@@ -117,7 +122,7 @@ std::string ConstructFragmentShader(DeviceBase* device,
     // Only generate the assignments we need.
     for (auto i : key.colorTargetsToApplyClearColorValue) {
         wgpu::TextureFormat currentFormat = key.colorTargetFormats[i];
-        DAWN_ASSERT(currentFormat != wgpu::TextureFormat::Undefined);
+        DAWN_CHECK(currentFormat != wgpu::TextureFormat::Undefined);
 
         const char* type = GetTextureComponentTypeString(device, currentFormat);
 
@@ -134,27 +139,26 @@ std::string ConstructFragmentShader(DeviceBase* device,
     std::ostringstream fragmentShaderStream;
     if (key.hasPLS) {
         std::vector<const char*> plsTypes;
-        const size_t plsSlotCount = key.totalPixelLocalStorageSize / kPLSSlotByteSize;
+        const size_t plsSlotCount =
+            checked_cast<size_t>(key.totalPixelLocalStorageSize / kPLSSlotByteSize);
         plsTypes.resize(plsSlotCount, "u32");
         for (const auto& attachment : key.plsAttachments) {
             switch (attachment.format) {
                 case wgpu::TextureFormat::R32Uint:
-                    plsTypes[attachment.offset / kPLSSlotByteSize] = "u32";
+                    plsTypes[checked_cast<size_t>(attachment.offset / kPLSSlotByteSize)] = "u32";
                     break;
                 case wgpu::TextureFormat::R32Sint:
-                    plsTypes[attachment.offset / kPLSSlotByteSize] = "i32";
+                    plsTypes[checked_cast<size_t>(attachment.offset / kPLSSlotByteSize)] = "i32";
                     break;
                 case wgpu::TextureFormat::R32Float:
-                    plsTypes[attachment.offset / kPLSSlotByteSize] = "f32";
+                    plsTypes[checked_cast<size_t>(attachment.offset / kPLSSlotByteSize)] = "f32";
                     break;
                 default:
                     DAWN_UNREACHABLE();
             }
         }
 
-        fragmentShaderStream << R"(
-enable chromium_experimental_pixel_local;
-)";
+        fragmentShaderStream << "enable chromium_experimental_pixel_local;";
         std::ostringstream plsDeclarationStream;
         plsDeclarationStream << "struct PLS {\n";
         for (size_t i = 0; i < plsSlotCount; ++i) {
@@ -164,27 +168,26 @@ enable chromium_experimental_pixel_local;
         if (plsSlotCount) {
             // Read the PLS with a phony-assignment to mark the PLS as statically used for
             // compatibility with the render pass.
-            assignOutputColorStream << R"(
-    _ = pls.a0;
-)";
+            assignOutputColorStream << "_ = pls.a0;";
         }
 
-        fragmentShaderStream << plsDeclarationStream.str() << R"(
-var<pixel_local> pls : PLS;
-)";
+        fragmentShaderStream << plsDeclarationStream.str() << "var<pixel_local> pls : PLS;";
     }
 
     fragmentShaderStream << outputColorDeclarationStream.str()
-                         << clearValueUniformBufferDeclarationStream.str() << R"(
-@group(0) @binding(0) var<uniform> clearColors : ClearColors;
+                         << clearValueUniformBufferDeclarationStream.str();
+    fragmentShaderStream << DAWN_MULTILINE(
+        @group(0) @binding(0) var<uniform> clearColors : ClearColors;
 
-@fragment
-fn main() -> OutputColor {
-    var outputColor : OutputColor;
-)" << assignOutputColorStream.str()
-                         << R"(
-    return outputColor;
-})";
+        @fragment
+        fn main() -> OutputColor {
+            var outputColor : OutputColor;
+    );
+    fragmentShaderStream << assignOutputColorStream.str();
+    fragmentShaderStream << DAWN_MULTILINE(
+            return outputColor;
+        }
+    );
     return fragmentShaderStream.str();
 }
 
@@ -213,14 +216,6 @@ ResultOrError<RenderPipelineBase*> GetOrCreateApplyClearValueWithDrawPipeline(
     vertex.module = vertexModule.Get();
     vertex.entryPoint = "main";
 
-    // Prepare the fragment stage
-    std::string fragmentShader = ConstructFragmentShader(device, key);
-    Ref<ShaderModuleBase> fragmentModule;
-    DAWN_TRY_ASSIGN(fragmentModule, utils::CreateShaderModule(device, fragmentShader.c_str()));
-    FragmentState fragment = {};
-    fragment.module = fragmentModule.Get();
-    fragment.entryPoint = "main";
-
     // Prepare the color states
     PerColorAttachment<ColorTargetState> colorTargets = {};
     for (auto [i, target] : Enumerate(colorTargets)) {
@@ -230,6 +225,15 @@ ResultOrError<RenderPipelineBase*> GetOrCreateApplyClearValueWithDrawPipeline(
             target.writeMask = wgpu::ColorWriteMask::None;
         }
     }
+
+    // Prepare the fragment stage
+    std::string fragmentShader = ConstructFragmentShader(device, key);
+    Ref<ShaderModuleBase> fragmentModule;
+    DAWN_TRY_ASSIGN(fragmentModule, utils::CreateShaderModule(device, fragmentShader.c_str()));
+    FragmentState fragment = {};
+    fragment.module = fragmentModule.Get();
+    fragment.entryPoint = "main";
+    fragment.targets = colorTargets;
 
     // Create RenderPipeline
     RenderPipelineDescriptor renderPipelineDesc = {};
@@ -243,8 +247,6 @@ ResultOrError<RenderPipelineBase*> GetOrCreateApplyClearValueWithDrawPipeline(
         depthStencilState.format = key.depthStencilFormat;
         renderPipelineDesc.depthStencil = &depthStencilState;
     }
-    fragment.targetCount = key.colorAttachmentCount;
-    fragment.targets = colorTargets.data();
 
     // Build the pipeline layout explicitly as we might need to add PLS information to it.
     Ref<BindGroupLayoutBase> bgl;
@@ -252,8 +254,7 @@ ResultOrError<RenderPipelineBase*> GetOrCreateApplyClearValueWithDrawPipeline(
                                                               wgpu::BufferBindingType::Uniform}}));
 
     PipelineLayoutDescriptor pipelineLayoutDesc{};
-    pipelineLayoutDesc.bindGroupLayoutCount = 1;
-    pipelineLayoutDesc.bindGroupLayouts = &bgl.Get();
+    pipelineLayoutDesc.bindGroupLayouts = SpanFromRef<BindGroupIndex>(bgl.Get());
 
     wgpu::PipelineLayoutPixelLocalStorage pls;
     if (key.hasPLS) {
@@ -278,52 +279,56 @@ ResultOrError<Ref<BufferBase>> CreateUniformBufferWithClearValues(
     CommandEncoder* encoder,
     const RenderPassDescriptor* renderPassDescriptor,
     const KeyOfApplyClearColorValueWithDrawPipelines& key) {
-    auto colorAttachments = ityp::SpanFromUntyped<ColorAttachmentIndex>(
-        renderPassDescriptor->colorAttachments, renderPassDescriptor->colorAttachmentCount);
-
-    std::array<uint8_t, sizeof(uint32_t) * 4 * kMaxColorAttachments> clearValues = {};
-    uint32_t offset = 0;
+    std::array<std::byte, sizeof(uint32_t) * 4 * kMaxColorAttachments> clearValues = {};
+    Span<std::byte> clearValueBuffer = clearValues;
     for (auto i : key.colorTargetsToApplyClearColorValue) {
-        const Format& format = colorAttachments[i].view->GetFormat();
+        const RenderPassColorAttachment& colorAttachment =
+            renderPassDescriptor->colorAttachments[i];
+        const Format& format = colorAttachment.view->GetFormat();
         TextureComponentType baseType = format.GetAspectInfo(Aspect::Color).baseType;
 
-        Color initialClearValue = colorAttachments[i].clearValue;
+        Color initialClearValue = colorAttachment.clearValue;
         Color clearValue = ClampClearColorValueToLegalRange(initialClearValue, format);
         switch (baseType) {
             case TextureComponentType::Uint: {
-                uint32_t* clearValuePtr = reinterpret_cast<uint32_t*>(clearValues.data() + offset);
-                clearValuePtr[0] = static_cast<uint32_t>(clearValue.r);
-                clearValuePtr[1] = static_cast<uint32_t>(clearValue.g);
-                clearValuePtr[2] = static_cast<uint32_t>(clearValue.b);
-                clearValuePtr[3] = static_cast<uint32_t>(clearValue.a);
+                Span<uint32_t> clearValueSubBuffer =
+                    ReinterpretSpan<uint32_t>(clearValueBuffer.TakeFirst(sizeof(uint32_t) * 4));
+                clearValueSubBuffer[0] = static_cast<uint32_t>(clearValue.r);
+                clearValueSubBuffer[1] = static_cast<uint32_t>(clearValue.g);
+                clearValueSubBuffer[2] = static_cast<uint32_t>(clearValue.b);
+                clearValueSubBuffer[3] = static_cast<uint32_t>(clearValue.a);
                 break;
             }
             case TextureComponentType::Sint: {
-                int32_t* clearValuePtr = reinterpret_cast<int32_t*>(clearValues.data() + offset);
-                clearValuePtr[0] = static_cast<int32_t>(clearValue.r);
-                clearValuePtr[1] = static_cast<int32_t>(clearValue.g);
-                clearValuePtr[2] = static_cast<int32_t>(clearValue.b);
-                clearValuePtr[3] = static_cast<int32_t>(clearValue.a);
+                Span<int32_t> clearValueSubBuffer =
+                    ReinterpretSpan<int32_t>(clearValueBuffer.TakeFirst(sizeof(int32_t) * 4));
+                clearValueSubBuffer[0] = static_cast<int32_t>(clearValue.r);
+                clearValueSubBuffer[1] = static_cast<int32_t>(clearValue.g);
+                clearValueSubBuffer[2] = static_cast<int32_t>(clearValue.b);
+                clearValueSubBuffer[3] = static_cast<int32_t>(clearValue.a);
                 break;
             }
             case TextureComponentType::Float: {
-                float* clearValuePtr = reinterpret_cast<float*>(clearValues.data() + offset);
-                clearValuePtr[0] = static_cast<float>(clearValue.r);
-                clearValuePtr[1] = static_cast<float>(clearValue.g);
-                clearValuePtr[2] = static_cast<float>(clearValue.b);
-                clearValuePtr[3] = static_cast<float>(clearValue.a);
+                Span<float> clearValueSubBuffer =
+                    ReinterpretSpan<float>(clearValueBuffer.TakeFirst(sizeof(float) * 4));
+                clearValueSubBuffer[0] = static_cast<float>(clearValue.r);
+                clearValueSubBuffer[1] = static_cast<float>(clearValue.g);
+                clearValueSubBuffer[2] = static_cast<float>(clearValue.b);
+                clearValueSubBuffer[3] = static_cast<float>(clearValue.a);
                 break;
             }
         }
-        offset += sizeof(uint32_t) * 4;
     }
 
-    DAWN_ASSERT(offset > 0);
+    size_t clearValuesSize = clearValues.size() - clearValueBuffer.size();
+    DAWN_CHECK(clearValuesSize > 0);
 
     Ref<BufferBase> buffer;
-    DAWN_TRY_ASSIGN(buffer, encoder->GetDevice()->GetOrCreateTemporaryUniformBuffer(offset));
+    DAWN_TRY_ASSIGN(buffer,
+                    encoder->GetDevice()->GetOrCreateTemporaryUniformBuffer(clearValuesSize));
     buffer->SetLabel("Internal_UniformClearValues");
-    encoder->APIWriteBuffer(buffer.Get(), 0, clearValues.data(), offset);
+    encoder->APIWriteBuffer(buffer.Get(), 0,
+                            Span<const std::byte>(clearValues).first(clearValuesSize));
 
     return std::move(buffer);
 }
@@ -407,13 +412,10 @@ bool GetKeyOfApplyClearColorValueWithDrawPipelines(
         return false;
     }
 
-    key->colorAttachmentCount = static_cast<uint8_t>(renderPassDescriptor->colorAttachmentCount);
-
-    auto colorAttachments = ityp::SpanFromUntyped<ColorAttachmentIndex>(
-        renderPassDescriptor->colorAttachments, key->colorAttachmentCount);
-
+    key->colorAttachmentCount = renderPassDescriptor->colorAttachments.size();
     key->colorTargetFormats.fill(wgpu::TextureFormat::Undefined);
-    for (auto [i, attachment] : Enumerate(colorAttachments)) {
+
+    for (auto [i, attachment] : Enumerate(renderPassDescriptor->colorAttachments)) {
         if (attachment.view == nullptr) {
             continue;
         }
@@ -448,10 +450,10 @@ bool GetKeyOfApplyClearColorValueWithDrawPipelines(
     if (const auto* pls = renderPassDescriptor.Get<RenderPassPixelLocalStorage>()) {
         key->hasPLS = true;
         key->totalPixelLocalStorageSize = pls->totalPixelLocalStorageSize;
-        for (size_t i = 0; i < pls->storageAttachmentCount; ++i) {
+        for (const RenderPassStorageAttachment& attachmentIn : pls->storageAttachments) {
             wgpu::PipelineLayoutStorageAttachment attachment{};
-            attachment.format = pls->storageAttachments[i].storage->GetFormat().format;
-            attachment.offset = pls->storageAttachments[i].offset;
+            attachment.format = attachmentIn.storage->GetFormat().format;
+            attachment.offset = attachmentIn.offset;
             key->plsAttachments.push_back(std::move(attachment));
         }
         // Sort the PLS attachments by offset to make sure the order is deterministic.

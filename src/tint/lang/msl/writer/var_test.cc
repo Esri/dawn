@@ -40,7 +40,8 @@ TEST_F(MslWriterTest, VarF32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -57,7 +58,8 @@ TEST_F(MslWriterTest, VarI32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -74,7 +76,8 @@ TEST_F(MslWriterTest, VarU32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -90,7 +93,8 @@ TEST_F(MslWriterTest, VarArrayF32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + MetalArray() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -109,7 +113,8 @@ TEST_F(MslWriterTest, VarStruct) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 struct MyStruct {
   float a;
@@ -130,7 +135,8 @@ TEST_F(MslWriterTest, VarVecF32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -147,7 +153,8 @@ TEST_F(MslWriterTest, VarVecF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -163,7 +170,8 @@ TEST_F(MslWriterTest, VarMatF32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -180,7 +188,8 @@ TEST_F(MslWriterTest, VarMatF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -197,7 +206,8 @@ TEST_F(MslWriterTest, VarVecF32SplatZero) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -215,7 +225,8 @@ TEST_F(MslWriterTest, VarVecF16SplatZero) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -233,7 +244,8 @@ TEST_F(MslWriterTest, VarMatF32SplatZero) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -252,7 +264,8 @@ TEST_F(MslWriterTest, VarMatF16SplatZero) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -280,7 +293,8 @@ TEST_F(MslWriterTest, VarGlobalPrivate) {
         b.Return(frag);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 struct tint_module_vars_struct {
   thread float* v;
@@ -293,7 +307,7 @@ void foo(tint_module_vars_struct tint_module_vars) {
 fragment void entry() {
   thread float v = 0.0f;
   tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.v=(&v)};
-  foo(tint_module_vars);
+  (foo(tint_module_vars));
 }
 )");
 }
@@ -311,7 +325,8 @@ TEST_F(MslWriterTest, VarGlobalWorkgroup) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 struct tint_module_vars_struct {
   threadgroup float* v;
@@ -325,14 +340,14 @@ void entry_inner(uint tint_local_index, tint_module_vars_struct tint_module_vars
   if ((tint_local_index < 1u)) {
     (*tint_module_vars.v) = 0.0f;
   }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
+  (threadgroup_barrier(mem_flags::mem_threadgroup));
   float a = (*tint_module_vars.v);
 }
 
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry(uint tint_local_index [[thread_index_in_threadgroup]], threadgroup tint_symbol_1* v_1 [[threadgroup(0)]]) {
   tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.v=(&(*v_1).tint_symbol)};
-  entry_inner(tint_local_index, tint_module_vars);
+  (entry_inner(tint_local_index, tint_module_vars));
 }
 )");
 }

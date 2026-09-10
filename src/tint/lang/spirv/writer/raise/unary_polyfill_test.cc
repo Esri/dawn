@@ -35,7 +35,10 @@ namespace {
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
 
-using SpirvWriter_UnaryPolyfillTest = core::ir::transform::TransformTest;
+struct SpirvWriter_UnaryPolyfillTest : public core::ir::transform::TransformTest {
+  protected:
+    void SetUp() override { mod.properties.Add(core::ir::Property::kAllow16BitFloats); }
+};
 
 TEST_F(SpirvWriter_UnaryPolyfillTest, Negation_Scalar) {
     auto* arg = b.FunctionParam("arg", ty.f32());
@@ -60,16 +63,56 @@ TEST_F(SpirvWriter_UnaryPolyfillTest, Negation_Scalar) {
     auto* expect = R"(
 %foo = func(%arg:f32):f32 {
   $B1: {
-    %3:u32 = bitcast %arg
+    %3:u32 = bitcast<u32> %arg
     %4:u32 = xor %3, 2147483648u
-    %5:f32 = bitcast %4
+    %5:f32 = bitcast<f32> %4
     ret %5
   }
 }
 )";
 
     UnaryPolyfillConfig config;
-    config.polyfill_f32_negation = true;
+    config.polyfill_float_negation = true;
+    Run(UnaryPolyfill, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(SpirvWriter_UnaryPolyfillTest, Negation_F16) {
+    auto* arg = b.FunctionParam("arg", ty.f16());
+    auto* func = b.Function("foo", ty.f16());
+    func->SetParams({arg});
+
+    b.Append(func->Block(), [&] {
+        auto* result = b.Negation(arg);
+        b.Return(func, result);
+    });
+
+    auto* src = R"(
+%foo = func(%arg:f16):f16 {
+  $B1: {
+    %3:f16 = negation %arg
+    ret %3
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+%foo = func(%arg:f16):f16 {
+  $B1: {
+    %3:f32 = convert %arg
+    %4:u32 = bitcast<u32> %3
+    %5:u32 = xor %4, 2147483648u
+    %6:f32 = bitcast<f32> %5
+    %7:f16 = convert %6
+    ret %7
+  }
+}
+)";
+
+    UnaryPolyfillConfig config;
+    config.polyfill_float_negation = true;
     Run(UnaryPolyfill, config);
 
     EXPECT_EQ(expect, str());
@@ -98,16 +141,16 @@ TEST_F(SpirvWriter_UnaryPolyfillTest, Negation_Vector) {
     auto* expect = R"(
 %foo = func(%arg:vec4<f32>):vec4<f32> {
   $B1: {
-    %3:vec4<u32> = bitcast %arg
+    %3:vec4<u32> = bitcast<vec4<u32>> %arg
     %4:vec4<u32> = xor %3, vec4<u32>(2147483648u)
-    %5:vec4<f32> = bitcast %4
+    %5:vec4<f32> = bitcast<vec4<f32>> %4
     ret %5
   }
 }
 )";
 
     UnaryPolyfillConfig config;
-    config.polyfill_f32_negation = true;
+    config.polyfill_float_negation = true;
     Run(UnaryPolyfill, config);
 
     EXPECT_EQ(expect, str());
@@ -136,16 +179,56 @@ TEST_F(SpirvWriter_UnaryPolyfillTest, Abs_Scalar) {
     auto* expect = R"(
 %foo = func(%arg:f32):f32 {
   $B1: {
-    %3:u32 = bitcast %arg
+    %3:u32 = bitcast<u32> %arg
     %4:u32 = and %3, 2147483647u
-    %5:f32 = bitcast %4
+    %5:f32 = bitcast<f32> %4
     ret %5
   }
 }
 )";
 
     UnaryPolyfillConfig config;
-    config.polyfill_f32_abs = true;
+    config.polyfill_float_abs = true;
+    Run(UnaryPolyfill, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(SpirvWriter_UnaryPolyfillTest, Abs_F16) {
+    auto* arg = b.FunctionParam("arg", ty.f16());
+    auto* func = b.Function("foo", ty.f16());
+    func->SetParams({arg});
+
+    b.Append(func->Block(), [&] {
+        auto* result = b.Call(ty.f16(), core::BuiltinFn::kAbs, arg);
+        b.Return(func, result);
+    });
+
+    auto* src = R"(
+%foo = func(%arg:f16):f16 {
+  $B1: {
+    %3:f16 = abs %arg
+    ret %3
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+%foo = func(%arg:f16):f16 {
+  $B1: {
+    %3:f32 = convert %arg
+    %4:u32 = bitcast<u32> %3
+    %5:u32 = and %4, 2147483647u
+    %6:f32 = bitcast<f32> %5
+    %7:f16 = convert %6
+    ret %7
+  }
+}
+)";
+
+    UnaryPolyfillConfig config;
+    config.polyfill_float_abs = true;
     Run(UnaryPolyfill, config);
 
     EXPECT_EQ(expect, str());
@@ -174,16 +257,16 @@ TEST_F(SpirvWriter_UnaryPolyfillTest, Abs_Vector) {
     auto* expect = R"(
 %foo = func(%arg:vec4<f32>):vec4<f32> {
   $B1: {
-    %3:vec4<u32> = bitcast %arg
+    %3:vec4<u32> = bitcast<vec4<u32>> %arg
     %4:vec4<u32> = and %3, vec4<u32>(2147483647u)
-    %5:vec4<f32> = bitcast %4
+    %5:vec4<f32> = bitcast<vec4<f32>> %4
     ret %5
   }
 }
 )";
 
     UnaryPolyfillConfig config;
-    config.polyfill_f32_abs = true;
+    config.polyfill_float_abs = true;
     Run(UnaryPolyfill, config);
 
     EXPECT_EQ(expect, str());
@@ -210,7 +293,7 @@ TEST_F(SpirvWriter_UnaryPolyfillTest, Negation_NoPolyfill) {
     EXPECT_EQ(src, str());
 
     UnaryPolyfillConfig config;
-    config.polyfill_f32_negation = false;
+    config.polyfill_float_negation = false;
     Run(UnaryPolyfill, config);
 
     EXPECT_EQ(src, str());
@@ -237,7 +320,7 @@ TEST_F(SpirvWriter_UnaryPolyfillTest, Abs_NoPolyfill) {
     EXPECT_EQ(src, str());
 
     UnaryPolyfillConfig config;
-    config.polyfill_f32_abs = false;
+    config.polyfill_float_abs = false;
     Run(UnaryPolyfill, config);
 
     EXPECT_EQ(src, str());

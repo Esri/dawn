@@ -1,4 +1,4 @@
-// Copyright 2025 The Dawn & Tint Authors
+// Copyright 2026 The Dawn & Tint Authors
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -35,7 +35,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
-// [hlsl-dxc] flags: --hlsl-shader-model 60
+// [hlsl-dxc] flags: --hlsl-shader-model 6.10
 
 
 enable chromium_experimental_subgroup_matrix;
@@ -49,5 +49,5 @@ fn subgroupMatrixMultiplyAccumulate_188a1e() -> subgroup_matrix_result<u32, 8, 8
 }
 @compute @workgroup_size(1)
 fn compute_main() {
-  subgroupMatrixStore(&prevent_dce, 0, subgroupMatrixMultiplyAccumulate_188a1e(), false, 64);
+  subgroupMatrixStore<row_major>(&prevent_dce, 0, subgroupMatrixMultiplyAccumulate_188a1e(), 16);
 }

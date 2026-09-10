@@ -40,8 +40,9 @@
 #include <functional>
 #include <type_traits>
 #include <utility>
-#include "dawn/common/Compiler.h"
+
 #include "partition_alloc/pointers/raw_ptr_exclusion.h"
+#include "src/dawn/common/Compiler.h"  // nogncheck
 
 namespace partition_alloc::internal {
 using RawPtrTraits = int;
@@ -155,10 +156,10 @@ class DAWN_TRIVIAL_ABI DAWN_GSL_POINTER raw_ptr {
         return *this;
     }
     DAWN_FORCE_INLINE constexpr raw_ptr operator++(int /* post_increment */) {
-        return ++wrapped_ptr_;
+        return wrapped_ptr_++;
     }
     DAWN_FORCE_INLINE constexpr raw_ptr operator--(int /* post_decrement */) {
-        return --wrapped_ptr_;
+        return wrapped_ptr_--;
     }
     template <typename Z, typename = std::enable_if_t<partition_alloc::internal::is_offset_type<Z>>>
     DAWN_FORCE_INLINE constexpr raw_ptr& operator+=(Z delta) {
@@ -176,7 +177,7 @@ class DAWN_TRIVIAL_ABI DAWN_GSL_POINTER raw_ptr {
         typename U = T,
         typename Unused = std::enable_if_t<!std::is_void_v<typename std::remove_cv<U>::type> &&
                                            partition_alloc::internal::is_offset_type<Z>>>
-    U& operator[](Z delta) const {
+    DAWN_FORCE_INLINE U& operator[](Z delta) const {
         return wrapped_ptr_[delta];
     }
 

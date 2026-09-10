@@ -29,9 +29,9 @@
 #define SRC_DAWN_NATIVE_WEBGPU_COMPUTEPIPELINEWGPU_H_
 
 #include "absl/container/inlined_vector.h"
-#include "dawn/native/ComputePipeline.h"
-#include "dawn/native/webgpu/ObjectWGPU.h"
-#include "dawn/native/webgpu/RecordableObject.h"
+#include "src/dawn/native/ComputePipeline.h"
+#include "src/dawn/native/webgpu/ObjectWGPU.h"
+#include "src/dawn/native/webgpu/RecordableObject.h"
 
 namespace dawn::native::webgpu {
 
@@ -44,13 +44,13 @@ class ComputePipeline final : public ComputePipelineBase,
         Device* device,
         const UnpackedPtr<ComputePipelineDescriptor>& descriptor);
 
-    MaybeError InitializeImpl() override;
-
     MaybeError AddReferenced(CaptureContext& captureContext) override;
     MaybeError CaptureCreationParameters(CaptureContext& context) override;
 
   protected:
     ComputePipeline(Device* device, const UnpackedPtr<ComputePipelineDescriptor>& descriptor);
+    ResultOrError<Extent3D> InitializeImpl() override;
+
     void SetLabelImpl() override;
 };
 

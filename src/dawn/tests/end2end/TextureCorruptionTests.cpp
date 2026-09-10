@@ -28,10 +28,10 @@
 #include <algorithm>
 #include <vector>
 
-#include "dawn/common/Math.h"
-#include "dawn/tests/DawnTest.h"
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/common/Math.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/WGPUHelpers.h"
 
 namespace dawn {
 namespace {
@@ -116,7 +116,7 @@ class TextureCorruptionTests : public DawnTestWithParams<TextureCorruptionTestsP
         }
         uint32_t bytesPerTexel = utils::GetTexelBlockSizeInBytes(format);
         uint32_t bytesPerRow = Align(levelSize.width * bytesPerTexel, 256);
-        uint64_t bufferSize = bytesPerRow * levelSize.height;
+        uint64_t bufferSize = static_cast<uint64_t>(bytesPerRow) * levelSize.height;
         wgpu::BufferDescriptor descriptor;
         descriptor.size = bufferSize;
         descriptor.usage = wgpu::BufferUsage::CopySrc | wgpu::BufferUsage::CopyDst;
@@ -142,7 +142,7 @@ class TextureCorruptionTests : public DawnTestWithParams<TextureCorruptionTestsP
         if (bytesPerTexel >= sizeof(uint32_t)) {
             elementNumPerTexel = bytesPerTexel / sizeof(uint32_t);
         } else {
-            copyWidth = copyWidth * bytesPerTexel / sizeof(uint32_t);
+            copyWidth = static_cast<size_t>(copyWidth) * bytesPerTexel / sizeof(uint32_t);
         }
 
         uint32_t elementNumPerRow = bytesPerRow / sizeof(uint32_t);
@@ -398,6 +398,40 @@ DAWN_INSTANTIATE_TEST_P(TextureCorruptionTests_WidthAndHeight,
                         {kDefaultMipLevelCount},
                         {kDefaultSampleCount},
                         {kDefaultWriteType});
+
+// Test for UINT16 overflow when calling ComputeExtraArraySizeForIntelGen12 as per
+// crbug.com/497565944.
+class TextureCorruptionTests_WidthAndHeight_IntelGen12 : public TextureCorruptionTests {
+    void GetRequiredLimits(const dawn::utils::ComboLimits& supported,
+                           dawn::utils::ComboLimits& required) override {
+        required.maxTextureArrayLayers = supported.maxTextureArrayLayers;
+    }
+};
+TEST_P(TextureCorruptionTests_WidthAndHeight_IntelGen12, Tests) {
+    wgpu::Limits limits;
+    device.GetLimits(&limits);
+    DAWN_SUPPRESS_TEST_IF(limits.maxTextureArrayLayers < 2048);
+
+    uint32_t width = GetParam().mTextureWidth;
+    uint32_t height = GetParam().mTextureHeight;
+    uint32_t depthOrArrayLayerCount = GetParam().mArrayLayerCount;
+    uint32_t mipLevelCount = GetParam().mMipLevelCount;
+    uint32_t sampleCount = GetParam().mSampleCount;
+    wgpu::Extent3D textureSize = {width, height, depthOrArrayLayerCount};
+    wgpu::TextureFormat format = GetParam().mTextureFormat;
+    // This should fail due to an OOM error.
+    ASSERT_DEVICE_ERROR(wgpu::Texture texture =
+                            Create2DTexture(textureSize, format, mipLevelCount, sampleCount));
+}
+DAWN_INSTANTIATE_TEST_P(TextureCorruptionTests_WidthAndHeight_IntelGen12,
+                        {D3D12Backend({"d3d12_allocate_extra_memory_for_2d_array_color_texture"})},
+                        {wgpu::TextureFormat::R16Uint},
+                        {1u},
+                        {8192u},
+                        {1793u},
+                        {kDefaultMipLevelCount},
+                        {kDefaultSampleCount},
+                        {WriteType::WriteTexture});
 
 class TextureCorruptionTests_ArrayLayer : public TextureCorruptionTests {};
 

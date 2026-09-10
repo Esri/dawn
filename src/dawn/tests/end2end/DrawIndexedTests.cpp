@@ -25,10 +25,9 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/tests/DawnTest.h"
-
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/WGPUHelpers.h"
 
 namespace dawn {
 namespace {
@@ -143,6 +142,9 @@ TEST_P(DrawIndexedTest, Uint32) {
     // TODO(crbug.com/468047553): Fails on Win11/NVIDIA GTX 1660.
     DAWN_SUPPRESS_TEST_IF(IsWindows11() && IsNvidia() && IsD3D12() && IsBackendValidationEnabled());
 
+    // TODO(crbug.com/468047553): Fails on Win11/AMD RX 5500 XT.
+    DAWN_SUPPRESS_TEST_IF(IsWindows11() && IsAMD() && IsD3D12() && IsBackendValidationEnabled());
+
     utils::RGBA8 filled(0, 255, 0, 255);
     utils::RGBA8 notFilled(0, 0, 0, 0);
 
@@ -180,6 +182,9 @@ TEST_P(DrawIndexedTest, NegativeBaseVertex) {
 
     // Also failing on Qualcomm and ARM GLES.
     DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsAndroid() && (IsQualcomm() || IsARM()));
+
+    // Fails on Xclipse with ANGLE Vulkan.
+    DAWN_SUPPRESS_TEST_IF(IsSamsung() && IsOpenGLES() && IsANGLE());
 
     utils::RGBA8 filled(0, 255, 0, 255);
     utils::RGBA8 notFilled(0, 0, 0, 0);

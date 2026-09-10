@@ -32,12 +32,13 @@
 
 #include <array>
 
-#include "dawn/common/Assert.h"
+#include "src/utils/assert.h"
+#include "src/utils/platform.h"
 
 namespace dawn::utils {
 
-#ifndef __EMSCRIPTEN__
-static constexpr std::array<wgpu::TextureFormat, 101> kAllTextureFormats = {
+#if !DAWN_PLATFORM_IS(EMSCRIPTEN)
+inline constexpr std::array<wgpu::TextureFormat, 101> kAllTextureFormats = {
     wgpu::TextureFormat::R8Unorm,
     wgpu::TextureFormat::R8Snorm,
     wgpu::TextureFormat::R8Uint,
@@ -139,9 +140,9 @@ static constexpr std::array<wgpu::TextureFormat, 101> kAllTextureFormats = {
     wgpu::TextureFormat::ASTC12x10UnormSrgb,
     wgpu::TextureFormat::ASTC12x12Unorm,
     wgpu::TextureFormat::ASTC12x12UnormSrgb};
-#endif  // __EMSCRIPTEN__
+#endif  // !DAWN_PLATFORM_IS(EMSCRIPTEN)
 
-static constexpr std::array<wgpu::TextureFormat, 41> kFormatsInCoreSpec = {
+inline constexpr std::array<wgpu::TextureFormat, 41> kFormatsInCoreSpec = {
     wgpu::TextureFormat::R8Unorm,
     wgpu::TextureFormat::R8Snorm,
     wgpu::TextureFormat::R8Uint,
@@ -185,7 +186,7 @@ static constexpr std::array<wgpu::TextureFormat, 41> kFormatsInCoreSpec = {
     wgpu::TextureFormat::Depth24PlusStencil8,
 };
 
-static constexpr std::array<wgpu::TextureFormat, 14> kBCFormats = {
+inline constexpr std::array<wgpu::TextureFormat, 14> kBCFormats = {
     wgpu::TextureFormat::BC1RGBAUnorm,  wgpu::TextureFormat::BC1RGBAUnormSrgb,
     wgpu::TextureFormat::BC2RGBAUnorm,  wgpu::TextureFormat::BC2RGBAUnormSrgb,
     wgpu::TextureFormat::BC3RGBAUnorm,  wgpu::TextureFormat::BC3RGBAUnormSrgb,
@@ -194,14 +195,14 @@ static constexpr std::array<wgpu::TextureFormat, 14> kBCFormats = {
     wgpu::TextureFormat::BC6HRGBUfloat, wgpu::TextureFormat::BC6HRGBFloat,
     wgpu::TextureFormat::BC7RGBAUnorm,  wgpu::TextureFormat::BC7RGBAUnormSrgb};
 
-static constexpr std::array<wgpu::TextureFormat, 10> kETC2Formats = {
+inline constexpr std::array<wgpu::TextureFormat, 10> kETC2Formats = {
     wgpu::TextureFormat::ETC2RGB8Unorm,   wgpu::TextureFormat::ETC2RGB8UnormSrgb,
     wgpu::TextureFormat::ETC2RGB8A1Unorm, wgpu::TextureFormat::ETC2RGB8A1UnormSrgb,
     wgpu::TextureFormat::ETC2RGBA8Unorm,  wgpu::TextureFormat::ETC2RGBA8UnormSrgb,
     wgpu::TextureFormat::EACR11Unorm,     wgpu::TextureFormat::EACR11Snorm,
     wgpu::TextureFormat::EACRG11Unorm,    wgpu::TextureFormat::EACRG11Snorm};
 
-static constexpr std::array<wgpu::TextureFormat, 28> kASTCFormats = {
+inline constexpr std::array<wgpu::TextureFormat, 28> kASTCFormats = {
     wgpu::TextureFormat::ASTC4x4Unorm,   wgpu::TextureFormat::ASTC4x4UnormSrgb,
     wgpu::TextureFormat::ASTC5x4Unorm,   wgpu::TextureFormat::ASTC5x4UnormSrgb,
     wgpu::TextureFormat::ASTC5x5Unorm,   wgpu::TextureFormat::ASTC5x5UnormSrgb,
@@ -218,7 +219,7 @@ static constexpr std::array<wgpu::TextureFormat, 28> kASTCFormats = {
     wgpu::TextureFormat::ASTC12x12Unorm, wgpu::TextureFormat::ASTC12x12UnormSrgb,
 };
 
-static constexpr std::array<wgpu::TextureFormat, 52> kCompressedFormats = {
+inline constexpr std::array<wgpu::TextureFormat, 52> kCompressedFormats = {
     wgpu::TextureFormat::BC1RGBAUnorm,    wgpu::TextureFormat::BC1RGBAUnormSrgb,
     wgpu::TextureFormat::BC2RGBAUnorm,    wgpu::TextureFormat::BC2RGBAUnormSrgb,
     wgpu::TextureFormat::BC3RGBAUnorm,    wgpu::TextureFormat::BC3RGBAUnormSrgb,
@@ -249,24 +250,22 @@ static_assert(kCompressedFormats.size() ==
                   kBCFormats.size() + kETC2Formats.size() + kASTCFormats.size(),
               "Number of compressed format must equal number of BC, ETC2, and ASTC formats.");
 
-#ifndef __EMSCRIPTEN__
-static constexpr std::array<wgpu::TextureFormat, 6> kNorm16Formats = {
+inline constexpr std::array<wgpu::TextureFormat, 6> kNorm16Formats = {
     wgpu::TextureFormat::R16Unorm, wgpu::TextureFormat::RG16Unorm, wgpu::TextureFormat::RGBA16Unorm,
     wgpu::TextureFormat::R16Snorm, wgpu::TextureFormat::RG16Snorm, wgpu::TextureFormat::RGBA16Snorm,
 };
-#endif  // __EMSCRIPTEN__
 
-static constexpr std::array<wgpu::TextureFormat, 5> kDepthFormats = {
+inline constexpr std::array<wgpu::TextureFormat, 5> kDepthFormats = {
     wgpu::TextureFormat::Depth16Unorm,         wgpu::TextureFormat::Depth32Float,
     wgpu::TextureFormat::Depth24Plus,          wgpu::TextureFormat::Depth24PlusStencil8,
     wgpu::TextureFormat::Depth32FloatStencil8,
 };
-static constexpr std::array<wgpu::TextureFormat, 3> kStencilFormats = {
+inline constexpr std::array<wgpu::TextureFormat, 3> kStencilFormats = {
     wgpu::TextureFormat::Depth24PlusStencil8,
     wgpu::TextureFormat::Depth32FloatStencil8,
     wgpu::TextureFormat::Stencil8,
 };
-static constexpr std::array<wgpu::TextureFormat, 2> kDepthAndStencilFormats = {
+inline constexpr std::array<wgpu::TextureFormat, 2> kDepthAndStencilFormats = {
     wgpu::TextureFormat::Depth24PlusStencil8,
     wgpu::TextureFormat::Depth32FloatStencil8,
 };
@@ -274,7 +273,7 @@ static constexpr std::array<wgpu::TextureFormat, 2> kDepthAndStencilFormats = {
 constexpr std::array<wgpu::TextureFormat, 3> kTier1TestFormats8Bit = {
     wgpu::TextureFormat::R8Snorm, wgpu::TextureFormat::RG8Snorm, wgpu::TextureFormat::RGBA8Snorm};
 
-#ifndef __EMSCRIPTEN__
+#if !DAWN_PLATFORM_IS(EMSCRIPTEN)
 constexpr std::array<wgpu::TextureFormat, 6> kTier1TestFormats16Bit = {
     wgpu::TextureFormat::R16Unorm,    wgpu::TextureFormat::R16Snorm,
     wgpu::TextureFormat::RG16Unorm,   wgpu::TextureFormat::RG16Snorm,
@@ -310,7 +309,7 @@ constexpr std::array<wgpu::TextureFormat, 15> kTier2AdditionalStorageFormats = {
     wgpu::TextureFormat::RGBA16Sint, wgpu::TextureFormat::RGBA16Float,
     wgpu::TextureFormat::RGBA32Uint, wgpu::TextureFormat::RGBA32Sint,
     wgpu::TextureFormat::RGBA32Float};
-#endif  // __EMSCRIPTEN__
+#endif  // !DAWN_PLATFORM_IS(EMSCRIPTEN)
 
 class SubsamplingFactor {
   public:
@@ -324,10 +323,9 @@ class SubsamplingFactor {
     const uint32_t verticalFactor = 1;
 };
 
-bool TextureFormatSupportsStorageTexture(wgpu::TextureFormat format,
-                                         const wgpu::Device& device,
-                                         bool isCompatibilityMode);
-bool TextureFormatSupportsReadWriteStorageTexture(wgpu::TextureFormat format);
+bool TextureFormatSupportsStorageTexture(const wgpu::Device& device, wgpu::TextureFormat format);
+bool TextureFormatSupportsReadWriteStorageTexture(const wgpu::Device& device,
+                                                  wgpu::TextureFormat format);
 
 bool IsBCTextureFormat(wgpu::TextureFormat textureFormat);
 bool IsNormalizedUncompressedColorTextureFormat(wgpu::TextureFormat textureFormat);
@@ -352,14 +350,14 @@ bool TextureFormatSupportsResolveTarget(const wgpu::Device& device,
 bool IsUnorm16TextureFormat(wgpu::TextureFormat textureFormat);
 bool IsSnorm16TextureFormat(wgpu::TextureFormat textureFormat);
 
-#ifndef __EMSCRIPTEN__
+#if !DAWN_PLATFORM_IS(EMSCRIPTEN)
 bool IsMultiPlanarFormat(wgpu::TextureFormat textureFormat);
 uint32_t GetMultiPlaneTextureBitDepth(wgpu::TextureFormat textureFormat);
 uint32_t GetMultiPlaneTextureNumPlanes(wgpu::TextureFormat textureFormat);
 uint32_t GetMultiPlaneTextureBytesPerElement(wgpu::TextureFormat textureFormat, size_t plane);
 SubsamplingFactor GetMultiPlaneTextureSubsamplingFactor(wgpu::TextureFormat textureFormat,
                                                         size_t plane);
-#endif  // __EMSCRIPTEN__
+#endif  // !DAWN_PLATFORM_IS(EMSCRIPTEN)
 
 uint32_t GetTexelBlockSizeInBytes(wgpu::TextureFormat textureFormat);
 uint32_t GetTextureFormatBlockWidth(wgpu::TextureFormat textureFormat);

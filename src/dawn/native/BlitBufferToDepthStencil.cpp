@@ -25,122 +25,124 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/BlitBufferToDepthStencil.h"
+#include "src/dawn/native/BlitBufferToDepthStencil.h"
 
 #include <string>
 #include <string_view>
 #include <utility>
 
-#include "dawn/common/Assert.h"
-#include "dawn/native/BindGroup.h"
-#include "dawn/native/CommandBuffer.h"
-#include "dawn/native/CommandEncoder.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/InternalPipelineStore.h"
-#include "dawn/native/Queue.h"
-#include "dawn/native/RenderPassEncoder.h"
-#include "dawn/native/RenderPipeline.h"
+#include "src/dawn/common/Strings.h"
+#include "src/dawn/native/BindGroup.h"
+#include "src/dawn/native/CommandBuffer.h"
+#include "src/dawn/native/CommandEncoder.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/InternalPipelineStore.h"
+#include "src/dawn/native/Queue.h"
+#include "src/dawn/native/RenderPassEncoder.h"
+#include "src/dawn/native/RenderPipeline.h"
+#include "src/utils/assert.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native {
 
 namespace {
 
-constexpr char kBlitRG8ToDepthShaders[] = R"(
+constexpr char kBlitRG8ToDepthShaders[] = DAWN_MULTILINE(
+    @vertex fn vert_fullscreen_quad(
+        @builtin(vertex_index) vertex_index : u32
+    ) -> @builtin(position) vec4f {
+        const pos = array(
+            vec2f(-1.0, -1.0),
+            vec2f( 3.0, -1.0),
+            vec2f(-1.0,  3.0));
+        return vec4f(pos[vertex_index], 0.0, 1.0);
+    }
 
-@vertex fn vert_fullscreen_quad(
-  @builtin(vertex_index) vertex_index : u32
-) -> @builtin(position) vec4f {
-  const pos = array(
-      vec2f(-1.0, -1.0),
-      vec2f( 3.0, -1.0),
-      vec2f(-1.0,  3.0));
-  return vec4f(pos[vertex_index], 0.0, 1.0);
-}
+    struct Params {
+    origin : vec2u
+    };
 
-struct Params {
-  origin : vec2u
-};
+    @group(0) @binding(0) var src_tex : texture_2d<u32>;
+    @group(0) @binding(1) var<uniform> params : Params;
 
-@group(0) @binding(0) var src_tex : texture_2d<u32>;
-@group(0) @binding(1) var<uniform> params : Params;
+    @fragment fn blit_to_depth(
+        @builtin(position) position : vec4f
+    ) -> @builtin(frag_depth) f32 {
+        // Load the source texel.
+        let src_texel = textureLoad(
+            src_tex, vec2u(position.xy) - params.origin, 0u);
 
-@fragment fn blit_to_depth(
-    @builtin(position) position : vec4f
-) -> @builtin(frag_depth) f32 {
-  // Load the source texel.
-  let src_texel = textureLoad(
-    src_tex, vec2u(position.xy) - params.origin, 0u);
+        let depth_u16_val = (src_texel.y << 8u) + src_texel.x;
 
-  let depth_u16_val = (src_texel.y << 8u) + src_texel.x;
+        const one_over_max : f32 = 1.0 / f32(0xFFFFu);
+        return f32(depth_u16_val) * one_over_max;
+    }
+);
 
-  const one_over_max : f32 = 1.0 / f32(0xFFFFu);
-  return f32(depth_u16_val) * one_over_max;
-}
+constexpr std::string_view kTexture2DHead = DAWN_MULTILINE(
+    fn textureLoadGeneral(tex: texture_2d<u32>, coords: vec2u, level: u32) -> vec4<u32> {
+        //
+        return textureLoad(tex, coords, level);
+    }
+    @group(0) @binding(0) var src_tex : texture_2d<u32>;
+);
 
-)";
+constexpr std::string_view kTexture2DArrayHead = DAWN_MULTILINE(
+    fn textureLoadGeneral(tex: texture_2d_array<u32>, coords: vec2u, level: u32) -> vec4<u32> {
+        //
+        return textureLoad(tex, coords, params.layer, level);
+    }
+    @group(0) @binding(0) var src_tex : texture_2d_array<u32>;
+);
 
-constexpr std::string_view kTexture2DHead = R"(
-fn textureLoadGeneral(tex: texture_2d<u32>, coords: vec2u, level: u32) -> vec4<u32> {
-    return textureLoad(tex, coords, level);
-}
-@group(0) @binding(0) var src_tex : texture_2d<u32>;
-)";
+constexpr std::string_view kBlitStencilShaderCommon = DAWN_MULTILINE(
+    struct Params {
+        origin : vec2u,
+        layer: u32,
+    };
+    @group(0) @binding(1) var<uniform> params : Params;
 
-constexpr std::string_view kTexture2DArrayHead = R"(
-fn textureLoadGeneral(tex: texture_2d_array<u32>, coords: vec2u, level: u32) -> vec4<u32> {
-    return textureLoad(tex, coords, params.layer, level);
-}
-@group(0) @binding(0) var src_tex : texture_2d_array<u32>;
-)";
+    struct VertexOutputs {
+        @location(0) @interpolate(flat, either) stencil_val : u32,
+        @builtin(position) position : vec4f,
+    };
 
-constexpr std::string_view kBlitStencilShaderCommon = R"(
-struct Params {
-  origin : vec2u,
-  layer: u32,
-};
-@group(0) @binding(1) var<uniform> params : Params;
+    // The instance_index here is not used for instancing.
+    // It represents the current stencil mask we're testing in the
+    // source.
+    // This is a cheap way to get the stencil value into the shader
+    // since WebGPU doesn't have immediate data.
+    @vertex fn vert_fullscreen_quad(
+        @builtin(vertex_index) vertex_index : u32,
+        @builtin(instance_index) instance_index: u32,
+    ) -> VertexOutputs {
+        const pos = array(
+            vec2f(-1.0, -1.0),
+            vec2f( 3.0, -1.0),
+            vec2f(-1.0,  3.0));
+        return VertexOutputs(
+            instance_index,
+            vec4f(pos[vertex_index], 0.0, 1.0),
+        );
+    }
 
-struct VertexOutputs {
-  @location(0) @interpolate(flat, either) stencil_val : u32,
-  @builtin(position) position : vec4f,
-};
+    // Do nothing (but also don't discard). Used for clearing
+    // stencil to 0.
+    @fragment fn frag_noop() {}
 
-// The instance_index here is not used for instancing.
-// It represents the current stencil mask we're testing in the
-// source.
-// This is a cheap way to get the stencil value into the shader
-// since WebGPU doesn't have immediate data.
-@vertex fn vert_fullscreen_quad(
-  @builtin(vertex_index) vertex_index : u32,
-  @builtin(instance_index) instance_index: u32,
-) -> VertexOutputs {
-  const pos = array(
-      vec2f(-1.0, -1.0),
-      vec2f( 3.0, -1.0),
-      vec2f(-1.0,  3.0));
-  return VertexOutputs(
-    instance_index,
-    vec4f(pos[vertex_index], 0.0, 1.0),
-  );
-}
+    // Discard the fragment if the source texture doesn't
+    // have the stencil_val.
+    @fragment fn frag_check_src_stencil(input : VertexOutputs) {
+        // Load the source stencil value.
+        let src_val : u32 = textureLoadGeneral(
+            src_tex, vec2u(input.position.xy) - params.origin, 0u)[0];
 
-// Do nothing (but also don't discard). Used for clearing
-// stencil to 0.
-@fragment fn frag_noop() {}
-
-// Discard the fragment if the source texture doesn't
-// have the stencil_val.
-@fragment fn frag_check_src_stencil(input : VertexOutputs) {
-  // Load the source stencil value.
-  let src_val : u32 = textureLoadGeneral(
-    src_tex, vec2u(input.position.xy) - params.origin, 0u)[0];
-
-  // Discard it if it doesn't contain the stencil reference.
-  if ((src_val & input.stencil_val) == 0u) {
-    discard;
-  }
-}
-)";
+        // Discard it if it doesn't contain the stencil reference.
+        if ((src_val & input.stencil_val) == 0u) {
+            discard;
+        }
+    }
+);
 
 ResultOrError<Ref<RenderPipelineBase>> GetOrCreateRG8ToDepth16UnormPipeline(DeviceBase* device) {
     InternalPipelineStore* store = device->GetInternalPipelineStore();
@@ -194,9 +196,7 @@ ResultOrError<InternalPipelineStore::BlitR8ToStencilPipelines> GetOrCreateR8ToSt
     Ref<PipelineLayoutBase> pipelineLayout;
     {
         PipelineLayoutDescriptor plDesc = {};
-        plDesc.bindGroupLayoutCount = 1;
-
-        plDesc.bindGroupLayouts = &bgl;
+        plDesc.bindGroupLayouts = SpanFromRef<BindGroupIndex>(bgl);
         DAWN_TRY_ASSIGN(pipelineLayout, device->CreatePipelineLayout(&plDesc));
     }
 
@@ -277,12 +277,12 @@ MaybeError BlitRG8ToDepth16Unorm(DeviceBase* device,
     Ref<BindGroupLayoutBase> bgl;
     DAWN_TRY_ASSIGN(bgl, pipeline->GetBindGroupLayout(0));
 
-    for (TexelCount z{0}; z < copyExtent.depthOrArrayLayers; ++z) {
+    for (TexelCount z{0u}; z < copyExtent.depthOrArrayLayers; ++z) {
         Ref<TextureViewBase> srcView;
         {
             TextureViewDescriptor viewDesc = {};
             viewDesc.dimension = wgpu::TextureViewDimension::e2D;
-            viewDesc.baseArrayLayer = static_cast<uint32_t>(z);
+            viewDesc.baseArrayLayer = dchecked_cast<uint32_t>(z);
             viewDesc.arrayLayerCount = 1;
             viewDesc.mipLevelCount = 1;
             DAWN_TRY_ASSIGN(srcView, dataTexture->CreateView(&viewDesc));
@@ -292,7 +292,7 @@ MaybeError BlitRG8ToDepth16Unorm(DeviceBase* device,
         {
             TextureViewDescriptor viewDesc = {};
             viewDesc.dimension = wgpu::TextureViewDimension::e2D;
-            viewDesc.baseArrayLayer = static_cast<uint32_t>(dst.origin.z + z);
+            viewDesc.baseArrayLayer = dchecked_cast<uint32_t>(dst.origin.z + z);
             viewDesc.arrayLayerCount = 1;
             viewDesc.baseMipLevel = dst.mipLevel;
             viewDesc.mipLevelCount = 1;
@@ -307,10 +307,10 @@ MaybeError BlitRG8ToDepth16Unorm(DeviceBase* device,
             bufferDesc.mappedAtCreation = true;
             DAWN_TRY_ASSIGN(paramsBuffer, device->CreateBuffer(&bufferDesc));
 
-            uint32_t* params =
-                static_cast<uint32_t*>(paramsBuffer->GetMappedRange(0, bufferDesc.size));
-            params[0] = static_cast<uint32_t>(dst.origin.x);
-            params[1] = static_cast<uint32_t>(dst.origin.y);
+            uint32_t* params = static_cast<uint32_t*>(
+                paramsBuffer->GetMappedRange(0, checked_cast<size_t>(bufferDesc.size)));
+            params[0] = dchecked_cast<uint32_t>(dst.origin.x);
+            DAWN_UNSAFE_TODO(params[1]) = dchecked_cast<uint32_t>(dst.origin.y);
             DAWN_TRY(paramsBuffer->Unmap());
         }
 
@@ -324,8 +324,7 @@ MaybeError BlitRG8ToDepth16Unorm(DeviceBase* device,
 
             BindGroupDescriptor bgDesc = {};
             bgDesc.layout = bgl.Get();
-            bgDesc.entryCount = bgEntries.size();
-            bgDesc.entries = bgEntries.data();
+            bgDesc.entries = bgEntries;
             DAWN_TRY_ASSIGN(bindGroup, device->CreateBindGroup(&bgDesc));
         }
 
@@ -343,8 +342,8 @@ MaybeError BlitRG8ToDepth16Unorm(DeviceBase* device,
         pass->APISetBindGroup(0, bindGroup.Get());
         // Discard all fragments outside the copy region.
         pass->APISetScissorRect(
-            static_cast<uint32_t>(dst.origin.x), static_cast<uint32_t>(dst.origin.y),
-            static_cast<uint32_t>(copyExtent.width), static_cast<uint32_t>(copyExtent.height));
+            dchecked_cast<uint32_t>(dst.origin.x), dchecked_cast<uint32_t>(dst.origin.y),
+            dchecked_cast<uint32_t>(copyExtent.width), dchecked_cast<uint32_t>(copyExtent.height));
 
         // Draw to perform the blit.
         pass->APISetPipeline(pipeline.Get());
@@ -394,8 +393,7 @@ MaybeError BlitR8ToStencil(DeviceBase* device,
         bglEntries[1].buffer.minBindingSize = 4 * sizeof(uint32_t);
 
         BindGroupLayoutDescriptor bglDesc = {};
-        bglDesc.entryCount = bglEntries.size();
-        bglDesc.entries = bglEntries.data();
+        bglDesc.entries = bglEntries;
 
         DAWN_TRY_ASSIGN(bgl, device->CreateBindGroupLayout(&bglDesc));
     }
@@ -413,10 +411,11 @@ MaybeError BlitR8ToStencil(DeviceBase* device,
         bufferDesc.mappedAtCreation = true;
         DAWN_TRY_ASSIGN(paramsBuffer, device->CreateBuffer(&bufferDesc));
 
-        uint32_t* params = static_cast<uint32_t*>(paramsBuffer->GetMappedRange(0, bufferDesc.size));
-        params[0] = static_cast<uint32_t>(dst.origin.x);
-        params[1] = static_cast<uint32_t>(dst.origin.y);
-        params[2] = 0;
+        uint32_t* params = static_cast<uint32_t*>(
+            paramsBuffer->GetMappedRange(0, checked_cast<size_t>(bufferDesc.size)));
+        params[0] = dchecked_cast<uint32_t>(dst.origin.x);
+        DAWN_UNSAFE_TODO(params[1]) = dchecked_cast<uint32_t>(dst.origin.y);
+        DAWN_UNSAFE_TODO(params[2]) = 0;
         DAWN_TRY(paramsBuffer->Unmap());
     }
 
@@ -436,14 +435,14 @@ MaybeError BlitR8ToStencil(DeviceBase* device,
         if (z >= 1) {
             // Pass the array layer info via the uniform buffer.
             commandEncoder->APIWriteBuffer(paramsBuffer.Get(), sizeof(uint32_t) * 2,
-                                           reinterpret_cast<const uint8_t*>(&z), sizeof(uint32_t));
+                                           ByteSpanFromRef(z));
         }
 
         Ref<TextureViewBase> dstView;
         {
             TextureViewDescriptor viewDesc = {};
             viewDesc.dimension = textureViewDimension;
-            viewDesc.baseArrayLayer = static_cast<uint32_t>(dst.origin.z) + z;
+            viewDesc.baseArrayLayer = dchecked_cast<uint32_t>(dst.origin.z) + z;
             viewDesc.arrayLayerCount = 1;
             viewDesc.baseMipLevel = dst.mipLevel;
             viewDesc.mipLevelCount = 1;
@@ -460,8 +459,7 @@ MaybeError BlitR8ToStencil(DeviceBase* device,
 
             BindGroupDescriptor bgDesc = {};
             bgDesc.layout = bgl.Get();
-            bgDesc.entryCount = bgEntries.size();
-            bgDesc.entries = bgEntries.data();
+            bgDesc.entries = bgEntries;
             DAWN_TRY_ASSIGN(bindGroup,
                             device->CreateBindGroup(&bgDesc, UsageValidationMode::Internal));
         }
@@ -483,8 +481,8 @@ MaybeError BlitR8ToStencil(DeviceBase* device,
         // Bind the resources.
         pass->APISetBindGroup(0, bindGroup.Get());
         // Discard all fragments outside the copy region.
-        pass->APISetScissorRect(static_cast<uint32_t>(dst.origin.x),
-                                static_cast<uint32_t>(dst.origin.y), copyExtent.width,
+        pass->APISetScissorRect(dchecked_cast<uint32_t>(dst.origin.x),
+                                dchecked_cast<uint32_t>(dst.origin.y), copyExtent.width,
                                 copyExtent.height);
 
         // Clear the copy region to 0.
@@ -543,7 +541,7 @@ MaybeError BlitStagingBufferToDepth(DeviceBase* device,
     DAWN_TRY_ASSIGN(commandBuffer, commandEncoder->Finish());
 
     CommandBufferBase* commands = commandBuffer.Get();
-    device->GetQueue()->APISubmit(1, &commands);
+    device->GetQueue()->APISubmit(SpanFromRef(commands));
     return {};
 }
 
@@ -607,7 +605,7 @@ MaybeError BlitStagingBufferToStencil(DeviceBase* device,
     DAWN_TRY_ASSIGN(commandBuffer, commandEncoder->Finish());
 
     CommandBufferBase* commands = commandBuffer.Get();
-    device->GetQueue()->APISubmit(1, &commands);
+    device->GetQueue()->APISubmit(SpanFromRef(commands));
     return {};
 }
 
