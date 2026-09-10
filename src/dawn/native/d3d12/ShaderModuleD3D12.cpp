@@ -35,7 +35,7 @@
 #include "dawn/platform/DawnPlatform.h"
 
 
-#include "dawn/common/Log.h"
+#include "src/utils/log.h"
 
 
 #include "src/dawn/common/MatchVariant.h"
