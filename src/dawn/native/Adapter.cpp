@@ -487,20 +487,21 @@ std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapter
             // Sort backends generally in order of Core -> Compat -> Testing,
             // while preferring OS-specific backends like Metal/D3D.
             case wgpu::BackendType::Metal:
-            case wgpu::BackendType::D3D12:
                 return 0;
             case wgpu::BackendType::Vulkan:
                 return 1;
-            case wgpu::BackendType::D3D11:
+            case wgpu::BackendType::D3D12:
                 return 2;
-            case wgpu::BackendType::OpenGLES:
+            case wgpu::BackendType::D3D11:
                 return 3;
-            case wgpu::BackendType::OpenGL:
+            case wgpu::BackendType::OpenGLES:
                 return 4;
-            case wgpu::BackendType::WebGPU:
+            case wgpu::BackendType::OpenGL:
                 return 5;
-            case wgpu::BackendType::Null:
+            case wgpu::BackendType::WebGPU:
                 return 6;
+            case wgpu::BackendType::Null:
+                return 7;
             case wgpu::BackendType::Undefined:
                 break;
         }
