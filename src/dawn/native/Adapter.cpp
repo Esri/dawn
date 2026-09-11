@@ -489,10 +489,12 @@ std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapter
         DAWN_UNREACHABLE();
     };
 
+    #if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
+
     const auto ComputeBackendTypeRank = [](const Ref<AdapterBase>& a) {
         switch (a->GetPhysicalDevice()->GetBackendType()) {
             // Sort backends generally in order of Core -> Compat -> Testing,
-            // while preferring OS-specific backends like Metal/D3D.
+            // while preferring Metal then Vulkan where available.
             case wgpu::BackendType::Metal:
                 return 0;
             case wgpu::BackendType::Vulkan:
@@ -514,6 +516,35 @@ std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapter
         }
         DAWN_UNREACHABLE();
     };
+
+    #else
+
+    const auto ComputeBackendTypeRank = [](const Ref<AdapterBase>& a) {
+        switch (a->GetPhysicalDevice()->GetBackendType()) {
+            // Sort backends generally in order of Core -> Compat -> Testing,
+            // while preferring OS-specific backends like Metal/D3D.
+            case wgpu::BackendType::Metal:
+            case wgpu::BackendType::D3D12:
+                return 0;
+            case wgpu::BackendType::Vulkan:
+                return 1;
+            case wgpu::BackendType::D3D11:
+                return 2;
+            case wgpu::BackendType::OpenGLES:
+                return 3;
+            case wgpu::BackendType::OpenGL:
+                return 4;
+            case wgpu::BackendType::WebGPU:
+                return 5;
+            case wgpu::BackendType::Null:
+                return 6;
+            case wgpu::BackendType::Undefined:
+                break;
+        }
+        DAWN_UNREACHABLE();
+    };
+
+    #endif
 
     std::sort(adapters.begin(), adapters.end(),
               [&](const Ref<AdapterBase>& a, const Ref<AdapterBase>& b) -> bool {
