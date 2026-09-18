@@ -818,6 +818,21 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "front-end's MapAsync and Unmap calls to become cheap without acquiring any lock internally.",
       "https://crbug.com/dawn/481158754", ToggleStage::Device}},
 
+    #if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
+     {Toggle::PreferVulkanOverDirectX,
+     {"prefer_vulkan_over_directx",
+      "Prefer Vulkan over DirectX when choosing available backends.",
+      "N/A", ToggleStage::Device}},
+    #endif
+
+    #if (DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
+      {Toggle::AllowDxcToFxcFallback,
+      {"allow_dxc_to_fxc_fallback",
+      "When DXC is requested but not available, attempt fall back to using FXC instead of "
+      "throwing an error.",
+      "N/A", ToggleStage::Device}},
+    #endif
+
     // Comment to separate the }} so it is clearer what to copy-paste to add a toggle.
 }};
 

@@ -200,6 +200,14 @@ enum class Toggle {
     DisableTransientAttachment,
     AutoMapBackendBuffer,
 
+    // Some toggles so we can toggle this without recompilation.
+    #if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
+    PreferVulkanOverDirectX,
+    #endif
+    #if (DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
+    AllowDxcToFxcFallback,
+    #endif
+
     EnumCount,
     InvalidEnum = EnumCount,
 };
