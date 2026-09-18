@@ -621,11 +621,14 @@ void PhysicalDevice::SetupBackendAdapterToggles(dawn::platform::Platform* platfo
     // Normally the availablity of compiler libaries is not checked as above. In this case we
     // want to check we can find DXC then fallback to FXC if it's not available. The normal
     // behavior if DAWN_USE_BUILD_DXC is on is to fail if DXC is not available.
-    MaybeError dxcCheck = GetBackend()->EnsureDXC();
-    if (dxcCheck.IsError()) {
-        // Consume the error for resource management.
-        [[maybe_unused]] auto error = dxcCheck.AcquireError();
-        adapterToggles->ForceSet(Toggle::UseDXC, false);
+    if (adapterToggles->IsEnabled(Toggle::UseDXC) && 
+        adapterToggles->IsEnabled(Toggle::AllowDXCToFXCFallback)) {
+        MaybeError dxcCheck = GetBackend()->EnsureDXC();
+        if (dxcCheck.IsError()) {
+            // Consume the error for resource management.
+            [[maybe_unused]] auto error = dxcCheck.AcquireError();
+            adapterToggles->ForceSet(Toggle::UseDXC, false);
+        }
     }
 #endif
 

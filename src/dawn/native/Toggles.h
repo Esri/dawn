@@ -205,7 +205,7 @@ enum class Toggle {
     PreferVulkanOverDirectX,
     #endif
     #if (DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
-    AllowDxcToFxcFallback,
+    AllowDXCToFXCFallback,
     #endif
 
     EnumCount,

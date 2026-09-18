@@ -822,15 +822,15 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
      {Toggle::PreferVulkanOverDirectX,
      {"prefer_vulkan_over_directx",
       "Prefer Vulkan over DirectX when choosing available backends.",
-      "N/A", ToggleStage::Device}},
+      "N/A", ToggleStage::Adapter}},
     #endif
 
     #if (DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
-      {Toggle::AllowDxcToFxcFallback,
+      {Toggle::AllowDXCToFXCFallback,
       {"allow_dxc_to_fxc_fallback",
       "When DXC is requested but not available, attempt fall back to using FXC instead of "
       "throwing an error.",
-      "N/A", ToggleStage::Device}},
+      "N/A", ToggleStage::Adapter}},
     #endif
 
     // Comment to separate the }} so it is clearer what to copy-paste to add a toggle.
