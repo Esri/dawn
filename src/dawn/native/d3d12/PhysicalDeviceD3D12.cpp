@@ -638,10 +638,6 @@ void PhysicalDevice::SetupBackendAdapterToggles(dawn::platform::Platform* platfo
     adapterToggles->Default(Toggle::UseDXC, false);
 #endif
 
-#if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
-    adapterToggles->Default(Toggle::PreferVulkanOverDirectX, true);
-#endif
-
     const uint32_t deviceId = GetDeviceId();
     const uint32_t vendorId = GetVendorId();
 

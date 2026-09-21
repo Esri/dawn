@@ -471,8 +471,14 @@ const std::string& AdapterBase::GetName() const {
     return mPhysicalDevice->GetName();
 }
 
+#if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
+std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapters,
+                                           const UnpackedPtr<RequestAdapterOptions>& options,
+                                           const bool preferVulkan) {
+#else
 std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapters,
                                            const UnpackedPtr<RequestAdapterOptions>& options) {
+#endif
     const bool highPerformance = options->powerPreference == wgpu::PowerPreference::HighPerformance;
 
     const auto ComputeAdapterTypeRank = [&](const Ref<AdapterBase>& a) {
@@ -490,17 +496,17 @@ std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapter
     };
 
     #if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
-
-    const auto ComputeBackendTypeRank = [](const Ref<AdapterBase>& a) {
+    
+    const auto ComputeBackendTypeRank = [&preferVulkan](const Ref<AdapterBase>& a) {
         switch (a->GetPhysicalDevice()->GetBackendType()) {
             // Sort backends generally in order of Core -> Compat -> Testing,
             // while preferring Metal then Vulkan where available.
             case wgpu::BackendType::Metal:
                 return 0;
             case wgpu::BackendType::Vulkan:
-                return 1;
+                return preferVulkan ? 1 : 2;
             case wgpu::BackendType::D3D12:
-                return 2;
+                return preferVulkan ? 2 : 1;
             case wgpu::BackendType::D3D11:
                 return 3;
             case wgpu::BackendType::OpenGLES:

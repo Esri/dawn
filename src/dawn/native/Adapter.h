@@ -123,8 +123,14 @@ class AdapterBase : public RefCounted, public WeakRefSupport<AdapterBase> {
     bool mAdapterIsConsumed = false;
 };
 
+#if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
+std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapters,
+                                           const UnpackedPtr<RequestAdapterOptions>& options,
+                                           const bool preferVulkan);
+#else
 std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapters,
                                            const UnpackedPtr<RequestAdapterOptions>& options);
+#endif
 
 }  // namespace dawn::native
 

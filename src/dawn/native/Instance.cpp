@@ -400,7 +400,21 @@ std::vector<Ref<AdapterBase>> InstanceBase::EnumerateAdapters(
         // returns the correct order based on system settings and configuration.
         return adapters;
     }
+
+    #if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
+
+    TogglesState adapterToggles =
+        TogglesState::CreateFromTogglesDescriptor(togglesDesc, ToggleStage::Adapter);
+    adapterToggles.InheritFrom(mToggles);
+    adapterToggles.Default(Toggle::PreferVulkanOverDirectX, true);
+    const bool preferVulkan = adapterToggles.IsEnabled(Toggle::PreferVulkanOverDirectX);
+    return SortAdapters(std::move(adapters), unpacked, preferVulkan);
+
+    #else
+
     return SortAdapters(std::move(adapters), unpacked);
+    
+    #endif
 }
 
 BackendConnection* InstanceBase::GetBackendConnection(wgpu::BackendType backendType) {
