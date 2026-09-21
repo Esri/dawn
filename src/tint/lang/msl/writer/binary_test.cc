@@ -60,7 +60,8 @@ TEST_P(MslWriterBinaryTest, Emit) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -90,7 +91,8 @@ TEST_F(MslWriterTest, BinaryDivU32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 uint tint_div_u32(uint lhs, uint rhs) {
   return (lhs / select(rhs, 1u, (rhs == 0u)));
@@ -115,10 +117,12 @@ TEST_F(MslWriterTest, BinaryModU32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 uint tint_mod_u32(uint lhs, uint rhs) {
-  return (lhs - ((lhs / select(rhs, 1u, (rhs == 0u))) * select(rhs, 1u, (rhs == 0u))));
+  uint const v = select(rhs, 1u, (rhs == 0u));
+  return (lhs - ((lhs / v) * v));
 }
 
 [[max_total_threads_per_threadgroup(1)]]
@@ -140,7 +144,8 @@ TEST_F(MslWriterTest, BinaryShiftLeft) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -161,7 +166,8 @@ TEST_F(MslWriterTest, BinaryShiftRight) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -185,7 +191,8 @@ TEST_P(MslWriterBinaryBoolTest, Emit) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -220,7 +227,8 @@ TEST_P(MslWriterBinaryTest_SignedOverflowDefinedBehaviour, Emit_Scalar) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -245,7 +253,8 @@ TEST_P(MslWriterBinaryTest_SignedOverflowDefinedBehaviour, Emit_Vector) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -279,7 +288,8 @@ TEST_P(MslWriterBinaryTest_ShiftSignedOverflowDefinedBehaviour, Emit) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -314,7 +324,8 @@ TEST_P(MslWriterBinaryTest_SignedOverflowDefinedBehaviour_Chained, Emit) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -352,7 +363,8 @@ TEST_P(MslWriterBinaryTest_ShiftSignedOverflowDefinedBehaviour_Chained, Emit) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -386,7 +398,8 @@ TEST_F(MslWriterTest, BinaryModF32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -411,7 +424,8 @@ TEST_F(MslWriterTest, BinaryModF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -436,7 +450,8 @@ TEST_F(MslWriterTest, BinaryModVec3F32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {
@@ -461,7 +476,8 @@ TEST_F(MslWriterTest, BinaryModVec3F16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.msl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 [[max_total_threads_per_threadgroup(1)]]
 kernel void entry() {

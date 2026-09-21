@@ -28,35 +28,34 @@
 #ifndef SRC_DAWN_NATIVE_METAL_PIPELINELAYOUTMTL_H_
 #define SRC_DAWN_NATIVE_METAL_PIPELINELAYOUTMTL_H_
 
-#include "dawn/common/ityp_stack_vec.h"
-#include "dawn/native/BindingInfo.h"
-#include "dawn/native/PipelineLayout.h"
-
-#include "dawn/native/PerStage.h"
-
 #import <Metal/Metal.h>
+
+#include "src/dawn/common/Constants.h"
+#include "src/dawn/common/ityp_stack_vec.h"
+#include "src/dawn/native/BindingInfo.h"
+#include "src/dawn/native/IntegerTypes.h"
+#include "src/dawn/native/PerStage.h"
+#include "src/dawn/native/PipelineLayout.h"
 
 namespace dawn::native::metal {
 
 class Device;
 
 // The number of Metal buffers usable by applications in general
-static constexpr size_t kMetalBufferTableSize = 31;
-// The Metal buffer slot that Dawn reserves for immediate block.
-// The layout of ImmediateBlock:
-// struct ImmediateBlock {
-//    - Normal render/compute immediates, ref to ImmediateConstantLayout.h
-//    - Optional Paddings to align the following vec4 to 16 bytes
-//    - Storage Buffer sizes - vec4<u32> arrays
-// };
-static constexpr size_t kImmediateBlockBufferSlot = kMetalBufferTableSize - 1;
+inline constexpr size_t kMetalBufferTableSize = 31;
+// Immediate blocks contain pipeline immediates followed by tightly packed storage buffer sizes.
+inline constexpr size_t kImmediateBlockBufferSlot = kMetalBufferTableSize - 1;
 // The number of Metal buffers Dawn can use in a generic way (i.e. that aren't reserved)
-static constexpr size_t kGenericMetalBufferSlots = kMetalBufferTableSize - 1;
+inline constexpr size_t kGenericMetalBufferSlots = kMetalBufferTableSize - 1;
 
 // The Last buffer slot to be used by argument buffers
-static constexpr size_t kArgumentBufferSlotMax = kImmediateBlockBufferSlot - 1;
+inline constexpr size_t kArgumentBufferSlotMax = kImmediateBlockBufferSlot - 1;
 
-static constexpr BindGroupIndex kPullingBufferBindingSet = BindGroupIndex(kMaxBindGroups);
+inline uint32_t GetImmediateBufferSizesByteOffset(ImmediateMask pipelineImmediateMask) {
+    return static_cast<uint32_t>(pipelineImmediateMask.count()) * kImmediateElementByteSize;
+}
+
+inline constexpr BindGroupIndex kPullingBufferBindingSet = BindGroupIndex(kMaxBindGroups);
 
 class PipelineLayout final : public PipelineLayoutBase {
   public:

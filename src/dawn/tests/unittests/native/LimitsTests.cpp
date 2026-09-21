@@ -26,11 +26,12 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <gtest/gtest.h>
+
 #include <unordered_set>
 
-#include "dawn/common/Constants.h"
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/Limits.h"
+#include "src/dawn/common/Constants.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/Limits.h"
 
 namespace dawn {
 namespace native {

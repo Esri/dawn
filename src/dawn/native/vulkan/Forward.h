@@ -28,7 +28,7 @@
 #ifndef SRC_DAWN_NATIVE_VULKAN_FORWARD_H_
 #define SRC_DAWN_NATIVE_VULKAN_FORWARD_H_
 
-#include "dawn/native/ToBackend.h"
+#include "src/dawn/native/ToBackend.h"
 
 namespace dawn::native::vulkan {
 
@@ -48,6 +48,7 @@ class ResourceHeap;
 class ResourceTable;
 class Sampler;
 class ShaderModule;
+class TexelBufferView;
 class SharedTextureMemory;
 class SharedFence;
 class SwapChain;
@@ -71,6 +72,7 @@ struct VulkanBackendTraits {
     using ResourceTableType = ResourceTable;
     using SamplerType = Sampler;
     using ShaderModuleType = ShaderModule;
+    using TexelBufferViewType = TexelBufferView;
     using SharedTextureMemoryType = SharedTextureMemory;
     using SharedFenceType = SharedFence;
     using SwapChainType = SwapChain;

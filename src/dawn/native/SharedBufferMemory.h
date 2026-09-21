@@ -28,14 +28,14 @@
 #ifndef SRC_DAWN_NATIVE_SHAREDBUFFERMEMORY_H_
 #define SRC_DAWN_NATIVE_SHAREDBUFFERMEMORY_H_
 
-#include "dawn/common/WeakRef.h"
-#include "dawn/common/WeakRefSupport.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/ObjectBase.h"
-#include "dawn/native/SharedFence.h"
-#include "dawn/native/SharedResourceMemory.h"
-#include "dawn/native/dawn_platform.h"
+#include "src/dawn/common/WeakRef.h"
+#include "src/dawn/common/WeakRefSupport.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/Forward.h"
+#include "src/dawn/native/ObjectBase.h"
+#include "src/dawn/native/SharedFence.h"
+#include "src/dawn/native/SharedResourceMemory.h"
+#include "src/dawn/native/dawn_platform.h"
 
 namespace dawn::native {
 
@@ -56,6 +56,10 @@ class SharedBufferMemoryBase : public SharedResourceMemory {
     BufferBase* APICreateBuffer(const BufferDescriptor* descriptor);
 
     ObjectType GetType() const override;
+
+    // Returns true if the underlying resource can be written by the CPU, detect by checking for
+    // MapWrite in the properties.
+    bool CanBeWrittenByCPU() const;
 
   protected:
     SharedBufferMemoryBase(DeviceBase* device,

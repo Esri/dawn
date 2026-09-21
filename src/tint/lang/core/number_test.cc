@@ -25,6 +25,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "src/tint/lang/core/number.h"
+
 #include <cmath>
 #include <cstdint>
 #include <tuple>
@@ -32,11 +34,9 @@
 #include <variant>
 #include <vector>
 
-#include "src/tint/lang/core/number.h"
+#include "gtest/gtest.h"
 #include "src/tint/utils/macros/compiler.h"
 #include "src/tint/utils/text/string_stream.h"
-
-#include "gtest/gtest.h"
 
 using namespace tint::core::number_suffixes;  // NOLINT
 
@@ -460,7 +460,8 @@ INSTANTIATE_TEST_SUITE_P(
 #undef OVERFLOW  // corecrt_math.h :(
 #endif
 #define OVERFLOW \
-    {}
+    {            \
+    }
 
 // An error value.  IEEE 754 exceptions map to this, including overflow,
 // invalid operation, and division by zero.
@@ -487,7 +488,7 @@ void ValidateResult(std::optional<T> result, std::optional<T> expect, bool float
             EXPECT_EQ(*result, *expect);
         } else {
             if (float_comp) {
-                EXPECT_FLOAT_EQ(*result, *expect);
+                EXPECT_FLOAT_EQ(static_cast<float>(*result), static_cast<float>(*expect));
             } else {
                 EXPECT_EQ(*result, *expect);
             }

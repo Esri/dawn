@@ -29,7 +29,6 @@ int f() {
             tint_loop_idx_1.y = (tint_loop_idx_1.y - tint_carry_1);
             j = as_type<int>((as_type<uint>(j) + as_type<uint>(1)));
           }
-          continue;
         }
       }
       /* unreachable */
@@ -42,5 +41,5 @@ int f() {
 
 [[max_total_threads_per_threadgroup(1)]]
 kernel void v() {
-  f();
+  (f());
 }

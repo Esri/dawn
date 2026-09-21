@@ -27,19 +27,20 @@
 
 // GEN_BUILD:CONDITION(tint_build_is_win)
 
-#include "src/tint/utils/system/executable_path.h"
-
 #include <Windows.h>
+
 #include <filesystem>
 
 #include "src/tint/utils/containers/vector.h"
+#include "src/tint/utils/system/executable_path.h"
 
 std::string tint::ExecutablePath() {
     tint::Vector<char, MAX_PATH> buff;
     buff.Resize(MAX_PATH);
     while (true) {
-        auto result = ::GetModuleFileNameA(NULL, &buff[0], buff.Length());
-        if (result == buff.Length() && (::GetLastError() == ERROR_INSUFFICIENT_BUFFER)) {
+        auto result = ::GetModuleFileNameA(nullptr, &buff[0], static_cast<DWORD>(buff.Length()));
+        if (result == static_cast<DWORD>(buff.Length()) &&
+            (::GetLastError() == ERROR_INSUFFICIENT_BUFFER)) {
             buff.Resize(buff.Length() * 2);
         } else {
             break;

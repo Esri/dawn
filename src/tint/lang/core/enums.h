@@ -41,7 +41,7 @@
 
 #include <cstdint>
 
-#include "src/tint/utils/reflection.h"
+#include "src/tint/utils/reflection/reflection.h"
 #include "src/tint/utils/rtti/traits.h"
 
 namespace tint::core {
@@ -198,67 +198,37 @@ constexpr std::string_view kInterpolationTypeStrings[] = {
     "perspective",
 };
 
-/// The sampler filtering.
-enum class SamplerFiltering : uint8_t {
+/// The majorness of a matrix.
+enum class Majorness : uint8_t {
     kUndefined,
-    kFiltering,
-    kNonFiltering,
+    kColMajor,
+    kRowMajor,
 };
 
 /// @param value the enum value
 /// @returns the string for the given enum value
-std::string_view ToString(SamplerFiltering value);
+std::string_view ToString(Majorness value);
 
 /// @param out the stream to write to
-/// @param value the SamplerFiltering
+/// @param value the Majorness
 /// @returns @p out so calls can be chained
 template <typename STREAM>
     requires(traits::IsOStream<STREAM>)
-auto& operator<<(STREAM& out, SamplerFiltering value) {
+auto& operator<<(STREAM& out, Majorness value) {
     return out << ToString(value);
 }
 
-/// ParseSamplerFiltering parses a SamplerFiltering from a string.
+/// ParseMajorness parses a Majorness from a string.
 /// @param str the string to parse
-/// @returns the parsed enum, or SamplerFiltering::kUndefined if the string could not be parsed.
-SamplerFiltering ParseSamplerFiltering(std::string_view str);
+/// @returns the parsed enum, or Majorness::kUndefined if the string could not be parsed.
+Majorness ParseMajorness(std::string_view str);
 
-constexpr std::string_view kSamplerFilteringStrings[] = {
-    "filtering",
-    "non_filtering",
+constexpr std::string_view kMajornessStrings[] = {
+    "col_major",
+    "row_major",
 };
 
-/// The texture filterable.
-enum class TextureFilterable : uint8_t {
-    kUndefined,
-    kFilterable,
-    kUnfilterable,
-};
-
-/// @param value the enum value
-/// @returns the string for the given enum value
-std::string_view ToString(TextureFilterable value);
-
-/// @param out the stream to write to
-/// @param value the TextureFilterable
-/// @returns @p out so calls can be chained
-template <typename STREAM>
-    requires(traits::IsOStream<STREAM>)
-auto& operator<<(STREAM& out, TextureFilterable value) {
-    return out << ToString(value);
-}
-
-/// ParseTextureFilterable parses a TextureFilterable from a string.
-/// @param str the string to parse
-/// @returns the parsed enum, or TextureFilterable::kUndefined if the string could not be parsed.
-TextureFilterable ParseTextureFilterable(std::string_view str);
-
-constexpr std::string_view kTextureFilterableStrings[] = {
-    "filterable",
-    "unfilterable",
-};
-
-/// Address space of a given pointer.
+/// The kind of subgroup matrix.
 enum class SubgroupMatrixKind : uint8_t {
     kUndefined,
     kLeft,
@@ -642,6 +612,7 @@ enum class BuiltinValue : uint8_t {
     kFragDepth,
     kFrontFacing,
     kGlobalInvocationId,
+    kGlobalInvocationIndex,
     kInstanceIndex,
     kLocalInvocationId,
     kLocalInvocationIndex,
@@ -656,6 +627,7 @@ enum class BuiltinValue : uint8_t {
     kSubgroupSize,
     kVertexIndex,
     kWorkgroupId,
+    kWorkgroupIndex,
 };
 
 /// @param value the enum value
@@ -682,6 +654,7 @@ constexpr std::string_view kBuiltinValueStrings[] = {
     "frag_depth",
     "front_facing",
     "global_invocation_id",
+    "global_invocation_index",
     "instance_index",
     "local_invocation_id",
     "local_invocation_index",
@@ -696,12 +669,12 @@ constexpr std::string_view kBuiltinValueStrings[] = {
     "subgroup_size",
     "vertex_index",
     "workgroup_id",
+    "workgroup_index",
 };
 
 /// Builtin depth mode defined with `@builtin(<name>, <depth_mode>)`.
 enum class BuiltinDepthMode : uint8_t {
     kUndefined,
-    kAny,
     kGreater,
     kLess,
 };
@@ -725,7 +698,6 @@ auto& operator<<(STREAM& out, BuiltinDepthMode value) {
 BuiltinDepthMode ParseBuiltinDepthMode(std::string_view str);
 
 constexpr std::string_view kBuiltinDepthModeStrings[] = {
-    "any",
     "greater",
     "less",
 };
@@ -801,7 +773,6 @@ enum class ParameterUsage : uint8_t {
     kBase,
     kBias,
     kBits,
-    kColMajor,
     kCompareValue,
     kComponent,
     kConstOffset,
@@ -857,6 +828,7 @@ enum class ParameterUsage : uint8_t {
     kZ,
     kZw,
     kZyw,
+    kColMajor,
     kNone,
 };
 
@@ -886,6 +858,7 @@ enum class BuiltinFn : uint8_t {
     kAtan,
     kAtan2,
     kAtanh,
+    kBitcast,
     kCeil,
     kClamp,
     kCos,
@@ -965,6 +938,7 @@ enum class BuiltinFn : uint8_t {
     kUnpack4X8Unorm,
     kUnpack4XI8,
     kUnpack4XU8,
+    kAddSat,
     kStorageBarrier,
     kWorkgroupBarrier,
     kTextureBarrier,
@@ -995,6 +969,8 @@ enum class BuiltinFn : uint8_t {
     kAtomicXor,
     kAtomicExchange,
     kAtomicCompareExchangeWeak,
+    kAtomicStoreMax,
+    kAtomicStoreMin,
     kSubgroupBallot,
     kSubgroupElect,
     kSubgroupBroadcast,
@@ -1028,6 +1004,7 @@ enum class BuiltinFn : uint8_t {
     kSubgroupMatrixScalarSubtract,
     kSubgroupMatrixScalarMultiply,
     kBufferView,
+    kBufferArrayView,
     kBufferLength,
     kPrint,
     kHasResource,
@@ -1066,6 +1043,7 @@ constexpr BuiltinFn kBuiltinFns[] = {
     BuiltinFn::kAtan,
     BuiltinFn::kAtan2,
     BuiltinFn::kAtanh,
+    BuiltinFn::kBitcast,
     BuiltinFn::kCeil,
     BuiltinFn::kClamp,
     BuiltinFn::kCos,
@@ -1145,6 +1123,7 @@ constexpr BuiltinFn kBuiltinFns[] = {
     BuiltinFn::kUnpack4X8Unorm,
     BuiltinFn::kUnpack4XI8,
     BuiltinFn::kUnpack4XU8,
+    BuiltinFn::kAddSat,
     BuiltinFn::kStorageBarrier,
     BuiltinFn::kWorkgroupBarrier,
     BuiltinFn::kTextureBarrier,
@@ -1175,6 +1154,8 @@ constexpr BuiltinFn kBuiltinFns[] = {
     BuiltinFn::kAtomicXor,
     BuiltinFn::kAtomicExchange,
     BuiltinFn::kAtomicCompareExchangeWeak,
+    BuiltinFn::kAtomicStoreMax,
+    BuiltinFn::kAtomicStoreMin,
     BuiltinFn::kSubgroupBallot,
     BuiltinFn::kSubgroupElect,
     BuiltinFn::kSubgroupBroadcast,
@@ -1208,6 +1189,7 @@ constexpr BuiltinFn kBuiltinFns[] = {
     BuiltinFn::kSubgroupMatrixScalarSubtract,
     BuiltinFn::kSubgroupMatrixScalarMultiply,
     BuiltinFn::kBufferView,
+    BuiltinFn::kBufferArrayView,
     BuiltinFn::kBufferLength,
     BuiltinFn::kPrint,
     BuiltinFn::kHasResource,
@@ -1227,6 +1209,7 @@ constexpr const char* kBuiltinFnStrings[] = {
     "atan",
     "atan2",
     "atanh",
+    "bitcast",
     "ceil",
     "clamp",
     "cos",
@@ -1306,6 +1289,7 @@ constexpr const char* kBuiltinFnStrings[] = {
     "unpack4x8unorm",
     "unpack4xI8",
     "unpack4xU8",
+    "addSat",
     "storageBarrier",
     "workgroupBarrier",
     "textureBarrier",
@@ -1336,6 +1320,8 @@ constexpr const char* kBuiltinFnStrings[] = {
     "atomicXor",
     "atomicExchange",
     "atomicCompareExchangeWeak",
+    "atomicStoreMax",
+    "atomicStoreMin",
     "subgroupBallot",
     "subgroupElect",
     "subgroupBroadcast",
@@ -1369,6 +1355,7 @@ constexpr const char* kBuiltinFnStrings[] = {
     "subgroupMatrixScalarSubtract",
     "subgroupMatrixScalarMultiply",
     "bufferView",
+    "bufferArrayView",
     "bufferLength",
     "print",
     "hasResource",

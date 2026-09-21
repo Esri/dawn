@@ -6,12 +6,16 @@ RWByteAddressBuffer prevent_dce : register(u0);
 int4 firstLeadingBit_c1f940() {
   int4 arg_0 = (int(1)).xxxx;
   uint4 v = asuint(arg_0);
-  uint4 v_1 = (((v < (2147483648u).xxxx)) ? (v) : (~(v)));
-  uint4 v_2 = ((((v_1 & (4294901760u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((16u).xxxx));
-  uint4 v_3 = (((((v_1 >> v_2) & (65280u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((8u).xxxx));
-  uint4 v_4 = ((((((v_1 >> v_2) >> v_3) & (240u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((4u).xxxx));
-  uint4 v_5 = (((((((v_1 >> v_2) >> v_3) >> v_4) & (12u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((2u).xxxx));
-  int4 res = asint((((((((v_1 >> v_2) >> v_3) >> v_4) >> v_5) == (0u).xxxx)) ? ((4294967295u).xxxx) : ((v_2 | (v_3 | (v_4 | (v_5 | ((((((((v_1 >> v_2) >> v_3) >> v_4) >> v_5) & (2u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((1u).xxxx)))))))));
+  uint4 v_1 = select((v < (2147483648u).xxxx), v, ~(v));
+  uint4 v_2 = select(((v_1 & (4294901760u).xxxx) == (0u).xxxx), (0u).xxxx, (16u).xxxx);
+  uint4 v_3 = (v_1 >> v_2);
+  uint4 v_4 = select(((v_3 & (65280u).xxxx) == (0u).xxxx), (0u).xxxx, (8u).xxxx);
+  uint4 v_5 = (v_3 >> v_4);
+  uint4 v_6 = select(((v_5 & (240u).xxxx) == (0u).xxxx), (0u).xxxx, (4u).xxxx);
+  uint4 v_7 = (v_5 >> v_6);
+  uint4 v_8 = select(((v_7 & (12u).xxxx) == (0u).xxxx), (0u).xxxx, (2u).xxxx);
+  uint4 v_9 = (v_7 >> v_8);
+  int4 res = asint(select((v_9 == (0u).xxxx), (4294967295u).xxxx, (v_2 | (v_4 | (v_6 | (v_8 | select(((v_9 & (2u).xxxx) == (0u).xxxx), (0u).xxxx, (1u).xxxx)))))));
   return res;
 }
 
@@ -27,12 +31,16 @@ RWByteAddressBuffer prevent_dce : register(u0);
 int4 firstLeadingBit_c1f940() {
   int4 arg_0 = (int(1)).xxxx;
   uint4 v = asuint(arg_0);
-  uint4 v_1 = (((v < (2147483648u).xxxx)) ? (v) : (~(v)));
-  uint4 v_2 = ((((v_1 & (4294901760u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((16u).xxxx));
-  uint4 v_3 = (((((v_1 >> v_2) & (65280u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((8u).xxxx));
-  uint4 v_4 = ((((((v_1 >> v_2) >> v_3) & (240u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((4u).xxxx));
-  uint4 v_5 = (((((((v_1 >> v_2) >> v_3) >> v_4) & (12u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((2u).xxxx));
-  int4 res = asint((((((((v_1 >> v_2) >> v_3) >> v_4) >> v_5) == (0u).xxxx)) ? ((4294967295u).xxxx) : ((v_2 | (v_3 | (v_4 | (v_5 | ((((((((v_1 >> v_2) >> v_3) >> v_4) >> v_5) & (2u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((1u).xxxx)))))))));
+  uint4 v_1 = select((v < (2147483648u).xxxx), v, ~(v));
+  uint4 v_2 = select(((v_1 & (4294901760u).xxxx) == (0u).xxxx), (0u).xxxx, (16u).xxxx);
+  uint4 v_3 = (v_1 >> v_2);
+  uint4 v_4 = select(((v_3 & (65280u).xxxx) == (0u).xxxx), (0u).xxxx, (8u).xxxx);
+  uint4 v_5 = (v_3 >> v_4);
+  uint4 v_6 = select(((v_5 & (240u).xxxx) == (0u).xxxx), (0u).xxxx, (4u).xxxx);
+  uint4 v_7 = (v_5 >> v_6);
+  uint4 v_8 = select(((v_7 & (12u).xxxx) == (0u).xxxx), (0u).xxxx, (2u).xxxx);
+  uint4 v_9 = (v_7 >> v_8);
+  int4 res = asint(select((v_9 == (0u).xxxx), (4294967295u).xxxx, (v_2 | (v_4 | (v_6 | (v_8 | select(((v_9 & (2u).xxxx) == (0u).xxxx), (0u).xxxx, (1u).xxxx)))))));
   return res;
 }
 
@@ -58,26 +66,30 @@ struct vertex_main_outputs {
 int4 firstLeadingBit_c1f940() {
   int4 arg_0 = (int(1)).xxxx;
   uint4 v = asuint(arg_0);
-  uint4 v_1 = (((v < (2147483648u).xxxx)) ? (v) : (~(v)));
-  uint4 v_2 = ((((v_1 & (4294901760u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((16u).xxxx));
-  uint4 v_3 = (((((v_1 >> v_2) & (65280u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((8u).xxxx));
-  uint4 v_4 = ((((((v_1 >> v_2) >> v_3) & (240u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((4u).xxxx));
-  uint4 v_5 = (((((((v_1 >> v_2) >> v_3) >> v_4) & (12u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((2u).xxxx));
-  int4 res = asint((((((((v_1 >> v_2) >> v_3) >> v_4) >> v_5) == (0u).xxxx)) ? ((4294967295u).xxxx) : ((v_2 | (v_3 | (v_4 | (v_5 | ((((((((v_1 >> v_2) >> v_3) >> v_4) >> v_5) & (2u).xxxx) == (0u).xxxx)) ? ((0u).xxxx) : ((1u).xxxx)))))))));
+  uint4 v_1 = select((v < (2147483648u).xxxx), v, ~(v));
+  uint4 v_2 = select(((v_1 & (4294901760u).xxxx) == (0u).xxxx), (0u).xxxx, (16u).xxxx);
+  uint4 v_3 = (v_1 >> v_2);
+  uint4 v_4 = select(((v_3 & (65280u).xxxx) == (0u).xxxx), (0u).xxxx, (8u).xxxx);
+  uint4 v_5 = (v_3 >> v_4);
+  uint4 v_6 = select(((v_5 & (240u).xxxx) == (0u).xxxx), (0u).xxxx, (4u).xxxx);
+  uint4 v_7 = (v_5 >> v_6);
+  uint4 v_8 = select(((v_7 & (12u).xxxx) == (0u).xxxx), (0u).xxxx, (2u).xxxx);
+  uint4 v_9 = (v_7 >> v_8);
+  int4 res = asint(select((v_9 == (0u).xxxx), (4294967295u).xxxx, (v_2 | (v_4 | (v_6 | (v_8 | select(((v_9 & (2u).xxxx) == (0u).xxxx), (0u).xxxx, (1u).xxxx)))))));
   return res;
 }
 
 VertexOutput vertex_main_inner() {
-  VertexOutput v_6 = (VertexOutput)0;
-  v_6.pos = (0.0f).xxxx;
-  v_6.prevent_dce = firstLeadingBit_c1f940();
-  VertexOutput v_7 = v_6;
-  return v_7;
+  VertexOutput v_10 = (VertexOutput)0;
+  v_10.pos = (0.0f).xxxx;
+  v_10.prevent_dce = firstLeadingBit_c1f940();
+  VertexOutput v_11 = v_10;
+  return v_11;
 }
 
 vertex_main_outputs vertex_main() {
-  VertexOutput v_8 = vertex_main_inner();
-  vertex_main_outputs v_9 = {v_8.prevent_dce, v_8.pos};
-  return v_9;
+  VertexOutput v_12 = vertex_main_inner();
+  vertex_main_outputs v_13 = {v_12.prevent_dce, v_12.pos};
+  return v_13;
 }
 

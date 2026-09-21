@@ -25,11 +25,12 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "src/tint/lang/hlsl/writer/raise/shader_io.h"
+
 #include <utility>
 
 #include "src/tint/lang/core/ir/transform/helper_test.h"
 #include "src/tint/lang/core/type/struct.h"
-#include "src/tint/lang/hlsl/writer/raise/shader_io.h"
 
 namespace tint::hlsl::writer::raise {
 namespace {
@@ -38,6 +39,17 @@ using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
 
 using HlslWriterTransformTest = core::ir::transform::TransformTest;
+
+// Builds the struct type used to store num_workgroups in the immediate block: three u32 members
+// (4-byte aligned), matching what Raise() declares.
+const core::type::Struct* MakeNumWorkgroupsType(core::ir::Module& mod) {
+    return mod.Types().Struct(mod.symbols.New("tint_num_workgroups_struct"),
+                              {
+                                  {mod.symbols.New("num_workgroups_x"), mod.Types().u32()},
+                                  {mod.symbols.New("num_workgroups_y"), mod.Types().u32()},
+                                  {mod.symbols.New("num_workgroups_z"), mod.Types().u32()},
+                              });
+}
 
 TEST_F(HlslWriterTransformTest, ShaderIONoInputsOrOutputs) {
     auto* ep = b.ComputeFunction("foo");
@@ -1275,8 +1287,14 @@ TEST_F(HlslWriterTransformTest, ShaderIOParameters_Immediate_NumWorkgroups_NonSt
     EXPECT_EQ(src, str());
 
     auto* expect = R"(
-tint_immediate_data_struct = struct @align(16), @block {
-  tint_num_workgroups_start_offset:vec3<u32> @offset(0)
+tint_num_workgroups_struct = struct @align(4) {
+  num_workgroups_x:u32 @offset(0)
+  num_workgroups_y:u32 @offset(4)
+  num_workgroups_z:u32 @offset(8)
+}
+
+tint_immediate_data_struct = struct @align(4), @block {
+  tint_num_workgroups_start_offset:tint_num_workgroups_struct @offset(0)
 }
 
 $B1: {  # root
@@ -1291,9 +1309,15 @@ $B1: {  # root
 }
 %foo = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B3: {
-    %6:ptr<immediate, vec3<u32>, read> = access %tint_immediate_data, 0u
-    %7:vec3<u32> = load %6
-    %8:void = call %foo_inner, %7
+    %6:ptr<immediate, tint_num_workgroups_struct, read> = access %tint_immediate_data, 0u
+    %7:ptr<immediate, u32, read> = access %6, 0u
+    %8:u32 = load %7
+    %9:ptr<immediate, u32, read> = access %6, 1u
+    %10:u32 = load %9
+    %11:ptr<immediate, u32, read> = access %6, 2u
+    %12:u32 = load %11
+    %13:vec3<u32> = construct %8, %10, %12
+    %14:void = call %foo_inner, %13
     ret
   }
 }
@@ -1302,11 +1326,12 @@ $B1: {  # root
     // Refs to Raise() steps to setup push constant layout.
     constexpr uint32_t num_workgroups_offset = 0u;
 
+    auto* num_workgroups_type = MakeNumWorkgroupsType(mod);
     core::ir::transform::PrepareImmediateDataConfig prepare_immediate_data_layout_config;
-    ASSERT_EQ(
-        prepare_immediate_data_layout_config.AddInternalImmediateData(
-            num_workgroups_offset, mod.symbols.New("tint_num_workgroups_start_offset"), ty.vec3u()),
-        Success);
+    ASSERT_EQ(prepare_immediate_data_layout_config.AddInternalImmediateData(
+                  num_workgroups_offset, mod.symbols.New("tint_num_workgroups_start_offset"),
+                  num_workgroups_type),
+              Success);
     auto layout =
         core::ir::transform::PrepareImmediateData(mod, prepare_immediate_data_layout_config);
 
@@ -1431,8 +1456,14 @@ Inputs = struct @align(16) {
   num_wgs:vec3<u32> @offset(0)
 }
 
-tint_immediate_data_struct = struct @align(16), @block {
-  tint_num_workgroups_start_offset:vec3<u32> @offset(0)
+tint_num_workgroups_struct = struct @align(4) {
+  num_workgroups_x:u32 @offset(0)
+  num_workgroups_y:u32 @offset(4)
+  num_workgroups_z:u32 @offset(8)
+}
+
+tint_immediate_data_struct = struct @align(4), @block {
+  tint_num_workgroups_start_offset:tint_num_workgroups_struct @offset(0)
 }
 
 $B1: {  # root
@@ -1448,10 +1479,16 @@ $B1: {  # root
 }
 %foo = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B3: {
-    %7:ptr<immediate, vec3<u32>, read> = access %tint_immediate_data, 0u
-    %8:vec3<u32> = load %7
-    %9:Inputs = construct %8
-    %10:void = call %foo_inner, %9
+    %7:ptr<immediate, tint_num_workgroups_struct, read> = access %tint_immediate_data, 0u
+    %8:ptr<immediate, u32, read> = access %7, 0u
+    %9:u32 = load %8
+    %10:ptr<immediate, u32, read> = access %7, 1u
+    %11:u32 = load %10
+    %12:ptr<immediate, u32, read> = access %7, 2u
+    %13:u32 = load %12
+    %14:vec3<u32> = construct %9, %11, %13
+    %15:Inputs = construct %14
+    %16:void = call %foo_inner, %15
     ret
   }
 }
@@ -1460,11 +1497,12 @@ $B1: {  # root
     // Refs to Raise() steps to setup push constant layout.
     constexpr uint32_t num_workgroups_offset = 0u;
 
+    auto* num_workgroups_type = MakeNumWorkgroupsType(mod);
     core::ir::transform::PrepareImmediateDataConfig prepare_immediate_data_layout_config;
-    ASSERT_EQ(
-        prepare_immediate_data_layout_config.AddInternalImmediateData(
-            num_workgroups_offset, mod.symbols.New("tint_num_workgroups_start_offset"), ty.vec3u()),
-        Success);
+    ASSERT_EQ(prepare_immediate_data_layout_config.AddInternalImmediateData(
+                  num_workgroups_offset, mod.symbols.New("tint_num_workgroups_start_offset"),
+                  num_workgroups_type),
+              Success);
     auto layout =
         core::ir::transform::PrepareImmediateData(mod, prepare_immediate_data_layout_config);
 
@@ -1691,8 +1729,14 @@ TEST_F(HlslWriterTransformTest,
     EXPECT_EQ(src, str());
 
     auto* expect = R"(
-tint_immediate_data_struct = struct @align(16), @block {
-  tint_num_workgroups_start_offset:vec3<u32> @offset(0)
+tint_num_workgroups_struct = struct @align(4) {
+  num_workgroups_x:u32 @offset(0)
+  num_workgroups_y:u32 @offset(4)
+  num_workgroups_z:u32 @offset(8)
+}
+
+tint_immediate_data_struct = struct @align(4), @block {
+  tint_num_workgroups_start_offset:tint_num_workgroups_struct @offset(0)
 }
 
 foo_inputs = struct @align(16) {
@@ -1713,9 +1757,15 @@ $B1: {  # root
 %foo = @compute @workgroup_size(1u, 1u, 1u) func(%inputs:foo_inputs):void {
   $B3: {
     %9:vec3<u32> = access %inputs, 0u
-    %10:ptr<immediate, vec3<u32>, read> = access %tint_immediate_data, 0u
-    %11:vec3<u32> = load %10
-    %12:void = call %foo_inner, %9, %11
+    %10:ptr<immediate, tint_num_workgroups_struct, read> = access %tint_immediate_data, 0u
+    %11:ptr<immediate, u32, read> = access %10, 0u
+    %12:u32 = load %11
+    %13:ptr<immediate, u32, read> = access %10, 1u
+    %14:u32 = load %13
+    %15:ptr<immediate, u32, read> = access %10, 2u
+    %16:u32 = load %15
+    %17:vec3<u32> = construct %12, %14, %16
+    %18:void = call %foo_inner, %9, %17
     ret
   }
 }
@@ -1725,10 +1775,10 @@ $B1: {  # root
     constexpr uint32_t num_workgroups_offset = 0u;
 
     core::ir::transform::PrepareImmediateDataConfig prepare_immediate_data_layout_config;
-    ASSERT_EQ(
-        prepare_immediate_data_layout_config.AddInternalImmediateData(
-            num_workgroups_offset, mod.symbols.New("tint_num_workgroups_start_offset"), ty.vec3u()),
-        Success);
+    ASSERT_EQ(prepare_immediate_data_layout_config.AddInternalImmediateData(
+                  num_workgroups_offset, mod.symbols.New("tint_num_workgroups_start_offset"),
+                  MakeNumWorkgroupsType(mod)),
+              Success);
     auto layout =
         core::ir::transform::PrepareImmediateData(mod, prepare_immediate_data_layout_config);
 
@@ -1826,8 +1876,14 @@ TEST_F(HlslWriterTransformTest,
     EXPECT_EQ(src, str());
 
     auto* expect = R"(
-tint_immediate_data_struct = struct @align(16), @block {
-  tint_num_workgroups_start_offset:vec3<u32> @offset(0)
+tint_num_workgroups_struct = struct @align(4) {
+  num_workgroups_x:u32 @offset(0)
+  num_workgroups_y:u32 @offset(4)
+  num_workgroups_z:u32 @offset(8)
+}
+
+tint_immediate_data_struct = struct @align(4), @block {
+  tint_num_workgroups_start_offset:tint_num_workgroups_struct @offset(0)
 }
 
 foo_inputs = struct @align(16) {
@@ -1847,10 +1903,16 @@ $B1: {  # root
 }
 %foo = @compute @workgroup_size(1u, 1u, 1u) func(%inputs:foo_inputs):void {
   $B3: {
-    %9:ptr<immediate, vec3<u32>, read> = access %tint_immediate_data, 0u
-    %10:vec3<u32> = load %9
-    %11:vec3<u32> = access %inputs, 0u
-    %12:void = call %foo_inner, %10, %11
+    %9:ptr<immediate, tint_num_workgroups_struct, read> = access %tint_immediate_data, 0u
+    %10:ptr<immediate, u32, read> = access %9, 0u
+    %11:u32 = load %10
+    %12:ptr<immediate, u32, read> = access %9, 1u
+    %13:u32 = load %12
+    %14:ptr<immediate, u32, read> = access %9, 2u
+    %15:u32 = load %14
+    %16:vec3<u32> = construct %11, %13, %15
+    %17:vec3<u32> = access %inputs, 0u
+    %18:void = call %foo_inner, %16, %17
     ret
   }
 }
@@ -1860,10 +1922,10 @@ $B1: {  # root
     constexpr uint32_t num_workgroups_offset = 0u;
 
     core::ir::transform::PrepareImmediateDataConfig prepare_immediate_data_layout_config;
-    ASSERT_EQ(
-        prepare_immediate_data_layout_config.AddInternalImmediateData(
-            num_workgroups_offset, mod.symbols.New("tint_num_workgroups_start_offset"), ty.vec3u()),
-        Success);
+    ASSERT_EQ(prepare_immediate_data_layout_config.AddInternalImmediateData(
+                  num_workgroups_offset, mod.symbols.New("tint_num_workgroups_start_offset"),
+                  MakeNumWorkgroupsType(mod)),
+              Success);
     auto layout =
         core::ir::transform::PrepareImmediateData(mod, prepare_immediate_data_layout_config);
 
@@ -2027,8 +2089,14 @@ TEST_F(HlslWriterTransformTest, ShaderIOParameters_Immediate_NumWorkgroupsAndSub
     EXPECT_EQ(src, str());
 
     auto* expect = R"(
-tint_immediate_data_struct = struct @align(16), @block {
-  tint_num_workgroups_start_offset:vec3<u32> @offset(0)
+tint_num_workgroups_struct = struct @align(4) {
+  num_workgroups_x:u32 @offset(0)
+  num_workgroups_y:u32 @offset(4)
+  num_workgroups_z:u32 @offset(8)
+}
+
+tint_immediate_data_struct = struct @align(4), @block {
+  tint_num_workgroups_start_offset:tint_num_workgroups_struct @offset(0)
 }
 
 foo_inputs = struct @align(16) {
@@ -2057,14 +2125,20 @@ $B1: {  # root
 %foo = @compute @workgroup_size(1u, 1u, 1u) func(%inputs:foo_inputs):void {
   $B3: {
     %19:vec3<u32> = access %inputs, 0u
-    %20:ptr<immediate, vec3<u32>, read> = access %tint_immediate_data, 0u
-    %21:vec3<u32> = load %20
-    %22:u32 = access %inputs, 1u
-    %23:u32 = hlsl.WaveGetLaneIndex
-    %24:vec3<u32> = access %inputs, 2u
-    %25:u32 = hlsl.WaveGetLaneCount
-    %26:vec3<u32> = access %inputs, 3u
-    %27:void = call %foo_inner, %19, %21, %22, %23, %24, %25, %26
+    %20:ptr<immediate, tint_num_workgroups_struct, read> = access %tint_immediate_data, 0u
+    %21:ptr<immediate, u32, read> = access %20, 0u
+    %22:u32 = load %21
+    %23:ptr<immediate, u32, read> = access %20, 1u
+    %24:u32 = load %23
+    %25:ptr<immediate, u32, read> = access %20, 2u
+    %26:u32 = load %25
+    %27:vec3<u32> = construct %22, %24, %26
+    %28:u32 = access %inputs, 1u
+    %29:u32 = hlsl.WaveGetLaneIndex
+    %30:vec3<u32> = access %inputs, 2u
+    %31:u32 = hlsl.WaveGetLaneCount
+    %32:vec3<u32> = access %inputs, 3u
+    %33:void = call %foo_inner, %19, %27, %28, %29, %30, %31, %32
     ret
   }
 }
@@ -2074,10 +2148,10 @@ $B1: {  # root
     constexpr uint32_t num_workgroups_offset = 0u;
 
     core::ir::transform::PrepareImmediateDataConfig prepare_immediate_data_layout_config;
-    ASSERT_EQ(
-        prepare_immediate_data_layout_config.AddInternalImmediateData(
-            num_workgroups_offset, mod.symbols.New("tint_num_workgroups_start_offset"), ty.vec3u()),
-        Success);
+    ASSERT_EQ(prepare_immediate_data_layout_config.AddInternalImmediateData(
+                  num_workgroups_offset, mod.symbols.New("tint_num_workgroups_start_offset"),
+                  MakeNumWorkgroupsType(mod)),
+              Success);
     auto layout =
         core::ir::transform::PrepareImmediateData(mod, prepare_immediate_data_layout_config);
 
@@ -2154,7 +2228,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2230,7 +2303,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2307,7 +2379,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2385,7 +2456,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2465,7 +2535,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2547,7 +2616,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2630,7 +2698,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2715,7 +2782,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -2795,7 +2861,6 @@ foo_outputs = struct @align(16) {
 }
 )";
 
-    capabilities = core::ir::Capability::kAllowClipDistancesOnF32ScalarAndVector;
     core::ir::transform::ImmediateDataLayout immediate_data;
     ShaderIOConfig config{immediate_data};
     Run(ShaderIO, config);
@@ -4661,6 +4726,280 @@ foo_inputs = struct @align(4) {
     %14:u32 = div %13, %12
     %15:u32 = access %inputs, 0u
     %16:void = call %foo_inner, %11, %14, %15
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data;
+    ShaderIOConfig config{immediate_data};
+    Run(ShaderIO, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, ShaderIOParameters_WorkgroupIndex_ReuseExistingBuiltins) {
+    auto* workgroup_id = b.FunctionParam("wgid", ty.vec3u());
+    workgroup_id->SetBuiltin(core::BuiltinValue::kWorkgroupId);
+
+    auto* num_workgroups = b.FunctionParam("numwgs", ty.vec3u());
+    num_workgroups->SetBuiltin(core::BuiltinValue::kNumWorkgroups);
+
+    auto* workgroup_index = b.FunctionParam("wgindex", ty.u32());
+    workgroup_index->SetBuiltin(core::BuiltinValue::kWorkgroupIndex);
+
+    auto* ep = b.ComputeFunction("foo", 3_u, 2_u, 1_u);
+    ep->SetParams({workgroup_id, num_workgroups, workgroup_index});
+    b.Append(ep->Block(), [&] {
+        b.Let("x", b.Add(workgroup_index, 0_u));
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%wgid:vec3<u32> [@workgroup_id], %numwgs:vec3<u32> [@num_workgroups], %wgindex:u32 [@workgroup_index]):void {
+  $B1: {
+    %5:u32 = add %wgindex, 0u
+    %x:u32 = let %5
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(16) {
+  wgid:vec3<u32> @offset(0), @builtin(workgroup_id)
+}
+
+$B1: {  # root
+  %tint_num_workgroups:ptr<uniform, vec3<u32>, read> = var undef @binding_point(0, 0)
+}
+
+%foo_inner = func(%wgid:vec3<u32>, %numwgs:vec3<u32>, %wgindex:u32):void {
+  $B2: {
+    %6:u32 = add %wgindex, 0u
+    %x:u32 = let %6
+    ret
+  }
+}
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%inputs:foo_inputs):void {
+  $B3: {
+    %10:vec3<u32> = access %inputs, 0u
+    %11:vec3<u32> = load %tint_num_workgroups
+    %12:vec3<u32> = access %inputs, 0u
+    %13:u32 = access %11, 0u
+    %14:u32 = access %11, 1u
+    %15:u32 = mul %13, %14
+    %16:u32 = access %12, 2u
+    %17:u32 = mul %16, %15
+    %18:u32 = access %12, 1u
+    %19:u32 = mul %18, %13
+    %20:u32 = access %12, 0u
+    %21:u32 = add %20, %19
+    %22:u32 = add %21, %17
+    %23:void = call %foo_inner, %10, %11, %22
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data;
+    ShaderIOConfig config{immediate_data};
+    Run(ShaderIO, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, ShaderIOParameters_WorkgroupIndex_AddMissingBuiltins) {
+    auto* workgroup_index = b.FunctionParam("wgindex", ty.u32());
+    workgroup_index->SetBuiltin(core::BuiltinValue::kWorkgroupIndex);
+
+    auto* ep = b.ComputeFunction("foo", 3_u, 2_u, 1_u);
+    ep->SetParams({workgroup_index});
+    b.Append(ep->Block(), [&] {
+        b.Let("x", b.Add(workgroup_index, 0_u));
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%wgindex:u32 [@workgroup_index]):void {
+  $B1: {
+    %3:u32 = add %wgindex, 0u
+    %x:u32 = let %3
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(16) {
+  workgroup_id:vec3<u32> @offset(0), @builtin(workgroup_id)
+}
+
+$B1: {  # root
+  %tint_num_workgroups:ptr<uniform, vec3<u32>, read> = var undef @binding_point(0, 0)
+}
+
+%foo_inner = func(%wgindex:u32):void {
+  $B2: {
+    %4:u32 = add %wgindex, 0u
+    %x:u32 = let %4
+    ret
+  }
+}
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%inputs:foo_inputs):void {
+  $B3: {
+    %8:vec3<u32> = access %inputs, 0u
+    %9:vec3<u32> = load %tint_num_workgroups
+    %10:u32 = access %9, 0u
+    %11:u32 = access %9, 1u
+    %12:u32 = mul %10, %11
+    %13:u32 = access %8, 2u
+    %14:u32 = mul %13, %12
+    %15:u32 = access %8, 1u
+    %16:u32 = mul %15, %10
+    %17:u32 = access %8, 0u
+    %18:u32 = add %17, %16
+    %19:u32 = add %18, %14
+    %20:void = call %foo_inner, %19
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data;
+    ShaderIOConfig config{immediate_data};
+    Run(ShaderIO, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, ShaderIOParameters_GlobalInvocationIndex_ReuseExistingBuiltins) {
+    auto* num_workgroups = b.FunctionParam("numwgs", ty.vec3u());
+    num_workgroups->SetBuiltin(core::BuiltinValue::kNumWorkgroups);
+
+    auto* global_index = b.FunctionParam("gindex", ty.u32());
+    global_index->SetBuiltin(core::BuiltinValue::kGlobalInvocationIndex);
+
+    auto* ep = b.ComputeFunction("foo", 3_u, 2_u, 1_u);
+    ep->SetParams({num_workgroups, global_index});
+    b.Append(ep->Block(), [&] {
+        b.Let("x", b.Add(global_index, 0_u));
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%numwgs:vec3<u32> [@num_workgroups], %gindex:u32 [@global_invocation_index]):void {
+  $B1: {
+    %4:u32 = add %gindex, 0u
+    %x:u32 = let %4
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(16) {
+  global_invocation_id:vec3<u32> @offset(0), @builtin(global_invocation_id)
+}
+
+$B1: {  # root
+  %tint_num_workgroups:ptr<uniform, vec3<u32>, read> = var undef @binding_point(0, 0)
+}
+
+%foo_inner = func(%numwgs:vec3<u32>, %gindex:u32):void {
+  $B2: {
+    %5:u32 = add %gindex, 0u
+    %x:u32 = let %5
+    ret
+  }
+}
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%inputs:foo_inputs):void {
+  $B3: {
+    %9:vec3<u32> = load %tint_num_workgroups
+    %10:vec3<u32> = access %inputs, 0u
+    %11:u32 = access %10, 0u
+    %12:u32 = access %10, 1u
+    %13:u32 = access %10, 2u
+    %14:u32 = access %9, 0u
+    %15:u32 = access %9, 1u
+    %16:u32 = mul %14, 3u
+    %17:u32 = mul %15, 2u
+    %18:u32 = mul %16, %17
+    %19:u32 = mul %13, %18
+    %20:u32 = mul %12, %16
+    %21:u32 = add %11, %20
+    %22:u32 = add %21, %19
+    %23:void = call %foo_inner, %9, %22
+    ret
+  }
+}
+)";
+
+    core::ir::transform::ImmediateDataLayout immediate_data;
+    ShaderIOConfig config{immediate_data};
+    Run(ShaderIO, config);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterTransformTest, ShaderIOParameters_GlobalInvocationIndex_AddMissingBuiltins) {
+    auto* global_index = b.FunctionParam("gindex", ty.u32());
+    global_index->SetBuiltin(core::BuiltinValue::kGlobalInvocationIndex);
+
+    auto* ep = b.ComputeFunction("foo", 3_u, 2_u, 1_u);
+    ep->SetParams({global_index});
+    b.Append(ep->Block(), [&] {
+        b.Let("x", b.Add(global_index, 0_u));
+        b.Return(ep);
+    });
+
+    auto* src = R"(
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%gindex:u32 [@global_invocation_index]):void {
+  $B1: {
+    %3:u32 = add %gindex, 0u
+    %x:u32 = let %3
+    ret
+  }
+}
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+foo_inputs = struct @align(16) {
+  global_invocation_id:vec3<u32> @offset(0), @builtin(global_invocation_id)
+}
+
+$B1: {  # root
+  %tint_num_workgroups:ptr<uniform, vec3<u32>, read> = var undef @binding_point(0, 0)
+}
+
+%foo_inner = func(%gindex:u32):void {
+  $B2: {
+    %4:u32 = add %gindex, 0u
+    %x:u32 = let %4
+    ret
+  }
+}
+%foo = @compute @workgroup_size(3u, 2u, 1u) func(%inputs:foo_inputs):void {
+  $B3: {
+    %8:vec3<u32> = load %tint_num_workgroups
+    %9:vec3<u32> = access %inputs, 0u
+    %10:u32 = access %9, 0u
+    %11:u32 = access %9, 1u
+    %12:u32 = access %9, 2u
+    %13:u32 = access %8, 0u
+    %14:u32 = access %8, 1u
+    %15:u32 = mul %13, 3u
+    %16:u32 = mul %14, 2u
+    %17:u32 = mul %15, %16
+    %18:u32 = mul %12, %17
+    %19:u32 = mul %11, %15
+    %20:u32 = add %10, %19
+    %21:u32 = add %20, %18
+    %22:void = call %foo_inner, %21
     ret
   }
 }

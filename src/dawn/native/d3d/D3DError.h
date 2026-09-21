@@ -29,8 +29,9 @@
 #define SRC_DAWN_NATIVE_D3D_D3DERROR_H_
 
 #include <winerror.h>
-#include "dawn/native/Error.h"
-#include "dawn/native/ErrorInjector.h"
+
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/ErrorInjector.h"
 
 namespace dawn::native::d3d {
 

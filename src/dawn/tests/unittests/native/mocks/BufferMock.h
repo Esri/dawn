@@ -31,9 +31,9 @@
 #include <memory>
 
 #include "gmock/gmock.h"
-
-#include "dawn/native/Buffer.h"
-#include "dawn/tests/unittests/native/mocks/DeviceMock.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/tests/unittests/native/mocks/DeviceMock.h"
+#include "src/utils/heap_array.h"
 
 namespace dawn::native {
 
@@ -41,10 +41,10 @@ class BufferMock : public BufferBase {
   public:
     BufferMock(DeviceMock* device,
                const UnpackedPtr<BufferDescriptor>& descriptor,
-               std::optional<uint64_t> allocatedSize = std::nullopt);
+               std::optional<uint64_t> allocatedSizeOverride = std::nullopt);
     BufferMock(DeviceMock* device,
                const BufferDescriptor* descriptor,
-               std::optional<uint64_t> allocatedSize = std::nullopt);
+               std::optional<uint64_t> allocatedSizeOverride = std::nullopt);
     ~BufferMock() override;
 
     MOCK_METHOD(void, DestroyImpl, (DestroyReason), (override));
@@ -61,7 +61,7 @@ class BufferMock : public BufferBase {
     MOCK_METHOD(bool, IsCPUWritableAtCreation, (), (const, override));
 
   private:
-    std::unique_ptr<uint8_t[]> mBackingData;
+    HeapArray<uint8_t> mBackingData;
 };
 
 }  // namespace dawn::native

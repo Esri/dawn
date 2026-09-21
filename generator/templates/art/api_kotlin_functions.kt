@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-{% from 'art/api_kotlin_types.kt' import kotlin_annotation, kotlin_declaration, kotlin_definition, check_if_doc_present, generate_kdoc, add_kdoc_disclaimer with context %}
+{% from 'art/api_kotlin_types.kt' import kotlin_annotation, kotlin_declaration, kotlin_definition, check_if_doc_present, generate_kdoc, add_kdoc_disclaimer, kotlin_member_optin with context %}
 {{ add_kdoc_disclaimer() }}
 @file:JvmName("Functions")
 
@@ -37,6 +37,14 @@ public object GPU {
             {{ generate_kdoc(main_doc, return_doc, arg_docs_map, function_args , line_wrap_prefix = "\n * ") }}
 
         {%- endif %}
+        {% if function.has_default %}
+            @JvmOverloads
+        {% endif %}
+        {% set experimental = kotlin_member_optin(function) -%}
+        {% if experimental %}
+            //* Requires opt-in if the function, its return type, or any argument is experimental.
+            {{ experimental }}
+        {% endif %}
         @FastNative
         {% if function.returns and function.returns.type.name.canonical_case() == 'status' %}
             @Throws({{"WebGpuException::class"}})

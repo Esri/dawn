@@ -25,7 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d11/QueueD3D11.h"
+#include "src/dawn/native/d3d11/QueueD3D11.h"
 
 #include <algorithm>
 #include <chrono>
@@ -37,18 +37,20 @@
 #include <vector>
 
 #include "absl/container/inlined_vector.h"
-#include "dawn/common/Log.h"
-#include "dawn/native/WaitAnySystemEvent.h"
-#include "dawn/native/d3d/D3DError.h"
-#include "dawn/native/d3d11/BufferD3D11.h"
-#include "dawn/native/d3d11/CommandBufferD3D11.h"
-#include "dawn/native/d3d11/DeviceD3D11.h"
-#include "dawn/native/d3d11/DeviceInfoD3D11.h"
-#include "dawn/native/d3d11/PhysicalDeviceD3D11.h"
-#include "dawn/native/d3d11/SharedFenceD3D11.h"
-#include "dawn/native/d3d11/TextureD3D11.h"
 #include "dawn/platform/DawnPlatform.h"
-#include "dawn/platform/tracing/TraceEvent.h"
+#include "src/dawn/native/WaitAnySystemEvent.h"
+#include "src/dawn/native/d3d/D3DError.h"
+#include "src/dawn/native/d3d11/BufferD3D11.h"
+#include "src/dawn/native/d3d11/CommandBufferD3D11.h"
+#include "src/dawn/native/d3d11/DeviceD3D11.h"
+#include "src/dawn/native/d3d11/DeviceInfoD3D11.h"
+#include "src/dawn/native/d3d11/PhysicalDeviceD3D11.h"
+#include "src/dawn/native/d3d11/SharedFenceD3D11.h"
+#include "src/dawn/native/d3d11/TextureD3D11.h"
+#include "src/dawn/platform/tracing/TraceEvent.h"
+#include "src/utils/compiler.h"
+#include "src/utils/log.h"
+#include "src/utils/numeric.h"
 
 namespace dawn::native::d3d11 {
 namespace {
@@ -313,21 +315,21 @@ MaybeError Queue::SubmitPendingCommandsImpl() {
     return {};
 }
 
-MaybeError Queue::SubmitImpl(uint32_t commandCount, CommandBufferBase* const* commands) {
+MaybeError Queue::SubmitImpl(Span<CommandBufferBase* const> commands) {
     // CommandBuffer::Execute() will modify the state of the global immediate device context, it may
     // affect following usage of it.
     // TODO(dawn:1770): figure how if we need to track and restore the state of the immediate device
     // context.
-    TRACE_EVENT_BEGIN0(GetDevice()->GetPlatform(), Recording, "CommandBufferD3D11::Execute");
+    TRACE_EVENT_BEGIN(DAWN_TRACE_CATEGORY("recording"), "CommandBufferD3D11::Execute");
     {
         auto commandContext =
             GetScopedSwapStatePendingCommandContext(QueueBase::SubmitMode::Normal);
-        for (uint32_t i = 0; i < commandCount; ++i) {
-            DAWN_TRY(ToBackend(commands[i])->Execute(&commandContext));
+        for (CommandBufferBase* commandBuffer : commands) {
+            DAWN_TRY(ToBackend(commandBuffer)->Execute(&commandContext));
         }
     }
     DAWN_TRY(SubmitPendingCommandsImpl());
-    TRACE_EVENT_END0(GetDevice()->GetPlatform(), Recording, "CommandBufferD3D11::Execute");
+    TRACE_EVENT_END(DAWN_TRACE_CATEGORY("recording"));
 
     return {};
 }
@@ -354,37 +356,81 @@ ResultOrError<ExecutionSerial> Queue::CheckAndUpdateCompletedSerials() {
 MaybeError Queue::CheckScheduledBufferMappings(ExecutionSerial completedSerial) {
     auto commandContext = GetScopedPendingCommandContext(QueueBase::SubmitMode::Passive);
     return mPendingMapBuffers.Use([&](auto pendingMapBuffers) -> MaybeError {
-        for (const auto& bufferEntry : pendingMapBuffers->IterateUpTo(completedSerial)) {
-            DAWN_TRY(
-                bufferEntry.buffer->TryMapNow(&commandContext, completedSerial, bufferEntry.mode));
+        auto& serialQueue = pendingMapBuffers->serialQueue;
+        auto& requestMap = pendingMapBuffers->requestMap;
+
+        // Process all serials up to and including completedSerial
+        auto it = serialQueue.begin();
+        while (it != serialQueue.end() && it->first <= completedSerial) {
+            LinkedList<BufferMapRequest>& list = it->second;
+
+            // Process all buffers in this serial's list
+            while (!list.empty()) {
+                LinkNode<BufferMapRequest>* node = list.head();
+                BufferMapRequest* request = node->value();
+                Buffer* buffer = request->buffer;
+
+                DAWN_ASSERT(buffer);
+                DAWN_TRY(buffer->TryMapNow(&commandContext, completedSerial, request->mode));
+
+                request->RemoveFromList();
+                requestMap.erase(buffer);
+            }
+
+            // Erase this serial's entry and advance iterator
+            it = serialQueue.erase(it);
         }
-        pendingMapBuffers->ClearUpTo(completedSerial);
+
         return {};
     });
 }
 
-void Queue::ScheduleBufferMapping(Ref<Buffer>&& buffer,
-                                  wgpu::MapMode mode,
-                                  ExecutionSerial readySerial) {
-    mPendingMapBuffers->Enqueue({buffer, mode}, readySerial);
+void Queue::ScheduleBufferMapping(BufferMapRequest* request, ExecutionSerial readySerial) {
+    DAWN_ASSERT(request->buffer != nullptr);
+    mPendingMapBuffers.Use([&](auto pendingMapBuffers) {
+        auto& serialQueue = pendingMapBuffers->serialQueue;
+        auto& requestMap = pendingMapBuffers->requestMap;
+
+        auto& storedRequest = requestMap[request->buffer];
+        // Cancel old schedule if any. This is because we only allow one schedule per buffer.
+        // Any new schedule will overwrite the old one.
+        if (storedRequest) {
+            storedRequest->RemoveFromList();
+        }
+        storedRequest = request;
+
+        DAWN_ASSERT(!request->IsInList());
+        serialQueue[readySerial].Append(request);
+    });
+}
+
+void Queue::CancelScheduledBufferMapping(Buffer* buffer) {
+    mPendingMapBuffers.Use([&](auto pendingMapBuffers) {
+        auto& requestMap = pendingMapBuffers->requestMap;
+
+        auto it = requestMap.find(buffer);
+        if (it != requestMap.end()) {
+            BufferMapRequest* entry = it->second;
+            entry->RemoveFromList();
+            requestMap.erase(it);
+        }
+    });
 }
 
 MaybeError Queue::WriteBufferImpl(BufferBase* buffer,
                                   uint64_t bufferOffset,
-                                  const void* data,
-                                  size_t size) {
-    if (size == 0) {
+                                  Span<const std::byte> data) {
+    if (data.empty()) {
         // skip the empty write
         return {};
     }
 
     auto commandContext = GetScopedPendingCommandContext(QueueBase::SubmitMode::Normal);
-    return ToBackend(buffer)->Write(&commandContext, bufferOffset, data, size);
+    return ToBackend(buffer)->Write(&commandContext, bufferOffset, data.data(), data.size());
 }
 
 MaybeError Queue::WriteTextureImpl(const TexelCopyTextureInfo& destination,
-                                   const void* data,
-                                   size_t dataSize,
+                                   Span<const std::byte> data,
                                    const TexelCopyBufferLayout& dataLayout,
                                    const Extent3D& writeSizePixel) {
     if (writeSizePixel.width == 0 || writeSizePixel.height == 0 ||
@@ -403,9 +449,10 @@ MaybeError Queue::WriteTextureImpl(const TexelCopyTextureInfo& destination,
 
     Texture* texture = ToBackend(destination.texture);
     DAWN_TRY(texture->SynchronizeTextureBeforeUse(&commandContext));
-    return texture->Write(&commandContext, subresources, destination.origin, writeSizePixel,
-                          static_cast<const uint8_t*>(data) + dataLayout.offset,
-                          dataLayout.bytesPerRow, dataLayout.rowsPerImage);
+    return texture->Write(
+        &commandContext, subresources, destination.origin, writeSizePixel,
+        DAWN_UNSAFE_TODO(reinterpret_cast<const uint8_t*>(data.data()) + dataLayout.offset),
+        dataLayout.bytesPerRow, dataLayout.rowsPerImage);
 }
 
 bool Queue::HasPendingCommands() const {
@@ -441,8 +488,7 @@ MaybeError MonitoredFenceQueue::NextSerial() {
     const uint64_t submitSerial = uint64_t(GetPendingCommandSerial());
 
     {
-        TRACE_EVENT1(GetDevice()->GetPlatform(), General, "D3D11Device::SignalFence", "serial",
-                     submitSerial);
+        TRACE_EVENT(DAWN_TRACE_CATEGORY(), "D3D11Device::SignalFence", "serial", submitSerial);
         DAWN_TRY(CheckHRESULT(commandContext.Signal(mFence.Get(), submitSerial),
                               "D3D11 command queue signal fence"));
     }
@@ -488,8 +534,8 @@ MaybeError SystemEventQueue::NextSerial() {
     if (commandContext->AcquireNeedsFence()) {
         DAWN_ASSERT(mFence);
 
-        TRACE_EVENT1(GetDevice()->GetPlatform(), General, "D3D11Device::SignalFence", "serial",
-                     uint64_t(submitSerial));
+        TRACE_EVENT(DAWN_TRACE_CATEGORY(), "D3D11Device::SignalFence", "serial",
+                    uint64_t(submitSerial));
         DAWN_TRY(CheckHRESULT(commandContext.Signal(mFence.Get(), uint64_t(submitSerial)),
                               "D3D11 command queue signal fence"));
     }
@@ -523,9 +569,9 @@ ResultOrError<ExecutionSerial> SystemEventQueue::CheckCompletedSerialsImpl() {
             std::for_each_n(pendingEvents->rbegin(), numberOfHandles, [&handles](const auto& e) {
                 handles.push_back(e.receiver.GetPrimitive().Get());
             });
-            DWORD result =
-                WaitForMultipleObjects(handles.size(), handles.data(), /*bWaitAll=*/false,
-                                       /*dwMilliseconds=*/0);
+            DWORD result = WaitForMultipleObjects(static_cast<DWORD>(handles.size()),
+                                                  handles.data(), /*bWaitAll=*/false,
+                                                  /*dwMilliseconds=*/0);
             DAWN_INTERNAL_ERROR_IF(result == WAIT_FAILED, "WaitForMultipleObjects() failed");
 
             DAWN_INTERNAL_ERROR_IF(
@@ -547,7 +593,8 @@ ResultOrError<ExecutionSerial> SystemEventQueue::CheckCompletedSerialsImpl() {
             std::for_each_n(pendingEvents->begin(), completedEvents, [&returnedReceivers](auto& e) {
                 returnedReceivers.emplace_back(std::move(e.receiver));
             });
-            pendingEvents->erase(pendingEvents->begin(), pendingEvents->begin() + completedEvents);
+            pendingEvents->erase(pendingEvents->begin(),
+                                 pendingEvents->begin() + sign_cast(completedEvents));
 
             return completedSerial;
         }));
@@ -650,8 +697,8 @@ MaybeError DelayFlushQueue::NextSerial() {
     if (commandContext->AcquireNeedsFence()) {
         DAWN_ASSERT(mFence);
 
-        TRACE_EVENT1(GetDevice()->GetPlatform(), General, "D3D11Device::SignalFence", "serial",
-                     uint64_t(submitSerial));
+        TRACE_EVENT(DAWN_TRACE_CATEGORY(), "D3D11Device::SignalFence", "serial",
+                    uint64_t(submitSerial));
         DAWN_TRY(CheckHRESULT(commandContext.Signal(mFence.Get(), uint64_t(submitSerial)),
                               "D3D11 command queue signal fence"));
     }
@@ -755,7 +802,7 @@ ResultOrError<ExecutionSerial> DelayFlushQueue::WaitForQueueSerialImpl(Execution
 
     bool done;
     DAWN_TRY_ASSIGN(done, IsQueryCompleted(&commandContext, /*requireFlush=*/false, &(*it)));
-    if (timeout == Nanoseconds(0)) {
+    if (timeout == Nanoseconds(0u)) {
         if (!done) {
             // Return timed-out immediately without using a timer.
             return kWaitSerialTimeout;
@@ -779,15 +826,14 @@ ResultOrError<ExecutionSerial> DelayFlushQueue::WaitForQueueSerialImpl(Execution
     }
 
     // Completed queries will be recycled in CheckCompletedSerialsImpl();
-    auto numCompletedQueries = std::distance(mPendingQueries.begin(), it) + 1;
+    auto numCompletedQueries = sign_cast(std::distance(mPendingQueries.begin(), it) + 1);
     MarkPendingQueriesAsComplete(numCompletedQueries);
     return done ? waitSerial : kWaitSerialTimeout;
 }
 
 MaybeError DelayFlushQueue::BlockWaitForLastSubmittedSerial(
     const ScopedCommandRecordingContext* commandContext) {
-    TRACE_EVENT0(GetDevice()->GetPlatform(), General,
-                 "DelayFlushQueue::BlockWaitForLastSubmittedSerial");
+    TRACE_EVENT(DAWN_TRACE_CATEGORY(), "DelayFlushQueue::BlockWaitForLastSubmittedSerial");
 
     SystemEventReceiver receiver;
     DAWN_TRY_ASSIGN(receiver, GetSystemEventReceiver());
@@ -807,9 +853,10 @@ void DelayFlushQueue::SetEventOnCompletion(ExecutionSerial serial, HANDLE event)
 void DelayFlushQueue::MarkPendingQueriesAsComplete(size_t numCompletedQueries) {
     mCompletedQueries.insert(
         mCompletedQueries.end(), std::make_move_iterator(mPendingQueries.begin()),
-        std::make_move_iterator(mPendingQueries.begin() + numCompletedQueries));
+        std::make_move_iterator(mPendingQueries.begin() + sign_cast(numCompletedQueries)));
 
-    mPendingQueries.erase(mPendingQueries.begin(), mPendingQueries.begin() + numCompletedQueries);
+    mPendingQueries.erase(mPendingQueries.begin(),
+                          mPendingQueries.begin() + sign_cast(numCompletedQueries));
 }
 
 ResultOrError<bool> DelayFlushQueue::IsQueryCompleted(

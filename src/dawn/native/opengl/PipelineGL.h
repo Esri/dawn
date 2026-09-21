@@ -32,12 +32,12 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "dawn/common/ityp_vector.h"
-#include "dawn/native/IntegerTypes.h"
-#include "dawn/native/PerStage.h"
-#include "dawn/native/Pipeline.h"
-#include "dawn/native/opengl/IntegerTypes.h"
-#include "dawn/native/opengl/opengl_platform.h"
+#include "src/dawn/common/ityp_vector.h"
+#include "src/dawn/native/IntegerTypes.h"
+#include "src/dawn/native/PerStage.h"
+#include "src/dawn/native/Pipeline.h"
+#include "src/dawn/native/opengl/IntegerTypes.h"
+#include "src/dawn/native/opengl/opengl_platform.h"
 
 namespace dawn::native {
 struct ProgrammableStage;
@@ -83,7 +83,6 @@ class PipelineGL {
 
     const std::vector<TextureUnit>& GetTextureUnitsForSampler(FlatBindingIndex index) const;
     const std::vector<TextureUnit>& GetTextureUnitsForTextureView(FlatBindingIndex index) const;
-    GLuint GetProgramHandle() const;
 
     const EmulatedTextureBuiltinInfo& GetEmulatedTextureBuiltinInfo() const;
     bool NeedsTextureBuiltinUniformBuffer() const;
@@ -95,14 +94,14 @@ class PipelineGL {
     MaybeError InitializeBase(const OpenGLFunctions& gl,
                               const PipelineLayout* layout,
                               const PerStage<ProgrammableStage>& stages,
-                              bool usesVertexIndex,
-                              bool usesInstanceIndex,
-                              bool usesFragDepth,
-                              VertexAttributeMask bgraSwizzleAttributes);
-    void DeleteProgram(const OpenGLFunctions& gl);
+                              ImmediateMask& pipelineImmediateMask,
+                              VertexAttributeMask bgraSwizzleAttributes,
+                              Extent3D* workgroupSize = nullptr);
+
+  protected:
+    GLuint mProgram;
 
   private:
-    GLuint mProgram;
     ityp::vector<FlatBindingIndex, std::vector<TextureUnit>> mUnitsForSamplers;
     ityp::vector<FlatBindingIndex, std::vector<TextureUnit>> mUnitsForTextures;
     std::vector<TextureUnit> mPlaceholderSamplerUnits;
@@ -132,7 +131,7 @@ class EmulatedTextureBuiltinRegistrar {
     EmulatedTextureBuiltinInfo AcquireInfo();
 
   private:
-    const PipelineLayout* mLayout;
+    raw_ptr<const PipelineLayout> mLayout;
     uint32_t mCurrentIndex = 0;
     EmulatedTextureBuiltinInfo mEmulatedTextureBuiltinInfo;
 };

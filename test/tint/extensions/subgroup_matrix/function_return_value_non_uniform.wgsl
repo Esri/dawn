@@ -1,3 +1,5 @@
+// [hlsl-dxc] flags: --hlsl-shader-model 6.10
+
 enable chromium_experimental_subgroup_matrix;
 diagnostic (off, chromium.subgroup_matrix_uniformity);
 
@@ -96,9 +98,9 @@ fn make_nested_struct() -> S_Nested {
 @compute @workgroup_size(64)
 fn main(@builtin(local_invocation_index) idx: u32) {
   non_uniform_condition = buffer[idx] == 0;
-  subgroupMatrixStore(&buffer, 0, make_matrix(), false, 64);
-  subgroupMatrixStore(&buffer, 0, make_array()[0], false, 64);
-  subgroupMatrixStore(&buffer, 0, make_nested_array()[1][0], false, 64);
-  subgroupMatrixStore(&buffer, 0, make_struct().l, false, 64);
-  subgroupMatrixStore(&buffer, 0, make_nested_struct().s.r, false, 64);
+  subgroupMatrixStore<row_major>(&buffer, 0, make_matrix(), 64);
+  subgroupMatrixStore<row_major>(&buffer, 0, make_array()[0], 64);
+  subgroupMatrixStore<row_major>(&buffer, 0, make_nested_array()[1][0], 64);
+  subgroupMatrixStore<row_major>(&buffer, 0, make_struct().l, 64);
+  subgroupMatrixStore<row_major>(&buffer, 0, make_nested_struct().s.r, 64);
 }

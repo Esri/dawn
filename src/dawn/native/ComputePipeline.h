@@ -28,10 +28,12 @@
 #ifndef SRC_DAWN_NATIVE_COMPUTEPIPELINE_H_
 #define SRC_DAWN_NATIVE_COMPUTEPIPELINE_H_
 
-#include "dawn/common/ContentLessObjectCacheable.h"
-#include "dawn/common/NonCopyable.h"
-#include "dawn/native/Forward.h"
-#include "dawn/native/Pipeline.h"
+#include <vector>
+
+#include "src/dawn/common/ContentLessObjectCacheable.h"
+#include "src/dawn/native/Forward.h"
+#include "src/dawn/native/Pipeline.h"
+#include "src/utils/non_copyable.h"
 
 namespace dawn::native {
 
@@ -60,11 +62,24 @@ class ComputePipelineBase : public PipelineBase,
         bool operator()(const ComputePipelineBase* a, const ComputePipelineBase* b) const;
     };
 
+    Extent3D GetWorkgroupSize() const;
+    bool UsesLinearIndexing() const;
+    bool UsesGlobalInvocationIndex() const;
+
   protected:
     void DestroyImpl(DestroyReason reason) override;
 
   private:
     ComputePipelineBase(DeviceBase* device, ObjectBase::ErrorTag tag, StringView label);
+
+    MaybeError InitializeWithShaders() final;
+    // Overridden by backends to perform their initialization steps. Returns the workgroup size
+    // (after overridable constants are applied).
+    virtual ResultOrError<Extent3D> InitializeImpl() = 0;
+
+    Extent3D mWorkgroupSize = {1, 1, 1};
+    bool mUsesLinearIndex = false;
+    bool mUsesGlobalInvocationIndex = false;
 };
 
 }  // namespace dawn::native

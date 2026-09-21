@@ -30,108 +30,13 @@
 #include <string>
 #include <vector>
 
-#include "dawn/common/NonMovable.h"
-#include "dawn/tests/unittests/validation/ValidationTest.h"
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/tests/unittests/validation/ValidationTest.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/WGPUHelpers.h"
+#include "src/utils/non_movable.h"
 
 namespace dawn {
 namespace {
-
-enum class FeatureMode {
-    Enabled,
-    DisabledViaNotAllowUnsafeAPIs,
-    DisabledViaBlocklistedFeatures,
-};
-
-// Test that the feature only works when enabled
-struct ImmediateDataDisableTest : ValidationTestWithParam<FeatureMode> {
-    std::vector<const char*> GetWGSLBlocklistedFeatures() override {
-        switch (GetParam()) {
-            case FeatureMode::Enabled:
-                return {};
-            case FeatureMode::DisabledViaNotAllowUnsafeAPIs:
-                return {};
-            case FeatureMode::DisabledViaBlocklistedFeatures:
-                return {"immediate_address_space"};
-        }
-        DAWN_UNREACHABLE();
-        return {};
-    }
-
-    bool AllowUnsafeAPIs() override {
-        switch (GetParam()) {
-            case FeatureMode::Enabled:
-                // Currently the only way to enable ImmediateAddressSpace is via AllowUnsafeAPIs.
-                // See GetLanguageFeatureStatus.
-                return true;
-            case FeatureMode::DisabledViaNotAllowUnsafeAPIs:
-                return false;
-            case FeatureMode::DisabledViaBlocklistedFeatures:
-                // Enabling AllowUnsafeAPIs while disabling via blocklist should still fail.
-                return true;
-        }
-        DAWN_UNREACHABLE();
-        return false;
-    }
-};
-
-// Check that creating a PipelineLayout with non-zero immediateSize is disallowed
-// without the feature enabled.
-TEST_P(ImmediateDataDisableTest, ImmediateSizeNotAllowed) {
-    wgpu::PipelineLayoutDescriptor desc{};
-    desc.immediateSize = 1;
-
-    if (GetParam() == FeatureMode::Enabled) {
-        device.CreatePipelineLayout(&desc);
-    } else {
-        ASSERT_DEVICE_ERROR(device.CreatePipelineLayout(&desc));
-    }
-}
-
-// Check that SetImmediates doesn't work (even with size=0) without the feature enabled.
-TEST_P(ImmediateDataDisableTest, SetImmediates) {
-    {
-        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
-        pass.SetImmediates(0, nullptr, 0);
-        pass.End();
-        if (GetParam() == FeatureMode::Enabled) {
-            encoder.Finish();
-        } else {
-            ASSERT_DEVICE_ERROR(encoder.Finish());
-        }
-    }
-    {
-        const uint32_t data = 0;
-
-        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
-        pass.SetImmediates(0, &data, 4);
-        pass.End();
-        if (GetParam() == FeatureMode::Enabled) {
-            encoder.Finish();
-        } else {
-            ASSERT_DEVICE_ERROR(encoder.Finish());
-        }
-    }
-}
-
-// Check that limits.maxImmediateSize is 0 when the feature is disabled, and kMaxImmediateDataBytes
-// otherwise.
-TEST_P(ImmediateDataDisableTest, MaxImmediateSizeIsZero) {
-    if (GetParam() == FeatureMode::Enabled) {
-        ASSERT_EQ(GetSupportedLimits().maxImmediateSize, kMaxImmediateDataBytes);
-    } else {
-        ASSERT_EQ(GetSupportedLimits().maxImmediateSize, 0u);
-    }
-}
-
-INSTANTIATE_TEST_SUITE_P(,
-                         ImmediateDataDisableTest,
-                         ::testing::ValuesIn({FeatureMode::Enabled,
-                                              FeatureMode::DisabledViaNotAllowUnsafeAPIs,
-                                              FeatureMode::DisabledViaBlocklistedFeatures}));
 
 class ImmediateDataTest : public ValidationTest {
   protected:
@@ -174,7 +79,44 @@ TEST_F(ImmediateDataTest, ValidateImmediateSize) {
 
     // Failed case with invalid immediateSize that exceed limits.
     {
-        desc.immediateSize = kMaxImmediateDataBytes + 1;
+        desc.immediateSize = kMaxImmediateDataBytes + 4;
+        ASSERT_DEVICE_ERROR(device.CreatePipelineLayout(&desc));
+    }
+}
+
+// Check that immediateSize must be aligned to kImmediateElementByteSize (4 bytes).
+TEST_F(ImmediateDataTest, ValidateImmediateSizeAlignment) {
+    wgpu::PipelineLayoutDescriptor desc{};
+
+    // Success case: aligned to 4 bytes.
+    {
+        desc.immediateSize = 4;
+        device.CreatePipelineLayout(&desc);
+    }
+    {
+        desc.immediateSize = 8;
+        device.CreatePipelineLayout(&desc);
+    }
+    {
+        desc.immediateSize = kMaxImmediateDataBytes;
+        device.CreatePipelineLayout(&desc);
+    }
+
+    // Failed case: not aligned to 4 bytes.
+    {
+        desc.immediateSize = 1;
+        ASSERT_DEVICE_ERROR(device.CreatePipelineLayout(&desc));
+    }
+    {
+        desc.immediateSize = 2;
+        ASSERT_DEVICE_ERROR(device.CreatePipelineLayout(&desc));
+    }
+    {
+        desc.immediateSize = 3;
+        ASSERT_DEVICE_ERROR(device.CreatePipelineLayout(&desc));
+    }
+    {
+        desc.immediateSize = 5;
         ASSERT_DEVICE_ERROR(device.CreatePipelineLayout(&desc));
     }
 }
@@ -399,8 +341,9 @@ TEST_F(ImmediateDataTest, ValidateDefaultPipelineLayout) {
                 output = vec4u(computeConstants.x, computeConstants.yzw);
             })");
 
-    // Failed case with too much immediate data in shader
-    ASSERT_DEVICE_ERROR(utils::CreateShaderModule(device, R"(
+    // Shader module creation should succeed even with too much immediate data.
+    // The validation error should occur at pipeline creation time.
+    wgpu::ShaderModule oobShaderModule = utils::CreateShaderModule(device, R"(
             struct FragmentConstants {
                 c0: vec4f,
                 c1: vec4f,
@@ -439,7 +382,22 @@ TEST_F(ImmediateDataTest, ValidateDefaultPipelineLayout) {
             fn csMain() {
                 output = vec4u(computeConstants.c0.x + computeConstants.constantsOOB,
                                computeConstants.c0.yzw);
-            })"));
+            })");
+
+    // Failed case: too much immediate data in shader should fail at pipeline creation.
+    {
+        utils::ComboRenderPipelineDescriptor pipelineDescriptor;
+        pipelineDescriptor.vertex.module = oobShaderModule;
+        pipelineDescriptor.cFragment.module = oobShaderModule;
+        ASSERT_DEVICE_ERROR(device.CreateRenderPipeline(&pipelineDescriptor));
+    }
+
+    {
+        wgpu::ComputePipelineDescriptor csDesc;
+        csDesc.compute.module = oobShaderModule;
+
+        ASSERT_DEVICE_ERROR(device.CreateComputePipeline(&csDesc));
+    }
 
     // Success cases
     {

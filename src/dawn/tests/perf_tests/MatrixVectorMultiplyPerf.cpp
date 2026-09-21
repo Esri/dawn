@@ -30,8 +30,8 @@
 #include <string>
 #include <vector>
 
-#include "dawn/tests/perf_tests/DawnPerfTest.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/tests/perf_tests/DawnPerfTest.h"
+#include "src/dawn/utils/WGPUHelpers.h"
 
 namespace dawn {
 namespace {
@@ -121,7 +121,7 @@ class MatrixVectorMultiplyPerf : public DawnPerfTestWithParams<MatrixVectorMulti
     }
 
     uint64_t GetMaxStorageBufferBindingSizeNeeded() {
-        return BytesPerElement() * GetParam().mRows * GetParam().mCols;
+        return static_cast<uint64_t>(BytesPerElement()) * GetParam().mRows * GetParam().mCols;
     }
 
     void GetRequiredLimits(const dawn::utils::ComboLimits& supported,
@@ -180,18 +180,25 @@ void MatrixVectorMultiplyPerf::SetUpPerfTest() {
 
     DAWN_TEST_UNSUPPORTED_IF(!mAllFeaturesSupported);
 
+    // TODO(crbug.com/501147570): Flakily kills Swarming bots when run on
+    // Windows 11/AMD RX 5500 XT.
+    DAWN_SUPPRESS_TEST_IF(IsWindows11() && IsAMD() && (IsD3D12() || IsVulkan()) &&
+                          GetParam().mRows == 32768 && GetParam().mCols == 2048 &&
+                          GetParam().mStoreType == StoreType::U8);
+
     // D3D12 device must be using DXC to support subgroups feature.
     DAWN_ASSERT(!mUsingSubgroups || !IsD3D12() || IsDXC());
 
     wgpu::BufferDescriptor bufferDesc;
     bufferDesc.usage = wgpu::BufferUsage::Storage;
-    bufferDesc.size = BytesPerElement() * GetParam().mRows * GetParam().mCols;
+    bufferDesc.size =
+        static_cast<uint64_t>(BytesPerElement()) * GetParam().mRows * GetParam().mCols;
     wgpu::Buffer matrix = device.CreateBuffer(&bufferDesc);
 
-    bufferDesc.size = BytesPerElement() * GetParam().mCols;
+    bufferDesc.size = static_cast<uint64_t>(BytesPerElement()) * GetParam().mCols;
     wgpu::Buffer vector = device.CreateBuffer(&bufferDesc);
 
-    bufferDesc.size = BytesPerElement() * GetParam().mRows;
+    bufferDesc.size = static_cast<uint64_t>(BytesPerElement()) * GetParam().mRows;
     wgpu::Buffer result = device.CreateBuffer(&bufferDesc);
 
     uint32_t uniformData[] = {GetParam().mRows, /* packed cols */ GetParam().mCols / 4};

@@ -1,7 +1,7 @@
 
 RWByteAddressBuffer b : register(u0);
 uint tint_mod_u32(uint lhs, uint rhs) {
-  uint v = (((rhs == 0u)) ? (1u) : (rhs));
+  uint v = select((rhs == 0u), 1u, rhs);
   return (lhs - ((lhs / v) * v));
 }
 
@@ -38,7 +38,6 @@ void main() {
         b.Store((4u + v_1), (b.Load((4u + v_1)) * 2u));
         i = (i + 1u);
       }
-      continue;
     }
   }
 }

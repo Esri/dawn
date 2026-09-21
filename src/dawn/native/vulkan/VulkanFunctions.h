@@ -28,10 +28,9 @@
 #ifndef SRC_DAWN_NATIVE_VULKAN_VULKANFUNCTIONS_H_
 #define SRC_DAWN_NATIVE_VULKAN_VULKANFUNCTIONS_H_
 
-#include "dawn/common/Compiler.h"
-#include "dawn/common/vulkan_platform.h"
-
-#include "dawn/native/Error.h"
+#include "src/dawn/common/Compiler.h"
+#include "src/dawn/common/vulkan_platform.h"
+#include "src/dawn/native/Error.h"
 
 namespace dawn {
 class DynamicLib;
@@ -165,8 +164,8 @@ struct VulkanFunctions {
 
 #if defined(DAWN_USE_WAYLAND)
     // KHR_wayland_surface
-    PFN_vkCreateWaylandSurfaceKHR CreateWaylandSurfaceKHR = nullptr;
-    PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR
+    VkFn<PFN_vkCreateWaylandSurfaceKHR> CreateWaylandSurfaceKHR = nullptr;
+    VkFn<PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR>
         GetPhysicalDeviceWaylandPresentationSupportKHR = nullptr;
 #endif  // defined(DAWN_USE_WAYLAND)
 
@@ -365,6 +364,16 @@ struct VulkanFunctions {
     VkFn<PFN_vkCmdBeginRenderingKHR> CmdBeginRenderingKHR = nullptr;
     VkFn<PFN_vkCmdEndRenderingKHR> CmdEndRenderingKHR = nullptr;
 
+    // VK_EXT_extended_dynamic_state
+    VkFn<PFN_vkCmdSetCullModeEXT> CmdSetCullModeEXT = nullptr;
+    VkFn<PFN_vkCmdSetDepthCompareOpEXT> CmdSetDepthCompareOpEXT = nullptr;
+    VkFn<PFN_vkCmdSetDepthTestEnableEXT> CmdSetDepthTestEnableEXT = nullptr;
+    VkFn<PFN_vkCmdSetDepthWriteEnableEXT> CmdSetDepthWriteEnableEXT = nullptr;
+    VkFn<PFN_vkCmdSetFrontFaceEXT> CmdSetFrontFaceEXT = nullptr;
+    VkFn<PFN_vkCmdSetPrimitiveTopologyEXT> CmdSetPrimitiveTopologyEXT = nullptr;
+    VkFn<PFN_vkCmdSetStencilOpEXT> CmdSetStencilOpEXT = nullptr;
+    VkFn<PFN_vkCmdSetStencilTestEnableEXT> CmdSetStencilTestEnableEXT = nullptr;
+
     // Not promoted to core in any version
 
     // VK_KHR_external_memory_fd
@@ -385,7 +394,7 @@ struct VulkanFunctions {
     VkFn<PFN_vkAcquireNextImageKHR> AcquireNextImageKHR = nullptr;
     VkFn<PFN_vkQueuePresentKHR> QueuePresentKHR = nullptr;
 
-#if VK_USE_PLATFORM_FUCHSIA
+#if defined(VK_USE_PLATFORM_FUCHSIA)
     // VK_FUCHSIA_external_memory
     VkFn<PFN_vkGetMemoryZirconHandleFUCHSIA> GetMemoryZirconHandleFUCHSIA = nullptr;
     VkFn<PFN_vkGetMemoryZirconHandlePropertiesFUCHSIA> GetMemoryZirconHandlePropertiesFUCHSIA =
@@ -405,6 +414,7 @@ class VkResult {
   public:
     constexpr static VkResult WrapUnsafe(::VkResult value) { return VkResult(value); }
 
+    // NOLINTNEXTLINE(google-explicit-constructor)
     constexpr operator ::VkResult() const { return mValue; }
 
   private:

@@ -25,27 +25,45 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/ComputePassEncoder.h"
+#include "src/dawn/native/ComputePassEncoder.h"
 
-#include "dawn/common/Range.h"
-#include "dawn/native/Adapter.h"
-#include "dawn/native/BindGroup.h"
-#include "dawn/native/BindGroupLayout.h"
-#include "dawn/native/Buffer.h"
-#include "dawn/native/CommandEncoder.h"
-#include "dawn/native/CommandValidation.h"
-#include "dawn/native/Commands.h"
-#include "dawn/native/ComputePipeline.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/InternalPipelineStore.h"
+#include <algorithm>
+#include <limits>
+
 #include "dawn/native/ObjectType_autogen.h"
-#include "dawn/native/PassResourceUsageTracker.h"
-#include "dawn/native/QuerySet.h"
-#include "dawn/native/utils/WGPUHelpers.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/common/Strings.h"
+#include "src/dawn/native/Adapter.h"
+#include "src/dawn/native/BindGroup.h"
+#include "src/dawn/native/BindGroupLayout.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/CommandEncoder.h"
+#include "src/dawn/native/CommandValidation.h"
+#include "src/dawn/native/Commands.h"
+#include "src/dawn/native/ComputePipeline.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/InternalPipelineStore.h"
+#include "src/dawn/native/PassResourceUsageTracker.h"
+#include "src/dawn/native/QuerySet.h"
+#include "src/dawn/native/ResourceTable.h"
+#include "src/dawn/native/utils/WGPUHelpers.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native {
 
 namespace {
+
+// Neither 'enableValidation' nor 'duplicateNumWorkgroups' can be declared as 'bool' as
+// currently in WGSL type 'bool' cannot be used in address space 'uniform' as 'it is
+// non-host-shareable'.
+struct IndirectDispatchParams {
+    uint32_t maxComputeWorkgroupsPerDimension;
+    uint32_t clientOffsetInU32;
+    uint32_t enableValidation;
+    uint32_t duplicateNumWorkgroups;
+    uint32_t linearIndexing;
+    uint32_t overflowValue;
+};
 
 ResultOrError<ComputePipelineBase*> GetOrCreateIndirectDispatchValidationPipeline(
     DeviceBase* device) {
@@ -59,56 +77,71 @@ ResultOrError<ComputePipelineBase*> GetOrCreateIndirectDispatchValidationPipelin
     // shader in various failure modes.
     // Type 'bool' cannot be used in address space 'uniform' as it is non-host-shareable.
     Ref<ShaderModuleBase> shaderModule;
-    DAWN_TRY_ASSIGN(shaderModule, utils::CreateShaderModule(device, R"(
-                struct UniformParams {
-                    maxComputeWorkgroupsPerDimension: u32,
-                    clientOffsetInU32: u32,
-                    enableValidation: u32,
-                    duplicateNumWorkgroups: u32,
+    DAWN_TRY_ASSIGN(shaderModule, utils::CreateShaderModule(device, DAWN_MULTILINE(
+        struct Params {
+            maxComputeWorkgroupsPerDimension: u32,
+            clientOffsetInU32: u32,
+            enableValidation: u32,
+            duplicateNumWorkgroups: u32,
+            linearIndexing: u32,
+            overflowValue: u32,
+        }
+
+        struct IndirectParams {
+            data: array<u32>
+        }
+
+        struct ValidatedParams {
+            data: array<u32>
+        }
+
+        var<immediate> params: Params;
+        @group(0) @binding(0) var<storage, read_write> clientParams: IndirectParams;
+        @group(0) @binding(1) var<storage, read_write> validatedParams: ValidatedParams;
+
+        @compute @workgroup_size(1, 1, 1)
+        fn main() {
+            var workgroups = vec3u(clientParams.data[params.clientOffsetInU32 + 0],
+                                   clientParams.data[params.clientOffsetInU32 + 1],
+                                   clientParams.data[params.clientOffsetInU32 + 2]);
+            if (params.enableValidation > 0u) {
+                var invalid = false;
+                if (max(workgroups.x, max(workgroups.y, workgroups.z)) > params.maxComputeWorkgroupsPerDimension) {
+                    invalid = true;
+                } else if (params.linearIndexing > 0u) {
+                    invalid |= workgroups.x > (params.overflowValue / workgroups.y);
+                    let xy = workgroups.x * workgroups.y;
+                    invalid |= xy > (params.overflowValue / workgroups.z);
                 }
 
-                struct IndirectParams {
-                    data: array<u32>
+                if (invalid) {
+                    workgroups = vec3u(0);
                 }
-
-                struct ValidatedParams {
-                    data: array<u32>
-                }
-
-                @group(0) @binding(0) var<uniform> uniformParams: UniformParams;
-                @group(0) @binding(1) var<storage, read_write> clientParams: IndirectParams;
-                @group(0) @binding(2) var<storage, read_write> validatedParams: ValidatedParams;
-
-                @compute @workgroup_size(1, 1, 1)
-                fn main() {
-                    for (var i = 0u; i < 3u; i = i + 1u) {
-                        var numWorkgroups = clientParams.data[uniformParams.clientOffsetInU32 + i];
-                        if (uniformParams.enableValidation > 0u &&
-                            numWorkgroups > uniformParams.maxComputeWorkgroupsPerDimension) {
-                            numWorkgroups = 0u;
-                        }
-                        validatedParams.data[i] = numWorkgroups;
-
-                        if (uniformParams.duplicateNumWorkgroups > 0u) {
-                             validatedParams.data[i + 3u] = numWorkgroups;
-                        }
-                    }
-                }
-            )"));
+            }
+            validatedParams.data[0] = workgroups.x;
+            validatedParams.data[1] = workgroups.y;
+            validatedParams.data[2] = workgroups.z;
+            if (params.duplicateNumWorkgroups > 0u) {
+                validatedParams.data[3] = workgroups.x;
+                validatedParams.data[4] = workgroups.y;
+                validatedParams.data[5] = workgroups.z;
+            }
+        }
+    )));
 
     Ref<BindGroupLayoutBase> bindGroupLayout;
     DAWN_TRY_ASSIGN(bindGroupLayout,
                     utils::MakeBindGroupLayout(
                         device,
                         {
-                            {0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Uniform},
-                            {1, wgpu::ShaderStage::Compute, kInternalStorageBufferBinding},
-                            {2, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},
+                            {0, wgpu::ShaderStage::Compute, kInternalStorageBufferBinding},
+                            {1, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage},
                         },
                         /* allowInternalBinding */ true));
 
     Ref<PipelineLayoutBase> pipelineLayout;
-    DAWN_TRY_ASSIGN(pipelineLayout, utils::MakeBasicPipelineLayout(device, bindGroupLayout));
+    DAWN_TRY_ASSIGN(pipelineLayout, utils::MakeBasicPipelineLayout(device, bindGroupLayout,
+                                                                   sizeof(IndirectDispatchParams)));
 
     ComputePipelineDescriptor computePipelineDescriptor = {};
     computePipelineDescriptor.layout = pipelineLayout.Get();
@@ -130,9 +163,6 @@ ComputePassEncoder::ComputePassEncoder(DeviceBase* device,
     : ProgrammableEncoder(device, descriptor->label, encodingContext),
       mCommandEncoder(commandEncoder) {
     GetObjectTrackingList()->Track(this);
-    if (auto* resourceTable = mCommandEncoder->GetResourceTable()) {
-        mCommandBufferState.SetResourceTable(resourceTable);
-    }
 }
 
 ComputePassEncoder::~ComputePassEncoder() {
@@ -243,13 +273,37 @@ void ComputePassEncoder::APIDispatchWorkgroups(uint32_t workgroupCountX,
                     DAWN_INCREASE_LIMIT_MESSAGE(GetDevice()->GetAdapter()->GetLimits().v1,
                                                 maxComputeWorkgroupsPerDimension, workgroupCountZ));
 
+                auto pipeline = mCommandBufferState.GetComputePipeline();
+                if (pipeline->UsesLinearIndexing()) {
+                    // Validate without assumptions on the range of the various uint32_t limits, as
+                    // they may be increased from default values.
+                    const auto wgSize = pipeline->GetWorkgroupSize();
+                    const uint64_t wgInvocations =
+                        pipeline->UsesGlobalInvocationIndex()
+                            ? wgSize.width * wgSize.height * wgSize.depthOrArrayLayers
+                            : 1u;
+                    const uint64_t factorWGAndX = wgInvocations * workgroupCountX;
+                    const uint64_t factorYAndZ =
+                        static_cast<uint64_t>(workgroupCountY) * workgroupCountZ;
+                    bool overflow = factorWGAndX > std::numeric_limits<uint32_t>::max();
+                    overflow |= factorYAndZ > std::numeric_limits<uint32_t>::max();
+                    overflow |= factorWGAndX * factorYAndZ > std::numeric_limits<uint32_t>::max();
+                    DAWN_INVALID_IF(
+                        overflow,
+                        "Dispatch using linear_indexing built-in value would "
+                        "exceed unsigned 32-bit range. (num WGs = [%u, %u, %u], wg size "
+                        "= [%u, %u, %u])",
+                        workgroupCountX, workgroupCountY, workgroupCountZ, wgSize.width,
+                        wgSize.height, wgSize.depthOrArrayLayers);
+                }
+
                 if (!GetDevice()->HasFlexibleTextureViews()) {
                     DAWN_TRY(mCommandBufferState.ValidateNoDifferentTextureViewsOnSameTexture());
                 }
             }
 
             // Record the synchronization scope for Dispatch, which is just the current
-            // bindgroups.
+            // bindgroups and resource table.
             AddDispatchSyncScope();
 
             DispatchCmd* dispatch = allocator->Allocate<DispatchCmd>(Command::Dispatch);
@@ -278,6 +332,15 @@ ComputePassEncoder::TransformIndirectDispatchBuffer(Ref<BufferBase> indirectBuff
     if (!IsValidationEnabled() && !shouldDuplicateNumWorkgroups) {
         return std::make_pair(indirectBuffer, indirectOffset);
     }
+    const bool usesLinearIndexing = mCommandBufferState.GetComputePipeline()->UsesLinearIndexing();
+    const bool usesGlobalIndex =
+        mCommandBufferState.GetComputePipeline()->UsesGlobalInvocationIndex();
+    const auto wgSize = mCommandBufferState.GetComputePipeline()->GetWorkgroupSize();
+    const uint32_t wgInvocations = wgSize.width * wgSize.height * wgSize.depthOrArrayLayers;
+    uint32_t overflowValue = std::numeric_limits<uint32_t>::max();
+    if (usesGlobalIndex) {
+        overflowValue /= wgInvocations;
+    }
 
     // Save the previous command buffer state so it can be restored after the
     // validation inserts additional commands.
@@ -302,29 +365,16 @@ ComputePassEncoder::TransformIndirectDispatchBuffer(Ref<BufferBase> indirectBuff
     const uint64_t clientIndirectBindingSize =
         kDispatchIndirectSize + clientOffsetFromAlignedBoundary;
 
-    // Neither 'enableValidation' nor 'duplicateNumWorkgroups' can be declared as 'bool' as
-    // currently in WGSL type 'bool' cannot be used in address space 'uniform' as 'it is
-    // non-host-shareable'.
-    struct UniformParams {
-        uint32_t maxComputeWorkgroupsPerDimension;
-        uint32_t clientOffsetInU32;
-        uint32_t enableValidation;
-        uint32_t duplicateNumWorkgroups;
+    // Set the immediate params.
+    IndirectDispatchParams params = {
+        .maxComputeWorkgroupsPerDimension = device->GetLimits().v1.maxComputeWorkgroupsPerDimension,
+        .clientOffsetInU32 =
+            static_cast<uint32_t>(clientOffsetFromAlignedBoundary / sizeof(uint32_t)),
+        .enableValidation = static_cast<uint32_t>(IsValidationEnabled()),
+        .duplicateNumWorkgroups = static_cast<uint32_t>(shouldDuplicateNumWorkgroups),
+        .linearIndexing = static_cast<uint32_t>(usesLinearIndexing),
+        .overflowValue = overflowValue,
     };
-
-    // Create a uniform buffer to hold parameters for the shader.
-    Ref<BufferBase> uniformBuffer;
-    {
-        UniformParams params;
-        params.maxComputeWorkgroupsPerDimension =
-            device->GetLimits().v1.maxComputeWorkgroupsPerDimension;
-        params.clientOffsetInU32 = clientOffsetFromAlignedBoundary / sizeof(uint32_t);
-        params.enableValidation = static_cast<uint32_t>(IsValidationEnabled());
-        params.duplicateNumWorkgroups = static_cast<uint32_t>(shouldDuplicateNumWorkgroups);
-
-        DAWN_TRY_ASSIGN(uniformBuffer,
-                        utils::CreateBufferFromData(device, wgpu::BufferUsage::Uniform, {params}));
-    }
 
     // Reserve space in the scratch buffer to hold the validated indirect params.
     ScratchBuffer& scratchBuffer = store->scratchIndirectStorage;
@@ -338,15 +388,15 @@ ComputePassEncoder::TransformIndirectDispatchBuffer(Ref<BufferBase> indirectBuff
     DAWN_TRY_ASSIGN(validationBindGroup,
                     utils::MakeBindGroup(device, layout,
                                          {
-                                             {0, uniformBuffer},
-                                             {1, indirectBuffer, clientIndirectBindingOffset,
+                                             {0, indirectBuffer, clientIndirectBindingOffset,
                                               clientIndirectBindingSize},
-                                             {2, validatedIndirectBuffer, 0, scratchBufferSize},
+                                             {1, validatedIndirectBuffer, 0, scratchBufferSize},
                                          },
                                          UsageValidationMode::Internal));
 
     // Issue commands to validate the indirect buffer.
     APISetPipeline(validationPipeline.Get());
+    APISetImmediates(0, ByteSpanFromRef(params));
     APISetBindGroup(0, validationBindGroup.Get());
     APIDispatchWorkgroups(1);
 
@@ -454,63 +504,79 @@ void ComputePassEncoder::APISetPipeline(ComputePipelineBase* pipeline) {
         "encoding %s.SetPipeline(%s).", this, pipeline);
 }
 
+void ComputePassEncoder::APISetResourceTable(ResourceTableBase* table) {
+    mEncodingContext->TryEncode(
+        this,
+        [&](CommandAllocator* allocator) -> MaybeError {
+            if (GetDevice()->IsValidationEnabled()) {
+                DAWN_INVALID_IF(
+                    !GetDevice()->HasFeature(Feature::ChromiumExperimentalSamplingResourceTable),
+                    "setResourceTable requires the %s feature enabled.",
+                    wgpu::FeatureName::ChromiumExperimentalSamplingResourceTable);
+                if (table) {
+                    DAWN_TRY(GetDevice()->ValidateObject(table));
+                }
+            }
+
+            mCommandBufferState.SetResourceTable(table);
+            if (table) {
+                // Add table for submit validation. Note that we add the currently used table to the
+                // usage tracker in AddDispatchSyncScope for command processing.
+                mUsageTracker.AddReferencedResourceTable(table);
+            }
+
+            SetResourceTableCmd* cmd =
+                allocator->Allocate<SetResourceTableCmd>(Command::SetResourceTable);
+            cmd->table = table;
+            return {};
+        },
+        "encoding %s.SetResourceTable(%s).", this, table);
+}
+
 void ComputePassEncoder::APISetBindGroup(uint32_t groupIndexIn,
                                          BindGroupBase* group,
-                                         uint32_t dynamicOffsetCount,
-                                         const uint32_t* dynamicOffsets) {
+                                         ityp::span<BindingIndex, const uint32_t> dynamicOffsets) {
     mEncodingContext->TryEncode(
         this,
         [&](CommandAllocator* allocator) -> MaybeError {
             BindGroupIndex groupIndex(groupIndexIn);
 
             if (IsValidationEnabled()) {
-                DAWN_TRY(
-                    ValidateSetBindGroup(groupIndex, group, dynamicOffsetCount, dynamicOffsets));
+                DAWN_TRY(ValidateSetBindGroup(groupIndex, group, dynamicOffsets));
             }
 
             if (group == nullptr) {
                 mCommandBufferState.UnsetBindGroup(groupIndex);
             } else {
                 mUsageTracker.AddResourcesReferencedByBindGroup(group);
-                RecordSetBindGroup(allocator, groupIndex, group, dynamicOffsetCount,
-                                   dynamicOffsets);
-                mCommandBufferState.SetBindGroup(groupIndex, group, dynamicOffsetCount,
-                                                 dynamicOffsets);
+                RecordSetBindGroup(allocator, groupIndex, group, dynamicOffsets);
+                mCommandBufferState.SetBindGroup(groupIndex, group, dynamicOffsets);
             }
 
             return {};
         },
         "encoding %s.SetBindGroup(%u, %s, %u, ...).", this, groupIndexIn, group,
-        dynamicOffsetCount);
+        dynamicOffsets.size());
 }
 
-void ComputePassEncoder::APISetImmediates(uint32_t offset, const void* data, size_t size) {
+void ComputePassEncoder::APISetImmediates(uint32_t offset, Span<const std::byte> data) {
     mEncodingContext->TryEncode(
         this,
         [&](CommandAllocator* allocator) -> MaybeError {
             if (IsValidationEnabled()) {
-                DAWN_TRY(ValidateSetImmediates(offset, size));
+                DAWN_TRY(ValidateSetImmediates(offset, data.size()));
             }
 
-            // Skip SetImmediates when uploading constants are empty.
-            if (size == 0) {
-                return {};
-            }
-
-            SetImmediatesCmd* cmd = allocator->Allocate<SetImmediatesCmd>(Command::SetImmediates);
-            cmd->offset = offset;
-            cmd->size = uint32_t(size);
-            uint8_t* immediateDatas = allocator->AllocateData<uint8_t>(cmd->size);
-            memcpy(immediateDatas, data, size);
-
-            mCommandBufferState.SetImmediateData(offset, uint32_t(size));
-
+            RecordSetImmediates(allocator, offset, data);
+            mCommandBufferState.SetImmediateData(offset, data.size());
             return {};
         },
-        "encoding %s.SetImmediates(%u, %u, ...).", this, offset, size);
+        "encoding %s.SetImmediates(%u, %u, ...).", this, offset, data.size());
 }
 
-void ComputePassEncoder::APIWriteTimestamp(QuerySetBase* querySet, uint32_t queryIndex) {
+void ComputePassEncoder::APIWriteTimestamp(QuerySetBase* querySet, uint32_t queryIndexUntyped) {
+    QueryIndex queryIndex{queryIndexUntyped};
+
     mEncodingContext->TryEncode(
         this,
         [&](CommandAllocator* allocator) -> MaybeError {
@@ -520,7 +586,7 @@ void ComputePassEncoder::APIWriteTimestamp(QuerySetBase* querySet, uint32_t quer
                     Feature::ChromiumExperimentalTimestampQueryInsidePasses));
             }
 
-            mCommandEncoder->TrackQueryAvailability(querySet, queryIndex);
+            mCommandEncoder->TrackUsedQuerySet(querySet);
 
             WriteTimestampCmd* cmd =
                 allocator->Allocate<WriteTimestampCmd>(Command::WriteTimestamp);
@@ -537,6 +603,11 @@ void ComputePassEncoder::AddDispatchSyncScope(SyncScopeUsageTracker scope) {
     for (BindGroupIndex i : layout->GetBindGroupLayoutsMask()) {
         scope.AddBindGroup(mCommandBufferState.GetBindGroup(i));
     }
+    if (mCommandBufferState.GetPipelineLayout()->UsesResourceTable()) {
+        ResourceTableBase* table = mCommandBufferState.GetResourceTable();
+        DAWN_ASSERT(table != nullptr);
+        scope.SetUsedResourceTable(table);
+    }
     mUsageTracker.AddDispatch(scope.AcquireSyncScopeUsage());
 }
 
@@ -548,13 +619,7 @@ void ComputePassEncoder::RestoreCommandBufferState(CommandBufferStateTracker sta
     for (auto i : Range(kMaxBindGroupsTyped)) {
         BindGroupBase* bg = state.GetBindGroup(i);
         if (bg != nullptr) {
-            const std::vector<uint32_t>& offsets = state.GetDynamicOffsets(i);
-            if (offsets.empty()) {
-                APISetBindGroup(static_cast<uint32_t>(i), bg);
-            } else {
-                APISetBindGroup(static_cast<uint32_t>(i), bg, static_cast<uint32_t>(offsets.size()),
-                                offsets.data());
-            }
+            APISetBindGroup(static_cast<uint32_t>(i), bg, state.GetDynamicOffsets(i));
         }
     }
 

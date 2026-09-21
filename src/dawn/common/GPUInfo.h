@@ -40,7 +40,7 @@ namespace dawn::gpu_info {
 // D3D12: AA.BB.CCC.DDDD
 // Vulkan: AAA.BBB.CCC.DDD on Nvidia, CCC.DDDD for Intel Windows, and AA.BB.CCC for others,
 // See https://vulkan.gpuinfo.org/
-static constexpr uint32_t kMaxVersionFields = 4;
+inline constexpr size_t kMaxVersionFields = 4;
 
 class DriverVersion {
   public:
@@ -50,7 +50,7 @@ class DriverVersion {
     uint16_t& operator[](size_t i);
     const uint16_t& operator[](size_t i) const;
 
-    uint32_t size() const;
+    size_t size() const;
     std::string ToString() const;
 
     std::strong_ordering operator<=>(const DriverVersion& other) const;
@@ -92,9 +92,17 @@ enum class QualcommACPIGen {
     Unknown = 0,
     Adreno6xx = 6,
     Adreno7xx = 7,
+    Adreno8xx = 8,
 };
 
 IntelGen GetIntelGen(PCIVendorID venderId, PCIDeviceID deviceId);
 QualcommACPIGen GetQualcommACPIGen(PCIVendorID venderId, PCIDeviceID deviceId);
+
+// ARM
+bool IsMaliG68(PCIDeviceID deviceId);
+
+// Returns whether the GPU vendor is known to build tile-based (deferred) renderers.
+bool IsTileBasedRenderer(PCIVendorID vendorId, PCIDeviceID deviceId);
+
 }  // namespace dawn::gpu_info
 #endif  // SRC_DAWN_COMMON_GPUINFO_H_

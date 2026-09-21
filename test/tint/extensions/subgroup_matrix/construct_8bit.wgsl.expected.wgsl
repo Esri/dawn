@@ -1,4 +1,4 @@
-enable chromium_experimental_subgroup_matrix;
+enable chromium_experimental_subgroup_matrix, subgroups;
 
 @group(0) @binding(0) var<storage, read_write> ibuffer : array<i32>;
 
@@ -6,8 +6,8 @@ enable chromium_experimental_subgroup_matrix;
 
 @compute @workgroup_size(64)
 fn main() {
-  subgroupMatrixStore(&(ibuffer), 0, subgroup_matrix_left<i8, 8, 8>(), false, 64);
-  subgroupMatrixStore(&(ubuffer), 0, subgroup_matrix_right<u8, 8, 8>(), false, 64);
-  subgroupMatrixStore(&(ibuffer), 0, subgroup_matrix_left<i8, 8, 8>(-(42)), false, 64);
-  subgroupMatrixStore(&(ubuffer), 0, subgroup_matrix_right<u8, 8, 8>(42), false, 64);
+  subgroupMatrixStore<row_major>(&(ibuffer), 0, subgroup_matrix_left<i8, 8, 8>(), 64);
+  subgroupMatrixStore<row_major>(&(ubuffer), 0, subgroup_matrix_right<u8, 8, 8>(), 64);
+  subgroupMatrixStore<row_major>(&(ibuffer), 0, subgroup_matrix_left<i8, 8, 8>(-(42)), 64);
+  subgroupMatrixStore<row_major>(&(ubuffer), 0, subgroup_matrix_right<u8, 8, 8>(42), 64);
 }

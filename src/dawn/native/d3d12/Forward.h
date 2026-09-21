@@ -28,7 +28,7 @@
 #ifndef SRC_DAWN_NATIVE_D3D12_FORWARD_H_
 #define SRC_DAWN_NATIVE_D3D12_FORWARD_H_
 
-#include "dawn/native/ToBackend.h"
+#include "src/dawn/native/ToBackend.h"
 
 namespace dawn::native::d3d12 {
 
@@ -79,7 +79,7 @@ struct D3D12BackendTraits {
 };
 
 template <typename T>
-decltype(auto) ToBackend(T&& common) {
+auto ToBackend(T&& common) -> decltype(ToBackendBase<D3D12BackendTraits>(common)) {
     return ToBackendBase<D3D12BackendTraits>(common);
 }
 

@@ -28,7 +28,6 @@
 #include "src/tint/lang/core/ir/transform/prepare_immediate_data.h"
 
 #include "gmock/gmock.h"
-
 #include "src/tint/lang/core/ir/transform/helper_test.h"
 
 namespace tint::core::ir::transform {
@@ -44,7 +43,7 @@ class IR_PrepareImmediateDataTests : public TransformTest {
         TINT_CHECK_RESULT_UNWRAP(result, PrepareImmediateData(mod, config));
 
         // Validate the output IR.
-        EXPECT_EQ(ir::Validate(mod, capabilities), Success);
+        EXPECT_EQ(ir::Validate(mod, "after transform"), Success);
 
         return result;
     }
@@ -137,6 +136,34 @@ $B1: {  # root
     EXPECT_NE(result->var, nullptr);
     EXPECT_EQ(result->offset_to_index.GetOr(0u, UINT32_MAX), 0u);
     EXPECT_EQ(expect, str());
+}
+
+TEST_F(IR_PrepareImmediateDataTests, InternalImmediateData_OffsetOverflow) {
+    PrepareImmediateDataConfig config;
+    // 0xFFFFFFFC + 4 = 0 (overflows to 0 in uint32_t)
+    ASSERT_EQ(config.AddInternalImmediateData(0xFFFFFFFCu, mod.symbols.New("overflow"), ty.i32()),
+              Success);
+    auto result = PrepareImmediateData(mod, config);
+    EXPECT_NE(result, Success);
+}
+
+TEST_F(IR_PrepareImmediateDataTests, UserImmediateData_TooLarge) {
+    auto* v = b.Var("v", ty.ptr<immediate>(ty.array<i32, 0x1000>()));
+    mod.root_block->Append(v);
+
+    PrepareImmediateDataConfig config;
+    ASSERT_EQ(config.AddInternalImmediateData(0u, mod.symbols.New("overflow"), ty.i32()), Success);
+    auto result = PrepareImmediateData(mod, config);
+    EXPECT_NE(result, Success);
+}
+
+TEST_F(IR_PrepareImmediateDataTests, UserImmediateData_TooLarge_NoInternal) {
+    auto* v = b.Var("v", ty.ptr<immediate>(ty.array<i32, 0x1000>()));
+    mod.root_block->Append(v);
+
+    PrepareImmediateDataConfig config;
+    auto result = PrepareImmediateData(mod, config);
+    EXPECT_NE(result, Success);
 }
 
 TEST_F(IR_PrepareImmediateDataTests, NoUserImmediateData_MultipleInternalImmediateData) {
@@ -301,7 +328,36 @@ TEST_F(IR_PrepareImmediateDataTests, ValidateInternalImmediate_MisalignedScalar)
               R"(immediate offset for 'internal_constant' must be aligned to 4 bytes)");
 }
 
+TEST_F(IR_PrepareImmediateDataTests, ValidateInternalImmediate_StructU32Aligned) {
+    // A struct of three u32 members only needs 4-byte alignment, so it is accepted at a 4-aligned
+    // offset. This is the num_workgroups case placed after a non-16-byte user block.
+    PrepareImmediateDataConfig config;
+    auto* struct_ty =
+        ty.Struct(mod.symbols.New("num_workgroups"), {
+                                                         {mod.symbols.New("x"), ty.u32()},
+                                                         {mod.symbols.New("y"), ty.u32()},
+                                                         {mod.symbols.New("z"), ty.u32()},
+                                                     });
+    ASSERT_EQ(config.AddInternalImmediateData(4u, mod.symbols.New("internal_constant"), struct_ty),
+              Success);
+    auto result = Run(config);
+    EXPECT_EQ(result, Success);
+}
+
+TEST_F(IR_PrepareImmediateDataTests, ValidateInternalImmediate_MisalignedVector) {
+    // A vec3<u32> requires 16-byte alignment, so a 4-aligned offset is rejected.
+    PrepareImmediateDataConfig config;
+    ASSERT_EQ(config.AddInternalImmediateData(4u, mod.symbols.New("internal_constant"), ty.vec3u()),
+              Success);
+    auto result = Run(config);
+    ASSERT_NE(result, Success);
+    EXPECT_EQ(result.Failure().reason,
+              R"(immediate offset for 'internal_constant' must be aligned to 16 bytes)");
+}
+
 TEST_F(IR_PrepareImmediateDataTests, ValidateInternalImmediate_MisalignedArray) {
+    // An array<vec4<u32>> requires 16-byte alignment (its element's alignment); an offset of 8 is
+    // rejected.
     PrepareImmediateDataConfig config;
     ASSERT_EQ(config.AddInternalImmediateData(8u, mod.symbols.New("internal_constant"),
                                               ty.array<vec4u, 4>()),

@@ -28,9 +28,9 @@
 #ifndef SRC_DAWN_NATIVE_WEBGPU_PHYSICALDEVICEWGPU_H_
 #define SRC_DAWN_NATIVE_WEBGPU_PHYSICALDEVICEWGPU_H_
 
-#include "dawn/native/PhysicalDevice.h"
-#include "dawn/native/webgpu/Forward.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "src/dawn/native/PhysicalDevice.h"
+#include "src/dawn/native/webgpu/Forward.h"
 
 namespace dawn::native::webgpu {
 
@@ -76,7 +76,8 @@ class PhysicalDevice : public PhysicalDeviceBase {
     void PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
                                    const TogglesState& adapterToggles) const override;
 
-    raw_ptr<Backend> mBackend;
+    // TODO(crbug.com/485825675): Investigate this dangling pointers.
+    raw_ptr<Backend, DanglingUntriaged> mBackend;
     WGPUAdapter mInnerAdapter = nullptr;
     WGPUBackendType mInnerBackendType = WGPUBackendType_Undefined;
 };

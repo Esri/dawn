@@ -25,17 +25,18 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/vulkan/VulkanInfo.h"
+#include "src/dawn/native/vulkan/VulkanInfo.h"
 
 #include <cstring>
 #include <string>
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"
-#include "dawn/native/vulkan/BackendVk.h"
-#include "dawn/native/vulkan/PhysicalDeviceVk.h"
-#include "dawn/native/vulkan/UtilsVulkan.h"
-#include "dawn/native/vulkan/VulkanError.h"
+#include "src/dawn/native/vulkan/BackendVk.h"
+#include "src/dawn/native/vulkan/PhysicalDeviceVk.h"
+#include "src/dawn/native/vulkan/UtilsVulkan.h"
+#include "src/dawn/native/vulkan/VulkanError.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native::vulkan {
 
@@ -174,8 +175,13 @@ ResultOrError<VulkanDeviceInfo> GatherDeviceInfo(const PhysicalDevice& device) {
         VkPhysicalDeviceMemoryProperties memory;
         vkFunctions.GetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &memory);
 
-        info.memoryTypes.assign(memory.memoryTypes, memory.memoryTypes + memory.memoryTypeCount);
-        info.memoryHeaps.assign(memory.memoryHeaps, memory.memoryHeaps + memory.memoryHeapCount);
+        auto driverMemoryTypes =
+            Span<const VkMemoryType>(memory.memoryTypes).first(memory.memoryTypeCount);
+        auto driverMemoryHeaps =
+            Span<const VkMemoryHeap>(memory.memoryHeaps).first(memory.memoryHeapCount);
+
+        info.memoryTypes.assign(driverMemoryTypes.begin(), driverMemoryTypes.end());
+        info.memoryHeaps.assign(driverMemoryHeaps.begin(), driverMemoryHeaps.end());
     }
 
     // Gather info about device queue families
@@ -257,10 +263,17 @@ ResultOrError<VulkanDeviceInfo> GatherDeviceInfo(const PhysicalDevice& device) {
                       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES);
     featuresChain.Add(&info.samplerYCbCrConversionFeatures,
                       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES);
+    featuresChain.Add(&info.extendedDynamicStateFeatures,
+                      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT);
 
     if (info.extensions[DeviceExt::ShaderFloat16Int8]) {
         featuresChain.Add(&info.shaderFloat16Int8Features,
                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR);
+    }
+
+    if (info.extensions[DeviceExt::ShaderBufferInt64Atomics]) {
+        featuresChain.Add(&info.shaderAtomicInt64Features,
+                          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR);
     }
 
     if (info.extensions[DeviceExt::SubgroupSizeControl]) {
@@ -321,6 +334,18 @@ ResultOrError<VulkanDeviceInfo> GatherDeviceInfo(const PhysicalDevice& device) {
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES);
     }
 
+    if (info.extensions[DeviceExt::MaximalReconvergence]) {
+        featuresChain.Add(
+            &info.shaderMaximalReconvergenceFeatures,
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MAXIMAL_RECONVERGENCE_FEATURES_KHR);
+    }
+
+    if (info.extensions[DeviceExt::SubgroupUniformControlFlow]) {
+        featuresChain.Add(
+            &info.shaderSubgroupUniformControlFlowFeatures,
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_FEATURES_KHR);
+    }
+
     if (info.extensions[DeviceExt::ExternalMemoryHost]) {
         propertiesChain.Add(&info.externalMemoryHostProperties,
                             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT);
@@ -357,9 +382,20 @@ ResultOrError<VulkanDeviceInfo> GatherDeviceInfo(const PhysicalDevice& device) {
                             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_PROPERTIES);
     }
 
+    if (info.extensions[DeviceExt::RasterizationOrderAttachmentAccess]) {
+        featuresChain.Add(
+            &info.rasterizationOrderAttachmentAccessFeatures,
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RASTERIZATION_ORDER_ATTACHMENT_ACCESS_FEATURES_EXT);
+    }
+
     if (info.extensions[DeviceExt::DynamicRendering]) {
         featuresChain.Add(&info.dynamicRenderingFeatures,
                           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR);
+    }
+
+    if (info.extensions[DeviceExt::PhysicalDeviceDrm]) {
+        propertiesChain.Add(&info.drmProperties,
+                            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRM_PROPERTIES_EXT);
     }
 
     if (info.extensions[DeviceExt::MultisampledRenderToSingleSampled]) {

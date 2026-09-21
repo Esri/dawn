@@ -21,9 +21,9 @@ float d(float f_1) {
 
 float2x2 v_1(uint start_byte_offset) {
   uint4 v_2 = u[(start_byte_offset / 16u)];
-  float2 v_3 = asfloat((((((start_byte_offset & 15u) >> 2u) == 2u)) ? (v_2.zw) : (v_2.xy)));
-  uint4 v_4 = u[((8u + start_byte_offset) / 16u)];
-  return float2x2(v_3, asfloat(((((((8u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_4.zw) : (v_4.xy))));
+  uint v_3 = (8u + start_byte_offset);
+  uint4 v_4 = u[(v_3 / 16u)];
+  return float2x2(asfloat(select((((start_byte_offset & 15u) >> 2u) == 2u), v_2.zw, v_2.xy)), asfloat(select((((v_3 & 15u) >> 2u) == 2u), v_4.zw, v_4.xy)));
 }
 
 typedef float2x2 ary_ret[4];
@@ -41,7 +41,6 @@ ary_ret v_5(uint start_byte_offset) {
       {
         v_6 = (v_7 + 1u);
       }
-      continue;
     }
   }
   float2x2 v_8[4] = a_2;
@@ -54,6 +53,6 @@ void f() {
   float v_10 = a(v_9);
   float v_11 = (v_10 + b(v_1(16u)));
   float v_12 = (v_11 + c(asfloat(u[1u].xy).yx));
-  s.Store(0u, asuint((v_12 + d(asfloat(u[1u].xy).yx.x))));
+  s.Store(0u, asuint((v_12 + d(asfloat(u[1u].y)))));
 }
 

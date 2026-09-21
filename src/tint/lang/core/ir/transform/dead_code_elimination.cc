@@ -105,10 +105,11 @@ struct State {
 }  // namespace
 
 Result<SuccessType> DeadCodeElimination(Module& ir) {
-    TINT_CHECK_RESULT(
-        ValidateAndDumpIfNeeded(ir, "core.DeadCodeElimination", kDeadCodeEliminationCapabilities));
+    core::ir::AssertValid(ir, "before core.DeadCodeElimination");
 
     State{ir}.Process();
+
+    ir.properties.Remove(Property::kAllowUnannotatedModuleIOVariables);
 
     return Success;
 }

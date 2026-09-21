@@ -26,16 +26,24 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <fcntl.h>
-#include <gbm.h>
 
+#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "VideoViewsTests.h"
-#include "dawn/common/Assert.h"
+// gbm.h transitively include X11 headers which have problematic #define for common names (like
+// "Always") preemptively include xlib_with_undefs.h that will do the necessary #undefs before gbm.h
+// tries to include X11.h.
+#include <gbm.h>
+
+#include "src/dawn/common/xlib_with_undefs.h"
+// Comment to prevent reordering.
+
 #include "dawn/native/VulkanBackend.h"
+#include "src/dawn/tests/end2end/VideoViewsTests.h"
+#include "src/utils/assert.h"
 
 namespace dawn {
 namespace {

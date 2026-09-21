@@ -276,7 +276,7 @@ TEST_F(HlslWriterPromoteInitializersTest, ArrayInCall) {
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, ModuleScopedStruct) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* str_ty = ty.Struct(mod.symbols.New("S"), {
                                                        {mod.symbols.New("a"), ty.i32()},
@@ -314,7 +314,7 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, ModuleScopedStruct_SplatMultipleElements) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* str_ty = ty.Struct(mod.symbols.New("S"), {
                                                        {mod.symbols.New("a"), ty.i32()},
@@ -357,8 +357,60 @@ $B1: {  # root
     EXPECT_EQ(expect, str());
 }
 
+TEST_F(HlslWriterPromoteInitializersTest, ModuleScopedStruct_DontPromoteZero) {
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
+
+    auto* str_ty = ty.Struct(mod.symbols.New("S"), {
+                                                       {mod.symbols.New("a"), ty.i32()},
+                                                   });
+
+    b.ir.root_block->Append(b.Var<private_>("a", b.Zero(str_ty)));
+
+    auto* src = R"(
+S = struct @align(4) {
+  a:i32 @offset(0)
+}
+
+$B1: {  # root
+  %a:ptr<private, S, read_write> = var S(0i)
+}
+
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = src;
+    Run(PromoteInitializers);
+
+    EXPECT_EQ(expect, str());
+}
+
 TEST_F(HlslWriterPromoteInitializersTest, ModuleScopedArray) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
+
+    b.ir.root_block->Append(b.Var<private_>("a", b.Composite(ty.array<i32, 2>(), 1_i, 2_i)));
+
+    auto* src = R"(
+$B1: {  # root
+  %a:ptr<private, array<i32, 2>, read_write> = var array<i32, 2>(1i, 2i)
+}
+
+)";
+    EXPECT_EQ(src, str());
+
+    auto* expect = R"(
+$B1: {  # root
+  %1:array<i32, 2> = let array<i32, 2>(1i, 2i)
+  %a:ptr<private, array<i32, 2>, read_write> = var %1
+}
+
+)";
+    Run(PromoteInitializers);
+
+    EXPECT_EQ(expect, str());
+}
+
+TEST_F(HlslWriterPromoteInitializersTest, ModuleScopedArray_DontPromoteZero) {
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     b.ir.root_block->Append(b.Var<private_>("a", b.Zero<array<i32, 2>>()));
 
@@ -370,20 +422,15 @@ $B1: {  # root
 )";
     EXPECT_EQ(src, str());
 
-    auto* expect = R"(
-$B1: {  # root
-  %1:array<i32, 2> = let array<i32, 2>(0i)
-  %a:ptr<private, array<i32, 2>, read_write> = var %1
-}
+    auto* expect = src;
 
-)";
     Run(PromoteInitializers);
 
     EXPECT_EQ(expect, str());
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, ModuleScopedStructNested) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* b_ty = ty.Struct(mod.symbols.New("B"), {
                                                      {mod.symbols.New("c"), ty.f32()},
@@ -453,13 +500,14 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, ModuleScopedArrayNestedInStruct) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* str_ty = ty.Struct(mod.symbols.New("S"), {
                                                        {mod.symbols.New("a"), ty.array<i32, 3>()},
                                                    });
 
-    b.ir.root_block->Append(b.Var<private_>("a", b.Composite(str_ty, b.Zero(ty.array<i32, 3>()))));
+    b.ir.root_block->Append(
+        b.Var<private_>("a", b.Composite(str_ty, b.Composite(ty.array<i32, 3>(), 1_i, 2_i, 3_i))));
 
     auto* src = R"(
 S = struct @align(4) {
@@ -467,7 +515,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %a:ptr<private, S, read_write> = var S(array<i32, 3>(0i))
+  %a:ptr<private, S, read_write> = var S(array<i32, 3>(1i, 2i, 3i))
 }
 
 )";
@@ -479,7 +527,7 @@ S = struct @align(4) {
 }
 
 $B1: {  # root
-  %1:S = construct array<i32, 3>(0i)
+  %1:S = construct array<i32, 3>(1i, 2i, 3i)
   %2:S = let %1
   %a:ptr<private, S, read_write> = var %2
 }
@@ -491,7 +539,7 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, Many) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* a_ty = ty.Struct(mod.symbols.New("A"), {
                                                      {mod.symbols.New("a"), ty.array<i32, 2>()},
@@ -584,7 +632,7 @@ $B1: {  # root
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, DuplicateConstantInLet) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* ret_arr = b.Function("ret_arr", ty.array<vec4<i32>, 4>());
     b.Append(ret_arr->Block(), [&] { b.Return(ret_arr, b.Zero<array<vec4<i32>, 4>>()); });
@@ -630,7 +678,7 @@ TEST_F(HlslWriterPromoteInitializersTest, DuplicateConstantInLet) {
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, DuplicateConstantInBlock) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* a_ty = ty.Struct(mod.symbols.New("A"), {
                                                      {mod.symbols.New("a"), ty.i32()},
@@ -693,7 +741,7 @@ A = struct @align(4) {
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, DuplicateConstant) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* ret_arr = b.Function("ret_arr", ty.array<vec4<i32>, 4>());
     b.Append(ret_arr->Block(), [&] { b.Return(ret_arr, b.Zero<array<vec4<i32>, 4>>()); });
@@ -753,7 +801,7 @@ TEST_F(HlslWriterPromoteInitializersTest, DuplicateConstant) {
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, DuplicateAccess) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     b.Append(func->Block(), [&] {
@@ -795,7 +843,7 @@ TEST_F(HlslWriterPromoteInitializersTest, DuplicateAccess) {
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, DuplicateAccessDifferentFunction) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* a = b.Function("a", ty.void_());
     b.Append(a->Block(), [&] {
@@ -849,7 +897,7 @@ TEST_F(HlslWriterPromoteInitializersTest, DuplicateAccessDifferentFunction) {
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, DuplicateAccessDifferentScope) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* func = b.Function("foo", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     b.Append(func->Block(), [&] {
@@ -908,7 +956,7 @@ TEST_F(HlslWriterPromoteInitializersTest, DuplicateAccessDifferentScope) {
 }
 
 TEST_F(HlslWriterPromoteInitializersTest, LetOfLet) {
-    capabilities = core::ir::Capabilities{core::ir::Capability::kAllowModuleScopeLets};
+    mod.properties.Add(core::ir::Property::kAllowModuleScopeLets);
 
     auto* str_ty = ty.Struct(mod.symbols.New("S"), {
                                                        {mod.symbols.New("a"), ty.vec4i()},

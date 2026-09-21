@@ -26,6 +26,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "src/tint/lang/spirv/ir/builtin_call.h"
+
 #include "gmock/gmock.h"
 #include "src/tint/lang/core/ir/ir_helper_test.h"
 
@@ -49,7 +50,7 @@ TEST_F(IR_SpirvBuiltinCallTest, Clone) {
     EXPECT_TRUE(new_b->ExplicitTemplateParams().IsEmpty());
 
     auto args = new_b->Args();
-    EXPECT_EQ(2u, args.Length());
+    EXPECT_EQ(2u, args.size());
 
     auto* val0 = args[0]->As<core::ir::Constant>()->Value();
     EXPECT_EQ(1_u, val0->As<core::constant::Scalar<core::u32>>()->ValueAs<core::u32>());
@@ -61,7 +62,7 @@ TEST_F(IR_SpirvBuiltinCallTest, Clone) {
 TEST_F(IR_SpirvBuiltinCallTest, CloneWithExplicitParams) {
     auto* builtin = b.Call<BuiltinCall>(mod.Types().f32(), BuiltinFn::kArrayLength, 1_u, 2_u);
     builtin->SetExplicitTemplateParams(
-        Vector<const core::type::Type*, 2>{mod.Types().f32(), mod.Types().i32()});
+        Vector<core::ir::TemplateParameter, 2>{mod.Types().f32(), mod.Types().i32()});
 
     auto* new_b = clone_ctx.Clone(builtin);
 
@@ -72,7 +73,7 @@ TEST_F(IR_SpirvBuiltinCallTest, CloneWithExplicitParams) {
     EXPECT_EQ(BuiltinFn::kArrayLength, new_b->Func());
 
     auto args = new_b->Args();
-    EXPECT_EQ(2u, args.Length());
+    EXPECT_EQ(2u, args.size());
 
     auto* val0 = args[0]->As<core::ir::Constant>()->Value();
     EXPECT_EQ(1_u, val0->As<core::constant::Scalar<core::u32>>()->ValueAs<core::u32>());
@@ -83,8 +84,8 @@ TEST_F(IR_SpirvBuiltinCallTest, CloneWithExplicitParams) {
     auto new_explicit = new_b->ExplicitTemplateParams();
     ASSERT_EQ(2u, new_explicit.Length());
 
-    EXPECT_EQ(mod.Types().f32(), new_explicit[0]);
-    EXPECT_EQ(mod.Types().i32(), new_explicit[1]);
+    EXPECT_EQ(mod.Types().f32(), std::get<const core::type::Type*>(new_explicit[0]));
+    EXPECT_EQ(mod.Types().i32(), std::get<const core::type::Type*>(new_explicit[1]));
 }
 
 TEST_F(IR_SpirvBuiltinCallTest, CloneNoArgs) {
@@ -98,7 +99,7 @@ TEST_F(IR_SpirvBuiltinCallTest, CloneNoArgs) {
     EXPECT_TRUE(new_b->ExplicitTemplateParams().IsEmpty());
 
     auto args = new_b->Args();
-    EXPECT_TRUE(args.IsEmpty());
+    EXPECT_TRUE(args.empty());
 }
 
 }  // namespace

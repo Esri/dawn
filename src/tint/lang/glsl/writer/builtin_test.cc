@@ -25,6 +25,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "gtest/gtest.h"
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/ir/function.h"
 #include "src/tint/lang/core/number.h"
@@ -37,9 +38,8 @@
 #include "src/tint/lang/core/type/sampler_kind.h"
 #include "src/tint/lang/core/type/storage_texture.h"
 #include "src/tint/lang/core/type/texture_dimension.h"
+#include "src/tint/lang/glsl/ir/builtin_call.h"
 #include "src/tint/lang/glsl/writer/helper_test.h"
-
-#include "gtest/gtest.h"
 
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
@@ -57,7 +57,8 @@ TEST_F(GlslWriterTest, BuiltinGeneric) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
@@ -78,7 +79,8 @@ TEST_F(GlslWriterTest, BuiltinSelectScalar) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -102,7 +104,8 @@ TEST_F(GlslWriterTest, BuiltinSelectVector) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -121,7 +124,8 @@ TEST_F(GlslWriterTest, BuiltinStorageBarrier) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
@@ -138,7 +142,8 @@ TEST_F(GlslWriterTest, BuiltinTextureBarrier) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
@@ -155,7 +160,8 @@ TEST_F(GlslWriterTest, BuiltinWorkgroupBarrier) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 void main() {
@@ -184,7 +190,8 @@ TEST_F(GlslWriterTest, BuiltinStorageAtomicCompareExchangeWeak) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -225,7 +232,8 @@ TEST_F(GlslWriterTest, BuiltinStorageAtomicCompareExchangeWeakDirect) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -263,7 +271,8 @@ TEST_F(GlslWriterTest, BuiltinWorkgroupAtomicLoad) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 
 struct SB {
@@ -308,7 +317,8 @@ TEST_F(GlslWriterTest, BuiltinWorkgroupAtomicSub) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 
 struct SB {
@@ -354,7 +364,8 @@ TEST_F(GlslWriterTest, BuiltinWorkgroupAtomicCompareExchangeWeak) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 
 struct SB {
@@ -394,7 +405,8 @@ TEST_F(GlslWriterTest, BuiltinBitcast_FloatToFloat) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -413,7 +425,8 @@ TEST_F(GlslWriterTest, BuiltinBitcast_IntToFloat) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -432,7 +445,8 @@ TEST_F(GlslWriterTest, BuiltinBitcast_UintToFloat) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -451,7 +465,8 @@ TEST_F(GlslWriterTest, BuiltinBitcast_Vec3UintToVec3Float) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -470,7 +485,8 @@ TEST_F(GlslWriterTest, BuiltinBitcast_FloatToInt) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -489,7 +505,8 @@ TEST_F(GlslWriterTest, BuiltinBitcast_FloatToUint) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -508,7 +525,8 @@ TEST_F(GlslWriterTest, BuiltinBitcast_UintToInt) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -527,7 +545,8 @@ TEST_F(GlslWriterTest, BuiltinBitcast_IntToUint) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -546,17 +565,18 @@ TEST_F(GlslWriterTest, BuiltinBitcast_I32ToVec2F16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-f16vec2 tint_bitcast_to_f16(int src) {
+f16vec2 tint_bitcast_to_16bit(int src) {
   return unpackFloat2x16(uint(src));
 }
 void main() {
   int a = 1;
-  f16vec2 x = tint_bitcast_to_f16(a);
+  f16vec2 x = tint_bitcast_to_16bit(a);
 }
 )");
 }
@@ -569,17 +589,18 @@ TEST_F(GlslWriterTest, BuiltinBitcast_Vec2F16ToI32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-int tint_bitcast_from_f16(f16vec2 src) {
+int tint_bitcast_from_16bit(f16vec2 src) {
   return int(packFloat2x16(src));
 }
 void main() {
   f16vec2 a = f16vec2(1.0hf, 2.0hf);
-  int x = tint_bitcast_from_f16(a);
+  int x = tint_bitcast_from_16bit(a);
 }
 )");
 }
@@ -592,17 +613,18 @@ TEST_F(GlslWriterTest, BuiltinBitcast_U32ToVec2F16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-f16vec2 tint_bitcast_to_f16(uint src) {
+f16vec2 tint_bitcast_to_16bit(uint src) {
   return unpackFloat2x16(src);
 }
 void main() {
   uint a = 1u;
-  f16vec2 x = tint_bitcast_to_f16(a);
+  f16vec2 x = tint_bitcast_to_16bit(a);
 }
 )");
 }
@@ -615,17 +637,18 @@ TEST_F(GlslWriterTest, BuiltinBitcast_Vec2F16ToU32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-uint tint_bitcast_from_f16(f16vec2 src) {
+uint tint_bitcast_from_16bit(f16vec2 src) {
   return packFloat2x16(src);
 }
 void main() {
   f16vec2 a = f16vec2(1.0hf, 2.0hf);
-  uint x = tint_bitcast_from_f16(a);
+  uint x = tint_bitcast_from_16bit(a);
 }
 )");
 }
@@ -638,17 +661,18 @@ TEST_F(GlslWriterTest, BuiltinBitcast_F32ToVec2F16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-f16vec2 tint_bitcast_to_f16(float src) {
+f16vec2 tint_bitcast_to_16bit(float src) {
   return unpackFloat2x16(floatBitsToUint(src));
 }
 void main() {
   float a = 1.0f;
-  f16vec2 x = tint_bitcast_to_f16(a);
+  f16vec2 x = tint_bitcast_to_16bit(a);
 }
 )");
 }
@@ -661,17 +685,18 @@ TEST_F(GlslWriterTest, BuiltinBitcast_Vec2F16ToF32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-float tint_bitcast_from_f16(f16vec2 src) {
+float tint_bitcast_from_16bit(f16vec2 src) {
   return uintBitsToFloat(packFloat2x16(src));
 }
 void main() {
   f16vec2 a = f16vec2(1.0hf, 2.0hf);
-  float x = tint_bitcast_from_f16(a);
+  float x = tint_bitcast_from_16bit(a);
 }
 )");
 }
@@ -684,18 +709,19 @@ TEST_F(GlslWriterTest, BuiltinBitcast_Vec2I32ToVec4F16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-f16vec4 tint_bitcast_to_f16(ivec2 src) {
+f16vec4 tint_bitcast_to_16bit(ivec2 src) {
   uvec2 v = uvec2(src);
   return f16vec4(unpackFloat2x16(v.x), unpackFloat2x16(v.y));
 }
 void main() {
   ivec2 a = ivec2(1, 2);
-  f16vec4 x = tint_bitcast_to_f16(a);
+  f16vec4 x = tint_bitcast_to_16bit(a);
 }
 )");
 }
@@ -708,17 +734,18 @@ TEST_F(GlslWriterTest, BuiltinBitcast_Vec4F16ToVec2I32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-ivec2 tint_bitcast_from_f16(f16vec4 src) {
+ivec2 tint_bitcast_from_16bit(f16vec4 src) {
   return ivec2(uvec2(packFloat2x16(src.xy), packFloat2x16(src.zw)));
 }
 void main() {
   f16vec4 a = f16vec4(1.0hf, 2.0hf, 3.0hf, 4.0hf);
-  ivec2 x = tint_bitcast_from_f16(a);
+  ivec2 x = tint_bitcast_from_16bit(a);
 }
 )");
 }
@@ -731,17 +758,18 @@ TEST_F(GlslWriterTest, BuiltinBitcast_Vec2U32ToVec4F16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-f16vec4 tint_bitcast_to_f16(uvec2 src) {
+f16vec4 tint_bitcast_to_16bit(uvec2 src) {
   return f16vec4(unpackFloat2x16(src.x), unpackFloat2x16(src.y));
 }
 void main() {
   uvec2 a = uvec2(1u, 2u);
-  f16vec4 x = tint_bitcast_to_f16(a);
+  f16vec4 x = tint_bitcast_to_16bit(a);
 }
 )");
 }
@@ -754,17 +782,18 @@ TEST_F(GlslWriterTest, BuiltinBitcast_Vec4F16ToVec2U32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-uvec2 tint_bitcast_from_f16(f16vec4 src) {
+uvec2 tint_bitcast_from_16bit(f16vec4 src) {
   return uvec2(packFloat2x16(src.xy), packFloat2x16(src.zw));
 }
 void main() {
   f16vec4 a = f16vec4(1.0hf, 2.0hf, 3.0hf, 4.0hf);
-  uvec2 x = tint_bitcast_from_f16(a);
+  uvec2 x = tint_bitcast_from_16bit(a);
 }
 )");
 }
@@ -777,17 +806,19 @@ TEST_F(GlslWriterTest, BuiltinBitcast_Vec2F32ToVec4F16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-f16vec4 tint_bitcast_to_f16(vec2 src) {
-  return f16vec4(unpackFloat2x16(floatBitsToUint(src).x), unpackFloat2x16(floatBitsToUint(src).y));
+f16vec4 tint_bitcast_to_16bit(vec2 src) {
+  uvec2 v = floatBitsToUint(src);
+  return f16vec4(unpackFloat2x16(v.x), unpackFloat2x16(v.y));
 }
 void main() {
   vec2 a = vec2(1.0f, 2.0f);
-  f16vec4 x = tint_bitcast_to_f16(a);
+  f16vec4 x = tint_bitcast_to_16bit(a);
 }
 )");
 }
@@ -800,17 +831,18 @@ TEST_F(GlslWriterTest, BuiltinBitcast_Vec4F16ToVec2F32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(#extension GL_AMD_gpu_shader_half_float: require
 precision highp float;
 precision highp int;
 
-vec2 tint_bitcast_from_f16(f16vec4 src) {
+vec2 tint_bitcast_from_16bit(f16vec4 src) {
   return uintBitsToFloat(uvec2(packFloat2x16(src.xy), packFloat2x16(src.zw)));
 }
 void main() {
   f16vec4 a = f16vec4(1.0hf, 2.0hf, 3.0hf, 4.0hf);
-  vec2 x = tint_bitcast_from_f16(a);
+  vec2 x = tint_bitcast_from_16bit(a);
 }
 )");
 }
@@ -830,7 +862,8 @@ TEST_F(GlslWriterTest, BuiltinTextureDimensions_1d) {
     Options opts{};
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
     opts.entry_point_name = "main";
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -854,7 +887,8 @@ TEST_F(GlslWriterTest, BuiltinTextureDimensions_2d_WithoutLod) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -882,7 +916,8 @@ TEST_F(GlslWriterTest, BuiltinTextureDimensions_2d_WithU32Lod) {
     opts.bindings.texture[{0, 0}] = {0};
     opts.texture_builtins_from_uniform.ubo_binding = {.group = 0, .binding = 0};
     opts.texture_builtins_from_uniform.ubo_contents = {{.offset = 0, .count = 1, .binding = {0}}};
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -909,7 +944,8 @@ TEST_F(GlslWriterTest, BuiltinTextureDimensions_2dArray) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -933,7 +969,8 @@ TEST_F(GlslWriterTest, BuiltinTextureDimensions_Storage1D) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -956,7 +993,8 @@ TEST_F(GlslWriterTest, BuiltinTextureDimensions_DepthMultisampled) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -974,7 +1012,8 @@ TEST_F(GlslWriterTest, CountOneBits) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -991,13 +1030,15 @@ TEST_F(GlslWriterTest, ExtractBits) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
 void main() {
-  int v = int(min(2u, 32u));
-  uint x = bitfieldExtract(1u, v, int(min(3u, (32u - min(2u, 32u)))));
+  uint v = min(2u, 32u);
+  int v_1 = int(v);
+  uint x = bitfieldExtract(1u, v_1, int(min(3u, (32u - v))));
 }
 )");
 }
@@ -1009,13 +1050,15 @@ TEST_F(GlslWriterTest, InsertBits) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
 void main() {
-  int v = int(min(3u, 32u));
-  uint x = bitfieldInsert(1u, 2u, v, int(min(4u, (32u - min(3u, 32u)))));
+  uint v = min(3u, 32u);
+  int v_1 = int(v);
+  uint x = bitfieldInsert(1u, 2u, v_1, int(min(4u, (32u - v))));
 }
 )");
 }
@@ -1033,7 +1076,8 @@ TEST_F(GlslWriterTest, TextureNumLayers_2DArray) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1057,7 +1101,8 @@ TEST_F(GlslWriterTest, TextureNumLayers_Depth2DArray) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1084,7 +1129,8 @@ TEST_F(GlslWriterTest, TextureNumLayers_CubeArray) {
     Options opts{};
     opts.entry_point_name = "main";
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -1112,7 +1158,8 @@ TEST_F(GlslWriterTest, TextureNumLayers_DepthCubeArray) {
     Options opts{};
     opts.entry_point_name = "main";
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -1141,7 +1188,8 @@ TEST_F(GlslWriterTest, TextureNumLayers_Storage2DArray) {
     Options opts{};
     opts.entry_point_name = "main";
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -1171,7 +1219,8 @@ TEST_F(GlslWriterTest, BuiltinTextureLoad_1DF32) {
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -1201,7 +1250,8 @@ TEST_F(GlslWriterTest, BuiltinTextureLoad_2DLevelI32) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1230,7 +1280,8 @@ TEST_F(GlslWriterTest, BuiltinTextureLoad_3DLevelU32) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1258,7 +1309,8 @@ TEST_F(GlslWriterTest, BuiltinTextureLoad_Multisampled2DI32) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1287,7 +1339,8 @@ TEST_F(GlslWriterTest, BuiltinTextureLoad_Storage2D) {
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -1317,7 +1370,8 @@ TEST_F(GlslWriterTest, BuiltinTextureStore1D) {
     Options opts;
     opts.entry_point_name = "main";
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -1344,7 +1398,8 @@ TEST_F(GlslWriterTest, BuiltinTextureStore3D) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1370,7 +1425,8 @@ TEST_F(GlslWriterTest, BuiltinTextureStoreArray) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1392,7 +1448,8 @@ TEST_F(GlslWriterTest, BuiltinFMA_f32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1413,7 +1470,8 @@ TEST_F(GlslWriterTest, BuiltinFMA_f16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 #extension GL_AMD_gpu_shader_half_float: require
@@ -1440,7 +1498,8 @@ TEST_F(GlslWriterTest, BuiltinArrayLength) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1461,7 +1520,8 @@ TEST_F(GlslWriterTest, AnyScalar) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1478,7 +1538,8 @@ TEST_F(GlslWriterTest, AllScalar) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1497,7 +1558,8 @@ TEST_F(GlslWriterTest, DotI32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1534,7 +1596,8 @@ TEST_F(GlslWriterTest, DotU32) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1567,7 +1630,8 @@ TEST_F(GlslWriterTest, Modf_Scalar) {
         b.Return(eb);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 
 struct modf_result_f32 {
@@ -1606,7 +1670,8 @@ TEST_F(GlslWriterTest, Modf_Vector) {
         b.Return(eb);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 
 struct modf_result_vec4_f32 {
@@ -1645,7 +1710,8 @@ TEST_F(GlslWriterTest, Frexp_Scalar) {
         b.Return(eb);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 
 struct frexp_result_f32 {
@@ -1684,7 +1750,8 @@ TEST_F(GlslWriterTest, Frexp_Vector) {
         b.Return(eb);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(
 
 struct frexp_result_vec4_f32 {
@@ -1712,7 +1779,8 @@ TEST_F(GlslWriterTest, AbsScalar) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1729,7 +1797,8 @@ TEST_F(GlslWriterTest, AbsVector) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1747,7 +1816,8 @@ TEST_F(GlslWriterTest, BuiltinQuantizeToF16) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1788,7 +1858,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGatherCompare_Depth2d) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1827,7 +1898,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGatherCompare_Depth2dOffset) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1867,7 +1939,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGatherCompare_DepthCubeArray) {
     opts.entry_point_name = "main";
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -1909,7 +1982,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGatherCompare_Depth2dArrayOffset) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1945,7 +2019,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGather_Alpha) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -1982,7 +2057,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGather_RedOffset) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2020,7 +2096,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGather_GreenArray) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2061,7 +2138,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGather_BlueArrayOffset) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2099,7 +2177,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGather_Depth) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2135,7 +2214,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGather_DepthOffset) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2171,7 +2251,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGather_DepthArray) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2210,7 +2291,8 @@ TEST_F(GlslWriterTest, BuiltinTextureGather_DepthArrayOffset) {
     Options opts;
     opts.entry_point_name = "main";
     opts.disable_robustness = true;
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2244,7 +2326,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_1d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2277,7 +2360,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_2d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2311,7 +2395,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_2d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2345,7 +2430,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_2d_Array) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2382,7 +2468,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_2d_Array_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2416,7 +2503,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_3d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2450,7 +2538,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_3d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2483,7 +2572,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_Cube) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2520,7 +2610,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_Cube_Array) {
     Options opts{};
     opts.entry_point_name = "main";
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -2555,7 +2646,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_Depth2d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2589,7 +2681,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_Depth2d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2623,7 +2716,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_Depth2d_Array) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2659,7 +2753,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_Depth2d_Array_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate({}, core::ir::Function::PipelineStage::kFragment)) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2699,7 +2794,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSample_DepthCube_Array) {
     Options opts{};
     opts.entry_point_name = "main";
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -2734,7 +2830,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleBias_2d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2769,7 +2866,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleBias_2d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2804,7 +2902,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleBias_2d_Array) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2841,7 +2940,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleBias_2d_Array_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2875,7 +2975,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleBias_3d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2910,7 +3011,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleBias_3d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2943,7 +3045,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleBias_Cube) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -2981,7 +3084,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleBias_Cube_Array) {
     Options opts{};
     opts.entry_point_name = "main";
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -3016,7 +3120,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_2d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3051,7 +3156,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_2d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3086,7 +3192,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_2d_Array) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3123,7 +3230,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_2d_Array_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3157,7 +3265,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_3d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3192,7 +3301,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_3d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3225,7 +3335,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_Cube) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3263,7 +3374,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_Cube_Array) {
     Options opts{};
     opts.entry_point_name = "main";
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -3298,7 +3410,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_Depth2d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3333,7 +3446,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_Depth2d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3371,7 +3485,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_Depth2d_Array) {
     Options opts{};
     opts.entry_point_name = "main";
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -3411,7 +3526,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_Depth2d_Array_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 #extension GL_EXT_texture_shadow_lod: require
@@ -3451,7 +3567,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleLevel_DepthCube_Array) {
     Options opts{};
     opts.entry_point_name = "main";
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -3490,7 +3607,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleGrad_2d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3529,7 +3647,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleGrad_2d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3568,7 +3687,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleGrad_2d_Array) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3609,7 +3729,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleGrad_2d_Array_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3647,7 +3768,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleGrad_3d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3686,7 +3808,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleGrad_3d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3723,7 +3846,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleGrad_Cube) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3765,7 +3889,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleGrad_Cube_Array) {
     Options opts{};
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
     opts.entry_point_name = "main";
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -3802,7 +3927,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompare_2d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3836,7 +3962,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompare_2d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3871,7 +3998,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompare_2d_Array) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3908,7 +4036,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompare_2d_Array_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate({}, core::ir::Function::PipelineStage::kFragment)) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3944,7 +4073,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompare_Cube) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -3982,7 +4112,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompare_Cube_Array) {
     Options opts{};
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
     opts.entry_point_name = "main";
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -4017,7 +4148,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompareLevel_2d) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -4052,7 +4184,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompareLevel_2d_Offset) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -4087,7 +4220,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompareLevel_2d_Array) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -4127,7 +4261,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompareLevel_2d_Array_Offset) {
     Options opts{};
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
     opts.entry_point_name = "main";
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -4162,7 +4297,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompareLevel_Cube) {
         b.Return(func);
     });
 
-    ASSERT_TRUE(Generate()) << err_ << output_.glsl;
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, GlslHeader() + R"(precision highp float;
 precision highp int;
 
@@ -4200,7 +4336,8 @@ TEST_F(GlslWriterTest, BuiltinTextureSampleCompareLevel_Cube_Array) {
     Options opts{};
     opts.version = Version(Version::Standard::kDesktop, 4, 6);
     opts.entry_point_name = "main";
-    ASSERT_TRUE(Generate(opts)) << err_ << output_.glsl;
+    auto result = Generate(opts);
+    ASSERT_EQ(result, Success) << result.Failure().reason << output_.glsl;
     EXPECT_EQ(output_.glsl, R"(#version 460
 precision highp float;
 precision highp int;
@@ -4209,6 +4346,71 @@ uniform highp samplerCubeArrayShadow f_t_s;
 void main() {
   vec3 v = vec3(1.0f, 2.0f, 3.0f);
   float x = texture(f_t_s, vec4(v, float(4u)), 3.0f);
+}
+)");
+}
+
+TEST_F(GlslWriterTest, AddSat) {
+    auto* foo = b.Function("foo", ty.void_());
+    auto* lhs = b.FunctionParam("a", ty.u32());
+    auto* rhs = b.FunctionParam("b", ty.u32());
+    foo->SetParams({lhs, rhs});
+    b.Append(foo->Block(), [&] {
+        auto* call = b.Call(ty.u32(), core::BuiltinFn::kAddSat, lhs, rhs);
+        b.Let("res", call);
+        b.Return(foo);
+    });
+    auto* ep = b.ComputeFunction("main");
+    b.Append(ep->Block(), [&] {
+        b.Call(ty.void_(), foo, 0_u, 1_u);
+        b.Return(ep);
+    });
+
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.glsl;
+    EXPECT_EQ(output_.glsl, GlslHeader() + R"(
+void foo(uint a, uint b) {
+  uint v = 0u;
+  uint v_1 = uaddCarry(a, b, v);
+  uint res = mix(4294967295u, v_1, (v == 0u));
+}
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+void main() {
+  foo(0u, 1u);
+}
+)");
+}
+TEST_F(GlslWriterTest, AddSat_SideEffects) {
+    auto* foo = b.Function("foo", ty.void_());
+    auto* lhs = b.FunctionParam("a", ty.u32());
+    auto* rhs = b.FunctionParam("b", ty.u32());
+    foo->SetParams({lhs, rhs});
+    b.Append(foo->Block(), [&] {
+        auto* out = b.Var<function, u32>();
+        auto* call =
+            b.Call<glsl::ir::BuiltinCall>(ty.u32(), glsl::BuiltinFn::kUaddCarry, lhs, rhs, out);
+        b.Let("load_out_after_call", b.Load(out));
+        b.Let("res", call);
+        b.Return(foo);
+    });
+    auto* ep = b.ComputeFunction("main");
+    b.Append(ep->Block(), [&] {
+        b.Call(ty.void_(), foo, 0_u, 1_u);
+        b.Return(ep);
+    });
+
+    auto result = Generate();
+    ASSERT_EQ(result, Success) << result.Failure() << output_.glsl;
+    EXPECT_EQ(output_.glsl, GlslHeader() + R"(
+void foo(uint a, uint b) {
+  uint v = 0u;
+  uint v_1 = uaddCarry(a, b, v);
+  uint load_out_after_call = v;
+  uint res = v_1;
+}
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+void main() {
+  foo(0u, 1u);
 }
 )");
 }

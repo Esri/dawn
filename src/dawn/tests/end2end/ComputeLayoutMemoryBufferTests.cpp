@@ -31,9 +31,10 @@
 #include <string>
 #include <vector>
 
-#include "dawn/common/Math.h"
-#include "dawn/tests/DawnTest.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/common/Math.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/utils/WGPUHelpers.h"
+#include "src/utils/compiler.h"
 
 namespace dawn {
 namespace {
@@ -510,7 +511,7 @@ class ComputeLayoutMemoryBufferTests
             mUseDxcEnabledOrNonD3D12 = true;
         } else {
             for (auto* enabledToggle : GetParam().forceEnabledWorkarounds) {
-                if (strncmp(enabledToggle, "use_dxc", 7) == 0) {
+                if (DAWN_UNSAFE_TODO(strncmp(enabledToggle, "use_dxc", 7)) == 0) {
                     mUseDxcEnabledOrNonD3D12 = true;
                     break;
                 }
@@ -539,9 +540,6 @@ std::string AlignDeco(uint32_t value) {
 
 // Test different types used as a struct member
 TEST_P(ComputeLayoutMemoryBufferTests, StructMember) {
-    // TODO(crbug.com/dawn/1606): find out why these tests fail on Windows for OpenGL.
-    DAWN_TEST_UNSUPPORTED_IF(IsOpenGLES() && IsWindows());
-
     // TODO(crbug.com/dawn/2295): diagnose this failure on Pixel 4 OpenGLES
     DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsAndroid() && IsQualcomm());
 
@@ -704,7 +702,8 @@ fn main() {
     // silently transformed into a quiet NaN). Having NaN and Inf floating point data in input may
     // result in bitwise mismatch.
     field.CheckData([&](uint32_t offset, uint32_t size) {
-        EXPECT_BUFFER_U8_RANGE_EQ(expectedData.data() + offset, outputBuf, offset, size)
+        DAWN_UNSAFE_TODO(
+            EXPECT_BUFFER_U8_RANGE_EQ(expectedData.data() + offset, outputBuf, offset, size))
             << "offset: " << offset << "\n Input buffer:" << inputData << "Shader:\n"
             << shader << "\n";
     });
@@ -712,8 +711,7 @@ fn main() {
 
 // Test different types that used directly as buffer type
 TEST_P(ComputeLayoutMemoryBufferTests, NonStructMember) {
-    // TODO(crbug.com/dawn/1606): find out why these tests fail on Windows for OpenGL.
-    DAWN_TEST_UNSUPPORTED_IF(IsOpenGLES() && IsWindows());
+    // TODO(crbug.com/dawn/2295): diagnose this failure on Pixel 4 OpenGLES
     DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsAndroid() && IsQualcomm());
 
     const bool isUniform = GetParam().mAddressSpace == AddressSpace::Uniform;
@@ -786,7 +784,8 @@ fn main() {
     // silently transformed into a quiet NaN). Having NaN and Inf floating point data in input may
     // result in bitwise mismatch.
     field.CheckData([&](uint32_t offset, uint32_t size) {
-        EXPECT_BUFFER_U8_RANGE_EQ(expectedData.data() + offset, outputBuf, offset, size)
+        DAWN_UNSAFE_TODO(
+            EXPECT_BUFFER_U8_RANGE_EQ(expectedData.data() + offset, outputBuf, offset, size))
             << "offset: " << offset << "\n Input buffer:" << inputData << "Shader:\n"
             << shader << "\n";
     });

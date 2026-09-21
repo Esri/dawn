@@ -29,7 +29,6 @@ void tint_store_and_preserve_padding_1(uvec3 value_param[4]) {
       {
         v_2 = (v_3 + 1u);
       }
-      continue;
     }
   }
 }
@@ -52,15 +51,15 @@ uvec3[4] v_4(uint start_byte_offset) {
       {
         v_5 = (v_6 + 1u);
       }
-      continue;
     }
   }
   return a;
 }
 S v_7(uint start_byte_offset) {
   uvec3 v_8 = v.inner[(start_byte_offset / 16u)].xyz;
-  uvec4 v_9 = v.inner[((12u + start_byte_offset) / 16u)];
-  return S(v_8, v_9[(((12u + start_byte_offset) & 15u) >> 2u)], v_4((16u + start_byte_offset)));
+  uint v_9 = (12u + start_byte_offset);
+  uvec4 v_10 = v.inner[(v_9 / 16u)];
+  return S(v_8, v_10[((v_9 & 15u) >> 2u)], v_4((16u + start_byte_offset)));
 }
 void foo_inner(uint tint_local_index) {
   if ((tint_local_index < 1u)) {
@@ -68,18 +67,17 @@ void foo_inner(uint tint_local_index) {
     wbuffer.b = 0u;
   }
   {
-    uint v_10 = 0u;
-    v_10 = tint_local_index;
+    uint v_11 = 0u;
+    v_11 = tint_local_index;
     while(true) {
-      uint v_11 = v_10;
-      if ((v_11 >= 4u)) {
+      uint v_12 = v_11;
+      if ((v_12 >= 4u)) {
         break;
       }
-      wbuffer.c[v_11] = uvec3(0u);
+      wbuffer.c[v_12] = uvec3(0u);
       {
-        v_10 = (v_11 + 1u);
+        v_11 = (v_12 + 1u);
       }
-      continue;
     }
   }
   barrier();

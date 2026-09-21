@@ -28,10 +28,9 @@
 #include <iostream>
 #include <vector>
 
-#include "dawn/tests/DawnTest.h"
-
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/tests/DawnTest.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/WGPUHelpers.h"
 
 namespace dawn {
 namespace {
@@ -168,10 +167,7 @@ TEST_P(MultiDrawIndirectTest, IndirectOffset) {
 }
 
 // TODO(crbug.com/462151798): Implement MultiDraw*Indirect for WebGPU backend.
-DAWN_INSTANTIATE_TEST(MultiDrawIndirectTest,
-                      VulkanBackend(),
-                      D3D12Backend(),
-                      MetalBackend());
+DAWN_INSTANTIATE_TEST(MultiDrawIndirectTest, VulkanBackend(), D3D12Backend(), MetalBackend());
 
 class MultiDrawIndirectUsingFirstVertexTest : public DawnTest {
   protected:
@@ -317,12 +313,6 @@ class MultiDrawIndirectUsingInstanceIndexTest : public MultiDrawIndirectUsingFir
             @fragment fn main() -> @location(0) vec4f {
                 return vec4f(0.0, 1.0, 0.0, 1.0);
             })");
-    }
-
-    void SetUp() override {
-        DawnTest::SetUp();
-        DAWN_TEST_UNSUPPORTED_IF(!device.HasFeature(wgpu::FeatureName::MultiDrawIndirect));
-        GeneralSetup();
     }
 };
 

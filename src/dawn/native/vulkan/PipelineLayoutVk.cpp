@@ -25,18 +25,19 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/vulkan/PipelineLayoutVk.h"
+#include "src/dawn/native/vulkan/PipelineLayoutVk.h"
 
 #include <string>
 #include <utility>
 
-#include "dawn/common/Range.h"
-#include "dawn/common/ityp_bitset.h"
-#include "dawn/native/vulkan/BindGroupLayoutVk.h"
-#include "dawn/native/vulkan/DeviceVk.h"
-#include "dawn/native/vulkan/FencedDeleter.h"
-#include "dawn/native/vulkan/UtilsVulkan.h"
-#include "dawn/native/vulkan/VulkanError.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/common/ityp_bitset.h"
+#include "src/dawn/native/vulkan/BindGroupLayoutVk.h"
+#include "src/dawn/native/vulkan/DeviceVk.h"
+#include "src/dawn/native/vulkan/FencedDeleter.h"
+#include "src/dawn/native/vulkan/FramebufferFetchHelper.h"
+#include "src/dawn/native/vulkan/UtilsVulkan.h"
+#include "src/dawn/native/vulkan/VulkanError.h"
 
 namespace dawn::native::vulkan {
 
@@ -50,15 +51,24 @@ ResultOrError<Ref<PipelineLayout>> PipelineLayout::Create(
 }
 
 ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> PipelineLayout::CreateVkPipelineLayout(
-    uint32_t immediateConstantSize) {
+    const Specialization& specialization) {
     // Compute the array of VkDescriptorSetLayouts that will be chained in the create info.
-    ityp::array<BindGroupIndex, VkDescriptorSetLayout, size_t(kMaxBindGroupsTyped) + 1> setLayouts;
+    ityp::array<BindGroupIndex, VkDescriptorSetLayout, size_t(kMaxBindGroupsTyped) + 2> setLayouts;
 
-    // The first VkDescriptorSetLayout is the one for the resource table if needed.
-    BindGroupIndex startOfBindGroups{0};
+    // The first VkDescriptorSetLayouts are the for framebuffer fetch and/or the resource table if
+    // needed.
+    BindGroupIndex startOfBindGroups{0u};
+    if (specialization.framebufferFetchAttachmentCount > 0) {
+        DAWN_TRY_ASSIGN(setLayouts[startOfBindGroups],
+                        ToBackend(GetDevice())
+                            ->GetFramebufferFetchHelper()
+                            ->GetLayout(specialization.framebufferFetchAttachmentCount));
+        ++startOfBindGroups;
+    }
+
     if (UsesResourceTable()) {
-        startOfBindGroups = BindGroupIndex(1);
-        setLayouts[BindGroupIndex(0)] = ToBackend(GetDevice())->GetResourceTableLayout();
+        setLayouts[startOfBindGroups] = ToBackend(GetDevice())->GetResourceTableLayout();
+        ++startOfBindGroups;
     }
 
     // The all the descriptor sets for BindGroupLayouts, including the empty BGLs.
@@ -66,7 +76,9 @@ ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> PipelineLayout::CreateV
     BindGroupIndex highestBindGroupIndex = GetHighestBitIndexPlusOne(bindGroupMask);
     for (BindGroupIndex i : Range(highestBindGroupIndex)) {
         if (bindGroupMask[i]) {
-            setLayouts[startOfBindGroups + i] = ToBackend(GetBindGroupLayout(i))->GetHandle();
+            DAWN_TRY_ASSIGN(setLayouts[startOfBindGroups + i],
+                            ToBackend(GetBindGroupLayout(i))
+                                ->GetOrCreateSpecializedHandle(specialization.bindGroups[i]));
         } else {
             setLayouts[startOfBindGroups + i] =
                 ToBackend(GetDevice()->GetEmptyBindGroupLayout()->GetInternalBindGroupLayout())
@@ -84,10 +96,10 @@ ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> PipelineLayout::CreateV
     createInfo.pPushConstantRanges = nullptr;
 
     VkPushConstantRange pushConstantRange;
-    if (immediateConstantSize > 0) {
-        pushConstantRange.stageFlags = kImmediateDataRangeShaderStage;
+    if (specialization.pushConstantBytes > 0) {
+        pushConstantRange.stageFlags = kImmediateShaderStages;
         pushConstantRange.offset = 0;
-        pushConstantRange.size = immediateConstantSize;
+        pushConstantRange.size = specialization.pushConstantBytes;
         createInfo.pushConstantRangeCount = 1;
         createInfo.pPushConstantRanges = &pushConstantRange;
     }
@@ -125,13 +137,11 @@ MaybeError PipelineLayout::Initialize() {
 }
 
 ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> PipelineLayout::GetOrCreateVkLayoutObject(
-    const ImmediateConstantMask& immediateConstantMask) {
+    const Specialization& specialization) {
     // Check cache
     Ref<RefCountedVkHandle<VkPipelineLayout>> pipelineLayoutVk;
-    uint32_t immediateConstantSize =
-        immediateConstantMask.count() * kImmediateConstantElementByteSize;
     mVkPipelineLayouts.Use([&](auto vkPipelineLayouts) {
-        auto it = vkPipelineLayouts->find(immediateConstantSize);
+        auto it = vkPipelineLayouts->find(specialization);
         if (it != vkPipelineLayouts->end()) {
             pipelineLayoutVk = it->second;
         }
@@ -141,16 +151,12 @@ ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> PipelineLayout::GetOrCr
         return pipelineLayoutVk;
     }
 
-    DAWN_TRY_ASSIGN(pipelineLayoutVk, CreateVkPipelineLayout(immediateConstantSize));
+    DAWN_TRY_ASSIGN(pipelineLayoutVk, CreateVkPipelineLayout(specialization));
 
     return mVkPipelineLayouts.Use([&](auto vkPipelineLayouts) {
-        return vkPipelineLayouts->insert({immediateConstantSize, std::move(pipelineLayoutVk)})
+        return vkPipelineLayouts->insert({specialization, std::move(pipelineLayoutVk)})
             .first->second;
     });
-}
-
-VkShaderStageFlags PipelineLayout::GetImmediateDataRangeStage() const {
-    return kImmediateDataRangeShaderStage;
 }
 
 PipelineLayout::~PipelineLayout() = default;

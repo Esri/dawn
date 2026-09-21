@@ -8,7 +8,7 @@ while IFS= read -r file_name ; do
   shim_number=0
   # Find each file name in dawn.lua and get the path, file name and file extension.
   replace_pattern="s/^\ *\"\(.*\/\)\(${file_name}\)\(\.[cp]*\)\"\,/\1 \2 \3/pI"
-  files_to_replace=`grep -i "\/${file_name}\." ../dawn.lua | sed -n "$replace_pattern"`
+  files_to_replace=`grep -i "\/${file_name}\." ../dawn.lua | sed -n "$replace_pattern" | uniq -i`
 
   while IFS= read -r line ; do
     IFS=' ' read -r path name extension <<< "$line"

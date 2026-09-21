@@ -10,9 +10,9 @@ void v(uint offset, float2x2 obj) {
 
 float2x2 v_1(uint start_byte_offset) {
   uint4 v_2 = u[(start_byte_offset / 16u)];
-  float2 v_3 = asfloat((((((start_byte_offset & 15u) >> 2u) == 2u)) ? (v_2.zw) : (v_2.xy)));
-  uint4 v_4 = u[((8u + start_byte_offset) / 16u)];
-  return float2x2(v_3, asfloat(((((((8u + start_byte_offset) & 15u) >> 2u) == 2u)) ? (v_4.zw) : (v_4.xy))));
+  uint v_3 = (8u + start_byte_offset);
+  uint4 v_4 = u[(v_3 / 16u)];
+  return float2x2(asfloat(select((((start_byte_offset & 15u) >> 2u) == 2u), v_2.zw, v_2.xy)), asfloat(select((((v_3 & 15u) >> 2u) == 2u), v_4.zw, v_4.xy)));
 }
 
 void v_5(uint offset, float2x2 obj[4]) {
@@ -28,7 +28,6 @@ void v_5(uint offset, float2x2 obj[4]) {
       {
         v_6 = (v_7 + 1u);
       }
-      continue;
     }
   }
 }
@@ -48,7 +47,6 @@ ary_ret v_8(uint start_byte_offset) {
       {
         v_9 = (v_10 + 1u);
       }
-      continue;
     }
   }
   float2x2 v_11[4] = a;

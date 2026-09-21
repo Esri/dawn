@@ -29,6 +29,7 @@
 #define SRC_TINT_UTILS_CONTAINERS_HASHMAP_BASE_H_
 
 #include <algorithm>
+#include <array>
 #include <functional>
 #include <optional>
 #include <tuple>
@@ -141,6 +142,7 @@ class HashmapKey {
     const T& Value() const { return value_; }
 
     /// @returns the value of the key
+    // NOLINTNEXTLINE(google-explicit-constructor)
     operator const T&() const { return value_; }
 
     /// @returns the pointer to the value, or the value itself if T is a pointer.

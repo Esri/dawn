@@ -30,7 +30,7 @@
 
 {%- if 'dawn' in enabled_tags %}
     #ifdef __EMSCRIPTEN__
-    #error "Do not include this header. Emscripten already provides headers needed for {{metadata.api}}."
+    #error "Do not include this header. Use the headers provided by Emdawnwebgpu instead."
     #endif
 {% endif %}
 
@@ -242,7 +242,7 @@
 typedef uint64_t {{API}}Flags;
 typedef uint32_t {{API}}Bool;
 
-{% for type in by_category["object"] %}
+{% for type in by_category["object"] | sort %}
     typedef struct {{as_cType(type.name)}}Impl* {{as_cType(type.name)}} {{API}}_OBJECT_ATTRIBUTE;
 {% endfor %}
 
@@ -256,6 +256,8 @@ typedef uint32_t {{API}}Bool;
     struct {{as_cType(type.name)}};
 {% endfor %}
 
+// NOLINTBEGIN(cppcoreguidelines-use-enum-class)
+
 {% for type in by_category["enum"] %}
     typedef enum {{as_cType(type.name)}} {
         {% for value in type.values %}
@@ -265,6 +267,7 @@ typedef uint32_t {{API}}Bool;
     } {{as_cType(type.name)}} {{API}}_ENUM_ATTRIBUTE;
 
 {% endfor -%}
+// NOLINTEND(cppcoreguidelines-use-enum-class)
 
 {% for type in by_category["bitmask"] %}
     typedef {{API}}Flags {{as_cType(type.name)}};

@@ -25,21 +25,22 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/metal/QueueMTL.h"
+#include "src/dawn/native/metal/QueueMTL.h"
 
-#include "dawn/common/FutureUtils.h"
-#include "dawn/common/Math.h"
-#include "dawn/native/Buffer.h"
-#include "dawn/native/CommandValidation.h"
-#include "dawn/native/Commands.h"
-#include "dawn/native/DynamicUploader.h"
-#include "dawn/native/Instance.h"
 #include "dawn/native/MetalBackend.h"
-#include "dawn/native/PhysicalDevice.h"
-#include "dawn/native/metal/CommandBufferMTL.h"
-#include "dawn/native/metal/DeviceMTL.h"
 #include "dawn/platform/DawnPlatform.h"
-#include "dawn/platform/tracing/TraceEvent.h"
+#include "src/dawn/common/FutureUtils.h"
+#include "src/dawn/common/Math.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/CommandValidation.h"
+#include "src/dawn/native/Commands.h"
+#include "src/dawn/native/DynamicUploader.h"
+#include "src/dawn/native/Instance.h"
+#include "src/dawn/native/PhysicalDevice.h"
+#include "src/dawn/native/metal/CommandBufferMTL.h"
+#include "src/dawn/native/metal/DeviceMTL.h"
+#include "src/dawn/platform/tracing/TraceEvent.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native::metal {
 
@@ -48,8 +49,7 @@ class CommandsScheduledEvent : public EventManager::TrackedEvent {
   public:
     // It's important to use AllowSpontaneous for these events since we don't want to leak them if
     // the client forgets about the associated future and never calls WaitAny on it.
-    CommandsScheduledEvent()
-        : TrackedEvent(wgpu::CallbackMode::AllowSpontaneous, AcquireRef(new WaitListEvent())) {}
+    CommandsScheduledEvent() : TrackedEvent(wgpu::CallbackMode::AllowSpontaneous, false) {}
 
   private:
     void Complete(EventCompletionType completionType) override {
@@ -72,7 +72,6 @@ void Queue::DestroyImpl(DestroyReason reason) {
     // Forget all pending commands.
     mCommandContext.AcquireCommands();
     UpdateCommandsScheduledEvents(kMaxExecutionSerial);
-    UpdateCommandsCompletedEvents(kMaxExecutionSerial);
     mLastSubmittedCommands->Reset();
     mCommandQueue = nullptr;
     mSharedFence = nullptr;
@@ -142,19 +141,6 @@ void Queue::UpdateCommandsScheduledEvents(ExecutionSerial scheduledSerial) {
     }
 }
 
-void Queue::UpdateCommandsCompletedEvents(ExecutionSerial completedSerial) {
-    std::vector<Ref<WaitListEvent>> readyEvents;
-    mCommandsCompletedEvents.Use([&](auto events) {
-        for (auto& event : events->IterateUpTo(completedSerial)) {
-            readyEvents.emplace_back(std::move(event));
-        }
-        events->ClearUpTo(completedSerial);
-    });
-    for (auto& event : readyEvents) {
-        event->Signal();
-    }
-}
-
 MaybeError Queue::WaitForIdleForDestructionImpl() {
     // Forget all pending commands.
     mCommandContext.AcquireCommands();
@@ -219,8 +205,6 @@ MaybeError Queue::SubmitPendingCommandBuffer() {
         return {};
     }
 
-    auto platform = GetDevice()->GetPlatform();
-
     // Acquire the pending command buffer, which is retained. It must be released later.
     NSPRef<id<MTLCommandBuffer>> pendingCommands = mCommandContext.AcquireCommands();
 
@@ -248,15 +232,16 @@ MaybeError Queue::SubmitPendingCommandBuffer() {
 
     // This ObjC block runs on a different thread.
     [*pendingCommands addCompletedHandler:^(id<MTLCommandBuffer>) {
-        TRACE_EVENT_ASYNC_END0(platform, GPUWork, "DeviceMTL::SubmitPendingCommandBuffer",
-                               uint64_t(pendingSerial));
+        TRACE_EVENT_NESTABLE_ASYNC_END0(DAWN_TRACE_CATEGORY("gpu_work"),
+                                        "DeviceMTL::SubmitPendingCommandBuffer",
+                                        uint64_t(pendingSerial));
 
-        this->UpdateCompletedSerialTo(pendingSerial);
-        this->UpdateCommandsCompletedEvents(pendingSerial);
+        this->UpdateCompletedSerialTo(QueuePriority::Lowest, pendingSerial);
     }];
 
-    TRACE_EVENT_ASYNC_BEGIN0(platform, GPUWork, "DeviceMTL::SubmitPendingCommandBuffer",
-                             uint64_t(pendingSerial));
+    TRACE_EVENT_NESTABLE_ASYNC_BEGIN0(DAWN_TRACE_CATEGORY("gpu_work"),
+                                      "DeviceMTL::SubmitPendingCommandBuffer",
+                                      uint64_t(pendingSerial));
 
     DAWN_ASSERT(mSharedFence);
     [*pendingCommands encodeSignalEvent:mSharedFence->GetMTLSharedEvent()
@@ -281,15 +266,16 @@ ResultOrError<Ref<SharedFence>> Queue::GetOrCreateSharedFence() {
     return SharedFence::Create(ToBackend(GetDevice()), "Internal MTLSharedEvent", &desc);
 }
 
-MaybeError Queue::SubmitImpl(uint32_t commandCount, CommandBufferBase* const* commands) {
+MaybeError Queue::SubmitImpl(Span<CommandBufferBase* const> commands) {
     @autoreleasepool {
         CommandRecordingContext* commandContext = GetPendingCommandContext();
 
-        TRACE_EVENT_BEGIN0(GetDevice()->GetPlatform(), Recording, "CommandBufferMTL::FillCommands");
-        for (uint32_t i = 0; i < commandCount; ++i) {
-            DAWN_TRY(ToBackend(commands[i])->FillCommands(commandContext));
+        {
+            TRACE_EVENT(DAWN_TRACE_CATEGORY("recording"), "CommandBufferMTL::FillCommands");
+            for (CommandBufferBase* commandBuffer : commands) {
+                DAWN_TRY(ToBackend(commandBuffer)->FillCommands(commandContext));
+            }
         }
-        TRACE_EVENT_END0(GetDevice()->GetPlatform(), Recording, "CommandBufferMTL::FillCommands");
 
         DAWN_TRY(SubmitPendingCommandBuffer());
 
@@ -315,27 +301,6 @@ void Queue::ForceEventualFlushOfCommands() {
     if (mCommandContext.WasUsed()) {
         mCommandContext.SetNeedsSubmit();
     }
-}
-
-ResultOrError<ExecutionSerial> Queue::WaitForQueueSerialImpl(ExecutionSerial waitSerial,
-                                                             Nanoseconds timeout) {
-    Ref<WaitListEvent> completionEvent = AcquireRef(new WaitListEvent());
-    mCommandsCompletedEvents.Use([&](auto events) {
-        // Now that we hold the lock, check against completed serial before inserting. This serial
-        // may have just completed. If it did, mark the event complete. Also check for device loss.
-        // Otherwise, we could enqueue the event after mCommandsCompletedEvents has been flushed for
-        // device loss, and it'll never get cleaned up.
-        if (GetDevice()->GetState() == DeviceBase::State::Disconnected ||
-            GetDevice()->GetState() == DeviceBase::State::Destroyed ||
-            waitSerial <= GetCompletedCommandSerial()) {
-            completionEvent->Signal();
-        } else {
-            // Insert the event into the list which will be signaled inside Metal's queue
-            // completion handler.
-            events->Enqueue(completionEvent, waitSerial);
-        }
-    });
-    return completionEvent->Wait(timeout) ? waitSerial : kWaitSerialTimeout;
 }
 
 }  // namespace dawn::native::metal

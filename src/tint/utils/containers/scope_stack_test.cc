@@ -1,4 +1,5 @@
-// Copyright 2020 The Dawn & Tint Authors  //
+// Copyright 2020 The Dawn & Tint Authors
+//
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
 //
@@ -27,7 +28,6 @@
 #include "src/tint/utils/containers/scope_stack.h"
 
 #include "gtest/gtest.h"
-
 #include "src/tint/utils/symbol/symbol.h"
 
 namespace tint {

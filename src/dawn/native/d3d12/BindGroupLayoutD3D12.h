@@ -30,13 +30,13 @@
 
 #include <vector>
 
-#include "dawn/common/MutexProtected.h"
-#include "dawn/common/SlabAllocator.h"
-#include "dawn/common/ityp_stack_vec.h"
-#include "dawn/native/BindGroupLayoutInternal.h"
-#include "dawn/native/d3d12/BindGroupD3D12.h"
-#include "dawn/native/d3d12/d3d12_platform.h"
 #include "partition_alloc/pointers/raw_ptr_exclusion.h"
+#include "src/dawn/common/MutexProtected.h"
+#include "src/dawn/common/SlabAllocator.h"
+#include "src/dawn/common/ityp_stack_vec.h"
+#include "src/dawn/native/BindGroupLayoutInternal.h"
+#include "src/dawn/native/d3d12/BindGroupD3D12.h"
+#include "src/dawn/native/d3d12/d3d12_platform.h"
 
 namespace dawn::native::d3d12 {
 
@@ -48,7 +48,7 @@ class StagingDescriptorAllocator;
 //
 // We use the bind group index as the register space, but don't know the bind group index until
 // pipeline layout creation time. This value should be replaced in PipelineLayoutD3D12.
-static constexpr uint32_t kRegisterSpacePlaceholder =
+inline constexpr uint32_t kRegisterSpacePlaceholder =
     D3D12_DRIVER_RESERVED_REGISTER_SPACE_VALUES_START;
 
 class BindGroupLayout final : public BindGroupLayoutInternalBase {

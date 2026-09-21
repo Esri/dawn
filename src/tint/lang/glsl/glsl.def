@@ -48,6 +48,7 @@ type f16
 type f32
 type i32
 type u32
+type u16
 type atomic<T>
 type ptr<S: address_space, T, A: access>
 
@@ -157,23 +158,28 @@ match u32_texel_format
 @stage("compute") fn memoryBarrierBuffer()
 @stage("compute") fn memoryBarrierImage()
 
-@stage("fragment", "compute") implicit(T: iu32) fn atomicCompSwap(
-                                    ptr<workgroup_or_storage, atomic<T>, read_write>,
-                                    compare_value: T,
-                                    value: T) -> T
-@stage("fragment", "compute") implicit(T: iu32, S: workgroup_or_storage) fn atomicSub(
-                                    ptr<S, atomic<T>, read_write>,
-                                    T) -> T
+@stage("fragment", "compute") implicit(T: iu32, AS: workgroup_or_storage)
+fn atomicCompSwap(ptr<AS, atomic<T>, read_write>,
+                  compare_value: T,
+                  value: T) -> T
+@stage("fragment", "compute") implicit(T: iu32, S: workgroup_or_storage)
+fn atomicSub(ptr<S, atomic<T>, read_write>, T) -> T
 
 fn floatBitsToInt(value: f32) -> i32
 implicit(N: num) fn floatBitsToInt(value: vec<N, f32>) -> vec<N, i32>
 fn floatBitsToUint(value: f32) -> u32
 implicit(N: num) fn floatBitsToUint(value: vec<N, f32>) -> vec<N, u32>
 
+fn float16BitsToUint16(value: f16) -> u16
+implicit(N: num) fn float16BitsToUint16(value: vec<N, f16>) -> vec<N, u16>
+
 fn intBitsToFloat(value: i32) -> f32
 implicit(N: num) fn intBitsToFloat(value: vec<N, i32>) -> vec<N, f32>
 fn uintBitsToFloat(value: u32) -> f32
 implicit(N: num) fn uintBitsToFloat(value: vec<N, u32>) -> vec<N, f32>
+
+fn uint16BitsToFloat16(value: u16) -> f16
+implicit(N: num) fn uint16BitsToFloat16(value: vec<N, u16>) -> vec<N, f16>
 
 implicit(T: iu32) fn bitCount(value: T) -> i32
 implicit(T: iu32, N: num) fn bitCount(value: vec<N, T>) -> vec<N, i32>
@@ -229,7 +235,6 @@ fn textureOffset(texture: texture_2d_array<f32>, coords: vec3<f32>, offset: vec2
 fn textureOffset(texture: texture_3d<f32>, coords: vec3<f32>, offset: vec3<i32>) -> vec4<f32>
 fn textureOffset(texture: texture_depth_2d, coords: vec3<f32>, offset: vec2<i32>) -> f32
 fn textureOffset(texture: texture_depth_2d_array, coords: vec4<f32>, offset: vec2<i32>) -> f32
-
 fn textureOffset(texture: texture_2d<f32>, coords: vec2<f32>, offset: vec2<i32>, bias: f32) -> vec4<f32>
 fn textureOffset(texture: texture_2d_array<f32>, coords: vec3<f32>, offset: vec2<i32>, bias: f32) -> vec4<f32>
 fn textureOffset(texture: texture_3d<f32>, coords: vec3<f32>, offset: vec3<i32>, bias: f32) -> vec4<f32>
@@ -378,6 +383,7 @@ implicit(T: fiu32) fn texelFetch(texture: texture_multisampled_2d<T>,
                                  location: vec2<i32>,
                                  sample_index: i32) -> vec4<T>
 implicit(T: fiu32) fn texelFetch(texture: texture_3d<T>, location: vec3<i32>, level: i32) -> vec4<T>
+
 // This ends up emitting as a 2DMS
 fn texelFetch(texture: texture_depth_multisampled_2d, location: vec2<i32>, sample_index: i32) -> vec4<f32>
 
@@ -451,3 +457,6 @@ implicit(T: fiu32_f16 N: num) fn greaterThan(vec<N, T>, vec<N, T>) -> vec<N, boo
 implicit(T: fiu32_f16 N: num) fn greaterThanEqual(vec<N, T>, vec<N, T>) -> vec<N, bool>
 implicit(T: fiu32_f16_bool N: num) fn equal(vec<N, T>, vec<N, T>) -> vec<N, bool>
 implicit(T: fiu32_f16_bool N: num) fn notEqual(vec<N, T>, vec<N, T>) -> vec<N, bool>
+
+implicit(T: u32) fn uaddCarry(T, T, ptr<function, T, read_write>) -> T
+implicit(T: u32, N:num) fn uaddCarry(vec<N, T>, vec<N, T>, ptr<function, vec<N, T>, read_write>) -> vec<N, T>

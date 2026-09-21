@@ -25,16 +25,16 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/vulkan/FramebufferCache.h"
+#include "src/dawn/native/vulkan/FramebufferCache.h"
 
 #include "absl/container/inlined_vector.h"
-#include "dawn/common/HashUtils.h"
-#include "dawn/common/Range.h"
-#include "dawn/common/vulkan_platform.h"
-#include "dawn/native/vulkan/DeviceVk.h"
-#include "dawn/native/vulkan/FencedDeleter.h"
-#include "dawn/native/vulkan/TextureVk.h"
-#include "dawn/native/vulkan/VulkanError.h"
+#include "src/dawn/common/HashUtils.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/common/vulkan_platform.h"
+#include "src/dawn/native/vulkan/DeviceVk.h"
+#include "src/dawn/native/vulkan/FencedDeleter.h"
+#include "src/dawn/native/vulkan/TextureVk.h"
+#include "src/dawn/native/vulkan/VulkanError.h"
 
 namespace dawn::native::vulkan {
 
@@ -51,6 +51,8 @@ void FramebufferCacheQuery::SetRenderPass(uint64_t passId,
 MaybeError FramebufferCacheQuery::AddAttachment(TextureView* view,
                                                 VkClearValue clearValue,
                                                 uint32_t depthSlice) {
+    DAWN_ASSERT(attachmentCount < kMaxFramebufferAttachments);
+
     textureViews[attachmentCount].textureViewId = view->GetTextureViewId();
     textureViews[attachmentCount].depthSlice = depthSlice;
 

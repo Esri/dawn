@@ -50,8 +50,8 @@ libtint_source_set("strconv") {
     "parse_num.cc",
     "parse_num.h",
   ]
+  public_deps = [ "${dawn_abseil_dir}:absl" ]
   deps = [
-    "${dawn_root}:abseil",
     "${dawn_root}/src/utils",
     "${tint_src_dir}/utils",
     "${tint_src_dir}/utils/ice",
@@ -64,6 +64,7 @@ if (tint_build_unittests) {
   tint_unittests_source_set("unittests") {
     sources = [ "float_to_string_test.cc" ]
     deps = [
+      "${dawn_root}/src/utils",
       "${tint_src_dir}:gmock_and_gtest",
       "${tint_src_dir}/utils/memory",
       "${tint_src_dir}/utils/strconv",

@@ -25,16 +25,16 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/Limits.h"
+#include "src/dawn/native/Limits.h"
 
 #include <algorithm>
 #include <array>
 
-#include "dawn/common/Assert.h"
-#include "dawn/common/Constants.h"
-#include "dawn/common/Log.h"
-#include "dawn/common/Math.h"
-#include "dawn/native/Instance.h"
+#include "src/dawn/common/Constants.h"
+#include "src/dawn/common/Math.h"
+#include "src/dawn/native/Instance.h"
+#include "src/utils/assert.h"
+#include "src/utils/log.h"
 
 // clang-format off
 // TODO(crbug.com/dawn/685):
@@ -54,15 +54,16 @@
     X(v1, Maximum,                    maxComputeWorkgroupSizeZ,        64,          64,         64) \
     X(v1, Maximum,            maxComputeWorkgroupsPerDimension,     65535,       65535,      65535)
 
-// Tiers are 128MB, 256MB, 512MB, 1GB, 2GB-4, 4GB-4.
-//                                                 compat     tier0      tier1
-#define LIMITS_STORAGE_BUFFER_BINDING_SIZE(X)                                                        \
-    X(v1, Maximum, maxStorageBufferBindingSize, 134217728, 134217728, 268435456, 536870912, 1073741824, 2147483644, 4294967292)
+static constexpr uint64_t MiB = 1'048'576;
+static constexpr uint64_t GiB = 1'073'741'824;
 
-// Tiers are 256MB, 1GB, 2GB, 4GB.
-//                                    compat      tier0       tier1
-#define LIMITS_MAX_BUFFER_SIZE(X)                                                         \
-    X(v1, Maximum, maxBufferSize, 0x10000000, 0x10000000, 0x40000000, 0x80000000, 0x100000000)
+//                                                 compat      tier0      tier1      tier2    tier3        tier4        tier5
+#define LIMITS_STORAGE_BUFFER_BINDING_SIZE(X)                                                                                  \
+    X(v1, Maximum, maxStorageBufferBindingSize, 128 * MiB, 128 * MiB, 256 * MiB, 512 * MiB, 1 * GiB, 2 * GiB - 4, 4 * GiB - 4)
+
+//                                   compat      tier0    tier1    tier2        tier3
+#define LIMITS_MAX_BUFFER_SIZE(X)                                                      \
+    X(v1, Maximum, maxBufferSize, 256 * MiB, 256 * MiB, 1 * GiB, 2 * GiB, 4 * GiB - 4)
 
 // Tiers for limits related to resource bindings.
 // Note that changing these limits may require updating hard-coded constants common/Constants.h.
@@ -120,12 +121,7 @@
 // Tiered limits for immediate data sizes.
 //                                 compat  tier0
 #define LIMITS_IMMEDIATE_SIZE(X) \
-  X(v1, Maximum, maxImmediateSize,      0,    kMaxImmediateDataBytes)
-
-// Limits for the resource table.
-//                                                                   compat     tier0
-#define LIMITS_RESOURCE_TABLE(X) \
-  X(resourceTableLimits, Maximum, maxResourceTableSize,                   0,    50'000)
+  X(v1, Maximum, maxImmediateSize,     64,    kMaxImmediateDataBytes)
 
 // TODO(crbug.com/dawn/685):
 // These limits don't have tiers yet. Define two tiers with the same values since the macros
@@ -156,7 +152,6 @@
     X(LIMITS_INTER_STAGE_SHADER_VARIABLES) \
     X(LIMITS_TEXTURE_DIMENSIONS)           \
     X(LIMITS_IMMEDIATE_SIZE)               \
-    X(LIMITS_RESOURCE_TABLE)               \
     X(LIMITS_OTHER)
 
 #define LIMITS(X)                          \
@@ -170,7 +165,6 @@
     LIMITS_INTER_STAGE_SHADER_VARIABLES(X) \
     LIMITS_TEXTURE_DIMENSIONS(X)           \
     LIMITS_IMMEDIATE_SIZE(X)               \
-    LIMITS_RESOURCE_TABLE(X)               \
     LIMITS_OTHER(X)
 
 namespace dawn::native {
@@ -186,64 +180,6 @@ constexpr uint32_t ReduceSameValue(std::integer_sequence<uint32_t, I, Is...>) {
     return I;
 }
 
-enum class LimitClass {
-    Alignment,
-    Maximum,
-};
-
-template <LimitClass C>
-struct CheckLimit;
-
-template <>
-struct CheckLimit<LimitClass::Alignment> {
-    template <typename T>
-    static bool IsBetter(T lhs, T rhs) {
-        return lhs < rhs;
-    }
-
-    template <typename T>
-    static MaybeError Validate(T supported, T required) {
-        DAWN_INVALID_IF(IsBetter(required, supported),
-                        "Required limit (%u) is lower than the supported limit (%u).", required,
-                        supported);
-        DAWN_INVALID_IF(!IsPowerOfTwo(required), "Required limit (%u) is not a power of two.",
-                        required);
-        return {};
-    }
-};
-
-template <>
-struct CheckLimit<LimitClass::Maximum> {
-    template <typename T>
-    static bool IsBetter(T lhs, T rhs) {
-        return lhs > rhs;
-    }
-
-    template <typename T>
-    static MaybeError Validate(T supported, T required) {
-        DAWN_INVALID_IF(IsBetter(required, supported),
-                        "Required limit (%u) is greater than the supported limit (%u).", required,
-                        supported);
-        return {};
-    }
-};
-
-template <typename T>
-bool IsLimitUndefined(T value) {
-    static_assert(sizeof(T) != sizeof(T), "IsLimitUndefined not implemented for this type");
-    return false;
-}
-
-template <>
-bool IsLimitUndefined<uint32_t>(uint32_t value) {
-    return value == wgpu::kLimitU32Undefined;
-}
-
-template <>
-bool IsLimitUndefined<uint64_t>(uint64_t value) {
-    return value == wgpu::kLimitU64Undefined;
-}
-
 }  // namespace
 
 void GetDefaultLimits(CombinedLimits* limits, wgpu::FeatureLevel featureLevel) {
@@ -256,17 +192,18 @@ void GetDefaultLimits(CombinedLimits* limits, wgpu::FeatureLevel featureLevel) {
 
 CombinedLimits ReifyDefaultLimits(const CombinedLimits& limits, wgpu::FeatureLevel featureLevel) {
     CombinedLimits out;
-#define X(Scope, Class, limitName, compat, base, ...)                                        \
-    {                                                                                        \
-        const auto defaultLimit = static_cast<decltype(limits.Scope.limitName)>(             \
-            featureLevel == wgpu::FeatureLevel::Compatibility ? compat : base);              \
-        if (IsLimitUndefined(limits.Scope.limitName) ||                                      \
-            CheckLimit<LimitClass::Class>::IsBetter(defaultLimit, limits.Scope.limitName)) { \
-            /* If the limit is undefined or the default is better, use the default */        \
-            out.Scope.limitName = defaultLimit;                                              \
-        } else {                                                                             \
-            out.Scope.limitName = limits.Scope.limitName;                                    \
-        }                                                                                    \
+#define X(Scope, Class, limitName, compat, base, ...)                                          \
+    {                                                                                          \
+        const auto defaultLimit = static_cast<decltype(limits.Scope.limitName)>(               \
+            featureLevel == wgpu::FeatureLevel::Compatibility ? compat : base);                \
+        if (detail::IsLimitUndefined(limits.Scope.limitName) ||                                \
+            detail::CheckLimit<detail::LimitClass::Class>::IsBetter(defaultLimit,              \
+                                                                    limits.Scope.limitName)) { \
+            /* If the limit is undefined or the default is better, use the default */          \
+            out.Scope.limitName = defaultLimit;                                                \
+        } else {                                                                               \
+            out.Scope.limitName = limits.Scope.limitName;                                      \
+        }                                                                                      \
     }
     LIMITS(X)
 #undef X
@@ -291,20 +228,16 @@ MaybeError ValidateAndUnpackLimitsIn(const Limits* chainedLimits,
         out->compat = *compatibilityModeLimits;
         out->compat.nextInChain = nullptr;
     }
-    if (auto* resourceTableLimits = unpacked.Get<ResourceTableLimits>()) {
-        out->resourceTableLimits = *resourceTableLimits;
-        out->resourceTableLimits.nextInChain = nullptr;
-    }
 
     // TODO(crbug.com/378361783): Add validation and default values to support requiring limits for
     // DawnTexelCopyBufferRowAlignmentLimits. Test this, see old test removed here:
     // https://dawn-review.googlesource.com/c/dawn/+/240934/11/src/dawn/tests/unittests/native/LimitsTests.cpp#b269
-    if (unpacked.Get<DawnTexelCopyBufferRowAlignmentLimits>()) {
+    if (unpacked.Has<DawnTexelCopyBufferRowAlignmentLimits>()) {
         dawn::WarningLog()
             << "DawnTexelCopyBufferRowAlignmentLimits is not supported in required limits";
     }
 
-    if (unpacked.Get<DawnHostMappedPointerLimits>()) {
+    if (unpacked.Has<DawnHostMappedPointerLimits>()) {
         dawn::WarningLog() << "DawnHostMappedPointerLimits is not supported in required limits";
     }
 
@@ -326,19 +259,15 @@ void UnpackLimitsIn(const Limits* chainedLimits, CombinedLimits* out) {
         out->compat = *compatibilityModeLimits;
         out->compat.nextInChain = nullptr;
     }
-    if (auto* resourceTableLimits = unpacked.Get<ResourceTableLimits>()) {
-        out->resourceTableLimits = *resourceTableLimits;
-        out->resourceTableLimits.nextInChain = nullptr;
-    }
 }
 
 MaybeError ValidateLimits(const CombinedLimits& supportedLimits,
                           const CombinedLimits& requiredLimits) {
-#define X(Scope, Class, limitName, ...)                                                           \
-    if (!IsLimitUndefined(requiredLimits.Scope.limitName)) {                                      \
-        DAWN_TRY_CONTEXT(CheckLimit<LimitClass::Class>::Validate(supportedLimits.Scope.limitName, \
-                                                                 requiredLimits.Scope.limitName), \
-                         "validating " #limitName);                                               \
+#define X(Scope, Class, limitName, ...)                                                        \
+    if (!detail::IsLimitUndefined(requiredLimits.Scope.limitName)) {                           \
+        DAWN_TRY_CONTEXT(detail::CheckLimit<detail::LimitClass::Class>::Validate(              \
+                             supportedLimits.Scope.limitName, requiredLimits.Scope.limitName), \
+                         "validating " #limitName);                                            \
     }
     LIMITS(X)
 #undef X
@@ -372,7 +301,8 @@ void ApplyLimitTiers(CombinedLimits* limits) {
     {                                                                                           \
         constexpr std::array<decltype(limits->Scope.limitName), kTierCount> tiers{__VA_ARGS__}; \
         auto tierValue = tiers[i - 1];                                                          \
-        if (CheckLimit<LimitClass::Class>::IsBetter(tierValue, limits->Scope.limitName)) {      \
+        if (detail::CheckLimit<detail::LimitClass::Class>::IsBetter(tierValue,                  \
+                                                                    limits->Scope.limitName)) { \
             /* The tier is better. Go to the next tier. */                                      \
             continue;                                                                           \
         } else if (tierValue != limits->Scope.limitName) {                                      \
@@ -443,6 +373,8 @@ void NormalizeLimits(CombinedLimits* limits) {
     limits->v1.maxUniformBuffersPerShaderStage =
         std::min(limits->v1.maxUniformBuffersPerShaderStage, kMaxUniformBuffersPerShaderStage);
     limits->v1.maxImmediateSize = std::min(limits->v1.maxImmediateSize, kMaxImmediateDataBytes);
+    limits->v1.maxBindingsPerBindGroup =
+        std::min(limits->v1.maxBindingsPerBindGroup, kMaxBindingsPerBindGroup);
 
     if (limits->v1.maxDynamicUniformBuffersPerPipelineLayout >
         kMaxDynamicUniformBuffersPerPipelineLayout) {
@@ -571,8 +503,7 @@ MaybeError FillLimits(Limits* outputLimits,
     FillExtensionLimits(unpacked.Get<DawnHostMappedPointerLimits>(),
                         &CombinedLimits::hostMappedPointerLimits,
                         wgpu::FeatureName::HostMappedPointer);
-    FillExtensionLimits(unpacked.Get<ResourceTableLimits>(), &CombinedLimits::resourceTableLimits,
-                        wgpu::FeatureName::ChromiumExperimentalSamplingResourceTable);
+
     return {};
 }
 

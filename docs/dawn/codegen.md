@@ -46,7 +46,7 @@ A **record** is a list of **record members**, each of which is a dictionary with
  - `"length"` (default to 1 if not set), a string. Defines length of the array pointed to for pointer arguments. If not set the length is implicitly 1 (so not an array), but otherwise it can be set to the name of another member in the same record that will contain the length of the array (this is heavily used in the `fooCount` `foos` pattern in the API).
  - `"optional"` (default to false) a boolean that says whether this member is optional. Member records can be optional if they are pointers (otherwise dawn_wire will always try to dereference them), objects (otherwise dawn_wire will always try to encode their ID and crash), or if they have a `"default"` key. Optional pointers and objects will always default to `nullptr` (unless `"no_default"` is set to `true`).
  - `"default"` (optional) a number or string. If set the record member will use that value as default value. Depending on the member's category it can be a number, a string containing a number, or the name of an enum/bitmask value.
-   - Dawn implements "trivial defaulting" for enums, similarly to the upstream WebGPU spec's WebIDL: if a zero-valued enum (usually called `Undefined`) is passed in, Dawn applies the default value specified here. See `WithTrivialFrontendDefaults()` in `api_structs.h` for how this works.
+   - Dawn implements "trivial defaulting" for enums, similarly to the upstream WebGPU spec's WebIDL: if a zero-valued enum (usually called `Undefined`) is passed in, Dawn applies the default value specified here. See `WithTrivialFrontendDefaults()` in `api_structs_defaults.h` for how this works.
  - `"wire_is_data_only"` (default to false) a boolean that says whether it is safe to directly return a pointer of this member that is pointing to a piece of memory in the transfer buffer into dawn_wire. To prevent TOCTOU attacks, by default in dawn_wire we must ensure every single value returned to dawn_native a copy of what's in the wire, so `"wire_is_data_only"` is set to true only when the member is data-only and don't impact control flow.
 
 **`"native"`** native types that can be referenced by name in other things.
@@ -114,6 +114,21 @@ The schema of `dawn_wire.json` is a dictionary with the following keys:
    - `"server_handwrittten_commands"`: a list of methods that are written manually and won't be automatically generated in the server.
    - `server_reverse_object_lookup_objects`: a list of objects for which the server will maintain an object -> ID mapping.
 
+## Dawn "native" generators
+
+The generator for the pieces of dawn_native need additional data which is found in [`dawn_native_json`](../../src/dawn/dawn_native.json). Examples of pieces that are generated are:
+
+ - `ProcTable.cpp` that implements all of the WebGPU function by converting arguments and forwarding to the correct method/function in `dawn::native`.
+ - `dawn_platform_autogen.h` and `wgpu_structs_autogen.cpp` that define the `dawn::native` equivalents of types in `webgpu.h` (for example with objects being actual pointers to objects and not just opaque handles) as well as conversion functions.
+ - `api_absl_format.cpp` to make it easy to print any WebGPU type in error messages.
+
+ The schema of `dawn_native.json` is a dictionary with the following keys:
+  - `"metadata"` a dictionary containing various other containers that can be used in templates. Its keys are:
+    - `function_spanification_blocklist`: a list of function / methods still waiting to be spanified.
+    - `function_span_index_type_override`: A dictionary with keys in the form `<object><function/method name>::<span argument name>` with values specifying what integer type should be used to override the index type of the span argument. (if not present, a regular span will be used)
+    - `structure_spanification_blocklist`: a list of structures still waiting to be spanified.
+    - `structure_span_index_type_override`: A dictionary with keys in the form `<structure name>::<span member name>` with values specifying what integer type should be used to override the index type of the span member. (if not present, a regular span will be used)
+
 ## OpenGL loader generator
 
-The code to load OpenGL entrypoints from a `GetProcAddress` function is generated from [`gl.xml`](../../third_party/khronos/gl.xml) and the [list of extensions](../../src/dawn/native/opengl/supported_extensions.json) it supports.
+The code to load OpenGL entrypoints from a `GetProcAddress` function is generated from [`gl.xml`](../../third_party/OpenGL-Registry/src/xml/gl.xml) and the [list of extensions](../../src/dawn/native/opengl/supported_extensions.json) it supports.

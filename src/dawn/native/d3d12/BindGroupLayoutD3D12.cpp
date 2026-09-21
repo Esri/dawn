@@ -25,16 +25,16 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/d3d12/BindGroupLayoutD3D12.h"
+#include "src/dawn/native/d3d12/BindGroupLayoutD3D12.h"
 
 #include <utility>
 
-#include "dawn/common/MatchVariant.h"
-#include "dawn/native/d3d12/DeviceD3D12.h"
-#include "dawn/native/d3d12/SamplerD3D12.h"
-#include "dawn/native/d3d12/SamplerHeapCacheD3D12.h"
-#include "dawn/native/d3d12/StagingDescriptorAllocatorD3D12.h"
-#include "dawn/native/d3d12/UtilsD3D12.h"
+#include "src/dawn/common/MatchVariant.h"
+#include "src/dawn/native/d3d12/DeviceD3D12.h"
+#include "src/dawn/native/d3d12/SamplerD3D12.h"
+#include "src/dawn/native/d3d12/SamplerHeapCacheD3D12.h"
+#include "src/dawn/native/d3d12/StagingDescriptorAllocatorD3D12.h"
+#include "src/dawn/native/d3d12/UtilsD3D12.h"
 
 namespace dawn::native::d3d12 {
 namespace {
@@ -91,6 +91,9 @@ D3D12_DESCRIPTOR_RANGE_TYPE WGPUBindingInfoToDescriptorRangeType(const BindingIn
             DAWN_UNREACHABLE();
         });
 }
+
+const uint32_t kInvalidShaderRegister = 0xFFFFFFFF;
+
 }  // anonymous namespace
 
 // static
@@ -104,13 +107,20 @@ BindGroupLayout::BindGroupLayout(Device* device,
                                  const UnpackedPtr<BindGroupLayoutDescriptor>& descriptor)
     : BindGroupLayoutInternalBase(device, descriptor),
       mDescriptorHeapOffsets(GetBindingCount()),
-      mShaderRegisters(GetBindingCount()),
+      mShaderRegisters(GetBindingCount(), kInvalidShaderRegister),
       mCbvUavSrvDescriptorCount(0),
       mSamplerDescriptorCount(0),
       mViewSizeIncrement(0),
       mBindGroupAllocator(MakeFrontendBindGroupAllocator<BindGroup>(4096)) {
-    for (BindingIndex bindingIndex{0}; bindingIndex < GetBindingCount(); ++bindingIndex) {
+    for (BindingIndex bindingIndex{0u}; bindingIndex < GetBindingCount(); ++bindingIndex) {
         const BindingInfo& bindingInfo = GetBindingInfo(bindingIndex);
+
+        // Skip over bindings that cannot be seen by any shaders as they could cause us to create
+        // bindgroups much larger than what the rest of the backend expects (like 1000 samplers at
+        // once).
+        if (bindingInfo.visibility == wgpu::ShaderStage::None) {
+            continue;
+        }
 
         D3D12_DESCRIPTOR_RANGE_TYPE descriptorRangeType =
             WGPUBindingInfoToDescriptorRangeType(bindingInfo);
@@ -283,10 +293,11 @@ void BindGroupLayout::ReduceMemoryUsage() {
 }
 
 ityp::span<BindingIndex, const uint32_t> BindGroupLayout::GetDescriptorHeapOffsets() const {
-    return {mDescriptorHeapOffsets.data(), mDescriptorHeapOffsets.size()};
+    return mDescriptorHeapOffsets;
 }
 
 uint32_t BindGroupLayout::GetShaderRegister(BindingIndex bindingIndex) const {
+    DAWN_ASSERT(mShaderRegisters[bindingIndex] != kInvalidShaderRegister);
     return mShaderRegisters[bindingIndex];
 }
 

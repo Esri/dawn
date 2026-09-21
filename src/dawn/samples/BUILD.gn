@@ -55,13 +55,18 @@ static_library("utils") {
   public_deps = [
     "${dawn_root}/include/dawn:cpp_headers",
     "${dawn_root}/src/dawn/common",
+    "${dawn_root}/src/dawn/partition_alloc:raw_ptr",
     "${dawn_root}/src/dawn/utils:system_utils",
     "${dawn_root}/src/dawn/utils:wgpu_utils",
   ]
 
   if (dawn_supports_glfw_for_windowing) {
+    public_deps += [ "${dawn_root}/src/dawn/glfw" ]
+  }
+
+  if (!is_wasm) {
     public_deps += [
-      "${dawn_root}/src/dawn/glfw",
+      "${dawn_root}/src/dawn:proc",
       "${dawn_root}/src/dawn/native",
     ]
   }

@@ -29,10 +29,11 @@
 #define SRC_DAWN_NATIVE_WEBGPU_RENDERPIPELINEWGPU_H_
 
 #include <array>
-#include "dawn/common/Constants.h"
-#include "dawn/native/RenderPipeline.h"
-#include "dawn/native/webgpu/ObjectWGPU.h"
-#include "dawn/native/webgpu/RecordableObject.h"
+
+#include "src/dawn/common/Constants.h"
+#include "src/dawn/native/RenderPipeline.h"
+#include "src/dawn/native/webgpu/ObjectWGPU.h"
+#include "src/dawn/native/webgpu/RecordableObject.h"
 
 namespace dawn::native::webgpu {
 

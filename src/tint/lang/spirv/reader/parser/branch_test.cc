@@ -930,6 +930,118 @@ TEST_F(SpirvParserTest, Switch) {
 )");
 }
 
+TEST_F(SpirvParserTest, SwitchManyCases) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+       %void = OpTypeVoid
+        %i32 = OpTypeInt 32 1
+       %bool = OpTypeBool
+        %one = OpConstant %i32 1
+        %two = OpConstant %i32 2
+      %three = OpConstant %i32 3
+       %four = OpConstant %i32 4
+       %five = OpConstant %i32 5
+        %six = OpConstant %i32 6
+      %seven = OpConstant %i32 7
+      %eight = OpConstant %i32 8
+       %nine = OpConstant %i32 9
+        %ten = OpConstant %i32 10
+       %true = OpConstantTrue %bool
+    %ep_type = OpTypeFunction %void
+       %main = OpFunction %void None %ep_type
+         %10 = OpLabel
+               OpSelectionMerge %99 None
+               OpSwitch %two %98 20 %20 30 %30 40 %40 50 %50 60 %60 70 %70 80 %80 90 %90 100 %100
+         %20 = OpLabel
+         %21 = OpIAdd %i32 %one %two
+               OpBranch %99
+         %30 = OpLabel
+         %31 = OpIAdd %i32 %one %three
+               OpBranch %99
+         %40 = OpLabel
+         %41 = OpIAdd %i32 %one %four
+               OpBranch %99
+         %50 = OpLabel
+         %51 = OpIAdd %i32 %one %five
+               OpBranch %99
+         %60 = OpLabel
+         %61 = OpIAdd %i32 %one %six
+               OpBranch %99
+         %70 = OpLabel
+         %71 = OpIAdd %i32 %one %seven
+               OpBranch %99
+         %80 = OpLabel
+         %81 = OpIAdd %i32 %one %eight
+               OpBranch %99
+         %90 = OpLabel
+         %91 = OpIAdd %i32 %one %nine
+               OpBranch %99
+        %100 = OpLabel
+        %101 = OpIAdd %i32 %one %ten
+               OpBranch %99
+         %98 = OpLabel
+         %22 = OpIAdd %i32 %two %two
+               OpBranch %99
+         %99 = OpLabel
+         %23 = OpIAdd %i32 %ten %two
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B1: {
+    switch 2i [c: (default, $B2), c: (20i, $B3), c: (30i, $B4), c: (40i, $B5), c: (50i, $B6), c: (60i, $B7), c: (70i, $B8), c: (80i, $B9), c: (90i, $B10), c: (100i, $B11)] {  # switch_1
+      $B2: {  # case
+        %2:i32 = spirv.add<i32> 2i, 2i
+        exit_switch  # switch_1
+      }
+      $B3: {  # case
+        %3:i32 = spirv.add<i32> 1i, 2i
+        exit_switch  # switch_1
+      }
+      $B4: {  # case
+        %4:i32 = spirv.add<i32> 1i, 3i
+        exit_switch  # switch_1
+      }
+      $B5: {  # case
+        %5:i32 = spirv.add<i32> 1i, 4i
+        exit_switch  # switch_1
+      }
+      $B6: {  # case
+        %6:i32 = spirv.add<i32> 1i, 5i
+        exit_switch  # switch_1
+      }
+      $B7: {  # case
+        %7:i32 = spirv.add<i32> 1i, 6i
+        exit_switch  # switch_1
+      }
+      $B8: {  # case
+        %8:i32 = spirv.add<i32> 1i, 7i
+        exit_switch  # switch_1
+      }
+      $B9: {  # case
+        %9:i32 = spirv.add<i32> 1i, 8i
+        exit_switch  # switch_1
+      }
+      $B10: {  # case
+        %10:i32 = spirv.add<i32> 1i, 9i
+        exit_switch  # switch_1
+      }
+      $B11: {  # case
+        %11:i32 = spirv.add<i32> 1i, 10i
+        exit_switch  # switch_1
+      }
+    }
+    %12:i32 = spirv.add<i32> 10i, 2i
+    ret
+  }
+}
+)");
+}
+
 TEST_F(SpirvParserTest, Switch_DefaultIsMerge) {
     EXPECT_IR(R"(
                OpCapability Shader
@@ -1338,7 +1450,7 @@ TEST_F(SpirvParserTest, Switch_HoistFromCase) {
 )");
 }
 
-TEST_F(SpirvParserDeathTest, Switch_Fallthrough) {
+TEST_F(SpirvParserTest, Switch_Fallthrough) {
     auto src = R"(
                OpCapability Shader
                OpMemoryModel Logical GLSL450
@@ -1370,7 +1482,10 @@ TEST_F(SpirvParserDeathTest, Switch_Fallthrough) {
                OpReturn
                OpFunctionEnd
 )";
-    EXPECT_DEATH_IF_SUPPORTED({ auto _ = Run(src); }, "internal compiler error");
+    auto result = Run(src);
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("switch fallthrough not supported by the SPIR-V reader"));
 }
 
 TEST_F(SpirvParserTest, Switch_IfBreakInCase) {
@@ -7313,6 +7428,419 @@ TEST_F(SpirvParserTest, LoopInContinuing) {
           }
         }
         next_iteration  # -> $B2
+      }
+    }
+    ret
+  }
+}
+)");
+}
+
+TEST_F(SpirvParserTest, ReplicatePointerAccess_Basic) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %_Globals "Globals"
+               OpDecorate %_Globals DescriptorSet 0
+               OpDecorate %_Globals Binding 0
+               OpMemberDecorate %type__Globals 0 Offset 0
+               OpDecorate %type__Globals Block
+       %void = OpTypeVoid
+       %float = OpTypeFloat 32
+     %v4float = OpTypeVector %float 4
+         %int = OpTypeInt 32 1
+       %int_0 = OpConstant %int 0
+       %int_1 = OpConstant %int 1
+        %uint = OpTypeInt 32 0
+      %uint_0 = OpConstant %uint 0
+%type__Globals = OpTypeStruct %v4float
+%_ptr_Uniform_type__Globals = OpTypePointer Uniform %type__Globals
+%_ptr_Uniform_v4float = OpTypePointer Uniform %v4float
+%_ptr_Uniform_float = OpTypePointer Uniform %float
+    %_Globals = OpVariable %_ptr_Uniform_type__Globals Uniform
+     %ep_type = OpTypeFunction %void
+       %main = OpFunction %void None %ep_type
+   %main_lbl = OpLabel
+               OpSelectionMerge %merge None
+               OpSwitch %uint_0 %default
+    %default = OpLabel
+         %87 = OpAccessChain %_ptr_Uniform_v4float %_Globals %int_0
+               OpBranch %merge
+      %merge = OpLabel
+         %73 = OpAccessChain %_ptr_Uniform_float %87 %int_1
+         %74 = OpLoad %float %73
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    switch 0u [c: (default, $B3)] {  # switch_1
+      $B3: {  # case
+        %3:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+        exit_switch  # switch_1
+      }
+    }
+    %4:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+    %5:ptr<uniform, f32, read> = access %4, 1i
+    %6:f32 = load %5
+    ret
+  }
+}
+)");
+}
+
+TEST_F(SpirvParserTest, ReplicatePointerAccess_Recursive) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %_Globals "Globals"
+               OpDecorate %_Globals DescriptorSet 0
+               OpDecorate %_Globals Binding 0
+               OpMemberDecorate %type__Globals 0 Offset 0
+               OpDecorate %type__Globals Block
+       %void = OpTypeVoid
+       %float = OpTypeFloat 32
+     %v4float = OpTypeVector %float 4
+         %int = OpTypeInt 32 1
+       %int_0 = OpConstant %int 0
+       %int_1 = OpConstant %int 1
+        %uint = OpTypeInt 32 0
+      %uint_0 = OpConstant %uint 0
+%type__Globals = OpTypeStruct %v4float
+%_ptr_Uniform_type__Globals = OpTypePointer Uniform %type__Globals
+%_ptr_Uniform_v4float = OpTypePointer Uniform %v4float
+%_ptr_Uniform_float = OpTypePointer Uniform %float
+    %_Globals = OpVariable %_ptr_Uniform_type__Globals Uniform
+     %ep_type = OpTypeFunction %void
+       %main = OpFunction %void None %ep_type
+   %main_lbl = OpLabel
+               OpSelectionMerge %merge None
+               OpSwitch %uint_0 %default
+    %default = OpLabel
+         %87 = OpAccessChain %_ptr_Uniform_v4float %_Globals %int_0
+         %88 = OpAccessChain %_ptr_Uniform_float %87 %int_0
+               OpBranch %merge
+      %merge = OpLabel
+         %74 = OpLoad %float %88
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    switch 0u [c: (default, $B3)] {  # switch_1
+      $B3: {  # case
+        %3:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+        %4:ptr<uniform, f32, read> = access %3, 0i
+        exit_switch  # switch_1
+      }
+    }
+    %5:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+    %6:ptr<uniform, f32, read> = access %5, 0i
+    %7:f32 = load %6
+    ret
+  }
+}
+)");
+}
+
+TEST_F(SpirvParserTest, ReplicatePointerAccess_DynamicIndex) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %_Globals "Globals"
+               OpDecorate %_Globals DescriptorSet 0
+               OpDecorate %_Globals Binding 0
+               OpMemberDecorate %type__Globals 0 Offset 0
+               OpDecorate %type__Globals Block
+       %void = OpTypeVoid
+       %float = OpTypeFloat 32
+     %v4float = OpTypeVector %float 4
+         %int = OpTypeInt 32 1
+       %int_0 = OpConstant %int 0
+       %int_1 = OpConstant %int 1
+        %uint = OpTypeInt 32 0
+      %uint_0 = OpConstant %uint 0
+%type__Globals = OpTypeStruct %v4float
+%_ptr_Uniform_type__Globals = OpTypePointer Uniform %type__Globals
+%_ptr_Uniform_v4float = OpTypePointer Uniform %v4float
+%_ptr_Uniform_float = OpTypePointer Uniform %float
+    %_Globals = OpVariable %_ptr_Uniform_type__Globals Uniform
+     %ep_type = OpTypeFunction %void
+       %main = OpFunction %void None %ep_type
+   %main_lbl = OpLabel
+               OpSelectionMerge %merge None
+               OpSwitch %uint_0 %default
+    %default = OpLabel
+         %87 = OpAccessChain %_ptr_Uniform_v4float %_Globals %int_0
+         %88 = OpAccessChain %_ptr_Uniform_float %87 %int_0
+         %89 = OpLoad %float %88
+        %115 = OpConvertFToS %int %89
+        %116 = OpAccessChain %_ptr_Uniform_float %87 %115
+               OpBranch %merge
+      %merge = OpLabel
+         %74 = OpLoad %float %116
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    %3:i32 = switch 0u [c: (default, $B3)] {  # switch_1
+      $B3: {  # case
+        %4:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+        %5:ptr<uniform, f32, read> = access %4, 0i
+        %6:f32 = load %5
+        %7:i32 = spirv.convert_f_to_s<i32> %6
+        %8:ptr<uniform, f32, read> = access %4, %7
+        exit_switch %7  # switch_1
+      }
+    }
+    %9:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+    %10:ptr<uniform, f32, read> = access %9, %3
+    %11:f32 = load %10
+    ret
+  }
+}
+)");
+}
+
+TEST_F(SpirvParserTest, ReplicatePointerAccess_InBounds) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %_Globals "Globals"
+               OpDecorate %_Globals DescriptorSet 0
+               OpDecorate %_Globals Binding 0
+               OpMemberDecorate %type__Globals 0 Offset 0
+               OpDecorate %type__Globals Block
+       %void = OpTypeVoid
+       %float = OpTypeFloat 32
+     %v4float = OpTypeVector %float 4
+         %int = OpTypeInt 32 1
+       %int_0 = OpConstant %int 0
+       %int_1 = OpConstant %int 1
+        %uint = OpTypeInt 32 0
+      %uint_0 = OpConstant %uint 0
+%type__Globals = OpTypeStruct %v4float
+%_ptr_Uniform_type__Globals = OpTypePointer Uniform %type__Globals
+%_ptr_Uniform_v4float = OpTypePointer Uniform %v4float
+%_ptr_Uniform_float = OpTypePointer Uniform %float
+    %_Globals = OpVariable %_ptr_Uniform_type__Globals Uniform
+     %ep_type = OpTypeFunction %void
+       %main = OpFunction %void None %ep_type
+   %main_lbl = OpLabel
+               OpSelectionMerge %merge None
+               OpSwitch %uint_0 %default
+    %default = OpLabel
+         %87 = OpInBoundsAccessChain %_ptr_Uniform_v4float %_Globals %int_0
+               OpBranch %merge
+      %merge = OpLabel
+         %73 = OpInBoundsAccessChain %_ptr_Uniform_float %87 %int_1
+         %74 = OpLoad %float %73
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    switch 0u [c: (default, $B3)] {  # switch_1
+      $B3: {  # case
+        %3:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+        exit_switch  # switch_1
+      }
+    }
+    %4:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+    %5:ptr<uniform, f32, read> = access %4, 1i
+    %6:f32 = load %5
+    ret
+  }
+}
+)");
+}
+
+TEST_F(SpirvParserTest, ReplicatePointerAccess_CopyObject) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %_Globals "Globals"
+               OpDecorate %_Globals DescriptorSet 0
+               OpDecorate %_Globals Binding 0
+               OpMemberDecorate %type__Globals 0 Offset 0
+               OpDecorate %type__Globals Block
+       %void = OpTypeVoid
+       %float = OpTypeFloat 32
+     %v4float = OpTypeVector %float 4
+         %int = OpTypeInt 32 1
+       %int_0 = OpConstant %int 0
+       %int_1 = OpConstant %int 1
+        %uint = OpTypeInt 32 0
+      %uint_0 = OpConstant %uint 0
+%type__Globals = OpTypeStruct %v4float
+%_ptr_Uniform_type__Globals = OpTypePointer Uniform %type__Globals
+%_ptr_Uniform_v4float = OpTypePointer Uniform %v4float
+%_ptr_Uniform_float = OpTypePointer Uniform %float
+    %_Globals = OpVariable %_ptr_Uniform_type__Globals Uniform
+     %ep_type = OpTypeFunction %void
+       %main = OpFunction %void None %ep_type
+   %main_lbl = OpLabel
+               OpSelectionMerge %merge None
+               OpSwitch %uint_0 %default
+    %default = OpLabel
+         %87 = OpAccessChain %_ptr_Uniform_v4float %_Globals %int_0
+         %88 = OpCopyObject %_ptr_Uniform_v4float %87
+               OpBranch %merge
+      %merge = OpLabel
+         %73 = OpAccessChain %_ptr_Uniform_float %88 %int_1
+         %74 = OpLoad %float %73
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    switch 0u [c: (default, $B3)] {  # switch_1
+      $B3: {  # case
+        %3:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+        %4:ptr<uniform, vec4<f32>, read> = let %3
+        exit_switch  # switch_1
+      }
+    }
+    %5:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+    %6:ptr<uniform, vec4<f32>, read> = let %5
+    %7:ptr<uniform, f32, read> = access %6, 1i
+    %8:f32 = load %7
+    ret
+  }
+}
+)");
+}
+
+// OpImageTexelPointer is currently unsupported by the SPIR-V reader.
+// This test ensures it fails as expected. If support for OpImageTexelPointer is added in the
+// future, this test will fail, reminding the developer that they also need to handle its
+// replication when it escapes control flow (similar to OpAccessChain).
+TEST_F(SpirvParserTest, ReplicatePointerAccess_ImageTexelPointer_Unsupported) {
+    auto result = Run(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %_Image "Image"
+               OpDecorate %_Image DescriptorSet 0
+               OpDecorate %_Image Binding 0
+       %void = OpTypeVoid
+      %float = OpTypeFloat 32
+    %v4float = OpTypeVector %float 4
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+       %uint = OpTypeInt 32 0
+     %uint_0 = OpConstant %uint 0
+      %v2int = OpTypeVector %int 2
+      %coord = OpConstantComposite %v2int %int_0 %int_0
+     %type_image = OpTypeImage %float 2D 0 0 0 2 R32f
+%_ptr_UniformConstant_type_image = OpTypePointer UniformConstant %type_image
+     %_ptr_Image_float = OpTypePointer Image %float
+     %_Image = OpVariable %_ptr_UniformConstant_type_image UniformConstant
+     %ep_type = OpTypeFunction %void
+       %main = OpFunction %void None %ep_type
+   %main_lbl = OpLabel
+               OpSelectionMerge %merge None
+               OpSwitch %uint_0 %default
+    %default = OpLabel
+         %87 = OpImageTexelPointer %_ptr_Image_float %_Image %coord %uint_0
+               OpBranch %merge
+      %merge = OpLabel
+         %74 = OpLoad %float %87
+               OpReturn
+               OpFunctionEnd
+)");
+    EXPECT_NE(result, Success);
+    EXPECT_THAT(result.Failure().reason,
+                testing::HasSubstr("unhandled SPIR-V instruction: OpImageTexelPointer"));
+}
+
+TEST_F(SpirvParserTest, ReplicatePointerAccess_MultipleBlocks) {
+    EXPECT_IR(R"(
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpName %_Globals "Globals"
+               OpDecorate %_Globals DescriptorSet 0
+               OpDecorate %_Globals Binding 0
+               OpMemberDecorate %type__Globals 0 Offset 0
+               OpDecorate %type__Globals Block
+       %void = OpTypeVoid
+      %float = OpTypeFloat 32
+    %v4float = OpTypeVector %float 4
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+      %int_1 = OpConstant %int 1
+       %uint = OpTypeInt 32 0
+     %uint_0 = OpConstant %uint 0
+       %bool = OpTypeBool
+   %cond_val = OpUndef %bool
+%type__Globals = OpTypeStruct %v4float
+%_ptr_Uniform_type__Globals = OpTypePointer Uniform %type__Globals
+%_ptr_Uniform_v4float = OpTypePointer Uniform %v4float
+%_ptr_Uniform_float = OpTypePointer Uniform %float
+    %_Globals = OpVariable %_ptr_Uniform_type__Globals Uniform
+     %ep_type = OpTypeFunction %void
+       %main = OpFunction %void None %ep_type
+   %main_lbl = OpLabel
+               OpSelectionMerge %switch_merge None
+               OpSwitch %uint_0 %default
+    %default = OpLabel
+         %87 = OpAccessChain %_ptr_Uniform_v4float %_Globals %int_0
+               OpBranch %switch_merge
+%switch_merge = OpLabel
+               OpSelectionMerge %if_merge None
+               OpBranchConditional %cond_val %then %else
+       %then = OpLabel
+         %73 = OpAccessChain %_ptr_Uniform_float %87 %int_0
+         %74 = OpLoad %float %73
+               OpBranch %if_merge
+       %else = OpLabel
+         %75 = OpAccessChain %_ptr_Uniform_float %87 %int_1
+         %76 = OpLoad %float %75
+               OpBranch %if_merge
+   %if_merge = OpLabel
+               OpReturn
+               OpFunctionEnd
+)",
+              R"(
+%main = @compute @workgroup_size(1u, 1u, 1u) func():void {
+  $B2: {
+    switch 0u [c: (default, $B3)] {  # switch_1
+      $B3: {  # case
+        %3:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+        exit_switch  # switch_1
+      }
+    }
+    if false [t: $B4, f: $B5] {  # if_1
+      $B4: {  # true
+        %4:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+        %5:ptr<uniform, f32, read> = access %4, 0i
+        %6:f32 = load %5
+        exit_if  # if_1
+      }
+      $B5: {  # false
+        %7:ptr<uniform, vec4<f32>, read> = access %Globals, 0i
+        %8:ptr<uniform, f32, read> = access %7, 1i
+        %9:f32 = load %8
+        exit_if  # if_1
       }
     }
     ret

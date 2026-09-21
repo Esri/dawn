@@ -52,7 +52,8 @@ TEST_F(MslWriterTest, DiscardWithDemoteToHelper) {
     Options options;
     options.extensions.disable_demote_to_helper = false;
 
-    ASSERT_TRUE(Generate(options)) << err_ << output_.msl;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 struct tint_module_vars_struct {
   thread bool* continue_execution;
@@ -67,7 +68,7 @@ void foo(tint_module_vars_struct tint_module_vars) {
 fragment void entry() {
   thread bool continue_execution = true;
   tint_module_vars_struct const tint_module_vars = tint_module_vars_struct{.continue_execution=(&continue_execution)};
-  foo(tint_module_vars);
+  (foo(tint_module_vars));
   if (!((*tint_module_vars.continue_execution))) {
     discard_fragment();
   }
@@ -95,7 +96,8 @@ TEST_F(MslWriterTest, DiscardWithoutDemoteToHelper) {
     Options options;
     options.extensions.disable_demote_to_helper = true;
 
-    ASSERT_TRUE(Generate(options)) << err_ << output_.msl;
+    auto result = Generate(options);
+    ASSERT_EQ(result, Success) << result.Failure() << output_.msl;
     EXPECT_EQ(output_.msl, MetalHeader() + R"(
 void foo() {
   if (true) {
@@ -104,7 +106,7 @@ void foo() {
 }
 
 fragment void entry() {
-  foo();
+  (foo());
 }
 )");
 }

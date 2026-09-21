@@ -28,9 +28,8 @@
 #ifndef SRC_DAWN_NATIVE_OPENGL_TEXTUREGL_H_
 #define SRC_DAWN_NATIVE_OPENGL_TEXTUREGL_H_
 
-#include "dawn/native/Texture.h"
-
-#include "dawn/native/opengl/opengl_platform.h"
+#include "src/dawn/native/Texture.h"
+#include "src/dawn/native/opengl/opengl_platform.h"
 
 namespace dawn::native::opengl {
 
@@ -57,7 +56,8 @@ class Texture final : public TextureBase {
             GLuint handle,
             OwnsHandle ownsHandle);
 
-    GLuint GetHandle() const;
+    GLuint GetTextureHandle() const;
+    GLuint GetRenderbufferHandle() const;
     GLenum GetGLTarget() const;
     const GLFormat& GetGLFormat() const;
 
@@ -65,6 +65,7 @@ class Texture final : public TextureBase {
                                                    const SubresourceRange& range);
 
     MaybeError SynchronizeTextureBeforeUse();
+    bool IsRenderbuffer() const;
 
   private:
     ~Texture() override;
@@ -74,7 +75,8 @@ class Texture final : public TextureBase {
                             const SubresourceRange& range,
                             TextureBase::ClearValue clearValue);
 
-    GLuint mHandle;
+    GLuint mTextureHandle;
+    GLuint mRenderbufferHandle;
     OwnsHandle mOwnsHandle = OwnsHandle::No;
     GLenum mTarget;
 };
@@ -85,25 +87,24 @@ class TextureView final : public TextureViewBase {
         TextureBase* texture,
         const UnpackedPtr<TextureViewDescriptor>& descriptor);
 
-    GLuint GetHandle() const;
+    GLuint GetTextureHandle() const;
+    GLuint GetRenderbufferHandle() const;
     GLenum GetGLTarget() const;
     MaybeError BindToFramebuffer(const OpenGLFunctions& gl,
                                  GLenum target,
                                  GLenum attachment,
-                                 GLuint depthLayer = 0);
+                                 GLuint depthLayer = 0,
+                                 std::optional<uint32_t> passSampleCount = std::nullopt);
 
   private:
-    TextureView(TextureBase* texture,
-                const UnpackedPtr<TextureViewDescriptor>& descriptor,
-                GLuint handle,
-                OwnsHandle ownsHandle);
+    TextureView(TextureBase* texture, const UnpackedPtr<TextureViewDescriptor>& descriptor);
 
     ~TextureView() override;
     void DestroyImpl(DestroyReason reason) override;
     GLenum GetInternalFormat() const;
 
-    // TODO(crbug.com/dawn/1355): Delete this handle on texture destroy.
-    GLuint mHandle;
+    GLuint mTextureHandle;
+    GLuint mRenderbufferHandle;
     GLenum mTarget;
     OwnsHandle mOwnsHandle = OwnsHandle::No;
 };

@@ -33,12 +33,10 @@
 
 #include "spirv/unified1/GLSL.std.450.h"
 #include "spirv/unified1/spirv.h"
-
 #include "src/tint/lang/core/constant/value.h"
 #include "src/tint/lang/core/enums.h"
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/ir/access.h"
-#include "src/tint/lang/core/ir/bitcast.h"
 #include "src/tint/lang/core/ir/block.h"
 #include "src/tint/lang/core/ir/block_param.h"
 #include "src/tint/lang/core/ir/break_if.h"
@@ -86,14 +84,16 @@
 #include "src/tint/lang/core/type/subgroup_matrix.h"
 #include "src/tint/lang/core/type/type.h"
 #include "src/tint/lang/core/type/u32.h"
+#include "src/tint/lang/core/type/u64.h"
 #include "src/tint/lang/core/type/vector.h"
 #include "src/tint/lang/core/type/void.h"
 #include "src/tint/lang/spirv/ir/binary.h"
 #include "src/tint/lang/spirv/ir/builtin_call.h"
 #include "src/tint/lang/spirv/ir/copy_logical.h"
-#include "src/tint/lang/spirv/ir/literal_operand.h"
 #include "src/tint/lang/spirv/type/explicit_layout_array.h"
+#include "src/tint/lang/spirv/type/literal.h"
 #include "src/tint/lang/spirv/type/sampled_image.h"
+#include "src/tint/lang/spirv/writer/analysis/relaxed_precision_decorations.h"
 #include "src/tint/lang/spirv/writer/common/binary_writer.h"
 #include "src/tint/lang/spirv/writer/common/function.h"
 #include "src/tint/lang/spirv/writer/common/module.h"
@@ -180,6 +180,12 @@ const core::type::Type* DedupType(const core::type::Type* ty, core::type::Manage
 
         [&](Default) { return ty; });
 }
+
+// The list of properties that are not supported.
+const core::ir::Properties kUnsupportedProperties{
+    core::ir::Property::kAllowMultipleEntryPoints,
+    core::ir::Property::kAllowOverrides,
+};
 
 /// PIMPL class for SPIR-V writer
 class Printer {
@@ -294,8 +300,8 @@ class Printer {
 
     /// Builds the SPIR-V from the IR
     Result<SuccessType> Generate() {
-        TINT_CHECK_RESULT(
-            core::ir::ValidateAndDumpIfNeeded(ir_, "spirv.Printer", kPrinterCapabilities));
+        AssertValid(ir_, "before spirv.Printer");
+        AssertNoUnsupportedProperties(ir_, kUnsupportedProperties);
 
         module_.PushCapability(SpvCapabilityShader);
 
@@ -317,6 +323,20 @@ class Printer {
         // Emit functions.
         for (core::ir::Function* func : ir_.functions) {
             TINT_CHECK_RESULT(EmitFunction(func));
+        }
+
+        // Emit RelaxedPrecision decorations.
+        auto relaxed_precision_decorations = analysis::GetRelaxedPrecisionDecorations(ir_);
+        Hashset<uint32_t, 32> decorated_ids;
+        for (const auto& deco : relaxed_precision_decorations) {
+            uint32_t id = Value(deco);
+            if (decorated_ids.Add(id)) {
+                module_.PushAnnot(spv::Op::OpDecorate,
+                                  {
+                                      id,
+                                      U32Operand(SpvDecorationRelaxedPrecision),
+                                  });
+            }
         }
 
         return Success;
@@ -387,6 +407,9 @@ class Printer {
                 module_.PushExtension("SPV_KHR_fragment_shader_barycentric");
                 module_.PushCapability(SpvCapabilityFragmentBarycentricKHR);
                 return SpvBuiltInBaryCoordKHR;
+            // These are lowered elsewhere
+            case core::BuiltinValue::kGlobalInvocationIndex:
+            case core::BuiltinValue::kWorkgroupIndex:
             case core::BuiltinValue::kUndefined:
                 return SpvBuiltInMax;
         }
@@ -396,10 +419,10 @@ class Printer {
     /// Get the result ID of the constant `constant`, emitting its instruction if necessary.
     /// @param constant the constant to get the ID for
     /// @returns the result ID of the constant
-    uint32_t Constant(core::ir::Constant* constant) {
+    uint32_t Constant(const core::ir::Constant* constant) {
         // If it is a literal operand, just return the value.
-        if (auto* literal = constant->As<spirv::ir::LiteralOperand>()) {
-            return literal->Value()->ValueAs<uint32_t>();
+        if (constant->Type()->Is<spirv::type::Literal>()) {
+            return constant->Value()->ValueAs<uint32_t>();
         }
 
         auto id = Constant(constant->Value());
@@ -431,18 +454,18 @@ class Printer {
                                      {Type(ty), id});
                 },
                 [&](const core::type::I32*) {
-                    module_.PushType(spv::Op::OpConstant, {Type(ty), id, constant->ValueAs<u32>()});
+                    module_.PushType(spv::Op::OpConstant,
+                                     {Type(ty), id, U32Operand(constant->ValueAs<i32>())});
                 },
                 [&](const core::type::U32*) {
-                    module_.PushType(spv::Op::OpConstant,
-                                     {Type(ty), id, U32Operand(constant->ValueAs<i32>())});
-                },
-                [&](const core::type::I8*) {
                     module_.PushType(spv::Op::OpConstant, {Type(ty), id, constant->ValueAs<u32>()});
                 },
-                [&](const core::type::U8*) {
+                [&](const core::type::I8*) {
                     module_.PushType(spv::Op::OpConstant,
                                      {Type(ty), id, U32Operand(constant->ValueAs<i32>())});
+                },
+                [&](const core::type::U8*) {
+                    module_.PushType(spv::Op::OpConstant, {Type(ty), id, constant->ValueAs<u32>()});
                 },
                 [&](const core::type::F32*) {
                     module_.PushType(spv::Op::OpConstant, {Type(ty), id, constant->ValueAs<f32>()});
@@ -525,6 +548,10 @@ class Printer {
                 [&](const core::type::U32*) {
                     module_.PushType(spv::Op::OpTypeInt, {id, 32u, 0u});
                 },
+                [&](const core::type::U64*) {
+                    module_.PushCapability(SpvCapabilityInt64);
+                    module_.PushType(spv::Op::OpTypeInt, {id, 64u, 0u});
+                },
                 [&](const core::type::I8*) {
                     module_.PushCapability(SpvCapabilityInt8);
                     module_.PushType(spv::Op::OpTypeInt, {id, 8u, 1u});
@@ -532,6 +559,14 @@ class Printer {
                 [&](const core::type::U8*) {
                     module_.PushCapability(SpvCapabilityInt8);
                     module_.PushType(spv::Op::OpTypeInt, {id, 8u, 0u});
+                },
+                [&](const core::type::U16*) {
+                    module_.PushCapability(SpvCapabilityInt16);
+                    module_.PushCapability(SpvCapabilityStorageBuffer16BitAccess);
+                    if (options_.extensions.use_uniform_buffers) {
+                        module_.PushCapability(SpvCapabilityUniformAndStorageBuffer16BitAccess);
+                    }
+                    module_.PushType(spv::Op::OpTypeInt, {id, 16u, 0u});
                 },
                 [&](const core::type::F32*) { module_.PushType(spv::Op::OpTypeFloat, {id, 32u}); },
                 [&](const core::type::F16*) {
@@ -656,13 +691,24 @@ class Printer {
     /// Get the result ID of the value `value`, emitting its instruction if necessary.
     /// @param value the value to get the ID for
     /// @returns the result ID of the value
-    uint32_t Value(core::ir::Value* value) {
+    uint32_t Value(const core::ir::Value* value) {
         return Switch(
             value,  //
-            [&](core::ir::Constant* constant) { return Constant(constant); },
-            [&](core::ir::Value*) {
+            [&](const core::ir::Constant* constant) { return Constant(constant); },
+            [&](const core::ir::Value*) {
                 return values_.GetOrAdd(value, [&] { return module_.NextId(); });
             });
+    }
+
+    /// Maps a value to its folded counterpart. If the value's result ID was already
+    /// pre-allocated, emits an OpCopyObject to copy the folded ID into the pre-allocated ID.
+    /// @param from the original value being folded
+    /// @param to the ID it folds to
+    void FoldTo(const core::ir::Value* from, uint32_t to) {
+        auto res = values_.Add(from, to);
+        if (!res.added) {
+            current_function_.PushInst(spv::Op::OpCopyObject, {Type(from->Type()), res.value, to});
+        }
     }
 
     /// Get the ID of the label for `block`.
@@ -839,6 +885,19 @@ class Printer {
                 TINT_IR_ICE(ir_) << "undefined pipeline stage for entry point";
         }
 
+        if (options_.extensions.use_maximal_reconvergence) {
+            module_.PushExtension("SPV_KHR_maximal_reconvergence");
+            module_.PushExecutionMode(spv::Op::OpExecutionMode,
+                                      {id, U32Operand(SpvExecutionModeMaximallyReconvergesKHR)});
+        } else if (options_.extensions.use_subgroup_uniform_control_flow &&
+                   (func->Stage() == core::ir::Function::PipelineStage::kCompute ||
+                    func->Stage() == core::ir::Function::PipelineStage::kFragment)) {
+            module_.PushExtension("SPV_KHR_subgroup_uniform_control_flow");
+            module_.PushExecutionMode(
+                spv::Op::OpExecutionMode,
+                {id, U32Operand(SpvExecutionModeSubgroupUniformControlFlowKHR)});
+        }
+
         // Use the remapped entry point name if requested, otherwise use the original name.
         std::string name;
         if (!options_.remapped_entry_point_name.empty()) {
@@ -979,7 +1038,6 @@ class Printer {
             Switch(
                 inst,                                                                 //
                 [&](core::ir::Access* a) { EmitAccess(a); },                          //
-                [&](core::ir::Bitcast* b) { EmitBitcast(b); },                        //
                 [&](core::ir::CoreBinary* b) { EmitBinary(b); },                      //
                 [&](spirv::ir::Binary* b) { EmitSpirvBinary(b); },                    //
                 [&](core::ir::CoreBuiltinCall* b) { EmitCoreBuiltinCall(b); },        //
@@ -1029,8 +1087,8 @@ class Printer {
         tint::Switch(  //
             t,         //
             [&](core::ir::Return*) {
-                if (!t->Args().IsEmpty()) {
-                    TINT_IR_ASSERT(ir_, t->Args().Length() == 1u);
+                if (!t->Args().empty()) {
+                    TINT_IR_ASSERT(ir_, t->Args().size() == 1u);
                     OperandList operands;
                     operands.push_back(Value(t->Args()[0]));
                     current_function_.PushInst(spv::Op::OpReturnValue, operands);
@@ -1391,14 +1449,14 @@ class Printer {
 
     /// Emit a bitcast instruction.
     /// @param bitcast the bitcast instruction to emit
-    void EmitBitcast(core::ir::Bitcast* bitcast) {
+    void EmitBitcast(core::ir::CoreBuiltinCall* bitcast) {
         auto* ty = bitcast->Result()->Type();
-        if (ty == bitcast->Val()->Type()) {
-            values_.Add(bitcast->Result(), Value(bitcast->Val()));
+        if (ty == bitcast->Args()[0]->Type()) {
+            FoldTo(bitcast->Result(), Value(bitcast->Args()[0]));
             return;
         }
         current_function_.PushInst(spv::Op::OpBitcast,
-                                   {Type(ty), Value(bitcast), Value(bitcast->Val())});
+                                   {Type(ty), Value(bitcast), Value(bitcast->Args()[0])});
     }
 
     /// Emit a builtin function call instruction.
@@ -1458,9 +1516,15 @@ class Printer {
                 break;
             case spirv::BuiltinFn::kAtomicUMax:
                 op = spv::Op::OpAtomicUMax;
+                if (builtin->Args()[3]->Type()->Is<core::type::U64>()) {
+                    module_.PushCapability(SpvCapabilityInt64Atomics);
+                }
                 break;
             case spirv::BuiltinFn::kAtomicUMin:
                 op = spv::Op::OpAtomicUMin;
+                if (builtin->Args()[3]->Type()->Is<core::type::U64>()) {
+                    module_.PushCapability(SpvCapabilityInt64Atomics);
+                }
                 break;
             case spirv::BuiltinFn::kAtomicXor:
                 op = spv::Op::OpAtomicXor;
@@ -1528,6 +1592,13 @@ class Printer {
                 break;
             case spirv::BuiltinFn::kImageWrite:
                 op = spv::Op::OpImageWrite;
+                break;
+            case spirv::BuiltinFn::kInterpolateAtOffset:
+                // InterpolateAtOffset requires the InterpolationFunction capability.
+                // In Dawn this is only used for the pixel center polyfill which is only
+                // enabled if SampleRateShading is available.
+                module_.PushCapability(SpvCapabilityInterpolationFunction);
+                ext_inst(GLSLstd450InterpolateAtOffset);
                 break;
             case spirv::BuiltinFn::kMatrixTimesMatrix:
                 op = spv::Op::OpMatrixTimesMatrix;
@@ -1760,6 +1831,9 @@ class Printer {
             case BuiltinFn::kSConvert:
                 op = spv::Op::OpSConvert;
                 break;
+            case BuiltinFn::kAddCarry:
+                op = spv::Op::OpIAddCarry;
+                break;
             case spirv::BuiltinFn::kNone:
                 TINT_IR_ICE(ir_) << "undefined spirv ir function";
         }
@@ -1797,14 +1871,19 @@ class Printer {
         if (builtin->Func() == core::BuiltinFn::kAbs &&
             result_ty->IsUnsignedIntegerScalarOrVector()) {
             // abs() is a no-op for unsigned integers.
-            values_.Add(builtin->Result(), Value(builtin->Args()[0]));
+            FoldTo(builtin->Result(), Value(builtin->Args()[0]));
             return;
         }
         if ((builtin->Func() == core::BuiltinFn::kAll ||
              builtin->Func() == core::BuiltinFn::kAny) &&
             builtin->Args()[0]->Type()->Is<core::type::Bool>()) {
             // all() and any() are passthroughs for scalar arguments.
-            values_.Add(builtin->Result(), Value(builtin->Args()[0]));
+            FoldTo(builtin->Result(), Value(builtin->Args()[0]));
+            return;
+        }
+
+        if (builtin->Func() == core::BuiltinFn::kBitcast) {
+            EmitBitcast(builtin);
             return;
         }
 
@@ -2313,15 +2392,15 @@ class Printer {
 
         // If there is just a single argument with the same type as the result, this is an identity
         // constructor and we can just pass through the ID of the argument.
-        if (construct->Args().Length() == 1 && result_ty == construct->Args()[0]->Type()) {
-            values_.Add(construct->Result(), Value(construct->Args()[0]));
+        if (construct->Args().size() == 1 && result_ty == construct->Args()[0]->Type()) {
+            FoldTo(construct->Result(), Value(construct->Args()[0]));
             return;
         }
 
         // A zero-value constructor may be used for subgroup matrices or when IR is created from a
         // flow that is not the WGSL frontend, so special-case them into OpConstantNull here.
         if (construct->Operands().IsEmpty()) {
-            values_.Add(construct->Result(), ConstantNull(result_ty));
+            FoldTo(construct->Result(), ConstantNull(result_ty));
             return;
         }
 
@@ -2413,26 +2492,47 @@ class Printer {
         current_function_.PushInst(op, std::move(operands));
     }
 
-    SpvMemoryAccessMask MemoryAccessMaskForPointer(const core::type::Pointer* ptr) {
+    bool ExplicitLayoutStorageClass(core::AddressSpace aspace) {
+        switch (aspace) {
+            case core::AddressSpace::kStorage:
+            case core::AddressSpace::kUniform:
+            case core::AddressSpace::kImmediate:
+                return true;
+            default:
+                break;
+        }
+        return false;
+    }
+
+    uint32_t MemoryAccessMaskForPointer(const core::type::Pointer* ptr,
+                                        std::optional<uint32_t> alignment) {
         TINT_IR_ASSERT(ir_, ptr);
 
+        uint32_t mask = static_cast<uint32_t>(SpvMemoryAccessMaskNone);
         if (options_.extensions.use_vulkan_memory_model &&
             (ptr->AddressSpace() == core::AddressSpace::kStorage ||
              ptr->AddressSpace() == core::AddressSpace::kWorkgroup) &&
             ptr->Access() == core::Access::kReadWrite) {
-            return SpvMemoryAccessNonPrivatePointerMask;
+            mask |= static_cast<uint32_t>(SpvMemoryAccessNonPrivatePointerMask);
+        }
+        if (ExplicitLayoutStorageClass(ptr->AddressSpace()) && alignment.has_value()) {
+            mask |= static_cast<uint32_t>(SpvMemoryAccessAlignedMask);
         }
 
-        return SpvMemoryAccessMaskNone;
+        return mask;
     }
 
     /// Emit a load instruction.
     /// @param load the load instruction to emit
     void EmitLoad(core::ir::Load* load) {
-        current_function_.PushInst(spv::Op::OpLoad,
-                                   {Type(load->Result()->Type()), Value(load), Value(load->From()),
-                                    U32Operand(MemoryAccessMaskForPointer(
-                                        load->From()->Type()->As<core::type::Pointer>()))});
+        auto* ptr_ty = load->From()->Type()->As<core::type::Pointer>();
+        auto memory_mask = MemoryAccessMaskForPointer(ptr_ty, load->Alignment());
+        OperandList operands = {Type(load->Result()->Type()), Value(load), Value(load->From()),
+                                U32Operand(memory_mask)};
+        if (ExplicitLayoutStorageClass(ptr_ty->AddressSpace()) && load->Alignment().has_value()) {
+            operands.push_back(U32Operand(load->Alignment().value()));
+        }
+        current_function_.PushInst(spv::Op::OpLoad, operands);
     }
 
     /// Emit a load vector element instruction.
@@ -2445,9 +2545,14 @@ class Printer {
         current_function_.PushInst(spv::Op::OpAccessChain,
                                    {Type(el_ptr_ty), el_ptr_id, Value(load->From()),
                                     GetAccessChainIndexId(load->Index())});
-        current_function_.PushInst(spv::Op::OpLoad,
-                                   {Type(load->Result()->Type()), Value(load), el_ptr_id,
-                                    U32Operand(MemoryAccessMaskForPointer(vec_ptr_ty))});
+        auto memory_mask = MemoryAccessMaskForPointer(vec_ptr_ty, load->Alignment());
+        OperandList operands = {Type(load->Result()->Type()), Value(load), el_ptr_id,
+                                U32Operand(memory_mask)};
+        if (ExplicitLayoutStorageClass(vec_ptr_ty->AddressSpace()) &&
+            load->Alignment().has_value()) {
+            operands.push_back(U32Operand(load->Alignment().value()));
+        }
+        current_function_.PushInst(spv::Op::OpLoad, operands);
     }
 
     /// Emit a loop instruction.
@@ -2569,10 +2674,13 @@ class Printer {
     /// Emit a store instruction.
     /// @param store the store instruction to emit
     void EmitStore(core::ir::Store* store) {
-        current_function_.PushInst(spv::Op::OpStore,
-                                   {Value(store->To()), Value(store->From()),
-                                    U32Operand(MemoryAccessMaskForPointer(
-                                        store->To()->Type()->As<core::type::Pointer>()))});
+        auto* ptr_ty = store->To()->Type()->As<core::type::Pointer>();
+        auto memory_mask = MemoryAccessMaskForPointer(ptr_ty, store->Alignment());
+        OperandList operands = {Value(store->To()), Value(store->From()), U32Operand(memory_mask)};
+        if (ExplicitLayoutStorageClass(ptr_ty->AddressSpace()) && store->Alignment().has_value()) {
+            operands.push_back(U32Operand(store->Alignment().value()));
+        }
+        current_function_.PushInst(spv::Op::OpStore, operands);
     }
 
     /// Emit a store vector element instruction.
@@ -2585,9 +2693,13 @@ class Printer {
         current_function_.PushInst(spv::Op::OpAccessChain,
                                    {Type(el_ptr_ty), el_ptr_id, Value(store->To()),
                                     GetAccessChainIndexId(store->Index())});
-        current_function_.PushInst(
-            spv::Op::OpStore,
-            {el_ptr_id, Value(store->Value()), U32Operand(MemoryAccessMaskForPointer(vec_ptr_ty))});
+        auto memory_mask = MemoryAccessMaskForPointer(vec_ptr_ty, store->Alignment());
+        OperandList operands = {el_ptr_id, Value(store->Value()), U32Operand(memory_mask)};
+        if (ExplicitLayoutStorageClass(vec_ptr_ty->AddressSpace()) &&
+            store->Alignment().has_value()) {
+            operands.push_back(U32Operand(store->Alignment().value()));
+        }
+        current_function_.PushInst(spv::Op::OpStore, operands);
     }
 
     /// Emit a unary instruction.
@@ -2683,12 +2795,13 @@ class Printer {
         auto* ptr = var->Result()->Type()->As<core::type::Pointer>();
         if (ptr->AddressSpace() == core::AddressSpace::kWorkgroup) {
             auto* ty = ptr->StoreType();
-            uint32_t align = ty->Align();
-            uint32_t size = ty->Size();
+            uint64_t align = ty->Align();
+            uint64_t size = ty->Size();
 
             // This essentially matches std430 layout rules from GLSL, which are in
             // turn specified as an upper bound for Vulkan layout sizing.
-            output_.workgroup_info.storage_size += tint::RoundUp(16u, tint::RoundUp(align, size));
+            output_.workgroup_info.storage_size +=
+                tint::RoundUp(static_cast<uint64_t>(16u), tint::RoundUp(align, size));
         }
         EmitVar(var);
     }
@@ -2814,7 +2927,7 @@ class Printer {
     /// @param let the let instruction to emit
     void EmitLet(core::ir::Let* let) {
         auto id = Value(let->Value());
-        values_.Add(let->Result(), id);
+        FoldTo(let->Result(), id);
     }
 
     /// Emit the OpPhis for the given flow control instruction.
@@ -3016,7 +3129,7 @@ class Printer {
     /// Set the debug name of an instruction.
     void PushName(uint32_t id, core::ir::Instruction* inst) { PushName(id, ir_.NameOf(inst)); }
     /// Set the debug name of a value.
-    void PushName(uint32_t id, core::ir::Value* value) { PushName(id, ir_.NameOf(value)); }
+    void PushName(uint32_t id, const core::ir::Value* value) { PushName(id, ir_.NameOf(value)); }
     /// Set the debug name for a SPIR-V ID.
     void PushName(uint32_t id, const Symbol& name) {
         // Only set the name if it is valid and if we are not stripping user identifiers.

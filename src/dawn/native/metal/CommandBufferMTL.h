@@ -28,16 +28,16 @@
 #ifndef SRC_DAWN_NATIVE_METAL_COMMANDBUFFERMTL_H_
 #define SRC_DAWN_NATIVE_METAL_COMMANDBUFFERMTL_H_
 
+#import <Metal/Metal.h>
+
 #include <set>
 #include <utility>
 #include <vector>
 
-#include "dawn/native/CommandBuffer.h"
-#include "dawn/native/Commands.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/metal/MultiDrawEncoder.h"
-
-#import <Metal/Metal.h>
+#include "src/dawn/native/CommandBuffer.h"
+#include "src/dawn/native/Commands.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/metal/MultiDrawEncoder.h"
 
 namespace dawn::native {
 class CommandEncoder;
@@ -56,13 +56,13 @@ void RecordCopyBufferToTexture(CommandRecordingContext* commandContext,
                                id<MTLBuffer> mtlBuffer,
                                uint64_t bufferSize,
                                uint64_t offset,
-                               uint32_t bytesPerRow,
-                               uint32_t rowsPerImage,
+                               BlockCount blocksPerRow,
+                               BlockCount rowsPerImage,
                                Texture* texture,
                                uint32_t mipLevel,
-                               const Origin3D& origin,
+                               const BlockOrigin3D& origin,
                                Aspect aspect,
-                               const Extent3D& copySize);
+                               const BlockExtent3D& copySize);
 
 class CommandBuffer final : public CommandBufferBase {
   public:
@@ -85,11 +85,12 @@ class CommandBuffer final : public CommandBufferBase {
     // track which results should be explicitly zero'ed as a workaround. Use of empty queries
     // *should* mostly be a degenerate scenario, so this std::set shouldn't be performance-critical.
     // The set is passed as nullptr to `EncodeRenderPass` if the workaround is not in use.
-    using EmptyOcclusionQueries = std::set<std::pair<QuerySet*, uint32_t>>;
+    using EmptyOcclusionQueries = std::set<std::pair<QuerySet*, QueryIndex>>;
     MaybeError EncodeRenderPass(id<MTLRenderCommandEncoder> encoder,
                                 BeginRenderPassCmd* renderPassCmd,
                                 EmptyOcclusionQueries* emptyOcclusionQueries,
-                                const std::vector<MultiDrawExecutionData>& multiDrawExecutions);
+                                const std::vector<MultiDrawExecutionData>& multiDrawExecutions,
+                                PassIndex renderPassIndex);
 };
 
 }  // namespace dawn::native::metal

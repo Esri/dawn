@@ -34,15 +34,19 @@
 #                       Do not modify this file directly
 ################################################################################
 
+if(TINT_BUILD_SPV_READER OR TINT_BUILD_SPV_WRITER)
 ################################################################################
 # Target:    tint_lang_spirv_type
 # Kind:      lib
+# Condition: TINT_BUILD_SPV_READER OR TINT_BUILD_SPV_WRITER
 ################################################################################
 tint_add_target(tint_lang_spirv_type lib
   lang/spirv/type/explicit_layout_array.cc
   lang/spirv/type/explicit_layout_array.h
   lang/spirv/type/image.cc
   lang/spirv/type/image.h
+  lang/spirv/type/literal.cc
+  lang/spirv/type/literal.h
   lang/spirv/type/sampled_image.cc
   lang/spirv/type/sampled_image.h
 )
@@ -59,6 +63,7 @@ tint_target_add_dependencies(tint_lang_spirv_type lib
   tint_utils_macros
   tint_utils_math
   tint_utils_memory
+  tint_utils_reflection
   tint_utils_rtti
   tint_utils_symbol
   tint_utils_text
@@ -68,13 +73,17 @@ tint_target_add_external_dependencies(tint_lang_spirv_type lib
   "src_utils"
 )
 
+endif(TINT_BUILD_SPV_READER OR TINT_BUILD_SPV_WRITER)
+if(TINT_BUILD_SPV_READER OR TINT_BUILD_SPV_WRITER)
 ################################################################################
 # Target:    tint_lang_spirv_type_test
 # Kind:      test
+# Condition: TINT_BUILD_SPV_READER OR TINT_BUILD_SPV_WRITER
 ################################################################################
 tint_add_target(tint_lang_spirv_type_test test
   lang/spirv/type/explicit_layout_array_test.cc
   lang/spirv/type/image_test.cc
+  lang/spirv/type/literal_test.cc
   lang/spirv/type/sampled_image_test.cc
 )
 
@@ -92,6 +101,7 @@ tint_target_add_dependencies(tint_lang_spirv_type_test test
   tint_utils_macros
   tint_utils_math
   tint_utils_memory
+  tint_utils_reflection
   tint_utils_rtti
   tint_utils_symbol
   tint_utils_text
@@ -101,3 +111,5 @@ tint_target_add_external_dependencies(tint_lang_spirv_type_test test
   "gtest"
   "src_utils"
 )
+
+endif(TINT_BUILD_SPV_READER OR TINT_BUILD_SPV_WRITER)

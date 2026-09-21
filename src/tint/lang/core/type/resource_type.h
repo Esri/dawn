@@ -28,6 +28,8 @@
 #ifndef SRC_TINT_LANG_CORE_TYPE_RESOURCE_TYPE_H_
 #define SRC_TINT_LANG_CORE_TYPE_RESOURCE_TYPE_H_
 
+#include <vector>
+
 #include "src/tint/api/common/resource_type.h"
 #include "src/tint/lang/core/type/type.h"
 
@@ -35,9 +37,15 @@ namespace tint::core::type {
 
 // Converts a `in_type` into a resource type
 ResourceType TypeToResourceType(const core::type::Type* in_type);
+// Returns the default resource type for `in_type`. If the `in_type` is an `f32`
+// type that could be filterable, the type returns the filterable resource type
+ResourceType DefaultResourceTypeFor(const core::type::Type* in_type);
 
 // Converts a `ResourceType` back into a `core::type::Type`
 const core::type::Type* ResourceTypeToType(core::type::Manager& ty, ResourceType type);
+
+// For `in_type`, if it can be convert to from another type, returns the type it converts from.
+std::vector<ResourceType> ConvertsFrom(const core::type::Type* in_type);
 
 }  // namespace tint::core::type
 

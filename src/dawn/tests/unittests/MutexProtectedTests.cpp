@@ -25,91 +25,26 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <memory>
 #include <string>
 #include <thread>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
-#include "dawn/common/MutexProtected.h"
-#include "dawn/common/Ref.h"
-#include "dawn/common/RefCounted.h"
-#include "dawn/common/Time.h"
 #include "gtest/gtest.h"
+#include "src/dawn/common/MutexProtected.h"
+#include "src/dawn/common/Range.h"
+#include "src/dawn/common/Ref.h"
+#include "src/dawn/common/RefCounted.h"
+#include "src/dawn/common/Time.h"
+#include "src/dawn/utils/SystemUtils.h"
 
 namespace dawn {
 namespace {
 
 using ::testing::Test;
 using ::testing::Types;
-
-class MutexSupportedCounterT : public MutexProtectedSupport<MutexSupportedCounterT> {
-  public:
-    // This is an unsafe read of the count without acquiring the lock.
-    int ReadCount() { return mImpl.mCount; }
-
-  private:
-    friend typename MutexProtectedSupport<MutexSupportedCounterT>::Traits;
-
-    struct {
-        int mCount = 0;
-    } mImpl;
-};
-
-TEST(MutexProtectedSupportTests, Nominal) {
-    static constexpr int kIncrementCount = 100;
-    static constexpr int kDecrementCount = 50;
-
-    MutexSupportedCounterT counter;
-
-    auto increment = [&] {
-        for (uint32_t i = 0; i < kIncrementCount; i++) {
-            counter->mCount++;
-        }
-    };
-    auto useIncrement = [&] {
-        for (uint32_t i = 0; i < kIncrementCount; i++) {
-            counter.Use([](auto c) { c->mCount++; });
-        }
-    };
-    auto decrement = [&] {
-        for (uint32_t i = 0; i < kDecrementCount; i++) {
-            counter->mCount--;
-        }
-    };
-    auto useDecrement = [&] {
-        for (uint32_t i = 0; i < kDecrementCount; i++) {
-            counter.Use([](auto c) { c->mCount--; });
-        }
-    };
-
-    std::thread incrementThread(increment);
-    std::thread useIncrementThread(useIncrement);
-    std::thread decrementThread(decrement);
-    std::thread useDecrementThread(useDecrement);
-    incrementThread.join();
-    useIncrementThread.join();
-    decrementThread.join();
-    useDecrementThread.join();
-
-    EXPECT_EQ(counter->mCount, 2 * (kIncrementCount - kDecrementCount));
-}
-
-// Verifies that if we call additionally implemented functions when using the MutexProtectedSupport
-// wrapper, that they do not acquire the lock. If the lock was acquired, then this test would
-// deadlock.
-TEST(MutexProtectedSupportTests, UnsafeRead) {
-    MutexSupportedCounterT counter;
-
-    // Acquire the lock via the Use function.
-    counter.Use([&](auto c) {
-        // With the lock acquired, we should be able to call additionally implemented functions that
-        // do not acquire the lock.
-        c->mCount = 1;
-        EXPECT_EQ(counter.ReadCount(), 1);
-        c->mCount = 2;
-        EXPECT_EQ(counter.ReadCount(), 2);
-    });
-}
 
 // Simple thread-unsafe counter class.
 class CounterT : public RefCounted {
@@ -301,7 +236,7 @@ TEST(MutexCondVarProtectedTest, Nominal) {
 TEST(MutexCondVarProtectedTest, WaitForTimeout) {
     auto counter = MutexCondVarProtected<CounterT>();
     counter.Use([](auto c) {
-        EXPECT_FALSE(c.WaitFor(Nanoseconds(5), [](auto& x) { return x.Get() == 1; }));
+        EXPECT_FALSE(c.WaitFor(Nanoseconds(5u), [](auto& x) { return x.Get() == 1; }));
     });
 }
 
@@ -327,6 +262,138 @@ TEST(MutexCondVarProtectedTest, WaitDeadlock) {
     std::thread thread2(t2);
     thread1.join();
     thread2.join();
+}
+
+// Regression test for https://crbug.com/517303276 where the condition variable is signaled after
+// the mutex is unlocked, which could lead to issues because work on other threads could happen in
+// between the two (including destruction of the cond var itself).
+TEST(MutexCondVarProtectedTest, NotifyIsInLock) {
+    std::vector<std::unique_ptr<MutexCondVarProtected<bool>>> condVars;
+    for (size_t _ : Range(100)) {
+        condVars.push_back(std::make_unique<MutexCondVarProtected<bool>>(false));
+    }
+
+    std::thread doDestruction([&] {
+        for (size_t i : Range(condVars.size())) {
+            condVars[i]->Use(
+                [&](auto c) { c.Wait([](bool readyToDestroy) { return readyToDestroy; }); });
+            condVars[i] = nullptr;
+        }
+    });
+
+    std::thread markForDestruction([&] {
+        for (size_t i : Range(condVars.size())) {
+            condVars[i]->Use([&](auto c) { *c = true; });
+        }
+    });
+
+    markForDestruction.join();
+    doDestruction.join();
+}
+
+// Test that if we specifically ask for only one thread to be notified, then only one thread should
+// wake up from waiting.
+TEST(MutexCondVarProtectedTest, NotifyTypes) {
+    auto counter = MutexCondVarProtected<CounterT>();
+    std::atomic<int> woken = 0;
+
+    // Multiple threads both waiting on the condition variable, only one of them should actually be
+    // woken up on the first increment.
+    static constexpr int kNumThreads = 5;
+    std::vector<std::thread> threads;
+    threads.reserve(kNumThreads);
+    for (auto i = 0; i < kNumThreads; i++) {
+        threads.emplace_back([&] {
+            counter.ConstUse([&](auto c) {
+                c.Wait([](auto& x) { return x.Get() >= 1; });
+                woken += 1;
+            });
+        });
+    }
+
+    // Don't notify any threads.
+    counter.Use<NotifyType::None>([](auto c) { EXPECT_EQ(c->Get(), 0); });
+    EXPECT_EQ(woken, 0);
+
+    // Notify one of the threads only. This is currently racy w.r.t to the increment below in that
+    // it's possible that the increment happens before the threads start waiting. As a result, we
+    // only verify that at least once thread was woken. In practice, it is very difficult to verify
+    // that exactly one thread is woken.
+    counter.Use<NotifyType::One>([](auto c) { c->Increment(); });
+    while (woken == 0) {
+        utils::USleep(1000);
+    }
+
+    // Notify the rest of the threads via a NotifyAll, then wait for all the threads to join.
+    counter.Use<NotifyType::All>([](auto c) { c->Increment(); });
+    for (auto& t : threads) {
+        t.join();
+    }
+    EXPECT_EQ(woken, kNumThreads);
+}
+
+TEST(MutexRWProtectedTest, Nominal) {
+    static constexpr int kDefaultValue = 100;
+    auto counter = MutexRWProtected<CounterT>(kDefaultValue);
+
+    // We need to use another condvar protected value to ensure that multiple threads are capable of
+    // reading the value at the same time.
+    auto condvar = MutexCondVarProtected<CounterT>();
+
+    // Have multiple threads hold the read lock and then increment the condvar while holding the
+    // lock. We should be able to wait for the condvar to reach the expected value while still
+    // holding the read lock.
+    static constexpr int kNumThreads = 5;
+    std::vector<std::thread> threads;
+    threads.reserve(kNumThreads);
+    for (auto i = 0; i < kNumThreads; i++) {
+        threads.emplace_back([&] {
+            counter.ConstUse([&](auto c) {
+                // We should be holding the read scope lock now.
+                EXPECT_EQ(c->Get(), kDefaultValue);
+
+                // While holding the read lock, wait until all threads have read the value. This
+                // would deadlock if other threads were not able to acquire the read lock at the
+                // same time.
+                condvar.Use([&](auto cv) {
+                    cv->Increment();
+                    cv.Wait([](const auto& x) { return x.Get() == kNumThreads; });
+                });
+            });
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+}
+
+TEST(MutexRecursiveProtectedTest, Nominal) {
+    static constexpr int kIncrementCount = 100;
+    MutexRecursiveProtected<CounterT> counter;
+
+    auto increment = [&] {
+        for (uint32_t i = 0; i < kIncrementCount; i++) {
+            auto guard1 = counter.operator->();
+            guard1->Increment();
+            counter.Use([&](auto c2) { c2->Increment(); });
+        }
+    };
+    auto useIncrement = [&] {
+        for (uint32_t i = 0; i < kIncrementCount; i++) {
+            counter.Use([&](auto c1) {
+                c1->Increment();
+                counter.Use([&](auto c2) { c2->Increment(); });
+            });
+        }
+    };
+
+    std::thread incrementThread(increment);
+    std::thread useIncrementThread(useIncrement);
+    incrementThread.join();
+    useIncrementThread.join();
+
+    EXPECT_EQ(counter->Get(), 4 * kIncrementCount);
 }
 
 }  // anonymous namespace

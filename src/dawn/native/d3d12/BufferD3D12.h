@@ -32,11 +32,10 @@
 #include <memory>
 #include <vector>
 
-#include "dawn/native/Buffer.h"
 #include "partition_alloc/pointers/raw_ptr.h"
-
-#include "dawn/native/d3d12/ResourceHeapAllocationD3D12.h"
-#include "dawn/native/d3d12/d3d12_platform.h"
+#include "src/dawn/native/Buffer.h"
+#include "src/dawn/native/d3d12/ResourceHeapAllocationD3D12.h"
+#include "src/dawn/native/d3d12/d3d12_platform.h"
 
 namespace dawn::native::d3d12 {
 
@@ -107,7 +106,7 @@ class Buffer final : public BufferBase {
     ExecutionSerial mLastUsedSerial = std::numeric_limits<ExecutionSerial>::max();
 
     D3D12_RANGE mWrittenMappedRange = {0, 0};
-    void* mMappedData = nullptr;
+    raw_ptr<void> mMappedData = nullptr;
 
     std::unique_ptr<Heap> mHostMappedHeap;
     wgpu::Callback mHostMappedDisposeCallback = nullptr;

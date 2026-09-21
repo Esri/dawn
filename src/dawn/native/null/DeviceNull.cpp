@@ -25,21 +25,23 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/null/DeviceNull.h"
+#include "src/dawn/native/null/DeviceNull.h"
 
 #include <limits>
 #include <unordered_map>
 #include <utility>
 
-#include "dawn/native/BackendConnection.h"
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/Commands.h"
-#include "dawn/native/ErrorData.h"
-#include "dawn/native/Instance.h"
-#include "dawn/native/Surface.h"
-#include "dawn/native/TintUtils.h"
 #include "partition_alloc/pointers/raw_ptr.h"
-
+#include "src/dawn/native/BackendConnection.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/Commands.h"
+#include "src/dawn/native/ErrorData.h"
+#include "src/dawn/native/Instance.h"
+#include "src/dawn/native/Surface.h"
+#include "src/dawn/native/TintUtils.h"
+#include "src/utils/compiler.h"
+#include "src/utils/heap_array.h"
+#include "src/utils/numeric.h"
 #include "tint/tint.h"
 
 namespace dawn::native::null {
@@ -96,7 +98,6 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
 MaybeError PhysicalDevice::InitializeSupportedLimitsImpl(CombinedLimits* limits) {
     GetDefaultLimitsForSupportedFeatureLevel(limits);
     limits->v1.maxImmediateSize = kMaxImmediateDataBytes;
-    limits->resourceTableLimits.maxResourceTableSize = kMaxResourceTableSize;
     return {};
 }
 
@@ -117,25 +118,16 @@ ResultOrError<Ref<DeviceBase>> PhysicalDevice::CreateDeviceImpl(
 void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
                                                const TogglesState&) const {
     if (auto* memoryHeapProperties = info.Get<AdapterPropertiesMemoryHeaps>()) {
-        auto* heapInfo = new MemoryHeapInfo[1];
-        memoryHeapProperties->heapCount = 1;
-        memoryHeapProperties->heapInfo = heapInfo;
+        auto heapInfo = HeapArray<MemoryHeapInfo>(1);
 
-        heapInfo[0].size = 1024 * 1024 * 1024;
+        heapInfo[0].size = 1024ULL * 1024 * 1024;
         heapInfo[0].properties = wgpu::HeapProperty::DeviceLocal | wgpu::HeapProperty::HostVisible |
                                  wgpu::HeapProperty::HostCached;
+
+        memoryHeapProperties->heapInfo = std::move(heapInfo).MoveToSpan();
     }
     if (auto* d3dProperties = info.Get<AdapterPropertiesD3D>()) {
         d3dProperties->shaderModel = 0;
-    }
-    if (auto* explicitComputeSubgroupSizeConfigs =
-            info.Get<AdapterPropertiesExplicitComputeSubgroupSizeConfigs>()) {
-        explicitComputeSubgroupSizeConfigs->minExplicitComputeSubgroupSize =
-            GetMinExplicitComputeSubgroupSize();
-        explicitComputeSubgroupSizeConfigs->maxExplicitComputeSubgroupSize =
-            GetMaxExplicitComputeSubgroupSize();
-        explicitComputeSubgroupSizeConfigs->maxComputeWorkgroupSubgroups =
-            GetMaxComputeWorkgroupSubgroups();
     }
 }
 
@@ -354,20 +346,15 @@ MaybeError Device::SubmitPendingOperations() {
 
 // BindGroupDataHolder
 
-BindGroupDataHolder::BindGroupDataHolder(size_t size)
-    : mBindingDataAllocation(malloc(size))  // malloc is guaranteed to return a
-                                            // pointer aligned enough for the allocation
-{}
+BindGroupDataHolder::BindGroupDataHolder(size_t size) : mBindingDataAllocation{size} {}
 
-BindGroupDataHolder::~BindGroupDataHolder() {
-    free(mBindingDataAllocation.ExtractAsDangling());
-}
+BindGroupDataHolder::~BindGroupDataHolder() = default;
 
 // BindGroup
 
 BindGroup::BindGroup(DeviceBase* device, const UnpackedPtr<BindGroupDescriptor>& descriptor)
     : BindGroupDataHolder(descriptor->layout->GetInternalBindGroupLayout()->GetBindingDataSize()),
-      BindGroupBase(device, descriptor, mBindingDataAllocation) {}
+      BindGroupBase(device, descriptor, mBindingDataAllocation.data()) {}
 
 MaybeError BindGroup::InitializeImpl() {
     return {};
@@ -383,7 +370,9 @@ BindGroupLayout::BindGroupLayout(DeviceBase* device,
 
 Buffer::Buffer(Device* device, const UnpackedPtr<BufferDescriptor>& descriptor)
     : BufferBase(device, descriptor) {
-    mBackingData = std::unique_ptr<uint8_t[]>(new uint8_t[GetSize()]);
+    // SAFETY: Frontend is responsible for initializing mapped memory.
+    mBackingData =
+        DAWN_UNSAFE_BUFFERS(HeapArray<std::byte>::Uninit(checked_cast<size_t>(GetSize())));
     mAllocatedSize = GetSize();
 }
 
@@ -401,14 +390,17 @@ void Buffer::CopyFromStaging(BufferBase* staging,
                              uint64_t sourceOffset,
                              uint64_t destinationOffset,
                              uint64_t size) {
-    uint8_t* ptr = reinterpret_cast<uint8_t*>(staging->GetMappedPointer());
-    memcpy(mBackingData.get() + destinationOffset, ptr + sourceOffset, size);
+    // TODO(https://crbug.com/524406299): Use Span::CopyFrom.
+    std::ranges::copy(staging->GetCurrentMapping().GetMappedSubspan(
+                          checked_cast<size_t>(sourceOffset), checked_cast<size_t>(size)),
+                      mBackingData.begin() + sign_cast(checked_cast<size_t>(destinationOffset)));
 }
 
-void Buffer::DoWriteBuffer(uint64_t bufferOffset, const void* data, size_t size) {
-    DAWN_ASSERT(bufferOffset + size <= GetSize());
+void Buffer::DoWriteBuffer(uint64_t bufferOffset, Span<const std::byte> data) {
+    DAWN_ASSERT(bufferOffset + data.size() <= GetSize());
     DAWN_ASSERT(mBackingData);
-    memcpy(mBackingData.get() + bufferOffset, data, size);
+    // TODO(https://crbug.com/524406299): Use Span::CopyFrom.
+    std::ranges::copy(data, mBackingData.subspan(checked_cast<size_t>(bufferOffset)).begin());
 }
 
 MaybeError Buffer::MapAsyncImpl(wgpu::MapMode mode, size_t offset, size_t size) {
@@ -421,7 +413,7 @@ MaybeError Buffer::FinalizeMapImpl(BufferState newState) {
 }
 
 void* Buffer::GetMappedPointerImpl() {
-    return mBackingData.get();
+    return mBackingData.data();
 }
 
 void Buffer::UnmapImpl(BufferState oldState, BufferState newState) {}
@@ -454,7 +446,7 @@ Queue::Queue(Device* device, const QueueDescriptor* descriptor) : QueueBase(devi
 
 Queue::~Queue() {}
 
-MaybeError Queue::SubmitImpl(uint32_t, CommandBufferBase* const*) {
+MaybeError Queue::SubmitImpl(Span<CommandBufferBase* const>) {
     Device* device = ToBackend(GetDevice());
 
     DAWN_TRY(device->SubmitPendingOperations());
@@ -465,9 +457,8 @@ MaybeError Queue::SubmitImpl(uint32_t, CommandBufferBase* const*) {
 
 MaybeError Queue::WriteBufferImpl(BufferBase* buffer,
                                   uint64_t bufferOffset,
-                                  const void* data,
-                                  size_t size) {
-    ToBackend(buffer)->DoWriteBuffer(bufferOffset, data, size);
+                                  Span<const std::byte> data) {
+    ToBackend(buffer)->DoWriteBuffer(bufferOffset, data);
     return {};
 }
 
@@ -496,7 +487,7 @@ MaybeError Queue::WaitForIdleForDestructionImpl() {
 }
 
 // ComputePipeline
-MaybeError ComputePipeline::InitializeImpl() {
+ResultOrError<Extent3D> ComputePipeline::InitializeImpl() {
     const ProgrammableStage& computeStage = GetStage(SingleShaderStage::Compute);
 
     tint::null::writer::Options tintOptions;
@@ -505,9 +496,15 @@ MaybeError ComputePipeline::InitializeImpl() {
         .map = BuildSubstituteOverridesTransformConfig(computeStage),
     };
 
+    auto device = GetDevice();
+    tint::wgsl::reader::IROptions irOptions{
+        .dump_ir_when_validating = device->IsToggleEnabled(Toggle::DumpTintIR),
+        .enable_validation_asserts = device->IsToggleEnabled(Toggle::EnableTintIRValidationAsserts),
+    };
+
     // Convert the AST program to an IR module.
-    auto ir =
-        tint::wgsl::reader::ProgramToLoweredIR(computeStage.module->GetTintProgram()->program);
+    auto ir = tint::wgsl::reader::ProgramToLoweredIR(computeStage.module->GetTintProgram()->program,
+                                                     irOptions);
     DAWN_INVALID_IF(ir != tint::Success, "An error occurred while generating Tint IR\n%s",
                     ir.Failure().reason);
 
@@ -522,18 +519,13 @@ MaybeError ComputePipeline::InitializeImpl() {
         LimitsForCompilationRequest::Create(GetDevice()->GetAdapter()->GetLimits().v1);
     auto maxSubgroupSize = GetDevice()->GetAdapter()->GetPhysicalDevice()->GetSubgroupMaxSize();
 
-    Extent3D _;
-    DAWN_TRY_ASSIGN(_, ValidateComputeStageWorkgroupSize(
-                           tintResult->workgroup_info, computeStage.metadata->usesSubgroupMatrix,
-                           maxSubgroupSize, limits, adapterSupportedLimits));
+    Extent3D wgSize;
+    DAWN_TRY_ASSIGN(
+        wgSize, ValidateComputeStageWorkgroupSize(tintResult->workgroup_info,
+                                                  computeStage.metadata->usesSubgroupMatrix,
+                                                  maxSubgroupSize, limits, adapterSupportedLimits));
 
-    DAWN_TRY(ValidateExplicitComputeSubgroupSize(
-        tintResult->workgroup_info,
-        GetDevice()->GetAdapter()->GetPhysicalDevice()->GetMinExplicitComputeSubgroupSize(),
-        GetDevice()->GetAdapter()->GetPhysicalDevice()->GetMaxExplicitComputeSubgroupSize(),
-        GetDevice()->GetAdapter()->GetPhysicalDevice()->GetMaxComputeWorkgroupSubgroups()));
-
-    return {};
+    return wgSize;
 }
 
 // RenderPipeline
@@ -617,10 +609,6 @@ bool Device::CanTextureLoadResolveTargetInTheSameRenderpass() const {
 Texture::Texture(DeviceBase* device, const UnpackedPtr<TextureDescriptor>& descriptor)
     : TextureBase(device, descriptor) {}
 
-MaybeError Texture::PinImpl(wgpu::TextureUsage usage) {
-    return {};
-}
 
-void Texture::UnpinImpl() {}
 
 }  // namespace dawn::native::null

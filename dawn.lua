@@ -24,7 +24,7 @@ os.execute(PYTHON_EXE.." "..DAWN_SRC_DIR.."/generator/dawn_version_generator.py 
 os.execute(PYTHON_EXE.." "..DAWN_SRC_DIR.."/generator/dawn_gpu_info_generator.py --template-dir "..DAWN_SRC_DIR.."/generator/templates --root-dir "..DAWN_SRC_DIR.." --output-dir "..DAWN_GEN_OUTPUT_DIR.." --gpu-info-json "..DAWN_SRC_DIR.."/src/dawn/gpu_info.json")
 
 -- native utilities
-os.execute(PYTHON_EXE.." "..DAWN_SRC_DIR.."/generator/dawn_json_generator.py --template-dir "..DAWN_SRC_DIR.."/generator/templates --root-dir "..DAWN_SRC_DIR.." --output-dir "..DAWN_GEN_OUTPUT_DIR.." --dawn-json "..DAWN_SRC_DIR.."/src/dawn/dawn.json --wire-json "..DAWN_SRC_DIR.."/src/dawn/dawn_wire.json --targets native_utils")
+os.execute(PYTHON_EXE.." "..DAWN_SRC_DIR.."/generator/dawn_json_generator.py --template-dir "..DAWN_SRC_DIR.."/generator/templates --root-dir "..DAWN_SRC_DIR.." --output-dir "..DAWN_GEN_OUTPUT_DIR.." --dawn-json "..DAWN_SRC_DIR.."/src/dawn/dawn.json --native-json "..DAWN_SRC_DIR.."/src/dawn/dawn_native.json --wire-json "..DAWN_SRC_DIR.."/src/dawn/dawn_wire.json --targets native_utils")
 
 -- native WebGPU procs
 os.execute(PYTHON_EXE.." "..DAWN_SRC_DIR.."/generator/dawn_json_generator.py --template-dir "..DAWN_SRC_DIR.."/generator/templates --root-dir "..DAWN_SRC_DIR.." --output-dir "..DAWN_GEN_OUTPUT_DIR.." --dawn-json "..DAWN_SRC_DIR.."/src/dawn/dawn.json --wire-json "..DAWN_SRC_DIR.."/src/dawn/dawn_wire.json --targets webgpu_dawn_native_proc")
@@ -168,8 +168,8 @@ includedirs {
 -- grep '\.c.*' dawn.lua | sed 's/^\ *\".*\/\([a-zA-Z0-9_]*\)\.[cp]*\"\,/\L\1/' | sort | uniq -d
 
 files {
-    "src/dawn/utils/SystemHandle.cpp", -- update_lua_file.sh won't pick this up / might remove this if placed below, but it is necessary
-    "src/tint/utils/rtti/castable_rtc_shim_1.cc",
+    "src/utils/log.cc",
+    "src/tint/utils/rtti/castable.cc",
     "src/dawn/native/utils/RenderDoc.cpp"
 }
 
@@ -180,20 +180,22 @@ files {
 
   -- src/dawn/
   "src/dawn/common/AlignedAlloc.cpp",
-  "src/dawn/common/Assert.cpp",
   "src/dawn/common/Defer.cpp",
   "src/dawn/common/DynamicLib.cpp",
+  "src/dawn/common/ExternalTextureParams.cpp",
   "src/dawn/common/FutureUtils.cpp",
   "src/dawn/common/GPUInfo.cpp",
-  "src/dawn/common/Log.cpp",
   "src/dawn/common/Math.cpp",
+  "src/dawn/common/MemoryBlockAllocator.cpp",
   "src/dawn/common/RefCounted.cpp",
   "src/dawn/common/Result.cpp",
   "src/dawn/common/Sha3.cpp",
   "src/dawn/common/SlabAllocator.cpp",
   "src/dawn/common/StringViewUtils.cpp",
+  "src/dawn/common/SystemHandle.cpp",
   "src/dawn/common/SystemUtils.cpp",
   "src/dawn/common/ThreadLocal.cpp",
+  "src/dawn/common/WGPUDeviceCallbackInfos.cpp",
   "src/dawn/common/WeakRefSupport.cpp",
   "src/dawn/native/Adapter.cpp",
   "src/dawn/native/ApplyClearColorValueWithDrawHelper.cpp",
@@ -243,8 +245,7 @@ files {
   "src/dawn/native/ExternalTexture.cpp",
   "src/dawn/native/Features.cpp",
   "src/dawn/native/Format.cpp",
-  "src/dawn/native/ImmediateConstantsLayout.cpp",
-  "src/dawn/native/ImmediateConstantsTracker.cpp",
+  "src/dawn/native/ImmediatesLayout.cpp",
   "src/dawn/native/IndirectDrawMetadata.cpp",
   "src/dawn/native/IndirectDrawValidationEncoder.cpp",
   "src/dawn/native/Instance.cpp",
@@ -252,6 +253,7 @@ files {
   "src/dawn/native/Limits.cpp",
   "src/dawn/native/ObjectBase.cpp",
   "src/dawn/native/ObjectContentHasher.cpp",
+  "src/dawn/native/PassResourceUsage.cpp",
   "src/dawn/native/PassResourceUsageTracker.cpp",
   "src/dawn/native/PerStage.cpp",
   "src/dawn/native/PhysicalDevice.cpp",
@@ -271,6 +273,7 @@ files {
   "src/dawn/native/RenderPipeline.cpp",
   "src/dawn/native/ResourceMemoryAllocation.cpp",
   "src/dawn/native/ResourceTable.cpp",
+  "src/dawn/native/ResourceTableDefaultResources.cpp",
   "src/dawn/native/RingBufferAllocator.cpp",
   "src/dawn/native/Sampler.cpp",
   "src/dawn/native/ScratchBuffer.cpp",
@@ -291,23 +294,24 @@ files {
   "src/dawn/native/ValidationUtils.cpp",
   "src/dawn/native/WaitListEvent.cpp",
   "src/dawn/native/dawn_platform.cpp",
-  "src/dawn/native/null/DeviceNull_rtc_shim_1.cpp",
-  "src/dawn/native/null/NullBackend_rtc_shim_1.cpp",
+  "src/dawn/native/null/DeviceNull.cpp",
+  "src/dawn/native/null/NullBackend.cpp",
   "src/dawn/native/stream/BlobSource.cpp",
   "src/dawn/native/stream/ByteVectorSink.cpp",
-  "src/dawn/native/stream/Stream.cpp",
+  "src/dawn/native/utils/RenderDoc.cpp",
   "src/dawn/native/utils/WGPUHelpers.cpp",
   "src/dawn/native/webgpu_absl_format.cpp",
   "src/dawn/platform/DawnPlatform.cpp",
   "src/dawn/platform/WorkerThread.cpp",
   "src/dawn/platform/metrics/HistogramMacros.cpp",
-  "src/dawn/platform/tracing/EventTracer.cpp",
   "src/dawn/replay/BlitBufferToDepthTexture.cpp",
   "src/dawn/replay/Capture.cpp",
+  "src/dawn/replay/CaptureWalker.cpp",
   "src/dawn/replay/Deserialization.cpp",
   "src/dawn/replay/Error_rtc_shim_1.cpp",
   "src/dawn/replay/ReadHead.cpp",
   "src/dawn/replay/Replay.cpp",
+  "src/dawn/replay/SurfaceDiscovery.cpp",
 
   -- src/tint/
   "src/tint/api/common/vertex_pulling_config.cc",
@@ -333,7 +337,6 @@ files {
   "src/tint/lang/core/ir/analysis/loop_analysis.cc",
   "src/tint/lang/core/ir/analysis/subgroup_matrix.cc",
   "src/tint/lang/core/ir/binary.cc",
-  "src/tint/lang/core/ir/bitcast.cc",
   "src/tint/lang/core/ir/block.cc",
   "src/tint/lang/core/ir/block_param.cc",
   "src/tint/lang/core/ir/break_if.cc",
@@ -360,9 +363,11 @@ files {
   "src/tint/lang/core/ir/exit_switch.cc",
   "src/tint/lang/core/ir/function.cc",
   "src/tint/lang/core/ir/function_param.cc",
+  "src/tint/lang/core/ir/functional_validator.cc",
   "src/tint/lang/core/ir/if.cc",
   "src/tint/lang/core/ir/instruction.cc",
   "src/tint/lang/core/ir/instruction_result.cc",
+  "src/tint/lang/core/ir/io_attribute_validator.cc",
   "src/tint/lang/core/ir/let.cc",
   "src/tint/lang/core/ir/load.cc",
   "src/tint/lang/core/ir/load_vector_element.cc",
@@ -378,12 +383,12 @@ files {
   "src/tint/lang/core/ir/return.cc",
   "src/tint/lang/core/ir/store.cc",
   "src/tint/lang/core/ir/store_vector_element.cc",
+  "src/tint/lang/core/ir/structural_validator.cc",
   "src/tint/lang/core/ir/switch.cc",
   "src/tint/lang/core/ir/swizzle.cc",
   "src/tint/lang/core/ir/terminate_invocation.cc",
   "src/tint/lang/core/ir/terminator.cc",
-  "src/tint/lang/core/ir/transform/array_length_from_immediate.cc",
-  "src/tint/lang/core/ir/transform/array_length_from_uniform.cc",
+  "src/tint/lang/core/ir/transform/array_length_from.cc",
   "src/tint/lang/core/ir/transform/bgra8unorm_polyfill.cc",
   "src/tint/lang/core/ir/transform/binary_polyfill.cc",
   "src/tint/lang/core/ir/transform/binding_remapper.cc",
@@ -391,22 +396,25 @@ files {
   "src/tint/lang/core/ir/transform/builtin_polyfill.cc",
   "src/tint/lang/core/ir/transform/builtin_scalarize.cc",
   "src/tint/lang/core/ir/transform/change_immediate_to_uniform.cc",
+  "src/tint/lang/core/ir/transform/collapse_subgroup_min_max.cc",
   "src/tint/lang/core/ir/transform/combine_access_instructions.cc",
   "src/tint/lang/core/ir/transform/conversion_polyfill.cc",
   "src/tint/lang/core/ir/transform/dead_code_elimination.cc",
   "src/tint/lang/core/ir/transform/decompose_access.cc",
   "src/tint/lang/core/ir/transform/demote_to_helper.cc",
   "src/tint/lang/core/ir/transform/direct_variable_access.cc",
+  "src/tint/lang/core/ir/transform/lower_swizzle_view.cc",
   "src/tint/lang/core/ir/transform/multiplanar_external_texture.cc",
   "src/tint/lang/core/ir/transform/prepare_immediate_data.cc",
   "src/tint/lang/core/ir/transform/preserve_padding.cc",
   "src/tint/lang/core/ir/transform/prevent_infinite_loops.cc",
+  "src/tint/lang/core/ir/transform/propagate_buffer_sizes.cc",
   "src/tint/lang/core/ir/transform/remove_continue_in_switch.cc",
   "src/tint/lang/core/ir/transform/remove_terminator_args.cc",
   "src/tint/lang/core/ir/transform/remove_uniform_vector_component_loads.cc",
   "src/tint/lang/core/ir/transform/rename_conflicts.cc",
-  "src/tint/lang/core/ir/transform/resource_table_rtc_shim_2.cc",
-  "src/tint/lang/core/ir/transform/resource_table_helper_rtc_shim_1.cc",
+  "src/tint/lang/core/ir/transform/resource_table.cc",
+  "src/tint/lang/core/ir/transform/resource_table_helper.cc",
   "src/tint/lang/core/ir/transform/robustness.cc",
   "src/tint/lang/core/ir/transform/shader_io.cc",
   "src/tint/lang/core/ir/transform/signed_integer_polyfill.cc",
@@ -563,12 +571,12 @@ files {
   "src/tint/lang/wgsl/inspector/scalar_rtc_shim_2.cc",
   "src/tint/lang/wgsl/intrinsic/ctor_conv_rtc_shim_1.cc",
   "src/tint/lang/wgsl/intrinsic/data_rtc_shim_1.cc",
+  "src/tint/lang/wgsl/ir/atomic_vec2u_to_from_u64.cc",
   "src/tint/lang/wgsl/ir/builtin_call_rtc_shim_1.cc",
   "src/tint/lang/wgsl/ir/unary_rtc_shim_1.cc",
   "src/tint/lang/wgsl/program/program.cc",
   "src/tint/lang/wgsl/program/program_builder.cc",
   "src/tint/lang/wgsl/reader/lower/lower.cc",
-  "src/tint/lang/wgsl/reader/parser/classify_template_args.cc",
   "src/tint/lang/wgsl/reader/parser/lexer.cc",
   "src/tint/lang/wgsl/reader/parser/parser.cc",
   "src/tint/lang/wgsl/reader/parser/token.cc",
@@ -636,9 +644,9 @@ files {
   "src/tint/utils/macros/macros.cc",
   "src/tint/utils/math/math_rtc_shim_1.cc",
   "src/tint/utils/memory/memory.cc",
-  "src/tint/utils/reflection_rtc_shim_1.cc",
+  "src/tint/utils/reflection/reflection_rtc_shim_1.cc",
   "src/tint/utils/result_rtc_shim_1.cc",
-  "src/tint/utils/rtti/castable_rtc_shim_1.cc",
+  "src/tint/utils/rtti/castable.cc",
   "src/tint/utils/rtti/switch_rtc_shim_1.cc",
   "src/tint/utils/strconv/float_to_string.cc",
   "src/tint/utils/strconv/parse_num.cc",
@@ -667,7 +675,8 @@ if (enable_android) then
 
   files {
     "src/dawn/native/AHBFunctions.cpp",
-    "src/dawn/native/SpirvValidation_rtc_shim_1.cpp",
+    "src/dawn/native/SpirvValidation.cpp",
+    "src/dawn/utils/SystemUtils.cpp",
   }
 
 end
@@ -682,11 +691,11 @@ if (enable_apple) then
     "src/dawn/common/IOSurfaceUtils.cpp",
     "src/dawn/common/SystemUtils_mac.mm",
     "src/dawn/native/Surface_metal.mm",
-    "src/tint/utils/command/command_posix_rtc_shim_1.cc",
-    "src/tint/utils/file/tmpfile_posix_rtc_shim_1.cc",
+    "src/tint/utils/command/command_posix.cc",
+    "src/tint/utils/file/tmpfile_posix.cc",
     "src/tint/utils/system/executable_file_mac.cc",
-    "src/tint/utils/system/terminal_posix_rtc_shim_1.cc",
-    "src/tint/utils/text/styled_text_printer_posix_rtc_shim_1.cc",
+    "src/tint/utils/system/terminal_posix.cc",
+    "src/tint/utils/text/styled_text_printer_posix.cc",
   }
 
 end
@@ -699,13 +708,14 @@ if (enable_linux) then
   }
 
   files {
-    "src/dawn/native/SpirvValidation_rtc_shim_1.cpp",
+    "src/dawn/native/SpirvValidation.cpp",
     "src/dawn/native/X11Functions.cpp",
-    "src/tint/utils/command/command_posix_rtc_shim_1.cc",
-    "src/tint/utils/file/tmpfile_posix_rtc_shim_1.cc",
+    "src/dawn/utils/SystemUtils.cpp",
+    "src/tint/utils/command/command_posix.cc",
+    "src/tint/utils/file/tmpfile_posix.cc",
     "src/tint/utils/system/executable_path_linux.cc",
-    "src/tint/utils/system/terminal_posix_rtc_shim_1.cc",
-    "src/tint/utils/text/styled_text_printer_posix_rtc_shim_1.cc",
+    "src/tint/utils/system/terminal_posix.cc",
+    "src/tint/utils/text/styled_text_printer_posix.cc",
   }
 
 end
@@ -752,27 +762,33 @@ if (enable_hlsl) then
     "src/tint/lang/hlsl/ir/ternary.cc",
     "src/tint/lang/hlsl/type/byte_address_buffer.cc",
     "src/tint/lang/hlsl/type/int8_t4_packed.cc",
+    "src/tint/lang/hlsl/type/matrix_layout.cc",
     "src/tint/lang/hlsl/type/rasterizer_ordered_texture_2d.cc",
     "src/tint/lang/hlsl/type/uint8_t4_packed.cc",
     "src/tint/lang/hlsl/validate/validate.cc",
-    "src/tint/lang/hlsl/writer/raise/pixel_local.cc",
     "src/tint/lang/hlsl/writer/common/option_helpers.cc",
     "src/tint/lang/hlsl/writer/common/options_rtc_shim_1.cc",
     "src/tint/lang/hlsl/writer/common/output_rtc_shim_2.cc",
     "src/tint/lang/hlsl/writer/printer/printer.cc",
-    "src/tint/lang/hlsl/writer/raise/array_offset_from_uniform.cc",
     "src/tint/lang/hlsl/writer/raise/array_offset_from_immediate.cc",
+    "src/tint/lang/hlsl/writer/raise/array_offset_from_uniform.cc",
     "src/tint/lang/hlsl/writer/raise/binary_polyfill_rtc_shim_1.cc",
     "src/tint/lang/hlsl/writer/raise/builtin_polyfill_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/raise/decompose_snorm10_10_10_2.cc",
     "src/tint/lang/hlsl/writer/raise/decompose_storage_access.cc",
     "src/tint/lang/hlsl/writer/raise/extract_ternary_values.cc",
     "src/tint/lang/hlsl/writer/raise/localize_struct_array_assignment.cc",
+    "src/tint/lang/hlsl/writer/raise/pixel_local.cc",
     "src/tint/lang/hlsl/writer/raise/promote_initializers.cc",
     "src/tint/lang/hlsl/writer/raise/raise_rtc_shim_2.cc",
     "src/tint/lang/hlsl/writer/raise/replace_default_only_switch.cc",
     "src/tint/lang/hlsl/writer/raise/replace_non_indexable_mat_vec_stores.cc",
+    "src/tint/lang/hlsl/writer/raise/replace_subgroup_matrix_init.cc",
+    "src/tint/lang/hlsl/writer/raise/resource_table_helper_rtc_shim_1.cc",
     "src/tint/lang/hlsl/writer/raise/shader_io_rtc_shim_1.cc",
+    "src/tint/lang/hlsl/writer/raise/split_workgroup_atomics.cc",
     "src/tint/lang/hlsl/writer/writer_rtc_shim_2.cc",
+
 }
 
 end
@@ -805,12 +821,15 @@ if (enable_msl) then
     "src/tint/lang/msl/writer/raise/binary_polyfill_rtc_shim_2.cc",
     "src/tint/lang/msl/writer/raise/builtin_polyfill_rtc_shim_2.cc",
     "src/tint/lang/msl/writer/raise/convert_print_to_log.cc",
+    "src/tint/lang/msl/writer/raise/decompose_buffer.cc",
+    "src/tint/lang/msl/writer/raise/fix_type_layout.cc",
     "src/tint/lang/msl/writer/raise/module_constant.cc",
     "src/tint/lang/msl/writer/raise/module_scope_vars.cc",
-    "src/tint/lang/msl/writer/raise/packed_vec3.cc",
+    "src/tint/lang/msl/writer/raise/polyfill_bool_vector_dynamic_stores.cc",
     "src/tint/lang/msl/writer/raise/raise_rtc_shim_3.cc",
     "src/tint/lang/msl/writer/raise/shader_io_rtc_shim_2.cc",
     "src/tint/lang/msl/writer/raise/simd_ballot.cc",
+    "src/tint/lang/msl/writer/raise/switch_return.cc",
     "src/tint/lang/msl/writer/raise/validate_subgroup_matrix.cc",
     "src/tint/lang/msl/writer/writer_rtc_shim_3.cc",
 
@@ -837,26 +856,27 @@ if (enable_spirv) then
     -- /spirv/
     "src/tint/lang/spirv/builtin_fn_rtc_shim_3.cc",
     "src/tint/lang/spirv/intrinsic/data_rtc_shim_4.cc",
-    "src/tint/lang/spirv/ir/builtin_call_rtc_shim_4.cc",
-    "src/tint/lang/spirv/ir/literal_operand.cc",
-    "src/tint/lang/spirv/ir/copy_logical.cc",
     "src/tint/lang/spirv/ir/binary_rtc_shim_1.cc",
+    "src/tint/lang/spirv/ir/builtin_call_rtc_shim_4.cc",
+    "src/tint/lang/spirv/ir/copy_logical.cc",
+    "src/tint/lang/spirv/reader/common/common_rtc_shim_1.cc",
     "src/tint/lang/spirv/reader/lower/atomics.cc",
+    "src/tint/lang/spirv/reader/lower/builtins.cc",
     "src/tint/lang/spirv/reader/lower/decompose_strided_array.cc",
     "src/tint/lang/spirv/reader/lower/decompose_strided_matrix.cc",
-    "src/tint/lang/spirv/reader/lower/transpose_row_major.cc",
-    "src/tint/lang/spirv/reader/common/common_rtc_shim_1.cc",
-    "src/tint/lang/spirv/reader/lower/builtins.cc",
     "src/tint/lang/spirv/reader/lower/lower_rtc_shim_1.cc",
     "src/tint/lang/spirv/reader/lower/shader_io_rtc_shim_3.cc",
     "src/tint/lang/spirv/reader/lower/texture_rtc_shim_2.cc",
+    "src/tint/lang/spirv/reader/lower/transpose_row_major.cc",
     "src/tint/lang/spirv/reader/lower/vector_element_pointer.cc",
     "src/tint/lang/spirv/reader/parser/parser_rtc_shim_1.cc",
     "src/tint/lang/spirv/reader/reader_rtc_shim_2.cc",
     "src/tint/lang/spirv/type/explicit_layout_array.cc",
     "src/tint/lang/spirv/type/image.cc",
+    "src/tint/lang/spirv/type/literal.cc",
     "src/tint/lang/spirv/type/sampled_image.cc",
     "src/tint/lang/spirv/validate/validate_rtc_shim_2.cc",
+    "src/tint/lang/spirv/writer/analysis/relaxed_precision_decorations.cc",
     "src/tint/lang/spirv/writer/common/binary_writer.cc",
     "src/tint/lang/spirv/writer/common/function_rtc_shim_4.cc",
     "src/tint/lang/spirv/writer/common/instruction_rtc_shim_1.cc",
@@ -865,8 +885,8 @@ if (enable_spirv) then
     "src/tint/lang/spirv/writer/common/option_helper.cc",
     "src/tint/lang/spirv/writer/common/output_rtc_shim_4.cc",
     "src/tint/lang/spirv/writer/printer/printer_rtc_shim_2.cc",
-    "src/tint/lang/spirv/writer/raise/case_switch_to_if_else.cc",
     "src/tint/lang/spirv/writer/raise/builtin_polyfill_rtc_shim_3.cc",
+    "src/tint/lang/spirv/writer/raise/case_switch_to_if_else.cc",
     "src/tint/lang/spirv/writer/raise/expand_implicit_splats.cc",
     "src/tint/lang/spirv/writer/raise/fork_explicit_layout_types.cc",
     "src/tint/lang/spirv/writer/raise/handle_matrix_arithmetic.cc",
@@ -874,12 +894,13 @@ if (enable_spirv) then
     "src/tint/lang/spirv/writer/raise/merge_return.cc",
     "src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.cc",
     "src/tint/lang/spirv/writer/raise/raise_rtc_shim_4.cc",
-    "src/tint/lang/spirv/writer/raise/resource_table_helper_rtc_shim_2.cc",
     "src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.cc",
+    "src/tint/lang/spirv/writer/raise/resource_table_helper_rtc_shim_2.cc",
     "src/tint/lang/spirv/writer/raise/shader_io_rtc_shim_4.cc",
     "src/tint/lang/spirv/writer/raise/unary_polyfill.cc",
     "src/tint/lang/spirv/writer/raise/var_for_dynamic_index.cc",
     "src/tint/lang/spirv/writer/writer_rtc_shim_4.cc",
+
 }
 
 else
@@ -928,6 +949,9 @@ if (enable_d3d12) then
   defines {
     "DAWN_ENABLE_BACKEND_D3D12",
     "D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE))",
+    "D3D_SHADER_MODEL_6_7=static_cast<D3D_SHADER_MODEL>(0x67)",
+    "D3D_SHADER_MODEL_6_8=static_cast<D3D_SHADER_MODEL>(0x68)",
+    "D3D_SHADER_MODEL_6_9=static_cast<D3D_SHADER_MODEL>(0x69)",
   }
 
   files {
@@ -949,6 +973,7 @@ if (enable_d3d12) then
     "src/dawn/native/d3d12/PageableD3D12.cpp",
     "src/dawn/native/d3d12/PhysicalDeviceD3D12.cpp",
     "src/dawn/native/d3d12/PipelineLayoutD3D12.cpp",
+    "src/dawn/native/d3d12/PipelineLayoutHandle.cpp",
     "src/dawn/native/d3d12/PlatformFunctionsD3D12.cpp",
     "src/dawn/native/d3d12/QuerySetD3D12.cpp",
     "src/dawn/native/d3d12/QueueD3D12.cpp",
@@ -1028,18 +1053,18 @@ if (enable_vulkan) then
     "src/dawn/native/vulkan/BindGroupLayoutVk.cpp",
     "src/dawn/native/vulkan/BindGroupVk.cpp",
     "src/dawn/native/vulkan/BufferVk.cpp",
-    "src/dawn/native/vulkan/FramebufferCache.cpp",
     "src/dawn/native/vulkan/CommandBufferVk.cpp",
     "src/dawn/native/vulkan/CommandRecordingContextVk.cpp",
     "src/dawn/native/vulkan/ComputePipelineVk.cpp",
     "src/dawn/native/vulkan/DescriptorSetAllocator.cpp",
     "src/dawn/native/vulkan/DeviceVk.cpp",
     "src/dawn/native/vulkan/FencedDeleter.cpp",
+    "src/dawn/native/vulkan/FramebufferCache.cpp",
+    "src/dawn/native/vulkan/FramebufferFetchHelper.cpp",
     "src/dawn/native/vulkan/MemoryTypeSelector.cpp",
     "src/dawn/native/vulkan/PhysicalDeviceVk.cpp",
     "src/dawn/native/vulkan/PipelineCacheVk.cpp",
     "src/dawn/native/vulkan/PipelineLayoutVk.cpp",
-    "src/dawn/native/vulkan/PipelineVk.cpp",
     "src/dawn/native/vulkan/QuerySetVk.cpp",
     "src/dawn/native/vulkan/QueueVk.cpp",
     "src/dawn/native/vulkan/RenderPassCache.cpp",
@@ -1054,6 +1079,7 @@ if (enable_vulkan) then
     "src/dawn/native/vulkan/SharedTextureMemoryVk.cpp",
     "src/dawn/native/vulkan/StreamImplVk.cpp",
     "src/dawn/native/vulkan/SwapChainVk.cpp",
+    "src/dawn/native/vulkan/TexelBufferViewVk.cpp",
     "src/dawn/native/vulkan/TextureVk.cpp",
     "src/dawn/native/vulkan/UtilsVulkan.cpp",
     "src/dawn/native/vulkan/VulkanBackend.cpp",
@@ -1065,13 +1091,14 @@ if (enable_vulkan) then
     "src/dawn/native/vulkan/external_memory/MemoryServiceImplementation.cpp",
     "src/dawn/native/vulkan/external_semaphore/SemaphoreService.cpp",
     "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementation.cpp",
-  }
+
+}
 
   if (_PLATFORM_ANDROID) then
 
     files {
       "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationAHardwareBuffer.cpp",
-      "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD_rtc_shim_1.cpp",
+      "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD.cpp",
     }
 
   end
@@ -1081,7 +1108,7 @@ if (enable_vulkan) then
     files {
       "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationDmaBuf.cpp",
       "src/dawn/native/vulkan/external_memory/MemoryServiceImplementationOpaqueFD.cpp",
-      "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD_rtc_shim_1.cpp",
+      "src/dawn/native/vulkan/external_semaphore/SemaphoreServiceImplementationFD.cpp",
     }
   end
 
@@ -1094,8 +1121,8 @@ if (enable_null) then
   }
 
   files {
-    "src/dawn/native/null/DeviceNull_rtc_shim_1.cpp",
-    "src/dawn/native/null/NullBackend_rtc_shim_1.cpp",
+    "src/dawn/native/null/DeviceNull.cpp",
+    "src/dawn/native/null/NullBackend.cpp",
     }
 end
 

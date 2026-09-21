@@ -31,13 +31,12 @@
 #include <list>
 #include <memory>
 
-#include "dawn/common/MutexProtected.h"
-#include "dawn/native/Error.h"
-#include "dawn/native/RingBufferAllocator.h"
-#include "dawn/native/d3d12/IntegerTypes.h"
-#include "dawn/native/d3d12/PageableD3D12.h"
-#include "dawn/native/d3d12/d3d12_platform.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "src/dawn/native/Error.h"
+#include "src/dawn/native/RingBufferAllocator.h"
+#include "src/dawn/native/d3d12/IntegerTypes.h"
+#include "src/dawn/native/d3d12/PageableD3D12.h"
+#include "src/dawn/native/d3d12/d3d12_platform.h"
 
 // |ShaderVisibleDescriptorAllocator| allocates a variable-sized block of descriptors from a GPU
 // descriptor heap pool.
@@ -61,12 +60,13 @@ class ShaderVisibleDescriptorHeap : public Pageable {
 
 class ShaderVisibleDescriptorAllocator {
   public:
-    static ResultOrError<std::unique_ptr<MutexProtected<ShaderVisibleDescriptorAllocator>>> Create(
+    static ResultOrError<std::unique_ptr<ShaderVisibleDescriptorAllocator>> Create(
         Device* device,
         D3D12_DESCRIPTOR_HEAP_TYPE heapType);
 
     ShaderVisibleDescriptorAllocator(Device* device, D3D12_DESCRIPTOR_HEAP_TYPE heapType);
 
+    // Sub-allocates GPU descriptors in the current heap.
     // Returns true if the allocation was successful, when false is returned the current heap is
     // full and AllocateAndSwitchShaderVisibleHeap() must be called.
     bool AllocateGPUDescriptors(uint32_t descriptorCount,
@@ -76,8 +76,16 @@ class ShaderVisibleDescriptorAllocator {
 
     void Tick(ExecutionSerial completedSerial);
 
+    // Returns the current heap.
     ID3D12DescriptorHeap* GetShaderVisibleHeap() const;
-    MaybeError AllocateAndSwitchShaderVisibleHeap();
+
+    uint32_t GetShaderVisibleHeapMinSize() const;
+    uint32_t GetShaderVisibleHeapMaxSize() const;
+
+    // Switches the current heap to one that can fit `minDescriptorCount`, and bumps heap serial,
+    // invalidating existing GPU descriptor sub-allocations. If the required heap size reaches
+    // `GetShaderVisibleHeapMaxSize`, it pools the heaps, and returns an unused heap from the pool.
+    MaybeError AllocateAndSwitchShaderVisibleHeap(uint32_t minDescriptorCount);
 
     // For testing purposes only.
     HeapVersionID GetShaderVisibleHeapSerialForTesting() const;
@@ -92,7 +100,7 @@ class ShaderVisibleDescriptorAllocator {
 
   private:
     struct SerialDescriptorHeap {
-        ExecutionSerial heapSerial;
+        ExecutionSerial lastUseSerial;
         std::unique_ptr<ShaderVisibleDescriptorHeap> heap;
     };
 
@@ -109,7 +117,7 @@ class ShaderVisibleDescriptorAllocator {
     // The serial value of 0 means the shader-visible heaps have not been allocated.
     // This value is never returned in the GPUDescriptorHeapAllocation after
     // AllocateGPUDescriptors() is called.
-    HeapVersionID mHeapSerial = HeapVersionID(0);
+    HeapVersionID mHeapSerial = HeapVersionID(0u);
 
     uint32_t mSizeIncrement;
 

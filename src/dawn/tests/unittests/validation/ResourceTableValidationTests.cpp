@@ -28,10 +28,11 @@
 #include <utility>
 #include <vector>
 
-#include "dawn/tests/unittests/validation/ValidationTest.h"
-#include "dawn/utils/ComboRenderPipelineDescriptor.h"
-#include "dawn/utils/ScopedIgnoreValidationErrors.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/tests/unittests/validation/ValidationTest.h"
+#include "src/dawn/utils/ComboRenderBundleEncoderDescriptor.h"
+#include "src/dawn/utils/ComboRenderPipelineDescriptor.h"
+#include "src/dawn/utils/ScopedIgnoreValidationErrors.h"
+#include "src/dawn/utils/WGPUHelpers.h"
 
 namespace dawn {
 namespace {
@@ -48,7 +49,7 @@ class ResourceTableValidationTest : public ValidationTest {
         return device.CreateResourceTable(&desc);
     }
 
-    wgpu::ResourceTable MakeErrorResourceTable(uint32_t size) {
+    wgpu::ResourceTable MakeErrorResourceTable(uint32_t size = 1) {
         wgpu::RenderPassMaxDrawCount maxDraw;
         maxDraw.maxDrawCount = 1000;
         wgpu::ResourceTableDescriptor desc{
@@ -61,9 +62,88 @@ class ResourceTableValidationTest : public ValidationTest {
         return table;
     }
 
+    wgpu::ComputePipeline MakeComputePipelineNoTable() {
+        wgpu::ComputePipelineDescriptor csDesc;
+        csDesc.compute.module = utils::CreateShaderModule(device, R"(
+            @compute @workgroup_size(1) fn main() {}
+        )");
+        return device.CreateComputePipeline(&csDesc);
+    }
+
+    wgpu::ComputePipeline MakeComputePipelineWithTable(bool defaulted) {
+        wgpu::ComputePipelineDescriptor csDesc;
+        csDesc.compute.module = utils::CreateShaderModule(device, R"(
+            enable chromium_experimental_resource_table;
+            @compute @workgroup_size(1) fn main() {
+                _ = hasResource<texture_2d<f32>>(0);
+            }
+        )");
+
+        if (defaulted) {
+            return device.CreateComputePipeline(&csDesc);
+        }
+
+        wgpu::PipelineLayoutResourceTable plResourceTable;
+        plResourceTable.usesResourceTable = true;
+
+        wgpu::PipelineLayoutDescriptor pipelineLayoutDescriptor;
+        pipelineLayoutDescriptor.bindGroupLayoutCount = 0;
+        pipelineLayoutDescriptor.nextInChain = &plResourceTable;
+        csDesc.layout = device.CreatePipelineLayout(&pipelineLayoutDescriptor);
+
+        return device.CreateComputePipeline(&csDesc);
+    }
+
+    wgpu::RenderPipeline MakeRenderPipelineNoTable() {
+        auto shaderModule = utils::CreateShaderModule(device, R"(
+            @vertex fn vs() -> @builtin(position) vec4f {
+                return vec4f();
+            }
+            @fragment fn fs() -> @location(0) vec4f {
+                return vec4f();
+            }
+        )");
+
+        utils::ComboRenderPipelineDescriptor pDesc;
+        pDesc.vertex.module = shaderModule;
+        pDesc.cFragment.module = shaderModule;
+        return device.CreateRenderPipeline(&pDesc);
+    }
+
+    wgpu::RenderPipeline MakeRenderPipelineWithTable(bool defaulted = true) {
+        auto shaderModule = utils::CreateShaderModule(device, R"(
+            enable chromium_experimental_resource_table;
+            @vertex fn vs() -> @builtin(position) vec4f {
+                return vec4f();
+            }
+            @fragment fn fs() -> @location(0) vec4f {
+                _ = hasResource<texture_2d<f32>>(0);
+                return vec4f();
+            }
+        )");
+
+        utils::ComboRenderPipelineDescriptor pDesc;
+        pDesc.vertex.module = shaderModule;
+        pDesc.cFragment.module = shaderModule;
+
+        if (defaulted) {
+            return device.CreateRenderPipeline(&pDesc);
+        }
+
+        wgpu::PipelineLayoutResourceTable plResourceTable;
+        plResourceTable.usesResourceTable = true;
+
+        wgpu::PipelineLayoutDescriptor pipelineLayoutDescriptor;
+        pipelineLayoutDescriptor.bindGroupLayoutCount = 0;
+        pipelineLayoutDescriptor.nextInChain = &plResourceTable;
+        pDesc.layout = device.CreatePipelineLayout(&pipelineLayoutDescriptor);
+
+        return device.CreateRenderPipeline(&pDesc);
+    }
+
     enum class Mutator : uint8_t {
         Update,
-        InsertBinding,
+        Insert,
     };
     void TestMutator(Mutator mutator, const wgpu::BindingResource* resource, bool success) {
         wgpu::ResourceTable table = MakeResourceTable(1);
@@ -80,12 +160,12 @@ class ResourceTableValidationTest : public ValidationTest {
                 break;
             }
 
-            case Mutator::InsertBinding: {
+            case Mutator::Insert: {
                 uint32_t slot = wgpu::kInvalidBinding;
                 if (success) {
-                    slot = table.InsertBinding(resource);
+                    slot = table.Insert(resource);
                 } else {
-                    ASSERT_DEVICE_ERROR(slot = table.InsertBinding(resource));
+                    ASSERT_DEVICE_ERROR(slot = table.Insert(resource));
                 }
                 EXPECT_EQ(slot, 0u);
                 break;
@@ -97,23 +177,27 @@ class ResourceTableValidationTest : public ValidationTest {
     // doesn't track this, it makes tests more clearly correct.
     void UseResourceTableInSubmit(wgpu::ResourceTable table) {
         wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        encoder.SetResourceTable(table);
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetResourceTable(table);
+        pass.End();
         wgpu::CommandBuffer commands = encoder.Finish();
         device.GetQueue().Submit(1, &commands);
     }
 };
 
 class ResourceTableValidationTestDisabled : public ValidationTest {
+  protected:
     std::vector<wgpu::FeatureName> GetRequiredFeatures() override { return {}; }
 };
 
 // Test that validates that the feature must be enabled
 TEST_F(ResourceTableValidationTestDisabled, FeatureNotEnabled) {
     wgpu::ResourceTableDescriptor descriptor;
+    descriptor.size = 1u;
     ASSERT_DEVICE_ERROR(device.CreateResourceTable(&descriptor));
 }
 
-// Test that setting invalid size is an error
+// Test that setting invalid size returns nullptr
 TEST_F(ResourceTableValidationTest, InvalidSize) {
     wgpu::ResourceTableDescriptor descriptor;
 
@@ -125,13 +209,14 @@ TEST_F(ResourceTableValidationTest, InvalidSize) {
     descriptor.size = 1u;
     device.CreateResourceTable(&descriptor);
 
-    // Size of maxResourceTableSize is valid
+    // Size of kMaxResourceTableSize is valid
     descriptor.size = kMaxResourceTableSize;
     device.CreateResourceTable(&descriptor);
 
     // Size > limits is invalid
     descriptor.size = kMaxResourceTableSize + 1u;
-    ASSERT_DEVICE_ERROR(device.CreateResourceTable(&descriptor));
+    wgpu::ResourceTable table = device.CreateResourceTable(&descriptor);
+    ASSERT_EQ(table.Get(), nullptr);
 }
 
 // Test that setting nextInChain to anything is an error
@@ -470,76 +555,313 @@ TEST_F(ResourceTableValidationTest, GetBindGroupLayoutValidForOneLessIndex) {
     }
 }
 
-// Tests calling CommandEncoder::SetResourceTable
-TEST_F(ResourceTableValidationTest, CommandEncoder_SetResourceTable) {
+// Tests calling ComputePassEncoder::SetResourceTable
+TEST_F(ResourceTableValidationTest, ComputePassEncoder_SetResourceTable) {
     // Failure case: invalid encoder state
     {
         wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        encoder.Finish();
-        ASSERT_DEVICE_ERROR(encoder.SetResourceTable(nullptr));
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.End();
+        pass.SetResourceTable(nullptr);
+        ASSERT_DEVICE_ERROR(encoder.Finish());
     }
 
     // Failure case: invalid resource table
     {
-        wgpu::ResourceTableDescriptor descriptor;
-        descriptor.size = kMaxResourceTableSize + 1u;  // Invalid size
-        wgpu::ResourceTable resourceTable;
-        ASSERT_DEVICE_ERROR(resourceTable = device.CreateResourceTable(&descriptor));
+        ASSERT_DEVICE_ERROR(wgpu::ResourceTable resourceTable = MakeErrorResourceTable());
 
         wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        encoder.SetResourceTable(resourceTable);
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetResourceTable(resourceTable);
+        pass.End();
         ASSERT_DEVICE_ERROR(encoder.Finish());
     }
 
     // Success case: valid resource table
     {
-        wgpu::ResourceTableDescriptor descriptor;
-        descriptor.size = 1;
-        wgpu::ResourceTable resourceTable = device.CreateResourceTable(&descriptor);
-
+        wgpu::ResourceTable resourceTable = MakeResourceTable(1);
         wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        encoder.SetResourceTable(resourceTable);
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetResourceTable(resourceTable);
+        pass.End();
         encoder.Finish();
     }
 
     // Success case: null resource table
     {
         wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        encoder.SetResourceTable(nullptr);
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetResourceTable(nullptr);
+        pass.End();
         encoder.Finish();
     }
 }
 
-// Tests calling CommandEncoder::SetResourceTable when the feature is disabled
-TEST_F(ResourceTableValidationTestDisabled, CommandEncoder_SetResourceTable) {
+// Tests calling RenderPassEncoder::SetResourceTable
+TEST_F(ResourceTableValidationTest, RenderPassEncoder_SetResourceTable) {
+    auto rp = utils::CreateBasicRenderPass(device, 1, 1, wgpu::TextureFormat::RGBA8Unorm);
+
+    // Failure case: invalid encoder state
+    {
+        wgpu::ResourceTable resourceTable = MakeResourceTable(1);
+
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.End();
+        pass.SetResourceTable(resourceTable);
+        ASSERT_DEVICE_ERROR(encoder.Finish());
+    }
+
+    // Failure case: invalid resource table
+    {
+        ASSERT_DEVICE_ERROR(wgpu::ResourceTable resourceTable = MakeErrorResourceTable());
+
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.SetResourceTable(resourceTable);
+        pass.End();
+        ASSERT_DEVICE_ERROR(encoder.Finish());
+    }
+
+    // Success case: valid resource table
+    {
+        wgpu::ResourceTable resourceTable = MakeResourceTable(1);
+
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.SetResourceTable(resourceTable);
+        pass.End();
+        encoder.Finish();
+    }
+
+    // Success case: valid resource table set twice
+    {
+        wgpu::ResourceTable resourceTable = MakeResourceTable(1);
+
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.SetResourceTable(resourceTable);
+        pass.SetResourceTable(resourceTable);
+        pass.End();
+        encoder.Finish();
+    }
+
+    // Error case: two different resource tables are set
+    {
+        wgpu::ResourceTable resourceTable1 = MakeResourceTable(1);
+        wgpu::ResourceTable resourceTable2 = MakeResourceTable(1);
+
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.SetResourceTable(resourceTable1);
+        pass.SetResourceTable(resourceTable2);
+        pass.End();
+        ASSERT_DEVICE_ERROR(encoder.Finish());
+    }
+}
+
+// Tests that the resource table in RenderBundle can be used in draw
+TEST_F(ResourceTableValidationTest, RenderBundleUsesResourceTable) {
+    for (bool defaulted : {true, false}) {
+        wgpu::RenderPipeline pipelineUsesTable = MakeRenderPipelineWithTable(defaulted);
+        wgpu::RenderPipeline pipelineNoTable = MakeRenderPipelineNoTable();
+
+        // Control case 1: The pipeline doesn't use a resource table and is compatible with a render
+        // bundle created without RenderBundleEncoderResourceTable.
+        {
+            utils::ComboRenderBundleEncoderDescriptor desc = {};
+            desc.colorFormatCount = 1;
+            desc.cColorFormats[0] = wgpu::TextureFormat::RGBA8Unorm;
+            desc.SetUsesResourceTable(false);
+
+            wgpu::RenderBundleEncoder rbe = device.CreateRenderBundleEncoder(&desc);
+            rbe.SetPipeline(pipelineNoTable);
+            rbe.Draw(1);
+            rbe.Finish();
+        }
+        // Control case 2: The pipeline doesn't use a resource table and is compatible with
+        // usesResourceTable = false.
+        {
+            utils::ComboRenderBundleEncoderDescriptor desc = {};
+            desc.colorFormatCount = 1;
+            desc.cColorFormats[0] = wgpu::TextureFormat::RGBA8Unorm;
+
+            wgpu::RenderBundleEncoder rbe = device.CreateRenderBundleEncoder(&desc);
+            rbe.SetPipeline(pipelineNoTable);
+            rbe.Draw(1);
+            rbe.Finish();
+        }
+
+        // Success case: The pipeline uses a resource table and is compatible with a render bundle
+        // created with usesResourceTable = true.
+        {
+            utils::ComboRenderBundleEncoderDescriptor desc = {};
+            desc.colorFormatCount = 1;
+            desc.cColorFormats[0] = wgpu::TextureFormat::RGBA8Unorm;
+            desc.SetUsesResourceTable(true);
+
+            wgpu::RenderBundleEncoder rbe = device.CreateRenderBundleEncoder(&desc);
+            rbe.SetPipeline(pipelineUsesTable);
+            rbe.Draw(1);
+            rbe.Finish();
+        }
+
+        // Error case 1: The pipeline uses a resource table and is not compatible with a render
+        // bundle created without RenderBundleEncoderResourceTable.
+        {
+            utils::ComboRenderBundleEncoderDescriptor desc = {};
+            desc.colorFormatCount = 1;
+            desc.cColorFormats[0] = wgpu::TextureFormat::RGBA8Unorm;
+
+            wgpu::RenderBundleEncoder rbe = device.CreateRenderBundleEncoder(&desc);
+            rbe.SetPipeline(pipelineUsesTable);
+            rbe.Draw(1);
+            ASSERT_DEVICE_ERROR(rbe.Finish());
+        }
+        // Control case 2: The pipeline uses a resource table and is not compatible with
+        // usesResourceTable = false.
+        {
+            utils::ComboRenderBundleEncoderDescriptor desc = {};
+            desc.colorFormatCount = 1;
+            desc.cColorFormats[0] = wgpu::TextureFormat::RGBA8Unorm;
+            desc.SetUsesResourceTable(false);
+
+            wgpu::RenderBundleEncoder rbe = device.CreateRenderBundleEncoder(&desc);
+            rbe.SetPipeline(pipelineUsesTable);
+            rbe.Draw(1);
+            ASSERT_DEVICE_ERROR(rbe.Finish());
+        }
+    }
+}
+
+// Test that a RenderBundle created with usesResourceTable requires a table to be set when
+// ExecuteBundles is called.
+TEST_F(ResourceTableValidationTest, ExecuteBundlesUsingResourceTableRequiresCurrentResourceTable) {
+    auto rp = utils::CreateBasicRenderPass(device, 1, 1, wgpu::TextureFormat::RGBA8Unorm);
+
+    utils::ComboRenderBundleEncoderDescriptor desc = {};
+    desc.colorFormatCount = 1;
+    desc.cColorFormats[0] = wgpu::TextureFormat::RGBA8Unorm;
+    wgpu::RenderBundle rbNoTable = device.CreateRenderBundleEncoder(&desc).Finish();
+
+    desc.SetUsesResourceTable(true);
+    wgpu::RenderBundle rbTable = device.CreateRenderBundleEncoder(&desc).Finish();
+
+    // Control case: render bundle not using table doesn't require a ResourceTable set.
+    {
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.ExecuteBundles(1, &rbNoTable);
+        pass.End();
+        encoder.Finish();
+    }
+
+    // Error case: render bundle using table causes an error if no ResourceTable is set.
+    {
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.ExecuteBundles(1, &rbTable);
+        pass.End();
+        ASSERT_DEVICE_ERROR(encoder.Finish());
+    }
+
+    // Error case: at least one of the render bundles executed requires a resource table set.
+    {
+        std::array<wgpu::RenderBundle, 3u> rbs = {rbNoTable, rbTable, rbNoTable};
+
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.ExecuteBundles(3, rbs.data());
+        pass.End();
+        ASSERT_DEVICE_ERROR(encoder.Finish());
+    }
+
+    // Success case: render bundle using table can be executed if there is a resource table.
+    {
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.SetResourceTable(MakeResourceTable(1));
+        pass.ExecuteBundles(1, &rbTable);
+        pass.End();
+        encoder.Finish();
+    }
+}
+
+// Tests calling ComputePassEncoder::SetResourceTable when the feature is disabled
+TEST_F(ResourceTableValidationTestDisabled, ComputePassEncoder_SetResourceTable) {
     // Failure case: feature is disabled
     wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-    encoder.SetResourceTable(nullptr);
+    wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+    pass.SetResourceTable(nullptr);
+    pass.End();
     ASSERT_DEVICE_ERROR(encoder.Finish());
 }
 
-// Tests that the resource table can be used in submit
-TEST_F(ResourceTableValidationTest, Submit_CanUseInSubmit) {
+// Tests calling RenderBundleEncoderResourceTable is not allowed when the feature is disabled
+TEST_F(ResourceTableValidationTestDisabled, RenderBundleEncoderResourceTable) {
+    // Control case: RenderBundleEncoderResourceTable is not chained.
+    {
+        utils::ComboRenderBundleEncoderDescriptor desc = {};
+        desc.colorFormatCount = 1;
+        desc.cColorFormats[0] = wgpu::TextureFormat::RGBA8Unorm;
+        wgpu::RenderBundleEncoder rbe = device.CreateRenderBundleEncoder(&desc);
+        rbe.Finish();
+    }
+
+    // Success case: RenderBundleEncoderResourceTable is chained (with false).
+    {
+        utils::ComboRenderBundleEncoderDescriptor desc = {};
+        desc.colorFormatCount = 1;
+        desc.cColorFormats[0] = wgpu::TextureFormat::RGBA8Unorm;
+        desc.SetUsesResourceTable(false);
+        device.CreateRenderBundleEncoder(&desc);
+    }
+
+    // Error case: RenderBundleEncoderResourceTable is chained (with true).
+    {
+        utils::ComboRenderBundleEncoderDescriptor desc = {};
+        desc.colorFormatCount = 1;
+        desc.cColorFormats[0] = wgpu::TextureFormat::RGBA8Unorm;
+        desc.SetUsesResourceTable(true);
+        ASSERT_DEVICE_ERROR(device.CreateRenderBundleEncoder(&desc));
+    }
+}
+
+// Tests that resource tables set on a compute pass can be used in submit
+TEST_F(ResourceTableValidationTest, ComputePassEncoder_CanUseInSubmit) {
+    wgpu::ResourceTable resourceTable = MakeResourceTable(1);
+    wgpu::ResourceTable resourceTable2 = MakeResourceTable(1);
+    wgpu::ResourceTable resourceTable3 = MakeResourceTable(1);
+
     // Success case: resource table can be used in submit
     {
-        wgpu::ResourceTableDescriptor descriptor;
-        descriptor.size = 1u;
-        wgpu::ResourceTable resourceTable = device.CreateResourceTable(&descriptor);
-
         wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        encoder.SetResourceTable(resourceTable);
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetResourceTable(resourceTable);
+        pass.End();
+        wgpu::CommandBuffer commands = encoder.Finish();
+        device.GetQueue().Submit(1, &commands);
+    }
+
+    // Success case: resource table can be used in multiple passes for submit
+    {
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetResourceTable(resourceTable);
+        pass.End();
+        wgpu::ComputePassEncoder pass2 = encoder.BeginComputePass();
+        pass2.SetResourceTable(resourceTable);
+        pass2.End();
         wgpu::CommandBuffer commands = encoder.Finish();
         device.GetQueue().Submit(1, &commands);
     }
 
     // Failure case: resource table has been destroyed
     {
-        wgpu::ResourceTableDescriptor descriptor;
-        descriptor.size = 1u;
-        wgpu::ResourceTable resourceTable = device.CreateResourceTable(&descriptor);
-
         wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        encoder.SetResourceTable(resourceTable);
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetResourceTable(resourceTable);
+        pass.End();
         wgpu::CommandBuffer commands = encoder.Finish();
         resourceTable.Destroy();  // Destroy it
         ASSERT_DEVICE_ERROR(device.GetQueue().Submit(1, &commands));
@@ -547,30 +869,82 @@ TEST_F(ResourceTableValidationTest, Submit_CanUseInSubmit) {
 
     // Failure case: one of multiple resource tables has been destroyed
     {
-        wgpu::ResourceTableDescriptor descriptor;
-        descriptor.size = 1u;
-        wgpu::ResourceTable resourceTable1 = device.CreateResourceTable(&descriptor);
-        wgpu::ResourceTable resourceTable2 = device.CreateResourceTable(&descriptor);
-        wgpu::ResourceTable resourceTable3 = device.CreateResourceTable(&descriptor);
-
         wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        encoder.SetResourceTable(resourceTable1);
-        encoder.SetResourceTable(resourceTable2);
-        encoder.SetResourceTable(resourceTable3);
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetResourceTable(resourceTable);
+        pass.SetResourceTable(resourceTable2);
+        pass.SetResourceTable(resourceTable3);
+        pass.End();
         wgpu::CommandBuffer commands = encoder.Finish();
         resourceTable2.Destroy();  // Destroy one
         ASSERT_DEVICE_ERROR(device.GetQueue().Submit(1, &commands));
     }
 
+    // Failure case: one of multiple resource tables in another pass has been destroyed
+    {
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetResourceTable(resourceTable);
+        pass.SetResourceTable(resourceTable2);
+        pass.End();
+        wgpu::ComputePassEncoder pass2 = encoder.BeginComputePass();
+        pass2.SetResourceTable(resourceTable);
+        pass2.SetResourceTable(resourceTable3);
+        pass2.End();
+        wgpu::CommandBuffer commands = encoder.Finish();
+        resourceTable3.Destroy();  // Destroy one
+        ASSERT_DEVICE_ERROR(device.GetQueue().Submit(1, &commands));
+    }
+
     // Failure case: resource table must still be valid if set, then nullptr is set
     {
-        wgpu::ResourceTableDescriptor descriptor;
-        descriptor.size = 1u;
-        wgpu::ResourceTable resourceTable = device.CreateResourceTable(&descriptor);
-
         wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        encoder.SetResourceTable(resourceTable);
-        encoder.SetResourceTable(nullptr);  // Clear it
+        wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+        pass.SetResourceTable(resourceTable);
+        pass.SetResourceTable(nullptr);  // Clear it
+        pass.End();
+        wgpu::CommandBuffer commands = encoder.Finish();
+        resourceTable.Destroy();  // Destroy it
+        ASSERT_DEVICE_ERROR(device.GetQueue().Submit(1, &commands));
+    }
+}
+
+// Tests that resource tables set on a render pass can be used in submit
+TEST_F(ResourceTableValidationTest, RenderPassEncoder_CanUseInSubmit) {
+    wgpu::ResourceTable resourceTable = MakeResourceTable(1);
+    wgpu::ResourceTable resourceTable2 = MakeResourceTable(1);
+    wgpu::ResourceTable resourceTable3 = MakeResourceTable(1);
+    auto rp = utils::CreateBasicRenderPass(device, 1, 1, wgpu::TextureFormat::RGBA8Unorm);
+
+    // Success case: resource table can be used in submit
+    {
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.SetResourceTable(resourceTable);
+        pass.End();
+        wgpu::CommandBuffer commands = encoder.Finish();
+        device.GetQueue().Submit(1, &commands);
+    }
+
+    // Success case: resource table can be used in multiple passes for submit
+    {
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.SetResourceTable(resourceTable);
+        pass.End();
+        wgpu::RenderPassEncoder pass2 = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass2.SetResourceTable(resourceTable);
+        pass2.End();
+        wgpu::CommandBuffer commands = encoder.Finish();
+        device.GetQueue().Submit(1, &commands);
+    }
+
+    // Failure case: resource table has been destroyed
+    {
+        wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.SetResourceTable(resourceTable);
+        pass.End();
         wgpu::CommandBuffer commands = encoder.Finish();
         resourceTable.Destroy();  // Destroy it
         ASSERT_DEVICE_ERROR(device.GetQueue().Submit(1, &commands));
@@ -580,82 +954,87 @@ TEST_F(ResourceTableValidationTest, Submit_CanUseInSubmit) {
 // Tests that the resource table can be used in dispatch
 TEST_F(ResourceTableValidationTest, Submit_DispatchRequiresResourceTable) {
     for (bool defaulted : {true, false}) {
-        wgpu::ComputePipelineDescriptor csDesc;
-        csDesc.compute.module = utils::CreateShaderModule(device, R"(
-            enable chromium_experimental_resource_table;
-            @compute @workgroup_size(1) fn main() {
-                _ = hasResource<texture_2d<f32>>(0);
-            }
-        )");
+        wgpu::ComputePipeline pipelineUsesTable = MakeComputePipelineWithTable(defaulted);
+        wgpu::ComputePipeline pipelineNoTable = MakeComputePipelineNoTable();
+        wgpu::ResourceTable resourceTable = MakeResourceTable(1);
+        wgpu::ResourceTable resourceTable2 = MakeResourceTable(1);
 
-        wgpu::ComputePipeline pipeline;
-        if (defaulted) {
-            csDesc.layout = nullptr;
-            pipeline = device.CreateComputePipeline(&csDesc);
-        } else {
-            wgpu::PipelineLayoutResourceTable plResourceTable;
-            plResourceTable.usesResourceTable = true;
-
-            wgpu::PipelineLayoutDescriptor pipelineLayoutDescriptor;
-            pipelineLayoutDescriptor.bindGroupLayoutCount = 0;
-            pipelineLayoutDescriptor.nextInChain = &plResourceTable;
-
-            csDesc.layout = device.CreatePipelineLayout(&pipelineLayoutDescriptor);
-            pipeline = device.CreateComputePipeline(&csDesc);
-        }
-
-        wgpu::ResourceTableDescriptor descriptor;
-        descriptor.size = 1u;
-        wgpu::ResourceTable resourceTable = device.CreateResourceTable(&descriptor);
-        wgpu::ResourceTable resourceTable2 = device.CreateResourceTable(&descriptor);
-
-        // Success case: `usesResourceTable` is enabled, and one has been set on the encoder
+        // Success case: `usesResourceTable` is enabled, and one has been set on the pass
         {
             wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-            encoder.SetResourceTable(resourceTable);
             wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
-            pass.SetPipeline(pipeline);
+            pass.SetResourceTable(resourceTable);
+            pass.SetPipeline(pipelineUsesTable);
             pass.DispatchWorkgroups(1);
             pass.End();
             wgpu::CommandBuffer commands = encoder.Finish();
             device.GetQueue().Submit(1, &commands);
         }
 
-        // Failure case: `usesResourceTable` is enabled, but none has been set on the encoder
+        // Failure case: `usesResourceTable` is enabled, but none has been set on the pass
         {
             wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
             wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
-            pass.SetPipeline(pipeline);
+            pass.SetPipeline(pipelineUsesTable);
             pass.DispatchWorkgroups(1);
             pass.End();
             ASSERT_DEVICE_ERROR(wgpu::CommandBuffer commands = encoder.Finish());
         }
 
-        // Failure case: `usesResourceTable` is enabled, one then nullptr set on the encoder
+        // Failure case: `usesResourceTable` is enabled, one then nullptr set on the pass
         {
             wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-            encoder.SetResourceTable(resourceTable);  // Set a valid one
-            encoder.SetResourceTable(nullptr);        // Then clear it
             wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
-            pass.SetPipeline(pipeline);
+            pass.SetResourceTable(resourceTable);  // Set a valid one
+            pass.SetResourceTable(nullptr);        // Then clear it
+            pass.SetPipeline(pipelineUsesTable);
             pass.DispatchWorkgroups(1);
             pass.End();
             ASSERT_DEVICE_ERROR(wgpu::CommandBuffer commands = encoder.Finish());
         }
 
         // Success case: `usesResourceTable` is enabled, one then nullptr then another set on the
-        // encoder
+        // pass
         {
             wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-            encoder.SetResourceTable(resourceTable);   // Set a valid one
-            encoder.SetResourceTable(nullptr);         // Then clear it
-            encoder.SetResourceTable(resourceTable2);  // Then set another valid one
             wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
-            pass.SetPipeline(pipeline);
+            pass.SetResourceTable(resourceTable);   // Set a valid one
+            pass.SetResourceTable(nullptr);         // Then clear it
+            pass.SetResourceTable(resourceTable2);  // Then set another valid one
+            pass.SetPipeline(pipelineUsesTable);
             pass.DispatchWorkgroups(1);
             pass.End();
             wgpu::CommandBuffer commands = encoder.Finish();
             device.GetQueue().Submit(1, &commands);
+        }
+
+        // Success case: `usesResourceTable` enabled only on pass 2 with table set
+        {
+            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+            wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+            pass.SetPipeline(pipelineNoTable);
+            pass.DispatchWorkgroups(1);
+            pass.End();
+            wgpu::ComputePassEncoder pass2 = encoder.BeginComputePass();
+            pass2.SetResourceTable(resourceTable);
+            pass2.SetPipeline(pipelineUsesTable);
+            pass2.DispatchWorkgroups(1);
+            pass2.End();
+            wgpu::CommandBuffer commands = encoder.Finish();
+        }
+
+        // Failure case: `usesResourceTable` enabled only on pass 2 but no table set
+        {
+            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+            wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
+            pass.SetPipeline(pipelineNoTable);
+            pass.DispatchWorkgroups(1);
+            pass.End();
+            wgpu::ComputePassEncoder pass2 = encoder.BeginComputePass();
+            pass2.SetPipeline(pipelineUsesTable);
+            pass2.DispatchWorkgroups(1);
+            pass2.End();
+            ASSERT_DEVICE_ERROR(wgpu::CommandBuffer commands = encoder.Finish());
         }
     }
 }
@@ -663,366 +1042,123 @@ TEST_F(ResourceTableValidationTest, Submit_DispatchRequiresResourceTable) {
 // Tests that the resource table can be used in draw
 TEST_F(ResourceTableValidationTest, Submit_DrawRequiresResourceTable) {
     for (bool defaulted : {true, false}) {
-        utils::ComboRenderPipelineDescriptor pDesc;
-        pDesc.vertex.module = utils::CreateShaderModule(device, R"(
-            @vertex fn vs() -> @builtin(position) vec4f {
-                return vec4f();
-            }
-        )");
-        pDesc.cFragment.module = utils::CreateShaderModule(device, R"(
-            enable chromium_experimental_resource_table;
-            @fragment fn fs() -> @location(0) vec4f {
-                _ = hasResource<texture_2d<f32>>(0);
-                return vec4f();
-            }
-        )");
-
-        wgpu::RenderPipeline pipeline;
-        if (defaulted) {
-            pDesc.layout = nullptr;
-            pipeline = device.CreateRenderPipeline(&pDesc);
-        } else {
-            wgpu::PipelineLayoutResourceTable plResourceTable;
-            plResourceTable.usesResourceTable = true;
-
-            wgpu::PipelineLayoutDescriptor pipelineLayoutDescriptor;
-            pipelineLayoutDescriptor.bindGroupLayoutCount = 0;
-            pipelineLayoutDescriptor.nextInChain = &plResourceTable;
-
-            pDesc.layout = device.CreatePipelineLayout(&pipelineLayoutDescriptor);
-            pipeline = device.CreateRenderPipeline(&pDesc);
-        }
-
-        wgpu::ResourceTableDescriptor descriptor;
-        descriptor.size = 1u;
-        wgpu::ResourceTable resourceTable = device.CreateResourceTable(&descriptor);
-        wgpu::ResourceTable resourceTable2 = device.CreateResourceTable(&descriptor);
+        wgpu::RenderPipeline pipelineUsesTable = MakeRenderPipelineWithTable(defaulted);
+        wgpu::RenderPipeline pipelineNoTable = MakeRenderPipelineNoTable();
+        wgpu::ResourceTable resourceTable = MakeResourceTable(1);
+        wgpu::ResourceTable resourceTable2 = MakeResourceTable(1);
         auto rp = utils::CreateBasicRenderPass(device, 1, 1, wgpu::TextureFormat::RGBA8Unorm);
 
-        // Success case: `usesResourceTable` is enabled, and one has been set on the encoder
+        // Success case: `usesResourceTable` is enabled, and one has been set on the pass
         {
             wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-            encoder.SetResourceTable(resourceTable);
             wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
-            pass.SetPipeline(pipeline);
+            pass.SetResourceTable(resourceTable);
+            pass.SetPipeline(pipelineUsesTable);
             pass.Draw(1);
             pass.End();
             wgpu::CommandBuffer commands = encoder.Finish();
             device.GetQueue().Submit(1, &commands);
         }
 
-        // Failure case: `usesResourceTable` is enabled, but none has been set on the encoder
+        // Failure case: `usesResourceTable` is enabled, but none has been set on the pass
         {
             wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
             wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
-            pass.SetPipeline(pipeline);
+            pass.SetPipeline(pipelineUsesTable);
             pass.Draw(1);
             pass.End();
             ASSERT_DEVICE_ERROR(wgpu::CommandBuffer commands = encoder.Finish());
         }
 
-        // Failure case: `usesResourceTable` is enabled, one then nullptr set on the encoder
+        // Success case: single pass toggles between pipelines that do not use and use a table
         {
             wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-            encoder.SetResourceTable(resourceTable);  // Set a valid one
-            encoder.SetResourceTable(nullptr);        // Then clear it
             wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
-            pass.SetPipeline(pipeline);
+            pass.SetPipeline(pipelineNoTable);
             pass.Draw(1);
-            pass.End();
-            ASSERT_DEVICE_ERROR(wgpu::CommandBuffer commands = encoder.Finish());
-        }
-
-        // Success case: `usesResourceTable` is enabled, one then nullptr then another set on the
-        // encoder
-        {
-            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-            encoder.SetResourceTable(resourceTable);   // Set a valid one
-            encoder.SetResourceTable(nullptr);         // Then clear it
-            encoder.SetResourceTable(resourceTable2);  // Then set another valid one
-            wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
-            pass.SetPipeline(pipeline);
+            pass.SetPipeline(pipelineUsesTable);
+            pass.SetResourceTable(resourceTable);
             pass.Draw(1);
             pass.End();
             wgpu::CommandBuffer commands = encoder.Finish();
             device.GetQueue().Submit(1, &commands);
         }
-    }
-}
 
-// Test that pinning / unpinning is valid for a simple case. This is a control for the test that
-// errors are produced when the feature is not enabled.
-TEST_F(ResourceTableValidationTest, PinUnpinTextureSuccess) {
-    wgpu::TextureDescriptor desc{
-        .usage = wgpu::TextureUsage::TextureBinding,
-        .size = {1, 1},
-        .format = wgpu::TextureFormat::R32Float,
-    };
-    wgpu::Texture tex = device.CreateTexture(&desc);
+        // Failure case: single pass toggles between pipelines that do not use and use a table, but
+        // does not set a table when required
+        {
+            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+            wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+            pass.SetPipeline(pipelineNoTable);
+            pass.Draw(1);
+            pass.SetPipeline(pipelineUsesTable);
+            pass.Draw(1);
+            pass.End();
+            ASSERT_DEVICE_ERROR(wgpu::CommandBuffer commands = encoder.Finish());
+        }
 
-    tex.Pin(wgpu::TextureUsage::TextureBinding);
-    tex.Unpin();
-}
+        // Success case: `usesResourceTable` enabled only on pass 2 with table set
+        {
+            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+            wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+            pass.SetPipeline(pipelineNoTable);
+            pass.Draw(1);
+            pass.End();
+            wgpu::RenderPassEncoder pass2 = encoder.BeginRenderPass(&rp.renderPassInfo);
+            pass2.SetResourceTable(resourceTable);
+            pass2.SetPipeline(pipelineUsesTable);
+            pass2.Draw(1);
+            pass2.End();
+            wgpu::CommandBuffer commands = encoder.Finish();
+            device.GetQueue().Submit(1, &commands);
+        }
 
-// Test that calling pin/unpin is an error when the feature is not enabled.
-TEST_F(ResourceTableValidationTestDisabled, PinUnpinTextureSuccess) {
-    wgpu::TextureDescriptor desc{
-        .usage = wgpu::TextureUsage::TextureBinding,
-        .size = {1, 1},
-        .format = wgpu::TextureFormat::R32Float,
-    };
-    wgpu::Texture tex = device.CreateTexture(&desc);
-
-    ASSERT_DEVICE_ERROR(tex.Pin(wgpu::TextureUsage::TextureBinding));
-    ASSERT_DEVICE_ERROR(tex.Unpin());
-}
-
-// Test the validation of the usage parameter of Pin.
-TEST_F(ResourceTableValidationTest, PinUnpinTextureUsageConstraint) {
-    wgpu::TextureDescriptor desc{
-        .size = {1, 1},
-        .format = wgpu::TextureFormat::R32Float,
-    };
-
-    desc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopySrc |
-                 wgpu::TextureUsage::StorageBinding;
-    wgpu::Texture testTexture = device.CreateTexture(&desc);
-
-    desc.usage = wgpu::TextureUsage::RenderAttachment;
-    wgpu::Texture renderOnlyTexture = device.CreateTexture(&desc);
-
-    // Control case, pinning the sampled texture to TextureBinding is valid.
-    testTexture.Pin(wgpu::TextureUsage::TextureBinding);
-
-    // Error case, pinning to a usage not in the texture is invalid.
-    ASSERT_DEVICE_ERROR(renderOnlyTexture.Pin(wgpu::TextureUsage::TextureBinding));
-
-    // Error case, pinning to an invalid usage is invalid.
-    ASSERT_DEVICE_ERROR(testTexture.Pin(static_cast<wgpu::TextureUsage>(0x8000'0000)));
-
-    // Error case, pinning must be to a shader usage.
-    ASSERT_DEVICE_ERROR(testTexture.Pin(wgpu::TextureUsage::CopySrc));
-
-    // Error case, pinning must be to a shader usage.
-    // TODO(https://issues.chromium.org/473459218): Lift this constraint and allow other shader
-    // usages.
-    ASSERT_DEVICE_ERROR(testTexture.Pin(wgpu::TextureUsage::StorageBinding));
-}
-
-// Test that pinning / unpinning don't need to be balanced.
-TEST_F(ResourceTableValidationTest, PinUnpinUnbalancedIsValid) {
-    wgpu::TextureDescriptor desc{
-        .usage = wgpu::TextureUsage::TextureBinding,
-        .size = {1, 1},
-        .format = wgpu::TextureFormat::R32Float,
-    };
-    wgpu::Texture tex = device.CreateTexture(&desc);
-
-    // Pinning right after creation is valid.
-    tex.Unpin();
-
-    // Pinning twice is valid.
-    tex.Pin(wgpu::TextureUsage::TextureBinding);
-    // TODO(https://issues.chromium.org/473459218): Use a different usage here when another is
-    // valid.
-    tex.Pin(wgpu::TextureUsage::TextureBinding);
-
-    // Unpinning twice (plus one more to make sure we are unbalanced) is valid.
-    tex.Unpin();
-    tex.Unpin();
-    tex.Unpin();
-}
-
-// Test that pinning is not allowed on a destroyed texture.
-TEST_F(ResourceTableValidationTest, PinDestroyedTextureInvalid) {
-    wgpu::TextureDescriptor desc{
-        .usage = wgpu::TextureUsage::TextureBinding,
-        .size = {1, 1},
-        .format = wgpu::TextureFormat::R32Float,
-    };
-    wgpu::Texture tex = device.CreateTexture(&desc);
-
-    // Success case, pinning before Destroy() is valid.
-    tex.Pin(wgpu::TextureUsage::TextureBinding);
-    tex.Unpin();
-
-    // Error case, pinning a destroyed texture is not allowed.
-    tex.Destroy();
-    ASSERT_DEVICE_ERROR(tex.Pin(wgpu::TextureUsage::TextureBinding));
-}
-
-enum class TestPinState { Default, Pinned, Unpinned };
-std::array<TestPinState, 3> kAllTestPinStates = {TestPinState::Default, TestPinState::Pinned,
-                                                 TestPinState::Unpinned};
-wgpu::Texture CreateTextureWithPinState(const wgpu::Device& device,
-                                        TestPinState pin,
-                                        wgpu::TextureUsage usage) {
-    wgpu::TextureDescriptor desc{
-        .usage = usage,
-        .size = {1, 1},
-        .format = wgpu::TextureFormat::R32Float,
-    };
-    wgpu::Texture tex = device.CreateTexture(&desc);
-
-    switch (pin) {
-        case TestPinState::Default:
-            break;
-        case TestPinState::Pinned:
-            tex.Pin(wgpu::TextureUsage::TextureBinding);
-            break;
-        case TestPinState::Unpinned:
-            tex.Pin(wgpu::TextureUsage::TextureBinding);
-            tex.Unpin();
-            break;
-    }
-
-    return tex;
-}
-
-// Test that pinning prevents usage in WriteTexture
-TEST_F(ResourceTableValidationTest, PinValidationUsageWriteTexture) {
-    for (auto pin : kAllTestPinStates) {
-        wgpu::Texture tex = CreateTextureWithPinState(
-            device, pin, wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst);
-
-        wgpu::TexelCopyTextureInfo dst = {
-            .texture = tex,
-        };
-        wgpu::TexelCopyBufferLayout dataLayout = {};
-        wgpu::Extent3D copySize = {0, 0, 0};
-
-        if (pin == TestPinState::Pinned) {
-            ASSERT_DEVICE_ERROR(
-                device.GetQueue().WriteTexture(&dst, nullptr, 0, &dataLayout, &copySize));
-        } else {
-            device.GetQueue().WriteTexture(&dst, nullptr, 0, &dataLayout, &copySize);
+        // Failure case: `usesResourceTable` enabled only on pass 2 but no table set
+        {
+            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+            wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+            pass.SetPipeline(pipelineNoTable);
+            pass.Draw(1);
+            pass.End();
+            wgpu::RenderPassEncoder pass2 = encoder.BeginRenderPass(&rp.renderPassInfo);
+            pass2.SetPipeline(pipelineUsesTable);
+            pass2.Draw(1);
+            pass2.End();
+            ASSERT_DEVICE_ERROR(wgpu::CommandBuffer commands = encoder.Finish());
         }
     }
 }
 
-// Test that pinning prevents usage in an encoder copy command
-TEST_F(ResourceTableValidationTest, PinValidationUsageEncoderCopy) {
-    wgpu::TextureDescriptor desc{
-        .usage = wgpu::TextureUsage::CopyDst,
-        .size = {1, 1},
-        .format = wgpu::TextureFormat::R32Float,
-    };
-    wgpu::Texture texDst = device.CreateTexture(&desc);
+// Test that the resource table persists on the render pass after an ExecuteBundle call that uses /
+// doesn't use a ResourceTable.
+TEST_F(ResourceTableValidationTest, ExecuteBundlesPersistsResourceTable) {
+    for (bool rbUsesResourceTable : {true, false}) {
+        auto rp = utils::CreateBasicRenderPass(device, 1, 1, wgpu::TextureFormat::RGBA8Unorm);
 
-    for (auto pin : kAllTestPinStates) {
-        wgpu::Texture tex = CreateTextureWithPinState(
-            device, pin, wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopySrc);
-
-        wgpu::TexelCopyTextureInfo src = {
-            .texture = tex,
-        };
-        wgpu::TexelCopyTextureInfo dst = {
-            .texture = texDst,
-        };
-        wgpu::Extent3D copySize = {0, 0, 0};
+        utils::ComboRenderBundleEncoderDescriptor desc = {};
+        desc.colorFormatCount = 1;
+        desc.cColorFormats[0] = rp.colorFormat;
+        desc.SetUsesResourceTable(rbUsesResourceTable);
 
         wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-        encoder.CopyTextureToTexture(&src, &dst, &copySize);
-        wgpu::CommandBuffer commands = encoder.Finish();
+        wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
+        pass.SetResourceTable(MakeResourceTable(1));
 
-        if (pin == TestPinState::Pinned) {
-            ASSERT_DEVICE_ERROR(device.GetQueue().Submit(1, &commands));
-        } else {
-            device.GetQueue().Submit(1, &commands);
-        }
+        wgpu::RenderBundleEncoder rbe = device.CreateRenderBundleEncoder(&desc);
+        wgpu::RenderBundle renderBundle = rbe.Finish();
+
+        auto pipelineUsesTable = MakeRenderPipelineWithTable();
+        pass.ExecuteBundles(1, &renderBundle);
+        pass.SetPipeline(pipelineUsesTable);
+        pass.Draw(1);
+        pass.End();
+
+        encoder.Finish();
     }
 }
 
-// Test that pinning prevents usage in a dispatch if it is not the pinned usage.
-TEST_F(ResourceTableValidationTest, PinValidationUsageDispatch) {
-    wgpu::ComputePipelineDescriptor csDesc;
-    csDesc.compute.module = utils::CreateShaderModule(device, R"(
-        @group(0) @binding(0) var t_sampled : texture_2d<f32>;
-        @compute @workgroup_size(1) fn sample() {
-            _ = t_sampled;
-        }
-
-        @group(0) @binding(0) var t_ro_storage : texture_storage_2d<r32float, read>;
-        @compute @workgroup_size(1) fn ro_storage() {
-            _ = t_ro_storage;
-        }
-    )");
-
-    csDesc.compute.entryPoint = "sample";
-    wgpu::ComputePipeline samplePipeline = device.CreateComputePipeline(&csDesc);
-    csDesc.compute.entryPoint = "ro_storage";
-    wgpu::ComputePipeline storagePipeline = device.CreateComputePipeline(&csDesc);
-
-    for (auto pin : kAllTestPinStates) {
-        wgpu::Texture tex = CreateTextureWithPinState(
-            device, pin, wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::StorageBinding);
-
-        for (bool sample : {false, true}) {
-            wgpu::ComputePipeline pipeline = sample ? samplePipeline : storagePipeline;
-            wgpu::BindGroup bg = utils::MakeBindGroup(device, pipeline.GetBindGroupLayout(0),
-                                                      {
-                                                          {0, tex.CreateView()},
-                                                      });
-
-            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-            wgpu::ComputePassEncoder pass = encoder.BeginComputePass();
-            pass.SetPipeline(pipeline);
-            pass.SetBindGroup(0, bg);
-            pass.DispatchWorkgroups(1);
-            pass.End();
-            wgpu::CommandBuffer commands = encoder.Finish();
-
-            if (pin == TestPinState::Pinned && !sample) {
-                ASSERT_DEVICE_ERROR(device.GetQueue().Submit(1, &commands));
-            } else {
-                device.GetQueue().Submit(1, &commands);
-            }
-        }
-    }
-}
-
-// Test that pinning prevents usage in a render pass if it is not the pinned usage.
-TEST_F(ResourceTableValidationTest, PinValidationUsageRenderPass) {
-    wgpu::BindGroupLayout sampleLayout = utils::MakeBindGroupLayout(
-        device, {
-                    {0, wgpu::ShaderStage::Fragment, wgpu::TextureSampleType::UnfilterableFloat},
-                });
-    wgpu::BindGroupLayout storageLayout = utils::MakeBindGroupLayout(
-        device, {
-                    {0, wgpu::ShaderStage::Fragment, wgpu::StorageTextureAccess::ReadOnly,
-                     wgpu::TextureFormat::R32Float},
-                });
-
-    for (auto pin : kAllTestPinStates) {
-        wgpu::Texture tex = CreateTextureWithPinState(
-            device, pin, wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::StorageBinding);
-
-        for (bool sample : {false, true}) {
-            wgpu::BindGroupLayout bgl = sample ? sampleLayout : storageLayout;
-            wgpu::BindGroup bg = utils::MakeBindGroup(device, bgl,
-                                                      {
-                                                          {0, tex.CreateView()},
-                                                      });
-
-            utils::BasicRenderPass rp = utils::CreateBasicRenderPass(device, 1, 1);
-
-            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-            wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&rp.renderPassInfo);
-            pass.SetBindGroup(0, bg);
-            pass.End();
-            wgpu::CommandBuffer commands = encoder.Finish();
-
-            if (pin == TestPinState::Pinned && !sample) {
-                ASSERT_DEVICE_ERROR(device.GetQueue().Submit(1, &commands));
-            } else {
-                device.GetQueue().Submit(1, &commands);
-            }
-        }
-    }
-}
-
-// Checks that only texture views are allowed as resources in mutators for SamplingResourceTable.
-// TODO(https://issues.chromium.org/473354063): Support samplers in SamplingResourceTable.
+// Checks that only texture views and samplers are allowed as resources in mutators for
+// SamplingResourceTable.
 TEST_F(ResourceTableValidationTest, MutatorBindingKindValidation) {
     // Create the texture to put in the table.
     wgpu::TextureDescriptor tDesc = {
@@ -1042,23 +1178,22 @@ TEST_F(ResourceTableValidationTest, MutatorBindingKindValidation) {
     // Create the sampler to put in the table.
     wgpu::Sampler sampler = device.CreateSampler();
 
-    for (auto mutator : {Mutator::Update, Mutator::InsertBinding}) {
-        // Control case: putting only a texture is valid.
+    for (auto mutator : {Mutator::Update, Mutator::Insert}) {
+        // Success case: a single texture is valid.
         {
             wgpu::BindingResource resource = {.textureView = texture.CreateView()};
+            TestMutator(mutator, &resource, true);
+        }
+
+        // Success case: a single sampler is valid
+        {
+            wgpu::BindingResource resource = {.sampler = sampler};
             TestMutator(mutator, &resource, true);
         }
 
         // Error case: a buffer is an error.
         {
             wgpu::BindingResource resource = {.buffer = buffer};
-            TestMutator(mutator, &resource, false);
-        }
-
-        // Error case: a sampler is an error.
-        // TODO(https://issues.chromium.org/473354063): Support samplers in SamplingResourceTable.
-        {
-            wgpu::BindingResource resource = {.sampler = sampler};
             TestMutator(mutator, &resource, false);
         }
 
@@ -1069,6 +1204,79 @@ TEST_F(ResourceTableValidationTest, MutatorBindingKindValidation) {
             TestMutator(mutator, &resource, false);
         }
     }
+}
+
+// Tests that resources added/inserted on a table must be valid objects
+TEST_F(ResourceTableValidationTest, MutatorResourceMustBeValid) {
+    // Create the texture to put in the table.
+    wgpu::TextureDescriptor tDesc = {
+        .usage = wgpu::TextureUsage::TextureBinding,
+        .size = {1, 1},
+        .format = wgpu::TextureFormat::RGBA8Unorm,
+    };
+    wgpu::Texture textureGood = device.CreateTexture(&tDesc);
+
+    tDesc.size = {0, 0};
+    ASSERT_DEVICE_ERROR(wgpu::Texture textureBad = device.CreateTexture(&tDesc));
+
+    // Create the sampler to put in the table.
+    wgpu::SamplerDescriptor sDesc = {};
+    wgpu::Sampler samplerGood = device.CreateSampler(&sDesc);
+
+    sDesc.lodMinClamp = -1;
+    ASSERT_DEVICE_ERROR(wgpu::Sampler samplerBad = device.CreateSampler(&sDesc));
+
+    for (auto mutator : {Mutator::Update, Mutator::Insert}) {
+        // Success case: valid texture
+        {
+            wgpu::BindingResource resource = {.textureView = textureGood.CreateView()};
+            TestMutator(mutator, &resource, true);
+        }
+
+        // Error case: invalid texture
+        {
+            ASSERT_DEVICE_ERROR(
+                wgpu::BindingResource resource = {.textureView = textureBad.CreateView()});
+            TestMutator(mutator, &resource, false);
+        }
+
+        // Success case: valid sampler
+        {
+            wgpu::BindingResource resource = {.sampler = samplerGood};
+            TestMutator(mutator, &resource, true);
+        }
+
+        // Error case: invalid sampler
+        {
+            wgpu::BindingResource resource = {.sampler = samplerBad};
+            TestMutator(mutator, &resource, false);
+        }
+    }
+}
+
+// Tests that adding and removing different types of resources works
+TEST_F(ResourceTableValidationTest, MutatorsMultipleResources) {
+    // Create the texture to put in the table.
+    wgpu::TextureDescriptor tDesc{
+        .usage = wgpu::TextureUsage::TextureBinding,
+        .size = {1, 1},
+        .format = wgpu::TextureFormat::RGBA8Unorm,
+    };
+    wgpu::BindingResource textureResource = {.textureView =
+                                                 device.CreateTexture(&tDesc).CreateView()};
+    wgpu::BindingResource samplerResource = {.sampler = device.CreateSampler()};
+
+    auto table = MakeResourceTable(42);
+
+    EXPECT_EQ(wgpu::Status::Success, table.Update(0, &textureResource));
+    EXPECT_EQ(wgpu::Status::Success, table.Update(1, &samplerResource));
+    EXPECT_EQ(2u, table.Insert(&textureResource));
+    EXPECT_EQ(3u, table.Insert(&samplerResource));
+
+    EXPECT_EQ(wgpu::Status::Success, table.Remove(0));
+    EXPECT_EQ(wgpu::Status::Success, table.Remove(1));
+    EXPECT_EQ(wgpu::Status::Success, table.Remove(2));
+    EXPECT_EQ(wgpu::Status::Success, table.Remove(3));
 }
 
 // Check that the view must have only the TextureBinding usage for SamplingResourceTable.
@@ -1084,7 +1292,7 @@ TEST_F(ResourceTableValidationTest, MutatorTextureViewMustBeOnlyTextureBinding) 
     };
     wgpu::Texture tex = device.CreateTexture(&tDesc);
 
-    for (auto mutator : {Mutator::Update, Mutator::InsertBinding}) {
+    for (auto mutator : {Mutator::Update, Mutator::Insert}) {
         // Control case: limiting the usage to TextureBinding is valid.
         {
             wgpu::TextureViewDescriptor vDesc{
@@ -1133,7 +1341,7 @@ TEST_F(ResourceTableValidationTest, MutatorTextureViewMustBeSingleAspect) {
     };
     wgpu::Texture tex = device.CreateTexture(&tDesc);
 
-    for (auto mutator : {Mutator::Update, Mutator::InsertBinding}) {
+    for (auto mutator : {Mutator::Update, Mutator::Insert}) {
         // Success case, only the depth aspect is selected.
         {
             wgpu::TextureViewDescriptor vDesc{
@@ -1160,7 +1368,80 @@ TEST_F(ResourceTableValidationTest, MutatorTextureViewMustBeSingleAspect) {
     }
 }
 
-// Test that it is not allowed to call Update, RemoveBinding or InsertBinding after the table is
+class ResourceTableStaticSamplerValidationTest : public ResourceTableValidationTest {
+  protected:
+    std::vector<wgpu::FeatureName> GetRequiredFeatures() override {
+        return {
+            wgpu::FeatureName::ChromiumExperimentalSamplingResourceTable,
+            wgpu::FeatureName::StaticSamplers,
+            wgpu::FeatureName::YCbCrVulkanSamplers,
+        };
+    }
+};
+
+// Checks that YCbCr samplers cannot be added to a resource table
+TEST_F(ResourceTableStaticSamplerValidationTest, MutatorSamplerMustNotBeYCbCr) {
+    wgpu::SamplerDescriptor samplerDesc = {};
+    wgpu::Sampler samplerDefault = device.CreateSampler(&samplerDesc);
+
+    wgpu::YCbCrVkDescriptor yCbCrDesc = {};
+    yCbCrDesc.externalFormat = 1;
+    samplerDesc.nextInChain = &yCbCrDesc;
+    wgpu::Sampler samplerYCbCr = device.CreateSampler(&samplerDesc);
+
+    for (auto mutator : {Mutator::Update, Mutator::Insert}) {
+        // Success case: default sampler
+        {
+            wgpu::BindingResource resource = {.sampler = samplerDefault};
+            TestMutator(mutator, &resource, true);
+        }
+
+        // Error case: YCbCr sampler
+        {
+            wgpu::BindingResource resource = {.sampler = samplerYCbCr};
+            TestMutator(mutator, &resource, false);
+        }
+    }
+}
+
+// Checks that YCbCr texture views cannot be added to a resource table
+TEST_F(ResourceTableStaticSamplerValidationTest, MutatorViewMustNotBeYCbCr) {
+    wgpu::TextureDescriptor tDesc{
+        .usage = wgpu::TextureUsage::TextureBinding,
+        .size = {1, 1},
+        .format = wgpu::TextureFormat::RGBA8Unorm,
+    };
+    wgpu::Texture textureDefault = device.CreateTexture(&tDesc);
+
+    tDesc.format = wgpu::TextureFormat::OpaqueYCbCrAndroid;
+    wgpu::Texture textureYCbCr = device.CreateTexture(&tDesc);
+
+    wgpu::YCbCrVkDescriptor yCbCrDesc = {};
+    yCbCrDesc.externalFormat = 1;
+
+    wgpu::TextureViewDescriptor vDesc{
+        .nextInChain = &yCbCrDesc,
+        .format = wgpu::TextureFormat::OpaqueYCbCrAndroid,
+        .arrayLayerCount = 1,
+        .usage = wgpu::TextureUsage::TextureBinding,
+    };
+
+    for (auto mutator : {Mutator::Update, Mutator::Insert}) {
+        // Success case: default texture view
+        {
+            wgpu::BindingResource resource = {.textureView = textureDefault.CreateView()};
+            TestMutator(mutator, &resource, true);
+        }
+
+        // Error case: YCbCr texture view
+        {
+            wgpu::BindingResource resource = {.textureView = textureYCbCr.CreateView(&vDesc)};
+            // TestMutator(mutator, &resource, false);
+        }
+    }
+}
+
+// Test that it is not allowed to call Update, Remove or Insert after the table is
 // destroyed.
 TEST_F(ResourceTableValidationTest, MutatorsAfterDestroy) {
     // Create the texture to put in the table.
@@ -1176,24 +1457,24 @@ TEST_F(ResourceTableValidationTest, MutatorsAfterDestroy) {
     for (auto table : {MakeResourceTable(7), MakeErrorResourceTable(7)}) {
         utils::ScopedIgnoreValidationErrors ignoreErrors(device);
 
-        // Add a few bindings just to test RemoveBinding
+        // Add a few bindings just to test Remove
         EXPECT_EQ(wgpu::Status::Success, table.Update(0, &resource));
         EXPECT_EQ(wgpu::Status::Success, table.Update(1, &resource));
 
         // Success cases, calling mutators before destroying is valid.
         EXPECT_EQ(wgpu::Status::Success, table.Update(2, &resource));
-        EXPECT_NE(wgpu::kInvalidBinding, table.InsertBinding(&resource));
-        EXPECT_EQ(wgpu::Status::Success, table.RemoveBinding(0));
+        EXPECT_NE(wgpu::kInvalidBinding, table.Insert(&resource));
+        EXPECT_EQ(wgpu::Status::Success, table.Remove(0));
 
         // Error case, after destruction all mutators return errors.
         table.Destroy();
         EXPECT_EQ(wgpu::Status::Error, table.Update(6, &resource));
-        EXPECT_EQ(wgpu::kInvalidBinding, table.InsertBinding(&resource));
-        EXPECT_EQ(wgpu::Status::Error, table.RemoveBinding(1));
+        EXPECT_EQ(wgpu::kInvalidBinding, table.Insert(&resource));
+        EXPECT_EQ(wgpu::Status::Error, table.Remove(1));
     }
 }
 
-// Test that it is not allowed to call Update, RemoveBinding with slots past the end.
+// Test that it is not allowed to call Update, Remove with slots past the end.
 TEST_F(ResourceTableValidationTest, MutatorsAfterTableEnd) {
     // Create the texture to put in the table.
     wgpu::TextureDescriptor tDesc{
@@ -1211,16 +1492,16 @@ TEST_F(ResourceTableValidationTest, MutatorsAfterTableEnd) {
         // Success cases, calling mutators with slots in bounds.
         EXPECT_EQ(wgpu::Status::Success, table.Update(0, &resource));
         EXPECT_EQ(wgpu::Status::Success, table.Update(41, &resource));
-        EXPECT_EQ(wgpu::Status::Success, table.RemoveBinding(0));
-        EXPECT_EQ(wgpu::Status::Success, table.RemoveBinding(41));
+        EXPECT_EQ(wgpu::Status::Success, table.Remove(0));
+        EXPECT_EQ(wgpu::Status::Success, table.Remove(41));
 
         // Error case, calling mutators with out of bounds slots.
         EXPECT_EQ(wgpu::Status::Error, table.Update(42, &resource));
-        EXPECT_EQ(wgpu::Status::Error, table.RemoveBinding(42));
+        EXPECT_EQ(wgpu::Status::Error, table.Remove(42));
     }
 }
 
-// Test that Update/RemoveBinding return success but generates a validation error when used on an
+// Test that Update/Remove return success but generates a validation error when used on an
 // invalid table.
 TEST_F(ResourceTableValidationTest, MutatorsOnInvalidTable) {
     // Create the texture to put in the table.
@@ -1236,8 +1517,8 @@ TEST_F(ResourceTableValidationTest, MutatorsOnInvalidTable) {
         wgpu::ResourceTable table = MakeResourceTable(3);
 
         EXPECT_EQ(wgpu::Status::Success, table.Update(0, &resource));
-        EXPECT_EQ(wgpu::Status::Success, table.RemoveBinding(0));
-        EXPECT_NE(wgpu::kInvalidBinding, table.InsertBinding(&resource));
+        EXPECT_EQ(wgpu::Status::Success, table.Remove(0));
+        EXPECT_NE(wgpu::kInvalidBinding, table.Insert(&resource));
     }
 
     // Test on an invalid table.
@@ -1245,18 +1526,8 @@ TEST_F(ResourceTableValidationTest, MutatorsOnInvalidTable) {
         wgpu::ResourceTable table = MakeErrorResourceTable(3);
 
         ASSERT_DEVICE_ERROR(EXPECT_EQ(wgpu::Status::Success, table.Update(0, &resource)));
-        ASSERT_DEVICE_ERROR(EXPECT_EQ(wgpu::Status::Success, table.RemoveBinding(0)));
-        ASSERT_DEVICE_ERROR(EXPECT_NE(wgpu::kInvalidBinding, table.InsertBinding(&resource)));
-    }
-
-    // Test on an invalid table due to being too large.
-    {
-        wgpu::ResourceTable table;
-        ASSERT_DEVICE_ERROR(table = MakeResourceTable(kMaxResourceTableSize + 1));
-
-        EXPECT_EQ(wgpu::Status::Error, table.Update(0, &resource));
-        EXPECT_EQ(wgpu::Status::Error, table.RemoveBinding(0));
-        EXPECT_EQ(wgpu::kInvalidBinding, table.InsertBinding(&resource));
+        ASSERT_DEVICE_ERROR(EXPECT_EQ(wgpu::Status::Success, table.Remove(0)));
+        ASSERT_DEVICE_ERROR(EXPECT_NE(wgpu::kInvalidBinding, table.Insert(&resource)));
     }
 }
 
@@ -1285,16 +1556,16 @@ TEST_F(ResourceTableValidationTest, UpdateBindingWhenNeverUsed) {
 }
 
 // Test that Remove() can be called on a table slot even when it was never used.
-TEST_F(ResourceTableValidationTest, RemoveBindingWhenNeverUsed) {
+TEST_F(ResourceTableValidationTest, RemoveWhenNeverUsed) {
     // This is "content timeline" validation so it works the same on error tables and valid tables,
     // and we ignore device-timeline validation errors, they are not what we are testing here.
     for (auto table : {MakeResourceTable(3), MakeErrorResourceTable(3)}) {
         utils::ScopedIgnoreValidationErrors ignoreErrors(device);
-        EXPECT_EQ(wgpu::Status::Success, table.RemoveBinding(0));
+        EXPECT_EQ(wgpu::Status::Success, table.Remove(0));
     }
 }
 
-// Check that a table slot can be updated only after all commands submitted prior to RemoveBinding
+// Check that a table slot can be updated only after all commands submitted prior to Remove
 // are completed.
 TEST_F(ResourceTableValidationTest, UpdateAfterRemoveRequiresGPUIsFinished) {
     wgpu::TextureDescriptor tDesc{
@@ -1318,7 +1589,7 @@ TEST_F(ResourceTableValidationTest, UpdateAfterRemoveRequiresGPUIsFinished) {
         device.GetQueue().OnSubmittedWorkDone(
             wgpu::CallbackMode::AllowSpontaneous,
             [&](wgpu::QueueWorkDoneStatus, wgpu::StringView) { updateValid = true; });
-        EXPECT_EQ(wgpu::Status::Success, table.RemoveBinding(0));
+        EXPECT_EQ(wgpu::Status::Success, table.Remove(0));
 
         // The null backend happens to call OnSubmittedWorkDone immediately because commands take 0
         // time. This test is duplicated in the end2end tests where OnSubmittedWorkDone won't fire
@@ -1341,7 +1612,7 @@ TEST_F(ResourceTableValidationTest, UpdateAfterRemoveRequiresGPUIsFinished) {
 }
 
 // Check that trying to insert bindings fail when no more are available.
-TEST_F(ResourceTableValidationTest, InsertBindingFailWhenNoMoreSpace) {
+TEST_F(ResourceTableValidationTest, InsertFailWhenNoMoreSpace) {
     wgpu::TextureDescriptor tDesc{
         .usage = wgpu::TextureUsage::TextureBinding,
         .size = {1, 1},
@@ -1355,24 +1626,24 @@ TEST_F(ResourceTableValidationTest, InsertBindingFailWhenNoMoreSpace) {
         utils::ScopedIgnoreValidationErrors ignoreErrors(device);
 
         // There is space for only three resources.
-        EXPECT_EQ(0u, table.InsertBinding(&resource));
-        EXPECT_EQ(1u, table.InsertBinding(&resource));
-        EXPECT_EQ(2u, table.InsertBinding(&resource));
-        EXPECT_EQ(wgpu::kInvalidBinding, table.InsertBinding(&resource));
+        EXPECT_EQ(0u, table.Insert(&resource));
+        EXPECT_EQ(1u, table.Insert(&resource));
+        EXPECT_EQ(2u, table.Insert(&resource));
+        EXPECT_EQ(wgpu::kInvalidBinding, table.Insert(&resource));
 
         // Remove one binding (and wait for it to be recycled), it will be available for
-        // InsertBinding after which a new InsertBinding will still run out of space.
-        EXPECT_EQ(wgpu::Status::Success, table.RemoveBinding(1));
+        // Insert after which a new InsertBinding will still run out of space.
+        EXPECT_EQ(wgpu::Status::Success, table.Remove(1));
         UseResourceTableInSubmit(table);
         WaitForAllOperations();
 
-        EXPECT_EQ(1u, table.InsertBinding(&resource));
-        EXPECT_EQ(wgpu::kInvalidBinding, table.InsertBinding(&resource));
+        EXPECT_EQ(1u, table.Insert(&resource));
+        EXPECT_EQ(wgpu::kInvalidBinding, table.Insert(&resource));
     }
 }
 
-// Check that bindings that are inserted are unavailable for Update() until RemoveBinding.
-TEST_F(ResourceTableValidationTest, InsertBindingPreventsUpdate) {
+// Check that bindings that are inserted are unavailable for Update() until Remove.
+TEST_F(ResourceTableValidationTest, InsertPreventsUpdate) {
     wgpu::TextureDescriptor tDesc{
         .usage = wgpu::TextureUsage::TextureBinding,
         .size = {1, 1},
@@ -1385,11 +1656,11 @@ TEST_F(ResourceTableValidationTest, InsertBindingPreventsUpdate) {
     for (auto table : {MakeResourceTable(1), MakeErrorResourceTable(1)}) {
         utils::ScopedIgnoreValidationErrors ignoreErrors(device);
 
-        EXPECT_EQ(0u, table.InsertBinding(&resource));
+        EXPECT_EQ(0u, table.Insert(&resource));
         EXPECT_EQ(wgpu::Status::Error, table.Update(0, &resource));
 
         // Remove one binding (and wait for it to be recycled), it will be available for Update.
-        EXPECT_EQ(wgpu::Status::Success, table.RemoveBinding(0));
+        EXPECT_EQ(wgpu::Status::Success, table.Remove(0));
         UseResourceTableInSubmit(table);
         WaitForAllOperations();
 
@@ -1397,8 +1668,8 @@ TEST_F(ResourceTableValidationTest, InsertBindingPreventsUpdate) {
     }
 }
 
-// Check that InsertBinding skips over used slots.
-TEST_F(ResourceTableValidationTest, InsertBindingSkipsOverUsedSlots) {
+// Check that Insert skips over used slots.
+TEST_F(ResourceTableValidationTest, InsertSkipsOverUsedSlots) {
     wgpu::TextureDescriptor tDesc{
         .usage = wgpu::TextureUsage::TextureBinding,
         .size = {1, 1},
@@ -1413,22 +1684,22 @@ TEST_F(ResourceTableValidationTest, InsertBindingSkipsOverUsedSlots) {
         EXPECT_EQ(wgpu::Status::Success, table.Update(1, &resource));
         EXPECT_EQ(wgpu::Status::Success, table.Update(3, &resource));
 
-        // InsertBinding skips over entries used by Update()
-        EXPECT_EQ(0u, table.InsertBinding(&resource));
-        EXPECT_EQ(2u, table.InsertBinding(&resource));
-        EXPECT_EQ(4u, table.InsertBinding(&resource));
+        // Insert skips over entries used by Update()
+        EXPECT_EQ(0u, table.Insert(&resource));
+        EXPECT_EQ(2u, table.Insert(&resource));
+        EXPECT_EQ(4u, table.Insert(&resource));
 
         // Remove bindings in inverse order.
         for (uint32_t i : {4, 3, 2}) {
-            EXPECT_EQ(wgpu::Status::Success, table.RemoveBinding(i));
+            EXPECT_EQ(wgpu::Status::Success, table.Remove(i));
         }
         UseResourceTableInSubmit(table);
         WaitForAllOperations();
 
-        // InsertBinding should still return the min available slot.
-        EXPECT_EQ(2u, table.InsertBinding(&resource));
-        EXPECT_EQ(3u, table.InsertBinding(&resource));
-        EXPECT_EQ(4u, table.InsertBinding(&resource));
+        // Insert should still return the min available slot.
+        EXPECT_EQ(2u, table.Insert(&resource));
+        EXPECT_EQ(3u, table.Insert(&resource));
+        EXPECT_EQ(4u, table.Insert(&resource));
     }
 }
 
@@ -1446,14 +1717,6 @@ TEST_F(ResourceTableValidationTest, GetSizeAfterCreation) {
         EXPECT_EQ(0u, MakeErrorResourceTable(0).GetSize());
         EXPECT_EQ(42u, MakeErrorResourceTable(42).GetSize());
         EXPECT_EQ(kMaxResourceTableSize, MakeErrorResourceTable(kMaxResourceTableSize).GetSize());
-    }
-
-    // Invalid resource table with a size above the limit is a special case that doesn't allocate
-    // state tracking.
-    {
-        wgpu::ResourceTable table;
-        ASSERT_DEVICE_ERROR(table = MakeResourceTable(kMaxResourceTableSize + 1));
-        EXPECT_EQ(0u, table.GetSize());
     }
 }
 

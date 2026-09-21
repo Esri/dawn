@@ -29,6 +29,7 @@
 #define SRC_TINT_LANG_WGSL_READER_PARSER_PARSER_H_
 
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -262,7 +263,7 @@ class Parser {
         /// Parsed header source
         Source source;
         /// Function name
-        const ast::Identifier* name;
+        const ast::Identifier* name = nullptr;
         /// Function parameters
         Vector<const ast::Parameter*, 8> params;
         /// Function return type
@@ -384,6 +385,11 @@ class Parser {
     /// @param source the source to associate the error with
     /// @param msg the note message
     void AddNote(const Source& source, std::string_view msg);
+    /// Enables dependent extensions of `base_ext`
+    /// Dependent extensions are given the same source location as `base_ext`.
+    void AddDependentExtensions(Vector<const ast::Extension*, 4>& extensions,
+                                Extension base_ext,
+                                Source src);
     /// Appends a deprecated-language-feature warning at `source` with the message
     /// `msg`
     /// @param source the source to associate the error with
@@ -525,9 +531,6 @@ class Parser {
     /// Parses a `case_selector` grammar element
     /// @returns the selector
     Maybe<const ast::CaseSelector*> case_selector();
-    /// Parses a `func_call_statement` grammar element
-    /// @returns the parsed function call or nullptr
-    Maybe<const ast::CallStatement*> func_call_statement();
     /// Parses a `loop_statement` grammar element, with the attribute list provided as `attrs`.
     /// @param attrs the list of attributes for the statement
     /// @returns the parsed loop or nullptr
@@ -651,7 +654,7 @@ class Parser {
     /// Parses a `core_lhs_expression` grammar element
     /// @returns the parsed expression or a non-kMatched failure
     Maybe<const ast::Expression*> core_lhs_expression();
-    /// Parses a `lhs_expression` grammar element
+    /// Parses a `lhs_expression` or `func_call_statement` grammar element
     /// @returns the parsed expression or a non-kMatched failure
     Maybe<const ast::Expression*> lhs_expression();
     /// Parses a `variable_updating_statement` grammar element
@@ -890,7 +893,7 @@ class Parser {
     template <typename ENUM>
     Expect<ENUM> expect_enum(std::string_view name,
                              ENUM (*parse)(std::string_view str),
-                             Slice<const std::string_view> strings,
+                             std::span<const std::string_view> strings,
                              std::string_view use = "");
 
     Expect<ast::Type> expect_type(std::string_view use);

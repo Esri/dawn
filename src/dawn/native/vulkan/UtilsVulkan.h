@@ -32,10 +32,11 @@
 #include <string_view>
 #include <vector>
 
-#include "dawn/common/StackAllocated.h"
-#include "dawn/common/vulkan_platform.h"
-#include "dawn/native/Commands.h"
-#include "dawn/native/dawn_platform.h"
+#include "src/dawn/common/StackAllocated.h"
+#include "src/dawn/common/vulkan_platform.h"
+#include "src/dawn/native/Commands.h"
+#include "src/dawn/native/IntegerTypes.h"
+#include "src/dawn/native/dawn_platform.h"
 
 namespace dawn::native {
 struct ProgrammableStage;
@@ -43,6 +44,11 @@ union OverrideScalar;
 }  // namespace dawn::native
 
 namespace dawn::native::vulkan {
+
+// Per Vulkan spec (vkImportSemaphoreFdKHR / vkImportFenceFdKHR), fd = -1
+// for VK_EXTERNAL_*_HANDLE_TYPE_SYNC_FD_BIT is a valid sync file descriptor
+// meaning "already signaled".
+inline constexpr int kSemaphoreFdAlreadySignaledFd = -1;
 
 class Device;
 struct VulkanFunctions;
@@ -112,6 +118,9 @@ struct PNextChainBuilder : public StackAllocated {
   private:
     raw_ptr<VkBaseOutStructure> mCurrent;
 };
+
+uint32_t ToPushConstantBytes(const ImmediateMask& immediates);
+uint32_t AttachmentCount(const ColorAttachmentMask& mask);
 
 VkCompareOp ToVulkanCompareOp(wgpu::CompareFunction op);
 
@@ -199,9 +208,9 @@ ResultOrError<VkDrmFormatModifierPropertiesEXT> GetFormatModifierProps(
     VkFormat format,
     uint64_t modifier);
 
-ResultOrError<VkSamplerYcbcrConversion> CreateSamplerYCbCrConversionCreateInfo(
-    YCbCrVkDescriptor yCbCrDescriptor,
-    Device* device);
+ResultOrError<VkSamplerYcbcrConversion> CreateSamplerYCbCrConversion(
+    const Device* device,
+    const YCbCrVkDescriptor& yCbCrDescriptor);
 
 // TODO(42240963): properly surface the limit.
 // Linux nearly always exposes 4096.

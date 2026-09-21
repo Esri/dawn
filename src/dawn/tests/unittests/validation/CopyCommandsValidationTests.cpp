@@ -28,13 +28,13 @@
 #include <tuple>
 #include <vector>
 
-#include "dawn/common/Assert.h"
-#include "dawn/common/Constants.h"
-#include "dawn/common/Math.h"
-#include "dawn/tests/unittests/validation/ValidationTest.h"
-#include "dawn/utils/TestUtils.h"
-#include "dawn/utils/TextureUtils.h"
-#include "dawn/utils/WGPUHelpers.h"
+#include "src/dawn/common/Constants.h"
+#include "src/dawn/common/Math.h"
+#include "src/dawn/tests/unittests/validation/ValidationTest.h"
+#include "src/dawn/utils/TestUtils.h"
+#include "src/dawn/utils/TextureUtils.h"
+#include "src/dawn/utils/WGPUHelpers.h"
+#include "src/utils/assert.h"
 
 namespace dawn {
 namespace {
@@ -216,6 +216,52 @@ class CopyCommandTest : public ValidationTest {
                          rowsPerImage, texture, 0, origin, extent3D);
     }
 };
+
+struct CopyCommandTest_UseBlitForDepthTextureToTextureCopyToNonzeroSubresource : CopyCommandTest {
+    std::vector<const char*> GetEnabledToggles() override {
+        return {"use_blit_for_depth_texture_to_texture_copy_to_nonzero_subresource"};
+    }
+};
+// Regression test for crbug.com/489585038. Checks that an effective no-op T2T copies doesn't crash
+// during submit when all texture refs are 0. This was happening with
+// use_blit_for_depth_texture_to_texture_copy_to_nonzero_subresource enabled, and doing a 0-depth
+// (no-op) copy, then making sure that the src and dst texture refs go to 0 so they are deleted, and
+// then submitting. The bug was that the raw texture pointers were being added
+// CommandEncoder::mTopLevelTextures but without the texture refs being also stored in a command
+// object.
+TEST_F(CopyCommandTest_UseBlitForDepthTextureToTextureCopyToNonzeroSubresource,
+       Regression489585038) {
+    wgpu::Texture src, dst;
+    wgpu::CommandBuffer commands;
+    {
+        wgpu::TextureDescriptor texDesc = {};
+        texDesc.size = {8, 8, 1};
+        texDesc.format = wgpu::TextureFormat::Depth32Float;
+        texDesc.mipLevelCount = 4;
+        texDesc.sampleCount = 1;
+        texDesc.usage = wgpu::TextureUsage::CopySrc | wgpu::TextureUsage::CopyDst |
+                        wgpu::TextureUsage::RenderAttachment;
+
+        src = device.CreateTexture(&texDesc);
+        dst = device.CreateTexture(&texDesc);
+
+        wgpu::TexelCopyTextureInfo srcInfo = utils::CreateTexelCopyTextureInfo(src, 1);
+        wgpu::TexelCopyTextureInfo dstInfo = utils::CreateTexelCopyTextureInfo(dst, 1);
+
+        constexpr uint32_t depthToCopy = 0;  // Crucial for reproducing the crash
+        wgpu::Extent3D copySize = {4, 4, depthToCopy};
+
+        wgpu::CommandEncoder commandEncoder = device.CreateCommandEncoder();
+        commandEncoder.CopyTextureToTexture(&srcInfo, &dstInfo, &copySize);
+        commands = commandEncoder.Finish();
+    }
+
+    src = nullptr;
+    dst = nullptr;
+
+    // This used to result in a UAF in QueueBase::ValidateSubmit accessing the deleted textures.
+    device.GetQueue().Submit(1, &commands);
+}
 
 // Test copies between buffer and multiple array layers of an uncompressed texture
 TEST_F(CopyCommandTest, CopyToMultipleArrayLayers) {
@@ -476,8 +522,8 @@ TEST_F(CopyCommandTest_B2T, Success) {
         TestB2TCopy(utils::Expectation::Success, source, 0, 256, 3, destination, 0, {5, 7, 0},
                     {2, 3, 1});
         // Unaligned region, with buffer offset
-        TestB2TCopy(utils::Expectation::Success, source, 31 * 4, 256, 3, destination, 0, {0, 0, 0},
-                    {3, 3, 1});
+        TestB2TCopy(utils::Expectation::Success, source, 31ULL * 4, 256, 3, destination, 0,
+                    {0, 0, 0}, {3, 3, 1});
     }
 
     // bytesPerRow is undefined
@@ -585,7 +631,7 @@ TEST_F(CopyCommandTest_B2T, OutOfBoundsOnTexture) {
 
 // Test that we force Depth=1 on copies to 2D textures
 TEST_F(CopyCommandTest_B2T, DepthConstraintFor2DTextures) {
-    wgpu::Buffer source = CreateBuffer(16 * 4, wgpu::BufferUsage::CopySrc);
+    wgpu::Buffer source = CreateBuffer(16ULL * 4, wgpu::BufferUsage::CopySrc);
     wgpu::Texture destination =
         Create2DTexture(16, 16, 5, 1, wgpu::TextureFormat::RGBA8Unorm, wgpu::TextureUsage::CopyDst);
 
@@ -595,8 +641,8 @@ TEST_F(CopyCommandTest_B2T, DepthConstraintFor2DTextures) {
 
 // Test B2T copies with incorrect buffer usage
 TEST_F(CopyCommandTest_B2T, IncorrectUsage) {
-    wgpu::Buffer source = CreateBuffer(16 * 4, wgpu::BufferUsage::CopySrc);
-    wgpu::Buffer vertex = CreateBuffer(16 * 4, wgpu::BufferUsage::Vertex);
+    wgpu::Buffer source = CreateBuffer(16ULL * 4, wgpu::BufferUsage::CopySrc);
+    wgpu::Buffer vertex = CreateBuffer(16ULL * 4, wgpu::BufferUsage::Vertex);
     wgpu::Texture destination =
         Create2DTexture(16, 16, 5, 1, wgpu::TextureFormat::RGBA8Unorm, wgpu::TextureUsage::CopyDst);
     wgpu::Texture sampled = Create2DTexture(16, 16, 5, 1, wgpu::TextureFormat::RGBA8Unorm,
@@ -1082,8 +1128,8 @@ TEST_F(CopyCommandTest_T2B, Success) {
         TestT2BCopy(utils::Expectation::Success, source, 0, {5, 7, 0}, destination, 0, 256, 3,
                     {2, 3, 1});
         // Unaligned region, with buffer offset
-        TestT2BCopy(utils::Expectation::Success, source, 2, {0, 0, 0}, destination, 31 * 4, 256, 3,
-                    {3, 3, 1});
+        TestT2BCopy(utils::Expectation::Success, source, 2, {0, 0, 0}, destination, 31ULL * 4, 256,
+                    3, {3, 3, 1});
     }
 
     // bytesPerRow is undefined
@@ -2057,6 +2103,15 @@ TEST_F(CopyCommandTest_T2T, CopyWithinSameTexture) {
             constexpr uint32_t kDstBaseArrayLayer = kSrcBaseArrayLayer - kCopyArrayLayerCount;
             TestT2TCopy(utils::Expectation::Success, texture, 0, {0, 0, kSrcBaseArrayLayer},
                         texture, 0, {0, 0, kDstBaseArrayLayer}, {1, 1, kCopyArrayLayerCount});
+        }
+
+        // Case where kCopyArrayLayerCount == 0
+        {
+            constexpr uint32_t kSameBaseArrayLayer = 0;
+            constexpr uint32_t kZeroLayersToCopy = 0;
+
+            TestT2TCopy(utils::Expectation::Success, texture, 0, {0, 0, kSameBaseArrayLayer},
+                        texture, 0, {0, 0, kSameBaseArrayLayer}, {1, 1, kZeroLayersToCopy});
         }
     }
 

@@ -25,16 +25,17 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "dawn/native/ShaderModuleParseRequest.h"
+#include "src/dawn/native/ShaderModuleParseRequest.h"
 
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "dawn/native/ChainUtils.h"
-#include "dawn/native/Device.h"
-#include "dawn/native/Instance.h"
-#include "dawn/native/ShaderModule.h"
+#include "src/dawn/native/ChainUtils.h"
+#include "src/dawn/native/Device.h"
+#include "src/dawn/native/Instance.h"
+#include "src/dawn/native/ShaderModule.h"
+#include "src/utils/compiler.h"
 
 namespace dawn::native {
 
@@ -73,6 +74,8 @@ ShaderModuleParseRequest BuildShaderModuleParseRequest(
 #if TINT_BUILD_SPV_READER
     // Handling SPIR-V if enabled.
     if (const auto* spirvDesc = descriptor.Get<ShaderSourceSPIRV>()) {
+        Span<const uint32_t> spirvCode = ToSpirvSpan(spirvDesc);
+
         // SPIRV toggle and instance feature should have been validated before checking cache.
         DAWN_ASSERT(!device->IsToggleEnabled(Toggle::DisallowSpirv));
         DAWN_ASSERT(
@@ -85,8 +88,8 @@ ShaderModuleParseRequest BuildShaderModuleParseRequest(
 
         ShaderModuleParseSpirvDescription spirv = {
             {// TODO(dawn:2033): Avoid unnecessary copies of the SPIR-V code.
-             .spirvCode = UnsafeUnserializedValue(
-                 std::vector<uint32_t>(spirvDesc->code, spirvDesc->code + spirvDesc->codeSize)),
+             .spirvCode =
+                 UnsafeUnserializedValue(std::vector<uint32_t>(spirvCode.begin(), spirvCode.end())),
              .allowNonUniformDerivatives =
                  spirvOptions ? static_cast<bool>(spirvOptions->allowNonUniformDerivatives)
                               : false}};

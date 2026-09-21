@@ -26,6 +26,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "src/tint/lang/core/ir/loop.h"
+
 #include "src/tint/lang/core/ir/ir_helper_test.h"
 
 namespace tint::core::ir {
@@ -73,6 +74,27 @@ TEST_F(IR_LoopDeathTest, Fail_NullContinuingBlock) {
             Module mod;
             Builder b{mod};
             mod.CreateInstruction<Loop>(b.Block(), b.MultiInBlock(), nullptr);
+        },
+        "internal compiler error");
+}
+
+TEST_F(IR_LoopDeathTest, Fail_MultiInInitializerBlock) {
+    EXPECT_DEATH_IF_SUPPORTED(
+        {
+            Module mod;
+            Builder b{mod};
+            mod.CreateInstruction<Loop>(b.MultiInBlock(), b.MultiInBlock(), b.MultiInBlock());
+        },
+        "internal compiler error");
+}
+
+TEST_F(IR_LoopDeathTest, Fail_SetMultiInInitializerBlock) {
+    EXPECT_DEATH_IF_SUPPORTED(
+        {
+            Module mod;
+            Builder b{mod};
+            auto* loop = b.Loop();
+            loop->SetInitializer(b.MultiInBlock());
         },
         "internal compiler error");
 }
