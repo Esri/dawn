@@ -140,15 +140,11 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
     req.bytecode.compileFlags = compileFlags;
 
     if (device->IsToggleEnabled(Toggle::UseDXC)) {
-        dawn::WarningLog() << "DXC\n";
-        device->EmitLog(wgpu::LoggingType::Info, "DXC");
         req.bytecode.compiler = d3d::Compiler::DXC;
         req.bytecode.dxcLibrary = UnsafeUnserializedValue(device->GetDxcLibrary().Get());
         req.bytecode.dxcCompiler = UnsafeUnserializedValue(device->GetDxcCompiler().Get());
         req.bytecode.dxcShaderProfile = device->GetDxcShaderProfiles()[stage];
     } else {
-        dawn::WarningLog() << "FXC\n";
-        device->EmitLog(wgpu::LoggingType::Info, "FXC");
         req.bytecode.compiler = d3d::Compiler::FXC;
         req.bytecode.d3dCompile =
             UnsafeUnserializedValue(pD3DCompile{device->GetFunctions()->d3dCompile});
