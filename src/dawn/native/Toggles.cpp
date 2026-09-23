@@ -915,20 +915,20 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "boolean vectors fail.",
       "https://crbug.com/540789158", ToggleStage::Device}},
 
-    #if defined (RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
+    #if defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
      {Toggle::RTCPreferVulkanOverDirectX,
      {"rtc_prefer_vulkan_over_directx",
       "Prefer Vulkan over DirectX when choosing available backends.",
       "N/A", ToggleStage::Adapter}},
-    #endif
+    #endif // defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
 
-    #if defined (RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
+    #if defined(RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
       {Toggle::RTCAllowDXCToFXCFallback,
       {"rtc_allow_dxc_to_fxc_fallback",
       "When DXC is requested but not available, attempt fall back to using FXC instead of "
       "throwing an error.",
       "N/A", ToggleStage::Adapter}},
-    #endif
+    #endif // defined(RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
 
     // Comment to separate the }} so it is clearer what to copy-paste to add a toggle.
 }};

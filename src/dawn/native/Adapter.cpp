@@ -459,14 +459,14 @@ const std::string& AdapterBase::GetName() const {
     return mPhysicalDevice->GetName();
 }
 
-#if defined (RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
+#if defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
 std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapters,
                                            const UnpackedPtr<RequestAdapterOptions>& options,
                                            const bool preferVulkan) {
-#else
+#else // defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
 std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapters,
                                            const UnpackedPtr<RequestAdapterOptions>& options) {
-#endif
+#endif // defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
     const bool noPowerPreference = options->powerPreference == wgpu::PowerPreference::Undefined;
     const bool highPerformance = options->powerPreference == wgpu::PowerPreference::HighPerformance;
 
@@ -488,7 +488,7 @@ std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapter
         DAWN_UNREACHABLE();
     };
 
-    #if defined (RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
+    #if defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
     
     const auto ComputeBackendTypeRank = [&preferVulkan](const Ref<AdapterBase>& a) {
         switch (a->GetPhysicalDevice()->GetBackendType()) {
@@ -516,7 +516,7 @@ std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapter
         DAWN_UNREACHABLE();
     };
 
-    #else
+    #else // defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
 
     const auto ComputeBackendTypeRank = [](const Ref<AdapterBase>& a) {
         switch (a->GetPhysicalDevice()->GetBackendType()) {
@@ -543,7 +543,7 @@ std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapter
         DAWN_UNREACHABLE();
     };
 
-    #endif
+    #endif // defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
 
     std::stable_sort(adapters.begin(), adapters.end(),
                      [&](const Ref<AdapterBase>& a, const Ref<AdapterBase>& b) -> bool {

@@ -462,7 +462,7 @@ std::vector<Ref<AdapterBase>> InstanceBase::EnumerateAdapters(
         return adapters;
     }
 
-    #if defined (RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
+    #if defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
 
     TogglesState adapterToggles =
         TogglesState::CreateFromTogglesDescriptor(togglesDesc, ToggleStage::Adapter);
@@ -471,11 +471,11 @@ std::vector<Ref<AdapterBase>> InstanceBase::EnumerateAdapters(
     const bool preferVulkan = adapterToggles.IsEnabled(Toggle::RTCPreferVulkanOverDirectX);
     return SortAdapters(std::move(adapters), unpacked, preferVulkan);
 
-    #else
+    #else // defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
 
     return SortAdapters(std::move(adapters), unpacked);
     
-    #endif
+    #endif // defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
 }
 
 BackendConnection* InstanceBase::GetBackendConnection(wgpu::BackendType backendType) {

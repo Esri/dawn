@@ -645,7 +645,7 @@ void PhysicalDevice::SetupBackendAdapterToggles(dawn::platform::Platform* platfo
     const bool useDxc = platform->IsFeatureEnabled(dawn::platform::Features::kWebGPUUseDXC);
     adapterToggles->Default(Toggle::UseDXC, useDxc);
 
-#if defined (RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
+#if defined(RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
     // Normally the availablity of compiler libaries is not checked as above. In this case we
     // want to check we can find DXC then fallback to FXC if it's not available. The normal
     // behavior if DAWN_USE_BUILT_DXC is on is to fail if DXC is not available.
@@ -659,7 +659,7 @@ void PhysicalDevice::SetupBackendAdapterToggles(dawn::platform::Platform* platfo
             adapterToggles->ForceSet(Toggle::UseDXC, false);
         }
     }
-#endif
+#endif // defined(RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
 
 #else
     adapterToggles->ForceSet(Toggle::UseDXC, false);
