@@ -459,7 +459,7 @@ const std::string& AdapterBase::GetName() const {
     return mPhysicalDevice->GetName();
 }
 
-#if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
+#if defined (RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
 std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapters,
                                            const UnpackedPtr<RequestAdapterOptions>& options,
                                            const bool preferVulkan) {
@@ -488,7 +488,7 @@ std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapter
         DAWN_UNREACHABLE();
     };
 
-    #if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
+    #if defined (RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
     
     const auto ComputeBackendTypeRank = [&preferVulkan](const Ref<AdapterBase>& a) {
         switch (a->GetPhysicalDevice()->GetBackendType()) {

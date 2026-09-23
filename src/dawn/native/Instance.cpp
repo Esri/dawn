@@ -462,13 +462,13 @@ std::vector<Ref<AdapterBase>> InstanceBase::EnumerateAdapters(
         return adapters;
     }
 
-    #if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
+    #if defined (RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
 
     TogglesState adapterToggles =
         TogglesState::CreateFromTogglesDescriptor(togglesDesc, ToggleStage::Adapter);
     adapterToggles.InheritFrom(mToggles);
-    adapterToggles.Default(Toggle::PreferVulkanOverDirectX, true);
-    const bool preferVulkan = adapterToggles.IsEnabled(Toggle::PreferVulkanOverDirectX);
+    adapterToggles.Default(Toggle::RTCPreferVulkanOverDirectX, true);
+    const bool preferVulkan = adapterToggles.IsEnabled(Toggle::RTCPreferVulkanOverDirectX);
     return SortAdapters(std::move(adapters), unpacked, preferVulkan);
 
     #else

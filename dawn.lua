@@ -1133,9 +1133,9 @@ if (_PLATFORM_WINDOWS) then
   }
 
   defines {
-    "DAWN_USE_BUILT_DXC=1",
-    "DAWN_PREFER_VULKAN_OVER_DIRECTX=1",
-    "DAWN_ALLOW_DXC_TO_FXC_FALLBACK=1"
+    "DAWN_USE_BUILT_DXC",
+    "RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX",
+    "RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK",
   }
 
   -- Use the same build options for Test as for Release to overcome D8040

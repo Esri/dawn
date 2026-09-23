@@ -915,16 +915,16 @@ static constexpr ToggleEnumAndInfoList kToggleNameAndInfoList = {{
       "boolean vectors fail.",
       "https://crbug.com/540789158", ToggleStage::Device}},
 
-    #if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
-     {Toggle::PreferVulkanOverDirectX,
-     {"prefer_vulkan_over_directx",
+    #if defined (RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
+     {Toggle::RTCPreferVulkanOverDirectX,
+     {"rtc_prefer_vulkan_over_directx",
       "Prefer Vulkan over DirectX when choosing available backends.",
       "N/A", ToggleStage::Adapter}},
     #endif
 
-    #if (DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
-      {Toggle::AllowDXCToFXCFallback,
-      {"allow_dxc_to_fxc_fallback",
+    #if defined (RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
+      {Toggle::RTCAllowDXCToFXCFallback,
+      {"rtc_allow_dxc_to_fxc_fallback",
       "When DXC is requested but not available, attempt fall back to using FXC instead of "
       "throwing an error.",
       "N/A", ToggleStage::Adapter}},

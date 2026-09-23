@@ -225,11 +225,11 @@ enum class Toggle {
     MetalPolyfillBoolVecDynamicStore,
 
     // Some toggles so we can toggle this without recompilation.
-    #if (DAWN_PREFER_VULKAN_OVER_DIRECTX)
-    PreferVulkanOverDirectX,
+    #if defined (RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
+    RTCPreferVulkanOverDirectX,
     #endif
-    #if (DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
-    AllowDXCToFXCFallback,
+    #if defined (RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
+    RTCAllowDXCToFXCFallback,
     #endif
 
     EnumCount,
