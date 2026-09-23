@@ -655,7 +655,7 @@ void PhysicalDevice::SetupBackendAdapterToggles(dawn::platform::Platform* platfo
         MaybeError dxcCheck = GetBackend()->EnsureDXC();
         if (dxcCheck.IsError()) {
             // Consume the error for resource management.
-            [[maybe_unused]] auto error = dxcCheck.AcquireError();
+            dxcCheck.AcquireError();
             adapterToggles->ForceSet(Toggle::UseDXC, false);
         }
     }
