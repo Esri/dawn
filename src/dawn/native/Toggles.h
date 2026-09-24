@@ -224,6 +224,14 @@ enum class Toggle {
     AutoMapBackendBuffer,
     MetalPolyfillBoolVecDynamicStore,
 
+    // Some toggles so we can toggle this without recompilation.
+    #if defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
+    RTCPreferVulkanOverDirectX,
+    #endif // defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
+    #if defined(RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
+    RTCAllowDXCToFXCFallback,
+    #endif // defined(RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
+
     EnumCount,
     InvalidEnum = EnumCount,
 };
