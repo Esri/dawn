@@ -732,6 +732,8 @@ if (enable_win) then
 
   files {
     "src/dawn/common/WindowsUtils.cpp",
+    "src/dawn/native/SpirvValidation.cpp",
+    "src/dawn/utils/SystemUtils_rtc_shim_1.cpp",
     "src/dawn/utils/WindowsDebugLogger.cpp",
     "src/dawn/utils/WindowsTimer.cpp",
     "src/tint/utils/command/command_windows.cc",
