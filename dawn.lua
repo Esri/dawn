@@ -678,7 +678,7 @@ if (enable_android) then
   files {
     "src/dawn/native/AHBFunctions.cpp",
     "src/dawn/native/SpirvValidation.cpp",
-    "src/dawn/utils/SystemUtils.cpp",
+    "src/dawn/utils/SystemUtils_rtc_shim_1.cpp",
   }
 
 end
@@ -710,9 +710,9 @@ if (enable_linux) then
   }
 
   files {
-    "src/dawn/native/SpirvValidation_rtc_shim_1.cpp",
+    "src/dawn/native/SpirvValidation.cpp",
     "src/dawn/native/X11Functions.cpp",
-    "src/dawn/utils/SystemUtils.cpp",
+    "src/dawn/utils/SystemUtils_rtc_shim_1.cpp",
     "src/tint/utils/command/command_posix.cc",
     "src/tint/utils/file/tmpfile_posix.cc",
     "src/tint/utils/system/executable_path_linux.cc",
@@ -732,7 +732,6 @@ if (enable_win) then
 
   files {
     "src/dawn/common/WindowsUtils.cpp",
-    "src/dawn/native/SpirvValidation_rtc_shim_2.cpp",
     "src/dawn/utils/WindowsDebugLogger.cpp",
     "src/dawn/utils/WindowsTimer.cpp",
     "src/tint/utils/command/command_windows.cc",
