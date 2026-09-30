@@ -49,12 +49,10 @@ local enable_linux = false
 local enable_win = false
 
 -- Shader languages
-local enable_hlsl = false
 local enable_msl = false
 local enable_spirv = false
 
 -- GPU backends
-local enable_d3d12 = false
 local enable_metal = false
 local enable_vulkan = false
 local enable_null = false -- Fail silently when no native GPU API is available?
@@ -93,8 +91,6 @@ end
 
 if (_PLATFORM_WINDOWS) then
 
-  enable_d3d12 = true
-  enable_hlsl = true
   enable_win = true
   enable_spirv = true
   enable_vulkan = true
@@ -750,53 +746,6 @@ end
 -- Shader language specifics
 --
 
-if (enable_hlsl) then
-
-  defines {
-    "ENABLE_HLSL",
-    "TINT_BUILD_HLSL_WRITER=1",
-  }
-
-  files {
-    -- /hlsl/
-    "src/tint/lang/hlsl/builtin_fn_rtc_shim_1.cc",
-    "src/tint/lang/hlsl/intrinsic/data_rtc_shim_2.cc",
-    "src/tint/lang/hlsl/ir/builtin_call_rtc_shim_2.cc",
-    "src/tint/lang/hlsl/ir/member_builtin_call_rtc_shim_1.cc",
-    "src/tint/lang/hlsl/ir/ternary.cc",
-    "src/tint/lang/hlsl/type/byte_address_buffer.cc",
-    "src/tint/lang/hlsl/type/int8_t4_packed.cc",
-    "src/tint/lang/hlsl/type/matrix_layout.cc",
-    "src/tint/lang/hlsl/type/rasterizer_ordered_texture_2d.cc",
-    "src/tint/lang/hlsl/type/uint8_t4_packed.cc",
-    "src/tint/lang/hlsl/validate/validate.cc",
-    "src/tint/lang/hlsl/writer/common/option_helpers.cc",
-    "src/tint/lang/hlsl/writer/common/options_rtc_shim_1.cc",
-    "src/tint/lang/hlsl/writer/common/output_rtc_shim_2.cc",
-    "src/tint/lang/hlsl/writer/printer/printer.cc",
-    "src/tint/lang/hlsl/writer/raise/array_offset_from_immediate.cc",
-    "src/tint/lang/hlsl/writer/raise/array_offset_from_uniform.cc",
-    "src/tint/lang/hlsl/writer/raise/binary_polyfill_rtc_shim_1.cc",
-    "src/tint/lang/hlsl/writer/raise/builtin_polyfill_rtc_shim_1.cc",
-    "src/tint/lang/hlsl/writer/raise/decompose_snorm10_10_10_2.cc",
-    "src/tint/lang/hlsl/writer/raise/decompose_storage_access.cc",
-    "src/tint/lang/hlsl/writer/raise/extract_ternary_values.cc",
-    "src/tint/lang/hlsl/writer/raise/localize_struct_array_assignment.cc",
-    "src/tint/lang/hlsl/writer/raise/pixel_local.cc",
-    "src/tint/lang/hlsl/writer/raise/promote_initializers.cc",
-    "src/tint/lang/hlsl/writer/raise/raise_rtc_shim_2.cc",
-    "src/tint/lang/hlsl/writer/raise/replace_default_only_switch.cc",
-    "src/tint/lang/hlsl/writer/raise/replace_non_indexable_mat_vec_stores.cc",
-    "src/tint/lang/hlsl/writer/raise/replace_subgroup_matrix_init.cc",
-    "src/tint/lang/hlsl/writer/raise/resource_table_helper_rtc_shim_1.cc",
-    "src/tint/lang/hlsl/writer/raise/shader_io_rtc_shim_1.cc",
-    "src/tint/lang/hlsl/writer/raise/split_workgroup_atomics.cc",
-    "src/tint/lang/hlsl/writer/writer_rtc_shim_2.cc",
-
-}
-
-end
-
 if (enable_msl) then
 
   defines {
@@ -919,91 +868,6 @@ end
 --
 -- Native GPU API specifics
 --
-
-if (enable_d3d12) then -- or d3d11
-
-  includedirs {
-    _3RDPARTY_DIR .. "/DirectXShaderCompiler/include/dxc",
-    _3RDPARTY_DIR .. "/DirectXShaderCompiler/include",
-  }
-
-  files {
-    -- /d3d/
-    "src/dawn/native/d3d/BackendD3D.cpp",
-    "src/dawn/native/d3d/BlobD3D.cpp",
-    "src/dawn/native/d3d/D3DBackend.cpp",
-    "src/dawn/native/d3d/D3DError.cpp",
-    "src/dawn/native/d3d/DeviceD3D.cpp",
-    "src/dawn/native/d3d/KeyedMutex.cpp",
-    "src/dawn/native/d3d/PhysicalDeviceD3D.cpp",
-    "src/dawn/native/d3d/PlatformFunctions.cpp",
-    "src/dawn/native/d3d/QueueD3D.cpp",
-    "src/dawn/native/d3d/ShaderUtils.cpp",
-    "src/dawn/native/d3d/SharedFenceD3D.cpp",
-    "src/dawn/native/d3d/SharedTextureMemoryD3D.cpp",
-    "src/dawn/native/d3d/SwapChainD3D.cpp",
-    "src/dawn/native/d3d/UtilsD3D.cpp",
-
-}
-
-end
-
-if (enable_d3d12) then
-
-  defines {
-    "DAWN_ENABLE_BACKEND_D3D12",
-    "D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE=((D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)|(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE))",
-    "D3D_SHADER_MODEL_6_7=static_cast<D3D_SHADER_MODEL>(0x67)",
-    "D3D_SHADER_MODEL_6_8=static_cast<D3D_SHADER_MODEL>(0x68)",
-    "D3D_SHADER_MODEL_6_9=static_cast<D3D_SHADER_MODEL>(0x69)",
-  }
-
-  files {
-    -- /d3d12/
-    "src/dawn/native/d3d12/BackendD3D12.cpp",
-    "src/dawn/native/d3d12/BindGroupD3D12.cpp",
-    "src/dawn/native/d3d12/BindGroupLayoutD3D12.cpp",
-    "src/dawn/native/d3d12/BufferD3D12.cpp",
-    "src/dawn/native/d3d12/CPUDescriptorHeapAllocationD3D12.cpp",
-    "src/dawn/native/d3d12/CommandBufferD3D12.cpp",
-    "src/dawn/native/d3d12/CommandRecordingContext.cpp",
-    "src/dawn/native/d3d12/ComputePipelineD3D12.cpp",
-    "src/dawn/native/d3d12/D3D12Backend.cpp",
-    "src/dawn/native/d3d12/D3D12Info.cpp",
-    "src/dawn/native/d3d12/DeviceD3D12.cpp",
-    "src/dawn/native/d3d12/GPUDescriptorHeapAllocationD3D12.cpp",
-    "src/dawn/native/d3d12/HeapAllocatorD3D12.cpp",
-    "src/dawn/native/d3d12/HeapD3D12.cpp",
-    "src/dawn/native/d3d12/PageableD3D12.cpp",
-    "src/dawn/native/d3d12/PhysicalDeviceD3D12.cpp",
-    "src/dawn/native/d3d12/PipelineLayoutD3D12.cpp",
-    "src/dawn/native/d3d12/PipelineLayoutHandle.cpp",
-    "src/dawn/native/d3d12/PlatformFunctionsD3D12.cpp",
-    "src/dawn/native/d3d12/QuerySetD3D12.cpp",
-    "src/dawn/native/d3d12/QueueD3D12.cpp",
-    "src/dawn/native/d3d12/RenderPassBuilderD3D12.cpp",
-    "src/dawn/native/d3d12/RenderPipelineD3D12.cpp",
-    "src/dawn/native/d3d12/ResidencyManagerD3D12.cpp",
-    "src/dawn/native/d3d12/ResourceAllocatorManagerD3D12.cpp",
-    "src/dawn/native/d3d12/ResourceHeapAllocationD3D12.cpp",
-    "src/dawn/native/d3d12/ResourceTableD3D12.cpp",
-    "src/dawn/native/d3d12/SamplerD3D12.cpp",
-    "src/dawn/native/d3d12/SamplerHeapCacheD3D12.cpp",
-    "src/dawn/native/d3d12/ShaderModuleD3D12.cpp",
-    "src/dawn/native/d3d12/ShaderVisibleDescriptorAllocatorD3D12.cpp",
-    "src/dawn/native/d3d12/SharedBufferMemoryD3D12.cpp",
-    "src/dawn/native/d3d12/SharedFenceD3D12.cpp",
-    "src/dawn/native/d3d12/SharedTextureMemoryD3D12.cpp",
-    "src/dawn/native/d3d12/StagingDescriptorAllocatorD3D12.cpp",
-    "src/dawn/native/d3d12/StreamImplD3D12.cpp",
-    "src/dawn/native/d3d12/SwapChainD3D12.cpp",
-    "src/dawn/native/d3d12/TextureCopySplitter.cpp",
-    "src/dawn/native/d3d12/TextureD3D12.cpp",
-    "src/dawn/native/d3d12/UtilsD3D12.cpp",
-
-}
-
-end
 
 if (enable_metal) then
 
