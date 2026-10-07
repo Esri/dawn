@@ -31,6 +31,7 @@
 #include <optional>
 #include <utility>
 
+#include "absl/strings/str_format.h"
 #include "partition_alloc/pointers/raw_ptr.h"
 #include "src/dawn/common/Math.h"
 #include "src/dawn/native/BuddyMemoryAllocator.h"
@@ -38,8 +39,10 @@
 #include "src/dawn/native/ResourceHeapAllocator.h"
 #include "src/dawn/native/vulkan/DeviceVk.h"
 #include "src/dawn/native/vulkan/FencedDeleter.h"
+#include "src/dawn/native/vulkan/PhysicalDeviceVk.h"
 #include "src/dawn/native/vulkan/ResourceHeapVk.h"
 #include "src/dawn/native/vulkan/VulkanError.h"
+#include "src/utils/log.h"
 #include "src/utils/numeric.h"
 
 namespace dawn::native::vulkan {
@@ -100,6 +103,40 @@ class ResourceMemoryAllocator::SingleTypeAllocator : public ResourceHeapAllocato
     ResultOrError<std::unique_ptr<ResourceHeapBase>> AllocateResourceHeap(uint64_t size) override {
         if (size > mMaxHeapSize) {
             return DAWN_OUT_OF_MEMORY_ERROR("Allocation size too large");
+        }
+
+        dawn::WarningLog() << "HELLO " << size << " bytes requested";
+
+        const VulkanDeviceInfo& deviceInfo = mDevice->GetDeviceInfo();
+        if (deviceInfo.HasExt(DeviceExt::MemoryBudget)) {
+            VkPhysicalDeviceMemoryBudgetPropertiesEXT budgetProperties = {};
+            budgetProperties.sType =
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
+
+            VkPhysicalDeviceMemoryProperties2 memoryProperties = {};
+            memoryProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+            memoryProperties.pNext = &budgetProperties;
+            PhysicalDevice* physicalDevice = ToBackend(mDevice->GetPhysicalDevice());
+            mDevice->fn.GetPhysicalDeviceMemoryProperties2(physicalDevice->GetVkPhysicalDevice(),
+                                                           &memoryProperties);
+
+            const uint32_t heapIndex = deviceInfo.memoryTypes[mMemoryTypeIndex].heapIndex;
+            const VkDeviceSize budget = budgetProperties.heapBudget[heapIndex];
+            const VkDeviceSize usage = budgetProperties.heapUsage[heapIndex];
+            const bool exceedsBudget = budget > 0 && (usage >= budget || size > budget - usage);
+            dawn::WarningLog() << "Vulkan heap " << heapIndex << " budget preflight: requested "
+                               << size << " bytes, budget " << budget << ", currently used "
+                               << usage << " ("
+                               << (budget == 0 ? "budget unavailable"
+                                               : exceedsBudget ? "exceeds budget" : "within budget")
+                               << ")";
+            if (exceedsBudget) {
+                return DAWN_OUT_OF_MEMORY_ERROR(absl::StrFormat(
+                    "Vulkan heap %u budget preflight failed: requested %llu bytes, budget %llu, "
+                    "currently used %llu",
+                    heapIndex, static_cast<unsigned long long>(size),
+                    static_cast<unsigned long long>(budget), static_cast<unsigned long long>(usage)));
+            }
         }
 
         VkMemoryAllocateInfo allocateInfo;

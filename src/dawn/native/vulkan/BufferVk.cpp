@@ -50,6 +50,7 @@
 #include "src/dawn/native/vulkan/VulkanError.h"
 #include "src/utils/assert.h"
 #include "src/utils/compiler.h"
+#include "src/utils/log.h"
 #include "src/utils/numeric.h"
 
 namespace dawn::native::vulkan {
@@ -300,6 +301,16 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
     VkMemoryRequirements requirements;
     device->fn.GetBufferMemoryRequirements(device->GetVkDevice(), mHandle, &requirements);
 
+    dawn::WarningLog() << "Vulkan buffer allocation request: " << requirements.size << " bytes";
+    const auto& memoryHeaps = device->GetDeviceInfo().memoryHeaps;
+    for (size_t i = 0; i < memoryHeaps.size(); ++i) {
+        const VkMemoryHeap& heap = memoryHeaps[i];
+        if ((heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0) {
+            dawn::WarningLog() << "Vulkan device-local heap " << i << " capacity: " << heap.size
+                               << " bytes";
+        }
+    }
+
     MemoryKind requestKind = GetMemoryKindFor(GetInternalUsage());
     DAWN_TRY_ASSIGN(mMemoryAllocation,
                     device->GetResourceMemoryAllocator()->Allocate(requirements, requestKind));
@@ -314,8 +325,13 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
     // Get if buffer is host visible and coherent. This can be the case even if the buffer was not
     // created with map usages, as on integrated GPUs all memory will typically be host visible.
     const size_t memoryType = ToBackend(mMemoryAllocation.GetResourceHeap())->GetMemoryType();
+    const VkMemoryType& selectedMemoryType = device->GetDeviceInfo().memoryTypes[memoryType];
+    const size_t heapIndex = selectedMemoryType.heapIndex;
+    const VkMemoryHeap& selectedHeap = device->GetDeviceInfo().memoryHeaps[heapIndex];
+    dawn::WarningLog() << "Vulkan buffer selected memory type " << memoryType << " (heap "
+                       << heapIndex << ") with heap capacity " << selectedHeap.size << " bytes";
     const VkMemoryPropertyFlags memoryPropertyFlags =
-        device->GetDeviceInfo().memoryTypes[memoryType].propertyFlags;
+        selectedMemoryType.propertyFlags;
     mHostVisible = IsSubset(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, memoryPropertyFlags);
     mHostCoherent = IsSubset(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, memoryPropertyFlags);
 

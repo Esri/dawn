@@ -155,6 +155,7 @@ static constexpr std::array<DeviceExtInfo, kDeviceExtCount> sDeviceExtInfos{{
     {DeviceExt::CooperativeMatrix, "VK_KHR_cooperative_matrix"},
     {DeviceExt::MultisampledRenderToSingleSampled, "VK_EXT_multisampled_render_to_single_sampled"},
     {DeviceExt::PhysicalDeviceDrm, "VK_EXT_physical_device_drm"},
+    {DeviceExt::MemoryBudget, "VK_EXT_memory_budget"},
     {DeviceExt::RasterizationOrderAttachmentAccess, "VK_EXT_rasterization_order_attachment_access"},
     {DeviceExt::MaximalReconvergence, "VK_KHR_shader_maximal_reconvergence"},
     {DeviceExt::SubgroupUniformControlFlow, "VK_KHR_shader_subgroup_uniform_control_flow"},
@@ -235,6 +236,7 @@ DeviceExtSet EnsureDependencies(const DeviceExtSet& advertisedExts,
             case DeviceExt::ExternalSemaphoreZirconHandle:
             case DeviceExt::QueueFamilyForeign:
             case DeviceExt::PhysicalDeviceDrm:
+            case DeviceExt::MemoryBudget:
             case DeviceExt::ExtendedDynamicState:
             case DeviceExt::MaximalReconvergence:
             case DeviceExt::SubgroupUniformControlFlow:
