@@ -114,6 +114,7 @@ enum class DeviceExt : uint32_t {
     CooperativeMatrix,
     MultisampledRenderToSingleSampled,
     PhysicalDeviceDrm,
+    MemoryBudget,
     RasterizationOrderAttachmentAccess,
     MaximalReconvergence,
     SubgroupUniformControlFlow,
