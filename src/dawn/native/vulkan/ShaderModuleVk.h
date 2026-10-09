@@ -61,7 +61,7 @@ class ShaderModule final : public ShaderModuleBase {
     struct ModuleAndSpirv {
         VkShaderModule module;
         std::vector<uint32_t> spirv;
-        bool hasInputAttachment;
+        bool hasInputAttachment = false;
         Extent3D workgroupSize;
         std::optional<uint32_t> explicitSubgroupSize;
     };
@@ -78,7 +78,7 @@ class ShaderModule final : public ShaderModuleBase {
         bool needsMultisampledFramebufferFetch = false;
     };
 
-    ResultOrError<ModuleAndSpirv> GetHandleAndSpirv(const CompileParameters& p);
+    ResultOrError<ModuleAndSpirv> GetHandleAndSpirv(const CompileParameters& in);
 
   private:
     ShaderModule(Device* device,

@@ -65,9 +65,9 @@ class Device final : public RefCountedWithExternalCount<ObjectWithEventsBase> {
     Queue* GetQueue();
     const LimitsAndFeatures& GetLimitsAndFeatures() const;
 
-    void HandleError(WGPUErrorType errorType, WGPUStringView message);
-    void HandleLogging(WGPULoggingType loggingType, WGPUStringView message);
-    void HandleDeviceLost(WGPUDeviceLostReason reason, WGPUStringView message);
+    void HandleError(wgpu::ErrorType errorType, StringView message);
+    void HandleLogging(wgpu::LoggingType loggingType, StringView message);
+    void HandleDeviceLost(wgpu::DeviceLostReason reason, StringView message);
     class DeviceLostEvent;
 
     // WebGPU API
@@ -87,6 +87,7 @@ class Device final : public RefCountedWithExternalCount<ObjectWithEventsBase> {
         const RenderPipelineDescriptor* descriptor,
         const WGPUCreateRenderPipelineAsyncCallbackInfo& callbackInfo);
     ResourceTable* APICreateResourceTable(const ResourceTableDescriptor* descriptor);
+    ShaderModule* APICreateShaderModule(const ShaderModuleDescriptor* descriptor);
     Texture* APICreateTexture(const TextureDescriptor* descriptor);
     Texture* APICreateErrorTexture(const TextureDescriptor* descriptor);
 

@@ -45,8 +45,8 @@ class MemoryTransferService;
 }  // namespace server
 
 struct DAWN_WIRE_EXPORT WireServerDescriptor {
-    const DawnProcTable* procs;
-    CommandSerializer* serializer;
+    const DawnProcTable* procs = nullptr;
+    CommandSerializer* serializer = nullptr;
     server::MemoryTransferService* memoryTransferService = nullptr;
     bool useSpontaneousCallbacks = false;
 };
@@ -138,6 +138,12 @@ class DAWN_WIRE_EXPORT MemoryTransferService {
                                            size_t offset,
                                            size_t size,
                                            std::span<std::byte> target) = 0;
+
+        // Try to wrap the memory handle into a WGPUBuffer and get access to it. Returns a valid
+        // WGPUBuffer if succeeds.
+        virtual WGPUBuffer TryWrapInBuffer(const DawnProcTable* procs,
+                                           WGPUDevice device,
+                                           const WGPUBufferDescriptor* descriptor);
 
       private:
         MemoryHandle(const MemoryHandle&) = delete;

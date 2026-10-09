@@ -168,8 +168,9 @@ TEST_F(WireArgumentTests, CStringArgument) {
     EXPECT_CALL(api,
                 DeviceCreateRenderPipeline(
                     apiDevice, MatchesLambda([](const WGPURenderPipelineDescriptor* desc) -> bool {
-                        return std::string_view(desc->vertex.entryPoint.data,
-                                                desc->vertex.entryPoint.length) == "main";
+                        return DAWN_UNSAFE_TODO(std::string_view(desc->vertex.entryPoint.data,
+                                                                 desc->vertex.entryPoint.length)) ==
+                               "main";
                     })))
         .WillOnce(Return(apiPlaceholderPipeline));
 
@@ -192,28 +193,28 @@ TEST_F(WireArgumentTests, WGPUStringView) {
     FlushClient();
 
     // Give it a longer, explicit length that contains the null-terminator.
-    vsModule.SetLabel(std::string_view(label, 34));
+    vsModule.SetLabel(DAWN_UNSAFE_TODO(std::string_view(label, 34)));
     EXPECT_CALL(api, ShaderModuleSetLabel(apiVsModule,
                                           AllOf(Field(&WGPUStringView::data, EqBytes(label, 34u)),
                                                 Field(&WGPUStringView::length, Eq(34u)))));
     FlushClient();
 
     // Give it a shorder, explicit length.
-    vsModule.SetLabel(std::string_view(label, 2));
+    vsModule.SetLabel(DAWN_UNSAFE_TODO(std::string_view(label, 2)));
     EXPECT_CALL(api, ShaderModuleSetLabel(apiVsModule,
                                           AllOf(Field(&WGPUStringView::data, EqBytes(label, 2u)),
                                                 Field(&WGPUStringView::length, Eq(2u)))));
     FlushClient();
 
     // Give it a zero length.
-    vsModule.SetLabel(std::string_view(label, 0));
+    vsModule.SetLabel(DAWN_UNSAFE_TODO(std::string_view(label, 0)));
     EXPECT_CALL(
         api, ShaderModuleSetLabel(apiVsModule, AllOf(Field(&WGPUStringView::data, EqBytes("", 1u)),
                                                      Field(&WGPUStringView::length, Eq(0u)))));
     FlushClient();
 
     // Give it zero length and data.
-    vsModule.SetLabel(std::string_view(nullptr, 0));
+    vsModule.SetLabel(std::string_view());
     EXPECT_CALL(api,
                 ShaderModuleSetLabel(apiVsModule, AllOf(Field(&WGPUStringView::data, nullptr),
                                                         Field(&WGPUStringView::length, Eq(0u)))));
@@ -252,7 +253,7 @@ TEST_F(WireArgumentTests, ObjectAsValueArgument) {
 // Test that the wire is able to send array of objects
 TEST_F(WireArgumentTests, ObjectsAsPointerArgument) {
     std::array<wgpu::CommandBuffer, 2> cmdBufs;
-    std::array<WGPUCommandBuffer, 2> apiCmdBufs;
+    std::array<WGPUCommandBuffer, 2> apiCmdBufs{};
 
     // Create two command buffers we need to use a GMock sequence otherwise the order of the
     // CreateCommandEncoder might be swapped since they are equivalent in term of matchers
@@ -280,7 +281,7 @@ TEST_F(WireArgumentTests, ObjectsAsPointerArgument) {
         api, QueueSubmit(apiQueue, 2, MatchesLambda([=](const WGPUCommandBuffer* cmdBufs) -> bool {
                              return cmdBufs[0] == apiCmdBufs[0] && cmdBufs[1] == apiCmdBufs[1];
                          }))));
-    EXPECT_CALL(api, OnQueueOnSubmittedWorkDone(apiQueue, _));
+    EXPECT_CALL(api, OnQueueOnSubmittedWorkDone(apiQueue, _, _));
 
     FlushClient();
 }
@@ -345,7 +346,7 @@ TEST_F(WireArgumentTests, StructureOfObjectArrayArgument) {
 // Test that the wire is able to send structures that contain objects
 TEST_F(WireArgumentTests, StructureOfStructureArrayArgument) {
     static constexpr int NUM_BINDINGS = 3;
-    wgpu::BindGroupLayoutEntry entries[NUM_BINDINGS]{
+    std::array<wgpu::BindGroupLayoutEntry, NUM_BINDINGS> entries = {{
         {
             .binding = 0,
             .visibility = wgpu::ShaderStage::Vertex,
@@ -362,10 +363,10 @@ TEST_F(WireArgumentTests, StructureOfStructureArrayArgument) {
             .visibility = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment,
             .buffer = {nullptr, wgpu::BufferBindingType::Uniform, false, 0},
         },
-    };
+    }};
     wgpu::BindGroupLayoutDescriptor bglDescriptor = {};
     bglDescriptor.entryCount = NUM_BINDINGS;
-    bglDescriptor.entries = entries;
+    bglDescriptor.entries = entries.data();
 
     wgpu::BindGroupLayout bgl = device.CreateBindGroupLayout(&bglDescriptor);
     WGPUBindGroupLayout apiBgl = api.GetNewBindGroupLayout();

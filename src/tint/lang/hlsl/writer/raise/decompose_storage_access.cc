@@ -30,7 +30,7 @@
 #include <utility>
 
 #include "src/tint/lang/core/ir/builder.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/hlsl/builtin_fn.h"
 #include "src/tint/lang/hlsl/ir/builtin_call.h"
 #include "src/tint/lang/hlsl/ir/member_builtin_call.h"
@@ -132,10 +132,8 @@ struct State {
 
         uint32_t byte_struct_offset = 0;
 
-        uint32_t byte_size = 0;
         core::ir::Value* byte_size_expr = nullptr;
 
-        uint32_t byte_length = 0;
         core::ir::Value* byte_length_expr = nullptr;
     };
 
@@ -153,9 +151,9 @@ struct State {
             const bool has_length = HasLengthData(offset);
             core::ir::Value* len = nullptr;
             if (has_size) {
-                len = SizeToValue(offset);
+                len = offset.byte_size_expr;
             } else if (has_length) {
-                len = LengthToValue(offset);
+                len = offset.byte_length_expr;
             } else {
                 // The `GetDimensions` call uses out parameters for all return values, there is no
                 // return value. This ends up being the result value we care about.
@@ -184,12 +182,11 @@ struct State {
             if (value) {
                 auto* cnst = value->As<core::ir::Constant>();
                 if (!cnst || cnst->Value()->ValueAs<uint32_t>() > 0) {
-                    len = b.Subtract(len, value)->Result();
+                    len = b.Subtract(len, value);
                 }
             }
 
-            auto* div = b.Divide(len, u32(arr_ty->ImplicitStride()));
-            call->Result()->ReplaceAllUsesWith(div->Result());
+            b.DivideReplaceResult(call->DetachResult(), len, u32(arr_ty->ImplicitStride()));
         });
         call->Destroy();
     }
@@ -320,7 +317,7 @@ struct State {
                 args[2], original_value);
 
             auto* o = b.Load(original_value);
-            b.ConstructWithResult(call->DetachResult(), o, b.Equal(o, cmp));
+            b.ConstructReplaceResult(call->DetachResult(), o, b.Equal(o, cmp));
         });
         call->Destroy();
     }
@@ -390,16 +387,11 @@ struct State {
                            core::Majorness::kColMajor);
             auto* layout = ColMajorToMatrixLayout(col_major);
             uint32_t bytes_per_element = arr_stride;
-            if (auto* cnst = stride->As<core::ir::Constant>()) {
-                stride = b.Constant(u32(cnst->Value()->ValueAs<uint32_t>() * bytes_per_element));
-            } else {
-                auto* u32_stride = b.InsertBitcastIfNeeded(ty.u32(), stride);
-                stride = b.Multiply(u32_stride, u32(bytes_per_element))->Result();
-            }
-            auto* load = b.CallExplicit<hlsl::ir::BuiltinCall>(
-                sm, BuiltinFn::kLoad, Vector<core::ir::TemplateParameter, 1>{sm}, var,
-                OffsetToValue(offset), stride, layout);
-            call->Result()->ReplaceAllUsesWith(load->Result());
+            stride = b.InsertBitcastIfNeeded(ty.u32(), stride);
+            stride = b.Multiply(stride, u32(bytes_per_element));
+            b.CallExplicitWithResult<hlsl::ir::BuiltinCall>(
+                call->DetachResult(), BuiltinFn::kLoad, Vector<core::ir::TemplateParameter, 1>{sm},
+                var, OffsetToValue(offset), stride, layout);
         });
         call->Destroy();
     }
@@ -430,12 +422,8 @@ struct State {
             auto* layout = ColMajorToMatrixLayout(col_major);
 
             uint32_t bytes_per_element = arr_stride;
-            if (auto* cnst = stride->As<core::ir::Constant>()) {
-                stride = b.Constant(u32(cnst->Value()->ValueAs<uint32_t>() * bytes_per_element));
-            } else {
-                auto* u32_stride = b.InsertBitcastIfNeeded(ty.u32(), stride);
-                stride = b.Multiply(u32_stride, u32(bytes_per_element))->Result();
-            }
+            stride = b.InsertBitcastIfNeeded(ty.u32(), stride);
+            stride = b.Multiply(stride, u32(bytes_per_element));
             b.MemberCall<hlsl::ir::MemberBuiltinCall>(ty.void_(), BuiltinFn::kStore, value, var,
                                                       OffsetToValue(offset), stride, layout);
         });
@@ -451,73 +439,35 @@ struct State {
             },
             [&](core::ir::Value* val) {
                 auto* idx = b.InsertConvertIfNeeded(ty.u32(), val);
-                offset->byte_offset_expr.Push(b.Multiply(idx, u32(elm_size))->Result());
+                offset->byte_offset_expr.Push(b.Multiply(idx, u32(elm_size)));
             },
             TINT_ICE_ON_NO_MATCH);
     }
 
     // Note, must be called inside a builder insert block (Append, InsertBefore, etc)
     void UpdateSizeData(core::ir::Value* v, OffsetData* offset) {
-        tint::Switch(
-            v,  //
-            [&](core::ir::Constant* idx_value) {
-                offset->byte_size += idx_value->Value()->ValueAs<uint32_t>();
-            },
-            [&](core::ir::Value* val) {
-                TINT_IR_ASSERT(ir, offset->byte_size_expr == nullptr);
-                offset->byte_size_expr = b.InsertConvertIfNeeded(ty.u32(), val);
-            },
-            TINT_ICE_ON_NO_MATCH);
+        TINT_IR_ASSERT(ir, offset->byte_size_expr == nullptr);
+        offset->byte_size_expr = b.InsertConvertIfNeeded(ty.u32(), v);
     }
 
     // Note, must be called inside a builder insert block (Append, InsertBefore, etc)
     void UpdateLengthData(core::ir::Value* v, OffsetData* offset) {
-        tint::Switch(
-            v,  //
-            [&](core::ir::Constant* idx_value) {
-                offset->byte_length += idx_value->Value()->ValueAs<uint32_t>();
-            },
-            [&](core::ir::Value* val) {
-                TINT_IR_ASSERT(ir, offset->byte_length_expr == nullptr);
-                offset->byte_length_expr = b.InsertConvertIfNeeded(ty.u32(), val);
-            },
-            TINT_ICE_ON_NO_MATCH);
+        TINT_IR_ASSERT(ir, offset->byte_length_expr == nullptr);
+        offset->byte_length_expr = b.InsertConvertIfNeeded(ty.u32(), v);
     }
 
     // Note, must be called inside a builder insert block (Append, InsertBefore, etc)
     core::ir::Value* OffsetToValue(const OffsetData& offset) {
         core::ir::Value* val = b.Value(u32(offset.byte_offset));
         for (core::ir::Value* expr : offset.byte_offset_expr) {
-            val = b.Add(val, expr)->Result();
+            val = b.Add(val, expr);
         }
         return val;
     }
 
-    // Note, must be called inside a builder insert block (Append, InsertBefore, etc)
-    core::ir::Value* SizeToValue(const OffsetData& offset) {
-        if (offset.byte_size_expr != nullptr) {
-            TINT_IR_ASSERT(ir, offset.byte_size == 0);
-            return offset.byte_size_expr;
-        }
-        return b.Constant(u32(offset.byte_size));
-    }
+    bool HasSizeData(const OffsetData& offset) { return offset.byte_size_expr != nullptr; }
 
-    bool HasSizeData(const OffsetData& offset) {
-        return offset.byte_size != 0 || offset.byte_size_expr != nullptr;
-    }
-
-    // Note, must be called inside a builder insert block (Append, InsertBefore, etc)
-    core::ir::Value* LengthToValue(const OffsetData& offset) {
-        if (offset.byte_length_expr != nullptr) {
-            TINT_IR_ASSERT(ir, offset.byte_length == 0);
-            return offset.byte_length_expr;
-        }
-        return b.Constant(u32(offset.byte_length));
-    }
-
-    bool HasLengthData(const OffsetData& offset) {
-        return offset.byte_length != 0 || offset.byte_length_expr != nullptr;
-    }
+    bool HasLengthData(const OffsetData& offset) { return offset.byte_length_expr != nullptr; }
 
     // Creates the appropriate store instructions for the given result type.
     void MakeStore(core::ir::Instruction* inst,
@@ -584,16 +534,16 @@ struct State {
         if (is_f16 || is_u16) {
             cast = from;
         } else {
-            cast = b.Bitcast(cast_ty, from)->Result();
+            cast = b.Bitcast(cast_ty, from);
         }
         b.MemberCall<hlsl::ir::MemberBuiltinCall>(ty.void_(), fn, var, offset, cast);
     }
 
     // Creates the appropriate load instructions for the given result type.
-    core::ir::Call* MakeLoad(core::ir::Instruction* inst,
-                             core::ir::Var* var,
-                             const core::type::Type* result_ty,
-                             core::ir::Value* offset) {
+    core::ir::Value* MakeLoad(core::ir::Instruction* inst,
+                              core::ir::Var* var,
+                              const core::type::Type* result_ty,
+                              core::ir::Value* offset) {
         if (result_ty->IsNumericScalarOrVector()) {
             return MakeScalarOrVectorLoad(var, result_ty, offset);
         }
@@ -602,15 +552,15 @@ struct State {
             result_ty,  //
             [&](const core::type::Struct* s) {
                 auto* fn = GetLoadFunctionFor(inst, var, s);
-                return b.Call(fn, offset);
+                return b.Call(fn, offset)->Result();
             },
             [&](const core::type::Matrix* m) {
                 auto* fn = GetLoadFunctionFor(inst, var, m);
-                return b.Call(fn, offset);
+                return b.Call(fn, offset)->Result();
             },  //
             [&](const core::type::Array* a) {
                 auto* fn = GetLoadFunctionFor(inst, var, a);
-                return b.Call(fn, offset);
+                return b.Call(fn, offset)->Result();
             },  //
             TINT_ICE_ON_NO_MATCH);
     }
@@ -622,9 +572,9 @@ struct State {
     //
     // The `f16` type is special in that `f16` uses a templated load in HLSL `Load<float16_t>`
     // and returns the correct type, so there is no bitcast.
-    core::ir::Call* MakeScalarOrVectorLoad(core::ir::Var* var,
-                                           const core::type::Type* result_ty,
-                                           core::ir::Value* offset) {
+    core::ir::Value* MakeScalarOrVectorLoad(core::ir::Var* var,
+                                            const core::type::Type* result_ty,
+                                            core::ir::Value* offset) {
         bool is_f16 = result_ty->DeepestElement()->Is<core::type::F16>();
         bool is_u16 = result_ty->DeepestElement()->Is<core::type::U16>();
 
@@ -659,11 +609,11 @@ struct State {
         }
 
         auto* builtin = b.MemberCall<hlsl::ir::MemberBuiltinCall>(load_ty, fn, var, offset);
-        core::ir::Call* res = nullptr;
+        core::ir::Value* res = nullptr;
 
         // Do not bitcast `f16` or `u16` conversions as they use templated Load instructions
         if (is_f16 || is_u16) {
-            res = builtin;
+            res = builtin->Result();
         } else {
             res = b.Bitcast(result_ty, builtin->Result());
         }
@@ -691,9 +641,7 @@ struct State {
             b.Append(fn->Block(), [&] {
                 Vector<core::ir::Value*, 4> values;
                 for (const auto* mem : s->Members()) {
-                    values.Push(
-                        MakeLoad(inst, var, mem->Type(), b.Add(p, u32(mem->Offset()))->Result())
-                            ->Result());
+                    values.Push(MakeLoad(inst, var, mem->Type(), b.Add(p, u32(mem->Offset()))));
                 }
 
                 b.Return(fn, b.Construct(s, values));
@@ -715,7 +663,7 @@ struct State {
             b.Append(fn->Block(), [&] {
                 for (const auto* mem : s->Members()) {
                     auto* from = b.Access(mem->Type(), obj, u32(mem->Index()));
-                    MakeStore(inst, var, from->Result(), b.Add(p, u32(mem->Offset()))->Result());
+                    MakeStore(inst, var, from, b.Add(p, u32(mem->Offset())));
                 }
 
                 b.Return(fn);
@@ -747,8 +695,8 @@ struct State {
                 Vector<core::ir::Value*, 4> values;
                 for (size_t i = 0; i < mat->Columns(); ++i) {
                     auto* add = b.Add(p, u32(i * mat->ColumnStride()));
-                    auto* load = MakeLoad(inst, var, mat->ColumnType(), add->Result());
-                    values.Push(load->Result());
+                    auto* load = MakeLoad(inst, var, mat->ColumnType(), add);
+                    values.Push(load);
                 }
 
                 b.Return(fn, b.Construct(mat, values));
@@ -771,8 +719,7 @@ struct State {
                 Vector<core::ir::Value*, 4> values;
                 for (size_t i = 0; i < mat->Columns(); ++i) {
                     auto* from = b.Access(mat->ColumnType(), obj, u32(i));
-                    MakeStore(inst, var, from->Result(),
-                              b.Add(p, u32(i * mat->ColumnStride()))->Result());
+                    MakeStore(inst, var, from, b.Add(p, u32(i * mat->ColumnStride())));
                 }
 
                 b.Return(fn);
@@ -815,7 +762,7 @@ struct State {
                     auto* access = b.Access(ty.ptr<function>(arr->ElemType()), result_arr, idx);
                     auto* stride = b.Multiply(idx, u32(arr->ImplicitStride()));
                     auto* byte_offset = b.Add(p, stride);
-                    b.Store(access, MakeLoad(inst, var, arr->ElemType(), byte_offset->Result()));
+                    b.Store(access, MakeLoad(inst, var, arr->ElemType(), byte_offset));
                 });
 
                 b.Return(fn, b.Load(result_arr));
@@ -842,7 +789,7 @@ struct State {
                     auto* from = b.Access(arr->ElemType(), obj, idx);
                     auto* stride = b.Multiply(idx, u32(arr->ImplicitStride()));
                     auto* byte_offset = b.Add(p, stride);
-                    MakeStore(inst, var, from->Result(), byte_offset->Result());
+                    MakeStore(inst, var, from, byte_offset);
                 });
 
                 b.Return(fn);
@@ -1010,7 +957,7 @@ struct State {
         b.InsertBefore(inst, [&] {
             auto* off = OffsetToValue(offset);
             auto* call = MakeLoad(inst, var, inst->Result()->Type(), off);
-            inst->Result()->ReplaceAllUsesWith(call->Result());
+            inst->Result()->ReplaceAllUsesWith(call);
         });
         inst->Destroy();
     }
@@ -1027,7 +974,7 @@ struct State {
 
             auto* result =
                 MakeScalarOrVectorLoad(var, lve->Result()->Type(), OffsetToValue(offset));
-            lve->Result()->ReplaceAllUsesWith(result->Result());
+            lve->Result()->ReplaceAllUsesWith(result);
         });
 
         lve->Destroy();

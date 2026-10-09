@@ -30,7 +30,7 @@
 #include <concepts>
 
 #include "src/tint/lang/core/ir/ir_helper_test.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 
 namespace tint::core::ir::analysis {
 namespace {
@@ -55,12 +55,12 @@ enum class BoundKind : uint8_t {
     kVar,
 };
 struct BoundDescriptor {
-    Type type;
-    Direction dir;
-    BoundKind kind;
-    int64_t const_value;
-    BinaryOp op;
-    bool is_finite;
+    Type type{};
+    Direction dir{};
+    BoundKind kind{};
+    int64_t const_value = 0;
+    BinaryOp op{};
+    bool is_finite = false;
 };
 
 // Empty structure used to describe the position of the index variable in an expression.
@@ -175,7 +175,7 @@ TEST_P(IR_LoopAnalysisBoundTest, Bound) {
             b.NextIteration(loop);
         });
         b.Append(loop->Body(), [&] {
-            Instruction* cond = nullptr;
+            Value* cond = nullptr;
 
             core::ir::Value* bound = nullptr;
             switch (params.kind) {
@@ -766,11 +766,9 @@ TEST_F(IR_LoopAnalysisTest, Finite_Bitcasts) {
         %8:i32 = bitcast<i32> %7
         %9:u32 = bitcast<u32> %8
         %10:i32 = bitcast<i32> %9
-        %11:u32 = bitcast<u32> 1u
-        %12:i32 = bitcast<i32> %11
-        %13:i32 = add %10, %12
-        %14:u32 = bitcast<u32> %13
-        store %idx, %14
+        %11:i32 = add %10, 1i
+        %12:u32 = bitcast<u32> %11
+        store %idx, %12
         next_iteration  # -> $B3
       }
     }

@@ -101,7 +101,7 @@ class ComboBindGroupDescriptor {
     const WGPUBindGroupDescriptor* Get() const { return &mDesc; }
 
   private:
-    WGPUBindGroupDescriptor mDesc;
+    WGPUBindGroupDescriptor mDesc{};
     absl::InlinedVector<WGPUBindGroupEntry, 8> mEntries;
     // Use an inline size of 1 since external textures are rare, and reserve the required capacity
     // in constructor to preserve reallocations.
@@ -213,13 +213,13 @@ MaybeError BindGroup::CaptureCreationParameters(CaptureContext& captureContext) 
 
     schema::BindGroup bg{{
         .layoutId = captureContext.GetId(layout),
-        .numEntries = uint32_t(bindingMap.size()),
+        .numEntries = checked_cast<uint32_t>(bindingMap.size()),
     }};
     Serialize(captureContext, bg);
 
     for (const auto& [bindingNumber, apiBindingIndex] : bindingMap) {
         const auto& bindingInfo = layout->GetAPIBindingInfo(apiBindingIndex);
-        uint32_t binding = uint32_t(bindingNumber);
+        uint32_t binding = uint32_t{bindingNumber};
 
         MatchVariant(
             bindingInfo.bindingLayout,

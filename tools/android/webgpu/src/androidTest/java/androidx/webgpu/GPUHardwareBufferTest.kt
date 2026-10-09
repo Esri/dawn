@@ -1,4 +1,4 @@
-/*
+ /*
  * Copyright 2026 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@ import androidx.test.filters.MediumTest
 import androidx.webgpu.helper.GPUAndroidHardwareBufferUtil
 import androidx.webgpu.helper.WebGpu
 import androidx.webgpu.helper.createWebGpu
-import androidx.webgpu.GPU.createInstance
+import androidx.webgpu.GPU.createGPUInstance
 import androidx.webgpu.helper.initLibrary
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +48,7 @@ import java.util.concurrent.Executors
 @RunWith(AndroidJUnit4::class)
 @MediumTest
 @OptIn(ExperimentalWebGpuApi::class)
+@androidx.test.filters.SdkSuppress(minSdkVersion = 29)
 class GPUHardwareBufferTest {
 
     companion object {
@@ -69,7 +70,7 @@ class GPUHardwareBufferTest {
     fun setup() = runBlocking {
         // 1. Check features BEFORE requesting the device
         initLibrary()
-        val instance = createInstance(
+        val instance = createGPUInstance(
             GPUInstanceDescriptor().apply {
                 dawnTogglesDescriptor = GPUDawnTogglesDescriptor(
                     enabledToggles = arrayOf("allow_unsafe_apis") // Required to enable experimental SharedTextureMemoryAHardwareBuffer features
@@ -86,7 +87,11 @@ class GPUHardwareBufferTest {
         adapter.close()
         instance.close()
 
-        // 2. Skip gracefully if features are missing
+        // 2. Skip gracefully if features are missing or running on emulator
+        Assume.assumeFalse(
+            "HardwareBuffer tests are not supported on emulator environments",
+            EmulatorUtils.isEmulator,
+        )
         Assume.assumeTrue(
             "Adapter does not support required features for hardware buffer tests",
             hasRequiredFeatures
@@ -266,10 +271,10 @@ class GPUHardwareBufferTest {
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 29)
+    @ApiRequirement(minApi = 29, onlySkipOnEmulator = true)
     fun testImportHardwareBufferLoop_noLeaks() {
         runBlocking {
-            val unused = webGpu.execute {
+            webGpu.execute {
                 for (i in 0 until 50) {
                     val (rgbBuffer, wrapper) = createWrappedHardwareBuffer(
                         128, 128,
@@ -293,10 +298,10 @@ class GPUHardwareBufferTest {
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 29)
+    @ApiRequirement(minApi = 29, onlySkipOnEmulator = true)
     fun testWebGpuOOMScope_handlesErrorGracefully() {
         runBlocking {
-            val unused = webGpu.execute {
+            webGpu.execute<Unit> {
                 device.pushErrorScope(ErrorFilter.Validation)
 
                 // Attempt to allocate an absolutely massive texture to trigger validation error
@@ -305,11 +310,11 @@ class GPUHardwareBufferTest {
                     format = TextureFormat.RGBA8Unorm,
                     usage = TextureUsage.None // Invalid usage
                 )
-                val unusedTexture = device.createTexture(descriptor)
+                device.createTexture(descriptor).close()
 
                 // Popping the error scope should throw a ValidationException due to validation failure
                 assertThrows(ValidationException::class.java) {
-                    runBlocking { val unusedPop = device.popErrorScope() }
+                    runBlocking { device.popErrorScope() }
                 }
             }
         }
@@ -324,10 +329,10 @@ class GPUHardwareBufferTest {
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 29)
+    @ApiRequirement(minApi = 29, onlySkipOnEmulator = true)
     fun testRGBHardwareBuffer_asTexture() {
         runBlocking {
-            val unused = webGpu.execute {
+            webGpu.execute {
                 val (rgbBuffer, wrapper) = createWrappedHardwareBuffer(
                     textureUsage = TextureUsage.TextureBinding
                 )
@@ -350,10 +355,10 @@ class GPUHardwareBufferTest {
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 29)
+    @ApiRequirement(minApi = 29, onlySkipOnEmulator = true)
     fun testRGBHardwareBuffer_asExternalTexture() {
         runBlocking {
-            val unused = webGpu.execute {
+            webGpu.execute {
                 val rgbBuffer = createHardwareBuffer(64, 64)
 
                 val extDescriptor = createExternalTextureDescriptor()
@@ -368,10 +373,10 @@ class GPUHardwareBufferTest {
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 30)
+    @ApiRequirement(minApi = 30, onlySkipOnEmulator = true)
     fun testYUVHardwareBuffer_asExternalTexture() {
         runBlocking {
-            val unused = webGpu.execute {
+            webGpu.execute {
                 val yuvBuffer = createHardwareBuffer(64, 64, format = HardwareBuffer.YCBCR_420_888)
 
                 val extDescriptor = createExternalTextureDescriptor()
@@ -404,7 +409,7 @@ class GPUHardwareBufferTest {
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 29)
+    @ApiRequirement(minApi = 29, onlySkipOnEmulator = true)
     @SuppressLint("SuspendBlocks")
     fun testConcurrentAccess_raceCondition() {
         runBlocking(Dispatchers.IO) {
@@ -430,10 +435,10 @@ class GPUHardwareBufferTest {
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 29)
+    @ApiRequirement(minApi = 29, onlySkipOnEmulator = true)
     fun testZeroCopyPipeline_writeAndVerify() {
         runBlocking {
-            val unused = webGpu.execute {
+            webGpu.execute {
                 val width = 64
                 val height = 64
                 val (rgbBuffer, wrapper) = createWrappedHardwareBuffer(
@@ -454,15 +459,49 @@ class GPUHardwareBufferTest {
         }
     }
 
+    @Test
+    @MediumTest
+    @ApiRequirement(minApi = 26, onlySkipOnEmulator = true)
+    fun testAHBChainingAndDepth() {
+        runBlocking {
+            webGpu.execute {
+                val width = 64
+                val height = 64
+
+                val (rgbBuffer, wrapper) = createWrappedHardwareBuffer(
+                    width, height,
+                    textureUsage = TextureUsage.RenderAttachment or TextureUsage.CopySrc
+                )
+
+                assertNotNull(wrapper)
+                assertNotNull(wrapper.texture)
+
+                wrapper.beginAccess(null)
+                val fenceFd = wrapper.endAccess()
+
+                if (fenceFd != null) {
+                    wrapper.beginAccess(arrayOf(fenceFd))
+                    val fenceFd2 = wrapper.endAccess()
+                    fenceFd2?.close()
+                    fenceFd.close()
+                }
+
+                wrapper.close()
+                rgbBuffer.close()
+            }
+        }
+    }
+
     /**
-     * Verifies GPU-to-CPU zero-copy memory visibility after rendering.
+     * Verifies GPU-to-CPU zero-copy memory visibility after rendering into an imported HardwareBuffer.
+     * Crashes with Vulkan image layout transition mismatch if GPUImportedAHB does not use VK_IMAGE_LAYOUT_GENERAL.
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 29)
+    @ApiRequirement(minApi = 29, onlySkipOnEmulator = true)
     fun testZeroCopyPipeline_gpuRenderWriteAndVerify() {
         runBlocking {
-            val unused = webGpu.execute {
+            webGpu.execute {
                 val width = 64
                 val height = 64
 
@@ -547,10 +586,10 @@ class GPUHardwareBufferTest {
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 29)
+    @ApiRequirement(minApi = 29, onlySkipOnEmulator = true)
     fun testZeroCopyPipeline_gpuSamplingAndCopyVerify() {
         runBlocking {
-            val unused = webGpu.execute {
+            webGpu.execute {
                 val width = 64
                 val height = 64
 
@@ -615,10 +654,10 @@ class GPUHardwareBufferTest {
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 30)
+    @ApiRequirement(minApi = 30, onlySkipOnEmulator = true)
     fun testYUVExternalTexture_descriptorTransform_validatesWithoutError() {
         runBlocking {
-            val unused = webGpu.execute {
+            webGpu.execute {
                 val yuvBuffer = createHardwareBuffer(128, 128, format = HardwareBuffer.YCBCR_420_888)
 
                 val extDescriptor = createExternalTextureDescriptor(
@@ -636,10 +675,10 @@ class GPUHardwareBufferTest {
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 29)
+    @ApiRequirement(minApi = 29, onlySkipOnEmulator = true)
     fun testRGBExternalTexture_descriptorTransform_validatesWithoutError() {
         runBlocking {
-            val unused = webGpu.execute {
+            webGpu.execute {
                 val width = 64
                 val height = 64
 
@@ -660,11 +699,11 @@ class GPUHardwareBufferTest {
      */
     @Test
     @MediumTest
-    @ApiRequirement(minApi = 29)
+    @ApiRequirement(minApi = 29, onlySkipOnEmulator = true)
     @SuppressLint("SuspendBlocks")
     fun testColorSpaceEnumVariants() {
         runBlocking {
-            val unused = webGpu.execute {
+            webGpu.execute {
                 val width = 64
                 val height = 64
 

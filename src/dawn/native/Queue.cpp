@@ -71,8 +71,8 @@ namespace dawn::native {
 
 namespace {
 
-void CopyTextureData(uint8_t* dstPointer,
-                     const uint8_t* srcPointer,
+void CopyTextureData(Span<std::byte> dst,
+                     Span<const std::byte> src,
                      uint32_t depth,
                      uint32_t dstRowsPerImage,
                      uint64_t srcRowsPerImage,
@@ -83,26 +83,27 @@ void CopyTextureData(uint8_t* dstPointer,
     bool copyWholeLayer = actualBytesPerRow == dstBytesPerRow && dstBytesPerRow == srcBytesPerRow;
     bool copyWholeData = copyWholeLayer && imageAdditionalStride == 0;
 
+    size_t dstOffset = 0;
+    size_t srcOffset = 0;
     if (!copyWholeLayer) {  // copy row by row
         for (uint32_t d = 0; d < depth; ++d) {
             for (uint32_t h = 0; h < dstRowsPerImage; ++h) {
-                DAWN_UNSAFE_TODO(memcpy(dstPointer, srcPointer, actualBytesPerRow));
-                DAWN_UNSAFE_TODO(dstPointer += dstBytesPerRow);
-                DAWN_UNSAFE_TODO(srcPointer += srcBytesPerRow);
+                dst.subspan(dstOffset).CopyPrefixFrom(src.subspan(srcOffset, actualBytesPerRow));
+                dstOffset += dstBytesPerRow;
+                srcOffset += srcBytesPerRow;
             }
-            DAWN_UNSAFE_TODO(srcPointer += imageAdditionalStride);
+            srcOffset += imageAdditionalStride;
         }
     } else {
-        uint64_t layerSize = uint64_t(dstRowsPerImage) * actualBytesPerRow;
+        size_t layerSize = size_t{dstRowsPerImage} * actualBytesPerRow;
         if (!copyWholeData) {  // copy layer by layer
             for (uint32_t d = 0; d < depth; ++d) {
-                DAWN_UNSAFE_TODO(memcpy(dstPointer, srcPointer, checked_cast<size_t>(layerSize)));
-                DAWN_UNSAFE_TODO(dstPointer += layerSize);
-                DAWN_UNSAFE_TODO(srcPointer += layerSize + imageAdditionalStride);
+                dst.subspan(dstOffset).CopyPrefixFrom(src.subspan(srcOffset, layerSize));
+                dstOffset += layerSize;
+                srcOffset += layerSize + imageAdditionalStride;
             }
         } else {  // do a single copy
-            DAWN_UNSAFE_TODO(
-                memcpy(dstPointer, srcPointer, checked_cast<size_t>(layerSize * depth)));
+            dst.CopyPrefixFrom(src.first(layerSize * depth));
         }
     }
 }
@@ -176,7 +177,7 @@ void QueueBase::APISubmit(Span<CommandBufferBase* const> commands) {
         commandBuffer->Destroy();
     }
 
-    [[maybe_unused]] bool hadError =
+    std::ignore =
         GetDevice()->ConsumedError(std::move(result), "calling %s.Submit(%s)", this, commands);
 }
 
@@ -284,7 +285,7 @@ void QueueBase::Tick(ExecutionSerial finishedSerial) {
     // To prevent the reentrant call from invalidating mTasksInFlight while in use by the first
     // call, we remove the tasks to finish from the queue, update mTasksInFlight, then run the
     // callbacks.
-    TRACE_EVENT(DAWN_TRACE_CATEGORY(), "Queue::Tick", "finishedSerial", uint64_t(finishedSerial));
+    TRACE_EVENT(DAWN_TRACE_CATEGORY(), "Queue::Tick", "finishedSerial", uint64_t{finishedSerial});
 
     std::vector<std::unique_ptr<TrackTaskCallback>> tasks;
     mTasksInFlight.Use([&](auto tasksInFlight) {
@@ -318,7 +319,7 @@ void QueueBase::APIWriteBuffer(BufferBase* buffer,
         DAWN_TRY(WriteBuffer(buffer, bufferOffset, data));
         return GetDevice()->GetDynamicUploader()->MaybeSubmitPendingCommands();
     };
-    [[maybe_unused]] bool hadError = GetDevice()->ConsumedError(
+    std::ignore = GetDevice()->ConsumedError(
         writeBuffer(), "calling %s.WriteBuffer(%s, (%d bytes), data, (%d bytes))", this, buffer,
         bufferOffset, data.size());
 }
@@ -348,9 +349,9 @@ void QueueBase::APIWriteTexture(const TexelCopyTextureInfo* destination,
         DAWN_TRY(WriteTextureInternal(destination, data, *dataLayout, writeSize));
         return GetDevice()->GetDynamicUploader()->MaybeSubmitPendingCommands();
     };
-    [[maybe_unused]] bool hadError = GetDevice()->ConsumedError(
-        writeTexture(), "calling %s.WriteTexture(%s, (%u bytes), %s, %s)", this, destination,
-        data.size(), dataLayout, writeSize);
+    std::ignore = GetDevice()->ConsumedError(
+        writeTexture(), "calling %s.WriteTexture(%s, (%u bytes), %s, %s)", this, *destination,
+        data.size(), *dataLayout, *writeSize);
 }
 
 MaybeError QueueBase::WriteTextureInternal(const TexelCopyTextureInfo* destinationOrig,
@@ -382,7 +383,7 @@ MaybeError QueueBase::WriteTextureImpl(const TexelCopyTextureInfo& destination,
     // Note that validating texture copy range ensures that writeSizePixel->width and
     // writeSizePixel->height are multiples of blockWidth and blockHeight respectively.
     BlockCount rowsPerImage = writeSize.height;
-    uint32_t bytesPerRow = uint32_t(blockInfo.ToBytes(writeSize.width));
+    uint32_t bytesPerRow = checked_cast<uint32_t>(blockInfo.ToBytes(writeSize.width));
     uint32_t alignedBytesPerRow = Align(bytesPerRow, GetDevice()->GetOptimalBytesPerRowAlignment());
     BlockCount alignedBlocksPerRow = blockInfo.BytesToBlocks(alignedBytesPerRow);
 
@@ -394,7 +395,7 @@ MaybeError QueueBase::WriteTextureImpl(const TexelCopyTextureInfo& destination,
     DAWN_CHECK(IsPowerOfTwo(GetDevice()->GetOptimalBufferToTextureCopyOffsetAlignment()));
     DAWN_CHECK(IsPowerOfTwo(blockInfo.byteSize));
     uint64_t offsetAlignment = std::max(
-        uint64_t(blockInfo.byteSize), GetDevice()->GetOptimalBufferToTextureCopyOffsetAlignment());
+        uint64_t{blockInfo.byteSize}, GetDevice()->GetOptimalBufferToTextureCopyOffsetAlignment());
 
     // Buffer offset alignments must follow additional restrictions for depth stencil formats.
     const Format& format = destination.texture->GetFormat();
@@ -405,12 +406,10 @@ MaybeError QueueBase::WriteTextureImpl(const TexelCopyTextureInfo& destination,
 
     return GetDevice()->GetDynamicUploader()->WithUploadReservation(
         packedDataSize, offsetAlignment, [&](UploadReservation reservation) -> MaybeError {
-            const uint8_t* srcPointer =
-                DAWN_UNSAFE_TODO(reinterpret_cast<const uint8_t*>(data.data()) + dataLayout.offset);
-            uint8_t* dstPointer = reinterpret_cast<uint8_t*>(reservation.mappedPointer.get());
-            CopyTextureData(dstPointer, srcPointer, writeSizePixel.depthOrArrayLayers,
-                            dchecked_cast<uint32_t>(rowsPerImage), dataLayout.rowsPerImage,
-                            bytesPerRow, alignedBytesPerRow, dataLayout.bytesPerRow);
+            CopyTextureData(
+                reservation.mappedData, data.subspan(checked_cast<size_t>(dataLayout.offset)),
+                writeSizePixel.depthOrArrayLayers, dchecked_cast<uint32_t>(rowsPerImage),
+                dataLayout.rowsPerImage, bytesPerRow, alignedBytesPerRow, dataLayout.bytesPerRow);
 
             TexelCopyBufferLayout passDataLayout = dataLayout;
             passDataLayout.offset = reservation.offsetInBuffer;
@@ -432,7 +431,7 @@ void QueueBase::APICopyTextureForBrowser(const TexelCopyTextureInfo* source,
                                          const TexelCopyTextureInfo* destination,
                                          const Extent3D* copySize,
                                          const CopyTextureForBrowserOptions* options) {
-    [[maybe_unused]] bool hadError = GetDevice()->ConsumedError(
+    std::ignore = GetDevice()->ConsumedError(
         CopyTextureForBrowserInternal(source, destination, copySize, options));
 }
 
@@ -440,7 +439,7 @@ void QueueBase::APICopyExternalTextureForBrowser(const ImageCopyExternalTexture*
                                                  const TexelCopyTextureInfo* destination,
                                                  const Extent3D* copySize,
                                                  const CopyTextureForBrowserOptions* options) {
-    [[maybe_unused]] bool hadError = GetDevice()->ConsumedError(
+    std::ignore = GetDevice()->ConsumedError(
         CopyExternalTextureForBrowserInternal(source, destination, copySize, options));
 }
 
@@ -477,8 +476,8 @@ MaybeError QueueBase::CopyExternalTextureForBrowserInternal(
     return DoCopyExternalTextureForBrowser(GetDevice(), source, &destination, copySize, options);
 }
 
-MaybeError QueueBase::ValidateSubmit(Span<CommandBufferBase* const> commands,
-                                     BufferSet& buffersFromCommands) const {
+MaybeValError QueueBase::ValidateSubmit(Span<CommandBufferBase* const> commands,
+                                        BufferSet& buffersFromCommands) const {
     TRACE_EVENT(DAWN_TRACE_CATEGORY("validation"), "Queue::ValidateSubmit");
     DAWN_TRY(GetDevice()->ValidateObject(this));
 
@@ -549,15 +548,15 @@ MaybeError QueueBase::ValidateSubmit(Span<CommandBufferBase* const> commands,
     return {};
 }
 
-MaybeError QueueBase::ValidateOnSubmittedWorkDone() const {
+MaybeValError QueueBase::ValidateOnSubmittedWorkDone() const {
     DAWN_TRY(GetDevice()->ValidateObject(this));
     return {};
 }
 
-MaybeError QueueBase::ValidateWriteTexture(const TexelCopyTextureInfo* destination,
-                                           size_t dataSize,
-                                           const TexelCopyBufferLayout& dataLayout,
-                                           const Extent3D* writeSize) const {
+MaybeValError QueueBase::ValidateWriteTexture(const TexelCopyTextureInfo* destination,
+                                              size_t dataSize,
+                                              const TexelCopyBufferLayout& dataLayout,
+                                              const Extent3D* writeSize) const {
     DAWN_TRY(GetDevice()->ValidateIsAlive());
     DAWN_TRY(GetDevice()->ValidateObject(this));
     DAWN_TRY(GetDevice()->ValidateObject(destination->texture));

@@ -40,6 +40,7 @@
 #include "src/dawn/native/d3d/PlatformFunctions.h"
 #include "src/dawn/native/d3d/UtilsD3D.h"
 #include "src/dawn/platform/tracing/TraceEvent.h"
+#include "src/utils/compiler.h"
 #include "tint/tint.h"
 
 namespace dawn::native::d3d {
@@ -146,7 +147,7 @@ ResultOrError<ComPtr<IDxcBlob>> CompileShaderDXC(const d3d::D3DBytecodeCompilati
                                                  const std::string& hlslSource,
                                                  const wchar_t* hlslVersion,
                                                  bool dumpShadersOnFailure) {
-    DxcBuffer dxcBuffer;
+    DxcBuffer dxcBuffer{};
     dxcBuffer.Ptr = hlslSource.c_str();
     dxcBuffer.Size = hlslSource.length();
     dxcBuffer.Encoding = DXC_CP_UTF8;
@@ -172,11 +173,11 @@ ResultOrError<ComPtr<IDxcBlob>> CompileShaderDXC(const d3d::D3DBytecodeCompilati
         DAWN_TRY(CheckHRESULT(result->GetErrorBuffer(&errors), "DXC get error buffer"));
 
         if (dumpShadersOnFailure) {
-            return DAWN_VALIDATION_ERROR(
+            return DAWN_PIPELINE_UNCATEGORIZED_ERROR(
                 "DXC compile failed with error: %s msg: %s\n/* Generated HLSL: */\n%s\n",
                 hrAsString, static_cast<char*>(errors->GetBufferPointer()), hlslSource.c_str());
         }
-        return DAWN_VALIDATION_ERROR("DXC compile failed with error: %s.", hrAsString);
+        return DAWN_PIPELINE_UNCATEGORIZED_ERROR("DXC compile failed with error: %s.", hrAsString);
     }
 
     ComPtr<IDxcBlob> compiledShader;
@@ -200,12 +201,13 @@ ResultOrError<ComPtr<ID3DBlob>> CompileShaderFXC(const d3d::D3DBytecodeCompilati
         const char* resultAsString = HRESULTAsString(result);
         if (dumpShadersOnFailure) {
             std::string errorMsg = errors ? static_cast<char*>(errors->GetBufferPointer()) : "";
-            return DAWN_VALIDATION_ERROR(
+            return DAWN_PIPELINE_UNCATEGORIZED_ERROR(
                 "FXC compile failed with error: %s msg: %s\n/* Generated HLSL: */\n%s\n",
                 resultAsString, errorMsg, hlslSource.c_str());
         }
 
-        return DAWN_VALIDATION_ERROR("FXC compile failed with error: %s.", resultAsString);
+        return DAWN_PIPELINE_UNCATEGORIZED_ERROR("FXC compile failed with error: %s.",
+                                                 resultAsString);
     }
 
     return std::move(compiledShader);
@@ -249,15 +251,30 @@ MaybeError TranslateToHLSL(d3d::HlslCompilationRequest r,
                         result.Failure().reason);
     }
 
+    DAWN_TRY(
+        ValidateSubgroupMatrixConfiguration(result->subgroup_matrix_info, r.subgroupMatrixConfig));
+
     // Workgroup validation has to come after `Generate` because it may require overrides to
     // have been substituted.
     if (r.stage == SingleShaderStage::Compute) {
         // Validate workgroup size and workgroup storage size.
         Extent3D workgroupSize;
-        DAWN_TRY_ASSIGN(workgroupSize,
-                        ValidateComputeStageWorkgroupSize(
-                            result->workgroup_info, r.usesSubgroupMatrix, r.maxSubgroupSize,
-                            r.limits, r.adapterSupportedLimits.UnsafeGetValue()));
+        auto validationResult = ValidateComputeStageWorkgroupSize(
+            result->workgroup_info, r.usesSubgroupMatrix, r.maxSubgroupSize, r.limits,
+            r.adapterSupportedLimits.UnsafeGetValue());
+        if (result->workgroup_storage_size_before_split_workgroup_atomics.has_value() &&
+            *result->workgroup_storage_size_before_split_workgroup_atomics <=
+                r.limits.maxComputeWorkgroupStorageSize &&
+            result->workgroup_info.storage_size > r.limits.maxComputeWorkgroupStorageSize) {
+            DAWN_TRY_ASSIGN_CONTEXT(
+                workgroupSize, std::move(validationResult),
+                "the SplitWorkgroupAtomics transform increased workgroup storage usage "
+                "from %u bytes to %u bytes",
+                *result->workgroup_storage_size_before_split_workgroup_atomics,
+                result->workgroup_info.storage_size);
+        } else {
+            DAWN_TRY_ASSIGN(workgroupSize, std::move(validationResult));
+        }
 
         if (result->workgroup_info.subgroup_size.has_value()) {
             const uint32_t explicitSubgroupSize = result->workgroup_info.subgroup_size.value();
@@ -269,14 +286,13 @@ MaybeError TranslateToHLSL(d3d::HlslCompilationRequest r,
                         "The subgroup_size attribute (%u) is not in the allowed range "
                         "([%u, %u]).",
                         explicitSubgroupSize, r.waveLaneCountMin, r.waveLaneCountMax);
-                } else {
-                    return DAWN_VALIDATION_ERROR(
-                        "The subgroup_size attribute (%u) is not in the allowed range "
-                        "([%u, %u]). Note that on this device the allowed range is not "
-                        "[minSubgroupSize, maxSubgroupsize]([%u, %u]).",
-                        explicitSubgroupSize, r.waveLaneCountMin, r.waveLaneCountMax,
-                        r.minSubgroupSize, r.maxSubgroupSize);
                 }
+                return DAWN_VALIDATION_ERROR(
+                    "The subgroup_size attribute (%u) is not in the allowed range "
+                    "([%u, %u]). Note that on this device the allowed range is not "
+                    "[minSubgroupSize, maxSubgroupsize]([%u, %u]).",
+                    explicitSubgroupSize, r.waveLaneCountMin, r.waveLaneCountMax, r.minSubgroupSize,
+                    r.maxSubgroupSize);
             }
         }
 
@@ -424,8 +440,9 @@ void DumpFXCCompiledShader(Device* device,
                                                           flags, nullptr, &disassembly))) {
         dumpedMsg << "D3D disassemble failed\n";
     } else {
-        dumpedMsg << std::string_view(static_cast<const char*>(disassembly->GetBufferPointer()),
-                                      disassembly->GetBufferSize());
+        dumpedMsg << DAWN_UNSAFE_TODO(
+            std::string_view(static_cast<const char*>(disassembly->GetBufferPointer()),
+                             disassembly->GetBufferSize()));
     }
 
     std::string logMessage = dumpedMsg.str();

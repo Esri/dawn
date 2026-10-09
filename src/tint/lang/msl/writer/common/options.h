@@ -34,28 +34,24 @@
 
 #include "src/tint/api/common/binding_point.h"
 #include "src/tint/api/common/bindings.h"
+#include "src/tint/api/common/resource_table_config.h"
 #include "src/tint/api/common/substitute_overrides_config.h"
 #include "src/tint/api/common/vertex_pulling_config.h"
 #include "src/tint/utils/reflection/reflection.h"
 
 namespace tint::msl::writer {
 
-/// Options used to specify a mapping of binding points to indices into a UBO
-/// from which to load buffer sizes.
-/// TODO(crbug.com/366291600): Remove ubo_binding after switch to immediates.
+/// Options used to load buffer sizes from immediate data.
 struct ArrayLengthOptions {
-    /// The MSL binding point to use to generate a uniform buffer from which to read buffer sizes.
-    std::optional<uint32_t> ubo_binding{};
-
     /// The offset in immediate block for buffer sizes.
     std::optional<uint32_t> buffer_sizes_offset{};
 
     /// The mapping from the storage buffer binding points in WGSL binding-point space to the index
-    /// into the uniform buffer where the length of the buffer is stored.
+    /// into the immediate data where the length of the buffer is stored.
     std::unordered_map<BindingPoint, uint32_t> bindpoint_to_size_index{};
 
     /// Reflect the fields of this class so that it can be used by tint::ForeachField()
-    TINT_REFLECT(ArrayLengthOptions, ubo_binding, buffer_sizes_offset, bindpoint_to_size_index);
+    TINT_REFLECT(ArrayLengthOptions, buffer_sizes_offset, bindpoint_to_size_index);
     TINT_REFLECT_HASH_CODE(ArrayLengthOptions);
 
     bool operator==(const ArrayLengthOptions&) const = default;
@@ -161,7 +157,11 @@ struct Options {
         /// Set to `true` to disable demote to helper transform
         bool disable_demote_to_helper = false;
 
-        TINT_REFLECT(Extensions, disable_demote_to_helper);
+        /// Set to `true` to enable the use of Metal Tensors for subgroup matrix.
+        /// TODO(553457231): Enable in fuzzers when implementation is complete.
+        bool enable_tensors = false;
+
+        TINT_REFLECT(Extensions, disable_demote_to_helper, enable_tensors);
         TINT_REFLECT_HASH_CODE(Extensions);
 
         bool operator==(const Extensions&) const = default;
@@ -223,8 +223,8 @@ struct Options {
     /// Index of pixel_local structure member index to attachment index
     std::unordered_map<uint32_t, uint32_t> pixel_local_attachments;
 
-    /// Options used to specify a mapping of binding points to indices into a UBO
-    /// or immediate block from which to load buffer sizes.
+    /// Options used to specify a mapping of binding points to indices into the immediate block
+    /// from which to load buffer sizes.
     ArrayLengthOptions array_length_from_constants = {};
 
     /// The optional vertex pulling configuration.
@@ -239,8 +239,14 @@ struct Options {
     /// Offsets of the minDepth and maxDepth push constants.
     std::optional<RangeOffsets> depth_range_offsets = std::nullopt;
 
+    /// Offset of the non-constant zero immediate.
+    uint32_t non_constant_zero_offset = 0;
+
     /// The bindings.
     Bindings bindings;
+
+    /// Resource table information
+    std::optional<ResourceTableConfig> resource_table = std::nullopt;
 
     // Substitute Overrides
     SubstituteOverridesConfig substitute_overrides_config = {};
@@ -265,7 +271,9 @@ struct Options {
                  immediate_binding_point,
                  group_to_argument_buffer_info,
                  depth_range_offsets,
+                 non_constant_zero_offset,
                  bindings,
+                 resource_table,
                  substitute_overrides_config);
     TINT_REFLECT_HASH_CODE(Options);
 

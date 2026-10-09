@@ -102,10 +102,10 @@ class RenderPassBuilder {
                              bool isStencilReadOnly);
 
   private:
-    ColorAttachmentIndex mHighestColorAttachmentIndexPlusOne{uint8_t(0)};
+    ColorAttachmentIndex mHighestColorAttachmentIndexPlusOne{uint8_t{0}};
     bool mHasDepthOrStencil = false;
     D3D12_RENDER_PASS_FLAGS mRenderPassFlags = D3D12_RENDER_PASS_FLAG_NONE;
-    D3D12_RENDER_PASS_DEPTH_STENCIL_DESC mRenderPassDepthStencilDesc;
+    D3D12_RENDER_PASS_DEPTH_STENCIL_DESC mRenderPassDepthStencilDesc{};
     PerColorAttachment<D3D12_RENDER_PASS_RENDER_TARGET_DESC> mRenderPassRenderTargetDescriptors{};
     PerColorAttachment<D3D12_CPU_DESCRIPTOR_HANDLE> mRenderTargetViews{};
     PerColorAttachment<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS>

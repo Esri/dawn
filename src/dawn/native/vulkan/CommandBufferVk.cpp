@@ -414,10 +414,11 @@ class ImmediateTracker : public T {
             uint32_t pushConstantRangeStartOffset =
                 GetImmediateIndexInPipeline(static_cast<uint32_t>(offset), pipelineMask) *
                 kImmediateElementByteSize;
+            auto data = this->mContent.GetDataBytes(immediateContentStartOffset,
+                                                    size * kImmediateElementByteSize);
             vk.CmdPushConstants(commandBuffer, layout, kImmediateShaderStages,
-                                pushConstantRangeStartOffset,
-                                checked_cast<uint32_t>(size * kImmediateElementByteSize),
-                                this->mContent.template Get<uint32_t>(immediateContentStartOffset));
+                                pushConstantRangeStartOffset, checked_cast<uint32_t>(data.size()),
+                                data.data());
         }
 
         // Reset all dirty bits after uploading.
@@ -687,9 +688,9 @@ struct ProgrammablePassState : public StackAllocated {
             // Use static samplers for YCbCr external textures. However when the toggle is enabled,
             // we use a static sampler for all the single-planar external textures, which helps with
             // testing the code paths on any Vulkan-capable device.
-            if (view->GetFormat().format != wgpu::TextureFormat::OpaqueYCbCrAndroid &&
-                !lastPipeline->GetDevice()->IsToggleEnabled(
-                    Toggle::VulkanForceStaticSamplersForExternalTextures)) {
+            bool isYCbCr = view->GetFormat().format == wgpu::TextureFormat::OpaqueYCbCrAndroid;
+            if (!isYCbCr && !lastPipeline->GetDevice()->IsToggleEnabled(
+                                Toggle::VulkanForceStaticSamplersForExternalTextures)) {
                 continue;
             }
 
@@ -703,7 +704,9 @@ struct ProgrammablePassState : public StackAllocated {
 
             // Tell both the shader that we'll be using a YCbCr external texture at the bindpoint,
             // and tell BindGroupLayouts to use a specific static sampler.
-            s.ycbcrExternalTextures.insert(etBindPoint);
+            if (isYCbCr) {
+                s.ycbcrExternalTextures.insert(etBindPoint);
+            }
             s.layout.bindGroups[etBindPoint.group].staticSamplers[*etInfo.staticSampler] =
                 StaticSamplerSpecialization::From(view, sampler);
         }
@@ -1517,7 +1520,7 @@ MaybeError CommandBuffer::RecordCommands(CommandRecordingContext* recordingConte
             case Command::WriteBuffer: {
                 WriteBufferCmd* write = mCommands.NextCommand<WriteBufferCmd>();
                 const uint64_t offset = write->offset;
-                Span<const uint8_t> data = mCommands.NextData<uint8_t>(write->size);
+                Span<const std::byte> data = mCommands.NextData<std::byte>(write->size);
 
                 if (data.empty()) {
                     continue;
@@ -1525,11 +1528,10 @@ MaybeError CommandBuffer::RecordCommands(CommandRecordingContext* recordingConte
 
                 Buffer* dstBuffer = ToBackend(write->buffer.Get());
 
-                // TODO(https://crbug.com/534203108): Spanify WithUploadReservation.
-                DAWN_UNSAFE_TODO(DAWN_TRY(device->GetDynamicUploader()->WithUploadReservation(
+                DAWN_TRY(device->GetDynamicUploader()->WithUploadReservation(
                     data.size(), kCopyBufferToBufferOffsetAlignment,
                     [&](UploadReservation reservation) -> MaybeError {
-                        memcpy(reservation.mappedPointer, data.data(), data.size());
+                        reservation.mappedData.CopyFrom(data);
 
                         dstBuffer->EnsureDataInitializedAsDestination(recordingContext, offset,
                                                                       data.size());
@@ -1544,7 +1546,7 @@ MaybeError CommandBuffer::RecordCommands(CommandRecordingContext* recordingConte
                                                  ToBackend(reservation.buffer)->GetHandle(),
                                                  dstBuffer->GetHandle(), 1, &copy);
                         return {};
-                    })));
+                    }));
                 break;
             }
 

@@ -255,7 +255,7 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
 
     // Allocate at least 4 bytes so clamped accesses are always in bounds.
     // Also, Vulkan requires the size to be non-zero.
-    size = std::max(size, uint64_t(4u));
+    size = std::max(size, uint64_t{4});
 
     if (size > std::numeric_limits<uint64_t>::max() - kAlignment) {
         // Alignment would overlow.
@@ -275,7 +275,7 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
     // VkmemoryRequirements. See https://gitlab.khronos.org/vulkan/vulkan/issues/1904
     // Any size with one of two top bits of VkDeviceSize set is a HUGE allocation and we can
     // safely return an OOM error.
-    if (mAllocatedSize.value() & (uint64_t(3) << uint64_t(62))) {
+    if (mAllocatedSize.value() & (uint64_t{3} << uint64_t{62})) {
         return DAWN_OUT_OF_MEMORY_ERROR("Buffer size is HUGE and could cause overflows");
     }
 
@@ -328,19 +328,17 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
             // For host visible buffers do initialization on CPU to avoid a GPU write that
             // interferes with using the UploadData() fast path.
             if (device->IsToggleEnabled(Toggle::NonzeroClearResourcesOnCreationForTesting)) {
-                DAWN_TRY(
-                    MapMemoryAndPerformOperation(0, checked_cast<size_t>(mAllocatedSize.value()),
-                                                 [](std::span<std::byte> mapped) {
-                                                     std::ranges::fill(mapped, std::byte(0x01));
-                                                 }));
+                DAWN_TRY(MapMemoryAndPerformOperation(
+                    0, checked_cast<size_t>(mAllocatedSize.value()),
+                    [](Span<std::byte> mapped) { mapped.FillBytes(std::byte(0x01)); }));
             }
             if (device->IsToggleEnabled(Toggle::LazyClearResourceOnFirstUse) &&
                 paddingClearSize > 0) {
                 DAWN_TRY(MapMemoryAndPerformOperation(
                     checked_cast<size_t>(paddingClearOffset), paddingClearSize,
-                    [&paddingClearSize](std::span<std::byte> mapped) {
+                    [&paddingClearSize](Span<std::byte> mapped) {
                         DAWN_CHECK(mapped.size() == paddingClearSize);
-                        std::ranges::fill(mapped, std::byte(0x0));
+                        mapped.FillBytes(std::byte(0x0));
                     }));
             }
         } else {
@@ -418,8 +416,8 @@ MaybeError Buffer::InitializeHostMapped(const BufferHostMappedPointer* hostMappe
     MemoryKind requestKind = MemoryKind::Linear;
     auto maybeMemoryTypeIndex =
         device->GetResourceMemoryAllocator()->FindBestTypeIndex(requirements, requestKind);
-    DAWN_INTERNAL_ERROR_IF(!maybeMemoryTypeIndex.has_value(),
-                           "Unable to find an appropriate memory type for import.");
+    DAWN_UNRECOVERABLE_ERROR_IF(!maybeMemoryTypeIndex.has_value(),
+                                "Unable to find an appropriate memory type for import.");
     uint32_t memoryTypeIndex = maybeMemoryTypeIndex.value();
 
     // Make a device memory wrapping the host pointer.
@@ -583,9 +581,7 @@ MaybeError Buffer::FinalizeMapImpl(BufferState newState) {
     // The real mapped pointer is never returned for zero sized buffers. MappedAtCreation buffers
     // are initialized in BufferBase already.
     if (NeedsInitialization() && GetSize() > 0 && newState == BufferState::Mapped) {
-        // TODO(https://crbug.com/501491697): Spanify GetMappedPointerImpl.
-        DAWN_UNSAFE_TODO(
-            std::memset(GetMappedPointerImpl(), 0, checked_cast<size_t>(GetAllocatedSize())));
+        GetMappedRangeImpl(0, checked_cast<size_t>(GetAllocatedSize())).FillBytes(std::byte(0u));
         GetDevice()->IncrementLazyClearCountForTesting();
         SetInitialized(true);
 
@@ -638,10 +634,8 @@ void Buffer::UnmapImpl(BufferState oldState, BufferState newState) {
     }
 }
 
-void* Buffer::GetMappedPointerImpl() {
-    std::byte* memory = mMemoryAllocation.GetMappedSpan().data();
-    DAWN_ASSERT(memory != nullptr);
-    return memory;
+Span<std::byte> Buffer::GetMappedRangeImpl(size_t offset, size_t size) {
+    return mMemoryAllocation.GetMappedSpan().subspan(offset, size);
 }
 
 MaybeError Buffer::UploadData(uint64_t bufferOffset, Span<const std::byte> data) {
@@ -673,28 +667,26 @@ MaybeError Buffer::UploadData(uint64_t bufferOffset, Span<const std::byte> data)
     uint64_t mapSize = needsZeroInitialization ? mAllocatedSize.value() : data.size();
     uint64_t mapOffset = needsZeroInitialization ? 0 : bufferOffset;
 
-    return MapMemoryAndPerformOperation(
+    return MapMemoryAndPerformOperation(  //
         checked_cast<size_t>(mapOffset), checked_cast<size_t>(mapSize),
-        [&](std::span<std::byte> mapped) {
-            uint64_t dstOffset = 0;
+        [&](Span<std::byte> mapped) {
+            size_t dstOffset = 0;
             if (needsZeroInitialization) {
                 DAWN_ASSERT(mapped.size() == mAllocatedSize);
-                std::ranges::fill(mapped, std::byte(0x0));
+                mapped.FillBytes(std::byte(0x0));
                 GetDevice()->IncrementLazyClearCountForTesting();
-                dstOffset = bufferOffset;
+                dstOffset = checked_cast<size_t>(bufferOffset);
             }
-            // The buffer is always initialized here, either by explicit zero initialization
-            // above or memcpy below.
+            // The buffer is always initialized here, either by explicit zero initialization above
+            // or memcpy below.
             SetInitialized(true);
 
-            DAWN_ASSERT(mapped.size() >= dstOffset + data.size());
-            // TODO(https://crbug.com/524406299): Use Span::CopyFrom.
-            DAWN_UNSAFE_TODO(memcpy(mapped.data() + dstOffset, data.data(), data.size()));
+            mapped.subspan(dstOffset).CopyPrefixFrom(data);
         });
 }
 
 template <typename F>
-MaybeError Buffer::MapMemoryAndPerformOperation(uint64_t requestedOffset,
+MaybeError Buffer::MapMemoryAndPerformOperation(size_t requestedOffset,
                                                 size_t requestedSize,
                                                 F&& op) {
     Device* device = ToBackend(GetDevice());
@@ -705,7 +697,7 @@ MaybeError Buffer::MapMemoryAndPerformOperation(uint64_t requestedOffset,
 
     VkDeviceMemory deviceMemory = ToBackend(mMemoryAllocation.GetResourceHeap())->GetMemory();
     Span<std::byte> memory;
-    uint64_t realOffset = requestedOffset;
+    size_t realOffset = requestedOffset;
 
     if (isMappable) {
         // Mappable buffers are already persistently mapped.
@@ -785,19 +777,19 @@ void Buffer::DestroyImpl(DestroyReason reason) {
 
     if (mHostMappedDisposeCallback) {
         struct DisposeTask : TrackTaskCallback {
-            explicit DisposeTask(wgpu::Callback callback, void* userdata)
-                : TrackTaskCallback(nullptr), callback(callback), userdata(userdata) {}
+            explicit DisposeTask(wgpu::Callback callback, raw_ptr<void> userdata)
+                : TrackTaskCallback(nullptr), callback(callback), userdata(std::move(userdata)) {}
             ~DisposeTask() override = default;
 
-            void FinishImpl() override { callback(userdata); }
-            void HandleDeviceLossImpl() override { callback(userdata); }
-            void HandleShutDownImpl() override { callback(userdata); }
+            void FinishImpl() override { callback(userdata.ExtractAsDangling()); }
+            void HandleDeviceLossImpl() override { callback(userdata.ExtractAsDangling()); }
+            void HandleShutDownImpl() override { callback(userdata.ExtractAsDangling()); }
 
             wgpu::Callback callback;
-            raw_ptr<void, DisableDanglingPtrDetection> userdata;
+            raw_ptr<void> userdata;
         };
-        std::unique_ptr<DisposeTask> request =
-            std::make_unique<DisposeTask>(mHostMappedDisposeCallback, mHostMappedDisposeUserdata);
+        std::unique_ptr<DisposeTask> request = std::make_unique<DisposeTask>(
+            mHostMappedDisposeCallback, std::move(mHostMappedDisposeUserdata));
         mHostMappedDisposeCallback = nullptr;
 
         GetDevice()->GetQueue()->TrackPendingTask(std::move(request));

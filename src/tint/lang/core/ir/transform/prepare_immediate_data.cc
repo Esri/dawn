@@ -31,7 +31,7 @@
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/struct.h"
 #include "src/tint/utils/ice/ice.h"
 
@@ -120,7 +120,10 @@ struct State {
             }
 
             auto index = static_cast<uint32_t>(members.Length());
-            layout.offset_to_index.Add(offset, index);
+            if (!layout.immediate_to_index.Add(internal.second.immediate, index)) {
+                return Failure("duplicate internal immediate with id " +
+                               std::to_string(internal.second.immediate));
+            }
             members.Push(ty.Get<core::type::StructMember>(internal.second.name,
                                                           internal.second.type,
                                                           /* index */ index,
@@ -132,16 +135,18 @@ struct State {
 
         auto* immediate_struct =
             ty.Struct(ir.symbols.New("tint_immediate_data_struct"), std::move(members));
-        immediate_struct->SetStructFlag(type::kBlock);
+        immediate_struct->SetStructFlag(core::type::kBlock);
         layout.var = b.Var("tint_immediate_data", core::AddressSpace::kImmediate, immediate_struct);
         ir.root_block->Append(layout.var);
 
         // Update uses of the user defined immediate data variable.
         if (user_defined_immediates) {
             user_defined_immediates->Result()->ReplaceAllUsesWith([&](Usage use) {
-                auto* access = b.Access(user_defined_immediates->Result()->Type(), layout.var, 0_u);
-                access->InsertBefore(use.instruction);
-                return access->Result();
+                Value* access = nullptr;
+                b.InsertBefore(use.instruction, [&] {
+                    access = b.Access(user_defined_immediates->Result()->Type(), layout.var, 0_u);
+                });
+                return access;
             });
             user_defined_immediates->Destroy();
         }
@@ -151,6 +156,19 @@ struct State {
 };
 
 }  // namespace
+
+Value* ImmediateDataLayout::GetPointer(Builder& b, InternalImmediate immediate) const {
+    auto itr = immediate_to_index.Get(immediate);
+    TINT_ASSERT(itr);
+    auto index = u32(*itr.value);
+    auto* str = var->Result()->Type()->UnwrapPtr()->As<core::type::Struct>();
+    auto* type = str->Members()[index]->Type();
+    return b.Access(b.ir.Types().ptr(core::AddressSpace::kImmediate, type), var, index);
+}
+
+Value* ImmediateDataLayout::GetValue(Builder& b, InternalImmediate immediate) const {
+    return b.Load(GetPointer(b, immediate))->Result();
+}
 
 Result<ImmediateDataLayout> PrepareImmediateData(Module& ir,
                                                  const PrepareImmediateDataConfig& config) {

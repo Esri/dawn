@@ -25,11 +25,13 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <iomanip>
 #include <limits>
 #include <memory>
+#include <span>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -97,8 +99,7 @@ using TypedIntegerForTest = TypedInteger<struct TypedIntegerForTestTag, uint32_t
 
 // Matcher to compare ByteVectorSinks for easier testing.
 MATCHER_P(VectorEq, key, PrintToString(key)) {
-    return arg.size() == key.size() &&
-           DAWN_UNSAFE_TODO(memcmp(arg.data(), key.data(), key.size())) == 0;
+    return std::ranges::equal(arg, key);
 }
 
 #define EXPECT_CACHE_KEY_EQ(lhs, rhs)       \
@@ -117,27 +118,6 @@ TEST(SerializeTests, CallsWrite) {
     StreamIn(&sink, a);
 }
 
-// Test that ByteVectorSink calls Write on all elements of an iterable.
-TEST(SerializeTests, StreamInIterable) {
-    constexpr size_t kIterableSize = 100;
-
-    std::vector<A> vec(kIterableSize);
-    auto iterable = Iterable(vec.data(), kIterableSize);
-
-    // Expect write to be called for each element
-    for (const auto& a : vec) {
-        EXPECT_CALL(a, WriteMock(NotNull(), Ref(a))).Times(1);
-    }
-
-    ByteVectorSink sink;
-    StreamIn(&sink, iterable);
-
-    // Expecting the size of the container.
-    ByteVectorSink expected;
-    StreamIn(&expected, kIterableSize);
-    EXPECT_THAT(sink, VectorEq(expected));
-}
-
 // Test that ByteVectorSink calls Write on all nested members of a struct.
 TEST(SerializeTests, StreamInNested) {
     ByteVectorSink sink;
@@ -153,9 +133,9 @@ TEST(SerializeTests, IntegralTypes) {
     // Only testing explicitly sized types for simplicity, and using 0s for larger types to
     // avoid dealing with endianess.
     EXPECT_CACHE_KEY_EQ('c', ByteVectorSink({std::byte('c')}));
-    EXPECT_CACHE_KEY_EQ(uint8_t(255), ByteVectorSink({std::byte(255)}));
-    EXPECT_CACHE_KEY_EQ(uint16_t(0), ByteVectorSink({std::byte(0), std::byte(0)}));
-    EXPECT_CACHE_KEY_EQ(uint32_t(0),
+    EXPECT_CACHE_KEY_EQ(uint8_t{255}, ByteVectorSink({std::byte(255)}));
+    EXPECT_CACHE_KEY_EQ(uint16_t{0}, ByteVectorSink({std::byte(0), std::byte(0)}));
+    EXPECT_CACHE_KEY_EQ(uint32_t{0},
                         ByteVectorSink({std::byte(0), std::byte(0), std::byte(0), std::byte(0)}));
 }
 
@@ -185,7 +165,7 @@ TEST(SerializeTests, StdStrings) {
     std::string str = "string";
 
     ByteVectorSink expected;
-    StreamIn(&expected, size_t(6));
+    StreamIn(&expected, size_t{6});
     auto strBytes = std::as_bytes(std::span(str));
     expected.insert(expected.end(), strBytes.begin(), strBytes.end());
 
@@ -199,7 +179,7 @@ TEST(SerializeTests, StdWStrings) {
 
     ByteVectorSink expected;
 
-    StreamIn(&expected, size_t(str.length()));
+    StreamIn(&expected, str.length());
     size_t bytes = str.length() * sizeof(wchar_t);
     DAWN_UNSAFE_TODO(memcpy(expected.GetSpace(bytes).data(), str.data(), bytes));
 
@@ -211,7 +191,7 @@ TEST(SerializeTests, StdStringViews) {
     static constexpr std::string_view str("string");
 
     ByteVectorSink expected;
-    StreamIn(&expected, size_t(6));
+    StreamIn(&expected, size_t{6});
     auto strBytes = std::as_bytes(std::span(str));
     expected.insert(expected.end(), strBytes.begin(), strBytes.end());
 
@@ -223,7 +203,7 @@ TEST(SerializeTests, StdWStringViews) {
     static constexpr std::wstring_view str(L"Hello world!");
 
     ByteVectorSink expected;
-    StreamIn(&expected, size_t(str.length()));
+    StreamIn(&expected, str.length());
     size_t bytes = str.length() * sizeof(wchar_t);
     DAWN_UNSAFE_TODO(memcpy(expected.GetSpace(bytes).data(), str.data(), bytes));
 
@@ -233,7 +213,7 @@ TEST(SerializeTests, StdWStringViews) {
 // Test that ByteVectorSink serializes Blobs as expected.
 TEST(SerializeTests, Blob) {
     uint8_t data[] = "dawn native Blob";
-    Blob blob = Blob::UnsafeCreateWithDeleter(data, sizeof(data), [] {});
+    Blob blob = DAWN_UNSAFE_TODO(Blob::UnsafeCreateWithDeleter(data, sizeof(data), [] {}));
 
     ByteVectorSink expected;
     StreamIn(&expected, sizeof(data));
@@ -284,9 +264,9 @@ TEST(SerializeTests, StdPair) {
     std::string_view s = "hi!";
 
     ByteVectorSink expected;
-    StreamIn(&expected, s, uint32_t(42));
+    StreamIn(&expected, s, uint32_t{42});
 
-    EXPECT_CACHE_KEY_EQ(std::make_pair(s, uint32_t(42)), expected);
+    EXPECT_CACHE_KEY_EQ(std::make_pair(s, uint32_t{42}), expected);
 }
 
 // Test that ByteVectorSink serializes std::optional as expected.
@@ -315,14 +295,14 @@ TEST(SerializeTests, StdVariant) {
         // Type id of std::string_view is 0 in VariantType
         VariantType v1 = stringViewInput;
         ByteVectorSink expected;
-        StreamIn(&expected, /* Type id */ size_t(0), stringViewInput);
+        StreamIn(&expected, /* Type id */ size_t{0}, stringViewInput);
         EXPECT_CACHE_KEY_EQ(v1, expected);
     }
     {
         // Type id of uint32_t is 1 in VariantType
         VariantType v2 = u32Input;
         ByteVectorSink expected;
-        StreamIn(&expected, /* Type id */ size_t(1), u32Input);
+        StreamIn(&expected, /* Type id */ size_t{1}, u32Input);
         EXPECT_CACHE_KEY_EQ(v2, expected);
     }
 }
@@ -371,9 +351,9 @@ TEST(SerializeTests, StdUnorderedMap) {
 
     // Expect the number of entries, followed by (K, V) pairs sorted in order of key.
     ByteVectorSink expected;
-    StreamIn(&expected, size_t(4), std::make_pair(uint32_t(1), m[1]),
-             std::make_pair(uint32_t(3), m[3]), std::make_pair(uint32_t(4), m[4]),
-             std::make_pair(uint32_t(7), m[7]));
+    StreamIn(&expected, size_t{4}, std::make_pair(uint32_t{1}, m[1]),
+             std::make_pair(uint32_t{3}, m[3]), std::make_pair(uint32_t{4}, m[4]),
+             std::make_pair(uint32_t{7}, m[7]));
 
     EXPECT_CACHE_KEY_EQ(m, expected);
 }
@@ -384,7 +364,7 @@ TEST(SerializeTests, StdUnorderedSet) {
 
     // Expect the number of entries, followed by values sorted in order of key.
     ByteVectorSink expected;
-    StreamIn(&expected, size_t(4), 1, 4, 6, 99);
+    StreamIn(&expected, size_t{4}, 1, 4, 6, 99);
 
     EXPECT_CACHE_KEY_EQ(input, expected);
 }
@@ -403,6 +383,41 @@ TEST(SerializeTests, ItypArray) {
     EXPECT_CACHE_KEY_EQ(input, expected);
 }
 
+// Test that ByteVectorSink serializes C-style arrays
+TEST(SerializeTests, CStyleArray) {
+    const int input[5] = {1, 7, 4, 8, 4};
+
+    // Expect all values.
+    ByteVectorSink expected;
+    StreamIn(&expected, 1, 7, 4, 8, 4);
+
+    EXPECT_CACHE_KEY_EQ(input, expected);
+}
+
+// Test that ByteVectorSink serializes fixed extent spans
+TEST(SerializeTests, SpanFixedExtent) {
+    const std::array<int, 6> data = {9, 3, 5, 7, 8, 6};
+    Span<const int, 6> input = data;
+
+    // Expect all values.
+    ByteVectorSink expected;
+    StreamIn(&expected, 9, 3, 5, 7, 8, 6);
+
+    EXPECT_CACHE_KEY_EQ(input, expected);
+}
+
+// Test that ByteVectorSink serializes dynamic extent spans
+TEST(SerializeTests, SpanDynamicExtent) {
+    const std::array<int, 4> data = {9, 8, 6, 2};
+    Span<const int> input = data;
+
+    // Expect all values.
+    ByteVectorSink expected;
+    StreamIn(&expected, size_t{4}, 9, 8, 6, 2);
+
+    EXPECT_CACHE_KEY_EQ(input, expected);
+}
+
 // Test that ByteVectorSink serializes absl::flat_hash_map as expected.
 TEST(SerializeTests, AbslFlatHashMap) {
     absl::flat_hash_map<uint32_t, std::string_view> m;
@@ -414,9 +429,9 @@ TEST(SerializeTests, AbslFlatHashMap) {
 
     // Expect the number of entries, followed by (K, V) pairs sorted in order of key.
     ByteVectorSink expected;
-    StreamIn(&expected, size_t(4), std::make_pair(uint32_t(1), m[1]),
-             std::make_pair(uint32_t(3), m[3]), std::make_pair(uint32_t(4), m[4]),
-             std::make_pair(uint32_t(7), m[7]));
+    StreamIn(&expected, size_t{4}, std::make_pair(uint32_t{1}, m[1]),
+             std::make_pair(uint32_t{3}, m[3]), std::make_pair(uint32_t{4}, m[4]),
+             std::make_pair(uint32_t{7}, m[7]));
 
     EXPECT_CACHE_KEY_EQ(m, expected);
 }
@@ -427,7 +442,7 @@ TEST(SerializeTests, AbslFlatHashSet) {
 
     // Expect the number of entries, followed by values sorted in order of key.
     ByteVectorSink expected;
-    StreamIn(&expected, size_t(4), 1, 4, 6, 99);
+    StreamIn(&expected, size_t{4}, 1, 4, 6, 99);
 
     EXPECT_CACHE_KEY_EQ(input, expected);
 }
@@ -437,7 +452,7 @@ TEST(SerializeTests, TintSemBindingPoint) {
     tint::BindingPoint bp{3, 6};
 
     ByteVectorSink expected;
-    StreamIn(&expected, uint32_t(3), uint32_t(6));
+    StreamIn(&expected, uint32_t{3}, uint32_t{6});
 
     EXPECT_CACHE_KEY_EQ(bp, expected);
 }
@@ -448,7 +463,7 @@ TEST(SerializeTests, UnsafeUnserializedValue) {
 
     ByteVectorSink expected;
     // The second UnsafeUnserializedValue<uint32_t> is not serialized.
-    StreamIn(&expected, uint32_t(123));
+    StreamIn(&expected, uint32_t{123});
 
     EXPECT_CACHE_KEY_EQ(input, expected);
 }
@@ -536,7 +551,7 @@ TEST(StreamTests, SerializeDeserializeBlobs) {
         auto err = StreamOut(&src, &out);
         EXPECT_FALSE(err.IsError());
         EXPECT_EQ(blob.Size(), out.Size());
-        DAWN_UNSAFE_TODO(EXPECT_EQ(memcmp(blob.DataPtr(), out.DataPtr(), blob.Size()), 0));
+        EXPECT_TRUE(std::ranges::equal(blob.Data(), out.Data()));
     }
 
     // Test a blob with some data
@@ -551,7 +566,7 @@ TEST(StreamTests, SerializeDeserializeBlobs) {
         auto err = StreamOut(&src, &out);
         EXPECT_FALSE(err.IsError());
         EXPECT_EQ(blob.Size(), out.Size());
-        DAWN_UNSAFE_TODO(EXPECT_EQ(memcmp(blob.DataPtr(), out.DataPtr(), blob.Size()), 0));
+        EXPECT_TRUE(std::ranges::equal(blob.Data(), out.Data()));
     }
 }
 
@@ -611,6 +626,27 @@ TEST(StreamTests, SerializeDeserializeItypArray) {
     // Check every element of the out array is the same as in.
     for (TypedIntegerForTest i = TypedIntegerForTest(); i < in.size(); i++) {
         EXPECT_EQ(in[i], out[i]);
+    }
+}
+
+// Test that serializing then deserializing a C-style array yields the same data.
+// Tested here instead of in the type-parameterized tests since C-style arrays are just pointers and
+// don't actually contain the data.
+TEST(StreamTests, SerializeDeserializeCStyleArray) {
+    const int in[5] = {1, 7, 4, 8, 4};
+
+    ByteVectorSink sink;
+    StreamIn(&sink, in);
+    BlobSource src(Blob::Create(sink));
+
+    int out[5] = {0, 0, 0, 0, 0};
+    auto err = StreamOut(&src, &out);
+    EXPECT_FALSE(err.IsError());
+
+    Span<const int, 5> inSpan(in);
+    Span<int, 5> outSpan(out);
+    for (size_t i = 0; i < inSpan.size(); i++) {
+        EXPECT_EQ(inSpan[i], outSpan[i]);
     }
 }
 
@@ -727,8 +763,8 @@ class StreamParameterizedTests<T[N]> : public ::testing::Test {
         return std::get<std::initializer_list<T[N]>>(kStreamValueInitListParams);
     }
 
-    void ExpectEq(const T lhs[N], const T rhs[N]) {
-        DAWN_UNSAFE_TODO(EXPECT_EQ(memcmp(lhs, rhs, sizeof(T[N])), 0));
+    void ExpectEq(const T (&lhs)[N], const T (&rhs)[N]) {
+        EXPECT_TRUE(std::ranges::equal(lhs, rhs));
     }
 };
 

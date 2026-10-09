@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.3
 ; Generator: Google Tint Compiler; 1
-; Bound: 225
+; Bound: 198
 ; Schema: 0
                OpCapability Shader
                OpCapability VulkanMemoryModel
@@ -95,11 +95,9 @@
 %_ptr_StorageBuffer__runtimearr_float = OpTypePointer StorageBuffer %_runtimearr_float
 %_ptr_StorageBuffer_float = OpTypePointer StorageBuffer %float
     %float_0 = OpConstant %float 0
-        %int = OpTypeInt 32 1
-      %int_0 = OpConstant %int 0
-     %int_64 = OpConstant %int 64
-     %uint_7 = OpConstant %uint 7
-        %221 = OpTypeFunction %void
+   %uint_456 = OpConstant %uint 456
+    %uint_64 = OpConstant %uint 64
+        %194 = OpTypeFunction %void
 %make_matrix = OpFunction %14 None %18
          %19 = OpLabel
 %return_value = OpVariable %_ptr_Function_14 Function %22
@@ -232,82 +230,57 @@
         %142 = OpFunctionCall %14 %make_matrix
         %143 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
         %144 = OpArrayLength %uint %1 0
-        %145 = OpBitcast %uint %int_0
-        %148 = OpBitcast %uint %int_64
-        %150 = OpIMul %uint %148 %uint_7
-        %152 = OpIAdd %uint %145 %150
-        %153 = OpIAdd %uint %152 %uint_8
-        %154 = OpULessThanEqual %bool %153 %144
-        %155 = OpSelect %uint %154 %145 %uint_0
-        %156 = OpSelect %uint %154 %148 %uint_8
-        %157 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
-        %158 = OpAccessChain %_ptr_StorageBuffer_float %157 %155
-               OpCooperativeMatrixStoreKHR %158 %142 %uint_0 %156 NonPrivatePointer
-        %160 = OpFunctionCall %_arr_14_uint_2 %make_array
-        %161 = OpCompositeExtract %14 %160 0
-        %162 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
-        %163 = OpArrayLength %uint %1 0
-        %164 = OpBitcast %uint %int_0
-        %165 = OpBitcast %uint %int_64
-        %166 = OpIMul %uint %165 %uint_7
-        %167 = OpIAdd %uint %164 %166
-        %168 = OpIAdd %uint %167 %uint_8
-        %169 = OpULessThanEqual %bool %168 %163
-        %170 = OpSelect %uint %169 %164 %uint_0
-        %171 = OpSelect %uint %169 %165 %uint_8
-        %172 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
-        %173 = OpAccessChain %_ptr_StorageBuffer_float %172 %170
-               OpCooperativeMatrixStoreKHR %173 %161 %uint_0 %171 NonPrivatePointer
-        %175 = OpFunctionCall %_arr__arr_14_uint_2_uint_2 %make_nested_array
-        %176 = OpCompositeExtract %14 %175 1 0
-        %177 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
-        %178 = OpArrayLength %uint %1 0
-        %179 = OpBitcast %uint %int_0
-        %180 = OpBitcast %uint %int_64
-        %181 = OpIMul %uint %180 %uint_7
-        %182 = OpIAdd %uint %179 %181
-        %183 = OpIAdd %uint %182 %uint_8
-        %184 = OpULessThanEqual %bool %183 %178
-        %185 = OpSelect %uint %184 %179 %uint_0
-        %186 = OpSelect %uint %184 %180 %uint_8
-        %187 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
-        %188 = OpAccessChain %_ptr_StorageBuffer_float %187 %185
-               OpCooperativeMatrixStoreKHR %188 %176 %uint_0 %186 NonPrivatePointer
-        %190 = OpFunctionCall %S %make_struct
-        %191 = OpCompositeExtract %14 %190 0
-        %192 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
-        %193 = OpArrayLength %uint %1 0
-        %194 = OpBitcast %uint %int_0
-        %195 = OpBitcast %uint %int_64
-        %196 = OpIMul %uint %195 %uint_7
-        %197 = OpIAdd %uint %194 %196
-        %198 = OpIAdd %uint %197 %uint_8
-        %199 = OpULessThanEqual %bool %198 %193
-        %200 = OpSelect %uint %199 %194 %uint_0
-        %201 = OpSelect %uint %199 %195 %uint_8
-        %202 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
-        %203 = OpAccessChain %_ptr_StorageBuffer_float %202 %200
-               OpCooperativeMatrixStoreKHR %203 %191 %uint_0 %201 NonPrivatePointer
-        %205 = OpFunctionCall %S_Nested %make_nested_struct
-        %206 = OpCompositeExtract %88 %205 0 1
-        %207 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
-        %208 = OpArrayLength %uint %1 0
-        %209 = OpBitcast %uint %int_0
-        %210 = OpBitcast %uint %int_64
-        %211 = OpIMul %uint %210 %uint_7
-        %212 = OpIAdd %uint %209 %211
-        %213 = OpIAdd %uint %212 %uint_8
-        %214 = OpULessThanEqual %bool %213 %208
-        %215 = OpSelect %uint %214 %209 %uint_0
-        %216 = OpSelect %uint %214 %210 %uint_8
-        %217 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
-        %218 = OpAccessChain %_ptr_StorageBuffer_float %217 %215
-               OpCooperativeMatrixStoreKHR %218 %206 %uint_0 %216 NonPrivatePointer
+        %145 = OpULessThanEqual %bool %uint_456 %144
+        %147 = OpSelect %uint %145 %uint_0 %uint_0
+        %148 = OpSelect %uint %145 %uint_64 %uint_8
+        %150 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
+        %151 = OpAccessChain %_ptr_StorageBuffer_float %150 %147
+               OpCooperativeMatrixStoreKHR %151 %142 %uint_0 %148 NonPrivatePointer
+        %153 = OpFunctionCall %_arr_14_uint_2 %make_array
+        %154 = OpCompositeExtract %14 %153 0
+        %155 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
+        %156 = OpArrayLength %uint %1 0
+        %157 = OpULessThanEqual %bool %uint_456 %156
+        %158 = OpSelect %uint %157 %uint_0 %uint_0
+        %159 = OpSelect %uint %157 %uint_64 %uint_8
+        %160 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
+        %161 = OpAccessChain %_ptr_StorageBuffer_float %160 %158
+               OpCooperativeMatrixStoreKHR %161 %154 %uint_0 %159 NonPrivatePointer
+        %163 = OpFunctionCall %_arr__arr_14_uint_2_uint_2 %make_nested_array
+        %164 = OpCompositeExtract %14 %163 1 0
+        %165 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
+        %166 = OpArrayLength %uint %1 0
+        %167 = OpULessThanEqual %bool %uint_456 %166
+        %168 = OpSelect %uint %167 %uint_0 %uint_0
+        %169 = OpSelect %uint %167 %uint_64 %uint_8
+        %170 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
+        %171 = OpAccessChain %_ptr_StorageBuffer_float %170 %168
+               OpCooperativeMatrixStoreKHR %171 %164 %uint_0 %169 NonPrivatePointer
+        %173 = OpFunctionCall %S %make_struct
+        %174 = OpCompositeExtract %14 %173 0
+        %175 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
+        %176 = OpArrayLength %uint %1 0
+        %177 = OpULessThanEqual %bool %uint_456 %176
+        %178 = OpSelect %uint %177 %uint_0 %uint_0
+        %179 = OpSelect %uint %177 %uint_64 %uint_8
+        %180 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
+        %181 = OpAccessChain %_ptr_StorageBuffer_float %180 %178
+               OpCooperativeMatrixStoreKHR %181 %174 %uint_0 %179 NonPrivatePointer
+        %183 = OpFunctionCall %S_Nested %make_nested_struct
+        %184 = OpCompositeExtract %88 %183 0 1
+        %185 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
+        %186 = OpArrayLength %uint %1 0
+        %187 = OpULessThanEqual %bool %uint_456 %186
+        %188 = OpSelect %uint %187 %uint_0 %uint_0
+        %189 = OpSelect %uint %187 %uint_64 %uint_8
+        %190 = OpAccessChain %_ptr_StorageBuffer__runtimearr_float %1 %uint_0
+        %191 = OpAccessChain %_ptr_StorageBuffer_float %190 %188
+               OpCooperativeMatrixStoreKHR %191 %184 %uint_0 %189 NonPrivatePointer
                OpReturn
                OpFunctionEnd
-       %main = OpFunction %void None %221
-        %222 = OpLabel
-        %223 = OpLoad %uint %main_local_invocation_index_Input None
-        %224 = OpFunctionCall %void %main_inner %223
+       %main = OpFunction %void None %194
+        %195 = OpLabel
+        %196 = OpLoad %uint %main_local_invocation_index_Input None
+        %197 = OpFunctionCall %void %main_inner %196
                OpReturn
                OpFunctionEnd

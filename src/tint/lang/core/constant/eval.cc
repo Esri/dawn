@@ -48,7 +48,9 @@
 #include "src/tint/lang/core/type/i32.h"
 #include "src/tint/lang/core/type/matrix.h"
 #include "src/tint/lang/core/type/struct.h"
+#include "src/tint/lang/core/type/u16.h"
 #include "src/tint/lang/core/type/u32.h"
+#include "src/tint/lang/core/type/u64.h"
 #include "src/tint/lang/core/type/vector.h"
 #include "src/tint/utils/containers/map.h"
 #include "src/tint/utils/containers/transform.h"
@@ -1141,6 +1143,11 @@ auto Eval::Det4Func(const Source& source, const core::type::Type* elem_ty) {
 }
 
 Eval::Result Eval::ArrayOrStructCtor(const core::type::Type* ty, VectorRef<const Value*> args) {
+    // Cannot evaluate a non-constructible type.
+    if (!ty->IsConstructible()) {
+        return nullptr;
+    }
+
     if (args.IsEmpty()) {
         return mgr.Zero(ty);
     }
@@ -1148,6 +1155,21 @@ Eval::Result Eval::ArrayOrStructCtor(const core::type::Type* ty, VectorRef<const
     if (args.Length() == 1 && args[0]->Type() == ty) {
         // Identity constructor.
         return args[0];
+    }
+
+    // Check if the arg count and types match before folding.
+    auto* invalid_type = mgr.types.invalid();
+    uint32_t invalid_count = std::numeric_limits<uint32_t>::max();
+    auto type_and_count = ty->Elements(invalid_type, invalid_count);
+    if (type_and_count.count == invalid_count || type_and_count.count != args.Length()) {
+        return nullptr;
+    }
+    uint32_t i = 0;
+    for (auto arg : args) {
+        auto* ele_ty = ty->Element(i++);
+        if (ele_ty != arg->Type()) {
+            return nullptr;
+        }
     }
 
     // Multiple arguments. Must be a value constructor.
@@ -1334,6 +1356,10 @@ Eval::Result Eval::bitcast(const core::type::Type* ty,
             [&](const core::type::F16*) -> tint::Result<SuccessType> {
                 return push_16_bits(element->ValueAs<f16>().BitsRepresentation());
             },
+            [&](const core::type::U16*) -> tint::Result<SuccessType> {
+                return push_16_bits(element->ValueAs<u16>());
+            },
+            [&](const core::type::U64*) -> tint::Result<SuccessType> { return Failure(); },
             TINT_ICE_ON_NO_MATCH);
     };
     if (src_count == 1) {
@@ -1395,6 +1421,15 @@ Eval::Result Eval::bitcast(const core::type::Type* ty,
                 els.Push(r.Get());
                 return true;
             },
+            [&](const core::type::U16*) {  //
+                auto r = CreateScalar(source, dst_el_ty, u16(v));
+                if (r != Success) {
+                    return false;
+                }
+                els.Push(r.Get());
+                return true;
+            },
+            [&](const core::type::U64*) { return false; },  //
             TINT_ICE_ON_NO_MATCH);
     };
 
@@ -1975,6 +2010,25 @@ Eval::Result Eval::addSat(const core::type::Type* ty,
             using NumberT = decltype(a);
             NumberT result = NumberT{a + b};
             if (result < NumberT{a}) {
+                result = NumberT::Highest();
+            }
+            return CreateScalar(source, ty->DeepestElement(), result);
+        };
+        return Dispatch_u32(create, lhs, rhs);
+    };
+    return TransformBinaryElements(mgr, ty, transform, args[0], args[1]);
+}
+
+Eval::Result Eval::mulSat(const core::type::Type* ty,
+                          VectorRef<const Value*> args,
+                          const Source& source) {
+    auto transform = [&](const Value* lhs, const Value* rhs) {
+        auto create = [&](auto a, auto b) {
+            using NumberT = decltype(a);
+            auto result = NumberT{a * b};
+            if (a == NumberT{0} || b == NumberT{0}) {
+                result = NumberT{0};
+            } else if (b > (NumberT::Highest() / NumberT{a})) {
                 result = NumberT::Highest();
             }
             return CreateScalar(source, ty->DeepestElement(), result);
@@ -3340,7 +3394,7 @@ Eval::Result Eval::round(const core::type::Type* ty,
                 if (std::signbit(integral_val)) {
                     integral_val = std::abs(integral_val - 1);
                 }
-                if (uint64_t(integral_val) % 2 == 0) {
+                if (static_cast<uint64_t>(integral_val) % 2 == 0) {
                     result = NumberT(std::floor(e.value));
                 } else {
                     result = NumberT(std::ceil(e.value));
@@ -3595,7 +3649,7 @@ Eval::Result Eval::unpack2x16float(const core::type::Type* ty,
     Vector<const Value*, 2> els;
     els.Reserve(2);
     for (size_t i = 0; i < 2; ++i) {
-        auto in = f16::FromBits(uint16_t((e >> (16 * i)) & 0x0000'ffff));
+        auto in = f16::FromBits(static_cast<uint16_t>((e >> (16 * i)) & 0x0000'ffff));
         auto val = CheckedConvert<f32>(in);
         if (val != Success) {
             AddError(source) << OverflowErrorMessage(in, "f32");
@@ -3619,8 +3673,9 @@ Eval::Result Eval::unpack2x16snorm(const core::type::Type* ty,
     Vector<const Value*, 2> els;
     els.Reserve(2);
     for (size_t i = 0; i < 2; ++i) {
-        auto val = f32(
-            std::max(static_cast<float>(int16_t((e >> (16 * i)) & 0x0000'ffff)) / 32767.f, -1.f));
+        auto val = f32(std::max(
+            static_cast<float>(static_cast<int16_t>((e >> (16 * i)) & 0x0000'ffff)) / 32767.f,
+            -1.f));
         TINT_CHECK_RESULT_UNWRAP(el, CreateScalar(source, inner_ty, val));
         els.Push(el);
     }
@@ -3636,7 +3691,8 @@ Eval::Result Eval::unpack2x16unorm(const core::type::Type* ty,
     Vector<const Value*, 2> els;
     els.Reserve(2);
     for (size_t i = 0; i < 2; ++i) {
-        auto val = f32(static_cast<float>(uint16_t((e >> (16 * i)) & 0x0000'ffff)) / 65535.f);
+        auto val =
+            f32(static_cast<float>(static_cast<uint16_t>((e >> (16 * i)) & 0x0000'ffff)) / 65535.f);
         TINT_CHECK_RESULT_UNWRAP(el, CreateScalar(source, inner_ty, val));
         els.Push(el);
     }
@@ -3652,8 +3708,8 @@ Eval::Result Eval::unpack4x8snorm(const core::type::Type* ty,
     Vector<const Value*, 4> els;
     els.Reserve(4);
     for (size_t i = 0; i < 4; ++i) {
-        auto val =
-            f32(std::max(static_cast<float>(int8_t((e >> (8 * i)) & 0x0000'00ff)) / 127.f, -1.f));
+        auto val = f32(std::max(
+            static_cast<float>(static_cast<int8_t>((e >> (8 * i)) & 0x0000'00ff)) / 127.f, -1.f));
         TINT_CHECK_RESULT_UNWRAP(el, CreateScalar(source, inner_ty, val));
         els.Push(el);
     }
@@ -3669,7 +3725,8 @@ Eval::Result Eval::unpack4x8unorm(const core::type::Type* ty,
     Vector<const Value*, 4> els;
     els.Reserve(4);
     for (size_t i = 0; i < 4; ++i) {
-        auto val = f32(static_cast<float>(uint8_t((e >> (8 * i)) & 0x0000'00ff)) / 255.f);
+        auto val =
+            f32(static_cast<float>(static_cast<uint8_t>((e >> (8 * i)) & 0x0000'00ff)) / 255.f);
         TINT_CHECK_RESULT_UNWRAP(el, CreateScalar(source, inner_ty, val));
         els.Push(el);
     }

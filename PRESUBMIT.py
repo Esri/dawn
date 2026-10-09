@@ -119,6 +119,22 @@ class BanRule:
 # Configuration for banned patterns checks.
 _BANNED_CPP_PATTERNS: Sequence[BanRule] = (
     BanRule(
+        pattern=
+        r'/\bTINT_BEGIN_DISABLE_WARNING\s*\(\s*(UNSAFE_BUFFER_USAGE|UNSAFE_BUFFER_USAGE_IN_CONTAINER)\s*\)',
+        excluded_paths=(
+            r'^src/tint/lang/spirv/reader/parser/parser\.cc$',
+            r'^src/tint/lang/glsl/validate/validate\.cc$',
+        ),
+        explanation=(
+            'Do not introduce new instances of TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE) ',
+            'or TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE_IN_CONTAINER). ',
+            'Use DAWN_UNSAFE_BUFFERS with a // SAFETY: comment instead, ',
+            'or rewrite to be safe.',
+        ),
+        treat_as_error=False,
+        surface_as_gerrit_lint=True,
+    ),
+    BanRule(
         pattern=r'/\bDAWN_UNSAFE_TODO\b',
         explanation=(
             'Do not introduce new instances of DAWN_UNSAFE_TODO. ',
@@ -146,20 +162,28 @@ _BANNED_CPP_PATTERNS: Sequence[BanRule] = (
         surface_as_gerrit_lint=True,
     ),
     BanRule(
-        pattern=r'/\b(EXPECT_DEATH|EXPECT_DEBUG_DEATH)\b',
-        excluded_paths=(r'^src/utils/gtest\.h$', ),
+        pattern=
+        r'/\b(EXPECT_DEATH|EXPECT_DEBUG_DEATH|EXPECT_DEATH_IF_SUPPORTED)\b',
+        excluded_paths=(
+            r'^src/utils/gtest\.h$',
+            r'^src/tint/',
+        ),
         explanation=(
-            'Use EXPECT_DEATH_IF_SUPPORTED or ',
+            'Use DAWN_EXPECT_DEATH_IF_SUPPORTED or ',
             'DAWN_EXPECT_DEBUG_DEATH_IF_SUPPORTED instead.',
         ),
         treat_as_error=True,
         surface_as_gerrit_lint=True,
     ),
     BanRule(
-        pattern=r'/\b(ASSERT_DEATH|ASSERT_DEBUG_DEATH)\b',
-        excluded_paths=(r'^src/utils/gtest\.h$', ),
+        pattern=
+        r'/\b(ASSERT_DEATH|ASSERT_DEBUG_DEATH|ASSERT_DEATH_IF_SUPPORTED)\b',
+        excluded_paths=(
+            r'^src/utils/gtest\.h$',
+            r'^src/tint/',
+        ),
         explanation=(
-            'Use ASSERT_DEATH_IF_SUPPORTED or ',
+            'Use DAWN_ASSERT_DEATH_IF_SUPPORTED or ',
             'DAWN_ASSERT_DEBUG_DEATH_IF_SUPPORTED instead.',
         ),
         treat_as_error=True,
@@ -181,6 +205,15 @@ _BANNED_CPP_PATTERNS: Sequence[BanRule] = (
         explanation=(
             'Use explicit(false) for constructors, and ',
             'NOLINTNEXTLINE(google-explicit-constructor) for operators.',
+        ),
+        treat_as_error=True,
+        surface_as_gerrit_lint=True,
+    ),
+    BanRule(
+        pattern=r'/(?<!operator)\^\(',
+        excluded_paths=(r'\.(cc|cpp)$', ),
+        explanation=(
+            'Use C++ Lambdas []() { } instead of Objective-C Blocks ^() { }.',
         ),
         treat_as_error=True,
         surface_as_gerrit_lint=True,

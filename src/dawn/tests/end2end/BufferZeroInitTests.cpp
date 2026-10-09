@@ -60,11 +60,11 @@ namespace {
 
 struct BufferZeroInitInCopyT2BSpec {
     wgpu::Extent3D textureSize;
-    uint64_t bufferOffset;
-    uint64_t extraBytes;
-    uint32_t bytesPerRow;
-    uint32_t rowsPerImage;
-    uint32_t lazyClearCount;
+    uint64_t bufferOffset = 0;
+    uint64_t extraBytes = 0;
+    uint32_t bytesPerRow = 0;
+    uint32_t rowsPerImage = 0;
+    uint32_t lazyClearCount = 0;
 };
 
 class BufferZeroInitTest : public DawnTest {
@@ -147,8 +147,12 @@ class BufferZeroInitTest : public DawnTest {
         wgpu::CommandBuffer commandBuffer = encoder.Finish();
 
         // TODO(b/513631768): SetInitialized is now skipped for use_blit_for_t2b path.
+        // Blit is also used for the R32Float format when
+        // use_blit_for_non_rgba_float_texture_to_buffer_copy is enabled.
         uint32_t expectedLazyClearCount = spec.lazyClearCount;
-        if (expectedLazyClearCount == 0u && (HasToggleEnabled("use_blit_for_t2b"))) {
+        if (expectedLazyClearCount == 0u &&
+            (HasToggleEnabled("use_blit_for_t2b") ||
+             HasToggleEnabled("use_blit_for_non_rgba_float_texture_to_buffer_copy"))) {
             expectedLazyClearCount = 1u;
         }
 
@@ -646,7 +650,7 @@ TEST_P(BufferZeroInitTest, CopyBufferToBufferDestination) {
 
         EXPECT_LAZY_CLEAR(1u, queue.Submit(1, &commandBuffer));
 
-        std::array<uint8_t, kBufferSize> expectedData;
+        std::array<uint8_t, kBufferSize> expectedData{};
         expectedData.fill(0);
         for (uint32_t index = kDstOffset; index < kDstOffset + kCopySize; ++index) {
             expectedData[index] = kInitialData[index - kDstOffset];
@@ -669,7 +673,7 @@ TEST_P(BufferZeroInitTest, CopyBufferToBufferDestination) {
 
         EXPECT_LAZY_CLEAR(1u, queue.Submit(1, &commandBuffer));
 
-        std::array<uint8_t, kBufferSize> expectedData;
+        std::array<uint8_t, kBufferSize> expectedData{};
         expectedData.fill(0);
         for (uint32_t index = kDstOffset; index < kDstOffset + kCopySize; ++index) {
             expectedData[index] = kInitialData[index - kDstOffset];
@@ -692,7 +696,7 @@ TEST_P(BufferZeroInitTest, CopyBufferToBufferDestination) {
 
         EXPECT_LAZY_CLEAR(1u, queue.Submit(1, &commandBuffer));
 
-        std::array<uint8_t, kBufferSize> expectedData;
+        std::array<uint8_t, kBufferSize> expectedData{};
         expectedData.fill(0);
         for (uint32_t index = kDstOffset; index < kDstOffset + kCopySize; ++index) {
             expectedData[index] = kInitialData[index - kDstOffset];
@@ -1501,6 +1505,61 @@ DAWN_INSTANTIATE_TEST(BufferZeroInitTest,
                       OpenGLESBackend({"nonzero_clear_resources_on_creation_for_testing"}),
                       VulkanBackend({"nonzero_clear_resources_on_creation_for_testing"}),
                       WebGPUBackend({"nonzero_clear_resources_on_creation_for_testing"}));
+
+class BufferZeroInitMaxBufferSizeTest : public BufferZeroInitTest {};
+
+// Test that when a CopyTextureToBuffer from an uninitialized non-renderable 3D texture fails at
+// submit time because the lazy-clear staging buffer exceeds maxBufferSize, the internal buffer
+// creation failure causes device loss and prevents mapping the uninitialized destination buffer or
+// executing prior commands from the rejected submit.
+//
+// https://crbug.com/563359278
+TEST_P(BufferZeroInitMaxBufferSizeTest, DISABLED_CopyTextureToBufferLargerThanMaxBufferSize) {
+    constexpr wgpu::TextureFormat kFormat = wgpu::TextureFormat::RGBA32Float;
+    constexpr uint32_t kBytesPerTexel = 16u;
+    constexpr wgpu::Extent3D kPoisonSize = {256u, 256u, 257u};
+    constexpr uint64_t kSubresourceByteSize = uint64_t{kPoisonSize.width} * kPoisonSize.height *
+                                              kPoisonSize.depthOrArrayLayers * kBytesPerTexel;
+
+    DAWN_ASSERT(kSubresourceByteSize > GetSupportedLimits().maxBufferSize);
+    DAWN_ASSERT(kPoisonSize.width <= GetSupportedLimits().maxTextureDimension3D &&
+                kPoisonSize.height <= GetSupportedLimits().maxTextureDimension3D &&
+                kPoisonSize.depthOrArrayLayers <= GetSupportedLimits().maxTextureDimension3D);
+
+    // Create a 3D RGBA32Float texture with COPY_SRC usage only (non-renderable) whose packed
+    // subresource size (269,484,032 B) exceeds the default maxBufferSize (268,435,456 B).
+    wgpu::TextureDescriptor poisonDesc{
+        .usage = wgpu::TextureUsage::CopySrc,
+        .dimension = wgpu::TextureDimension::e3D,
+        .size = kPoisonSize,
+        .format = kFormat,
+    };
+    wgpu::Texture poison = device.CreateTexture(&poisonDesc);
+
+    EXPECT_FALSE(native::IsTextureSubresourceInitialized(poison.Get(), 0, 1, 0, 1));
+
+    constexpr uint64_t kDstSize = 256u;
+    wgpu::Buffer dst =
+        CreateBuffer(kDstSize, wgpu::BufferUsage::CopyDst | wgpu::BufferUsage::MapRead);
+
+    wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
+
+    wgpu::TexelCopyTextureInfo srcInfo = utils::CreateTexelCopyTextureInfo(poison, 0, {0, 0, 0});
+    wgpu::TexelCopyBufferInfo dstInfo = utils::CreateTexelCopyBufferInfo(dst, 0, 256u, 1u);
+    wgpu::Extent3D copySize = {16u, 1u, 1u};
+    encoder.CopyTextureToBuffer(&srcInfo, &dstInfo, &copySize);
+    wgpu::CommandBuffer cb = encoder.Finish();
+
+    // Submit fails when lazy-clearing `poison` tries to allocate a staging buffer larger than
+    // maxBufferSize.
+    EXPECT_DEVICE_LOSS_MSG(queue.Submit(1, &cb), testing::HasSubstr("max buffer size limit"));
+}
+
+DAWN_INSTANTIATE_TEST(BufferZeroInitMaxBufferSizeTest,
+                      D3D12Backend(),
+                      MetalBackend(),
+                      VulkanBackend(),
+                      WebGPUBackend());
 
 }  // anonymous namespace
 }  // namespace dawn

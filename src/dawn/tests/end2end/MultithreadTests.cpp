@@ -622,9 +622,6 @@ TEST_P(MultithreadTests, T2BThenDestroyTexture) {
 
 // Test that copy a texture to a buffer then map that buffer in parallel works.
 TEST_P(MultithreadTests, T2BThenMapInParallel) {
-    // TODO(crbug.com/459848483): Flaky on Win/Snapdragon X Elite.
-    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsQualcomm());
-
     constexpr uint32_t kTextureSize = 512;
     constexpr wgpu::TextureFormat kTextureFormat = wgpu::TextureFormat::RGBA8Unorm;
     constexpr uint32_t kBytesPerPixel = 4;
@@ -1646,7 +1643,7 @@ TEST_P(MultithreadTextureCopyTests, CopyDepthToDepthNoRace) {
         // Copy from depthTexture to destTexture.
         const wgpu::Extent3D dstSize = {kWidth, kHeight, 1};
         wgpu::TexelCopyTextureInfo dest = utils::CreateTexelCopyTextureInfo(
-            destTexture, /*dstMipLevel=*/1, {0, 0, 0}, wgpu::TextureAspect::All);
+            destTexture, /*mipLevel=*/1, {0, 0, 0}, wgpu::TextureAspect::All);
         auto encoder = device.CreateCommandEncoder();
         lockStep.Wait(Step::WriteTexture);
         CopyTextureToTextureHelper(depthTexture, dest, dstSize, encoder);
@@ -1715,7 +1712,7 @@ TEST_P(MultithreadTextureCopyTests, CopyBufferToDepthNoRace) {
         auto encoder = device.CreateCommandEncoder();
 
         wgpu::TexelCopyTextureInfo dest = utils::CreateTexelCopyTextureInfo(
-            destTexture, /*dstMipLevel=*/0, {0, 0, 0}, wgpu::TextureAspect::All);
+            destTexture, /*mipLevel=*/0, {0, 0, 0}, wgpu::TextureAspect::All);
 
         // Wait until src buffer is written.
         lockStep.Wait(Step::WriteBuffer);
@@ -1783,7 +1780,7 @@ TEST_P(MultithreadTextureCopyTests, CopyStencilToStencilNoRace) {
         // Copy from stencilTexture to destTexture.
         const wgpu::Extent3D dstSize = {kWidth, kHeight, 1};
         wgpu::TexelCopyTextureInfo dest = utils::CreateTexelCopyTextureInfo(
-            destTexture, /*dstMipLevel=*/1, {0, 0, 0}, wgpu::TextureAspect::All);
+            destTexture, /*mipLevel=*/1, {0, 0, 0}, wgpu::TextureAspect::All);
         auto encoder = device.CreateCommandEncoder();
         lockStep.Wait(Step::WriteTexture);
 
@@ -1842,7 +1839,7 @@ TEST_P(MultithreadTextureCopyTests, CopyBufferToStencilNoRace) {
         auto encoder = device.CreateCommandEncoder();
 
         wgpu::TexelCopyTextureInfo dest = utils::CreateTexelCopyTextureInfo(
-            destTexture, /*dstMipLevel=*/0, {0, 0, 0}, wgpu::TextureAspect::All);
+            destTexture, /*mipLevel=*/0, {0, 0, 0}, wgpu::TextureAspect::All);
 
         // Wait until src buffer is written.
         lockStep.Wait(Step::WriteBuffer);
@@ -1912,7 +1909,7 @@ TEST_P(MultithreadTextureCopyTests, CopyTextureForBrowserNoRace) {
         // Copy from srcTexture to destTexture.
         const wgpu::Extent3D dstSize = {kWidth, kHeight, 1};
         wgpu::TexelCopyTextureInfo dest = utils::CreateTexelCopyTextureInfo(
-            destTexture, /*dstMipLevel=*/0, {0, 0, 0}, wgpu::TextureAspect::All);
+            destTexture, /*mipLevel=*/0, {0, 0, 0}, wgpu::TextureAspect::All);
         wgpu::CopyTextureForBrowserOptions options;
         options.flipY = true;
 
@@ -1977,7 +1974,7 @@ TEST_P(MultithreadTextureCopyTests, CopyTextureForBrowserErrorNoDeadLock) {
         // Copy from srcTexture to destTexture.
         const wgpu::Extent3D dstSize = {kWidth, kHeight, 1};
         wgpu::TexelCopyTextureInfo dest = utils::CreateTexelCopyTextureInfo(
-            destTexture, /*dstMipLevel=*/0, {0, 0, 0}, wgpu::TextureAspect::All);
+            destTexture, /*mipLevel=*/0, {0, 0, 0}, wgpu::TextureAspect::All);
         wgpu::CopyTextureForBrowserOptions options = {};
 
         device.PushErrorScope(wgpu::ErrorFilter::Validation);
@@ -2182,8 +2179,6 @@ class MultithreadTimestampQueryTests : public MultithreadTests {
 // Test resolving timestamp queries on multiple threads. ResolveQuerySet() will create temp
 // resources internally so we need to make sure they are thread safe.
 TEST_P(MultithreadTimestampQueryTests, ResolveQuerySets_InParallel) {
-    DAWN_SUPPRESS_TEST_IF(IsWARP());  // Flaky on WARP
-
     // TODO(crbug.com/451389800): [Capture] implement query set.
     DAWN_SUPPRESS_TEST_IF(IsCaptureReplayCheckingEnabled());
 

@@ -122,6 +122,9 @@ std::vector<wgpu::FeatureName> VideoViewsTestsBase::GetRequiredFeatures() {
     if (SupportsFeatures({wgpu::FeatureName::FlexibleTextureViews})) {
         requiredFeatures.push_back(wgpu::FeatureName::FlexibleTextureViews);
     }
+    if (SupportsFeatures({wgpu::FeatureName::AdapterPropertiesDrm})) {
+        requiredFeatures.push_back(wgpu::FeatureName::AdapterPropertiesDrm);
+    }
 
     requiredFeatures.push_back(wgpu::FeatureName::DawnInternalUsages);
     return requiredFeatures;
@@ -163,10 +166,6 @@ bool VideoViewsTestsBase::IsFormatSupported() const {
     if (GetFormat() == wgpu::TextureFormat::R10X6BG10X6Biplanar420Unorm) {
         // DXGI_FORMAT_P010 can't be shared between D3D11 and D3D12.
         if (IsD3D12()) {
-            return false;
-        }
-        // DXGI_FORMAT_P010 is not supported on WARP.
-        if (IsWARP()) {
             return false;
         }
         return IsUnorm16FormatsForExternalTextureSupported() && IsMultiPlanarFormatP010Supported();
@@ -517,12 +516,11 @@ class VideoViewsTests : public VideoViewsTestsBase {
         DAWN_TEST_UNSUPPORTED_IF(!IsFormatSupported());
 
         mBackend = VideoViewsTestBackend::Create();
-        mBackend->OnSetUp(device);
+        DAWN_TEST_UNSUPPORTED_IF(!mBackend->Initialize(device));
     }
 
     void TearDown() override {
         if (mBackend) {
-            mBackend->OnTearDown();
             mBackend = nullptr;
         }
         VideoViewsTestsBase::TearDown();

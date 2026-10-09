@@ -44,6 +44,7 @@
 #include "src/dawn/native/Instance.h"
 #include "src/dawn/native/PhysicalDevice.h"
 #include "src/utils/compiler.h"
+#include "src/utils/heap_array.h"
 
 namespace dawn::native {
 namespace {
@@ -120,37 +121,7 @@ wgpu::Status AdapterBase::APIGetInfo(AdapterInfo* info) const {
     DAWN_CHECK(info != nullptr);
 
     UnpackedPtr<AdapterInfo> unpacked;
-    if (mInstance->ConsumedError(ValidateAndUnpack(info), &unpacked)) {
-        return wgpu::Status::Error;
-    }
-
-    bool hadError = false;
-    if (unpacked.Has<AdapterPropertiesMemoryHeaps>() &&
-        !mSupportedFeatures.IsEnabled(wgpu::FeatureName::AdapterPropertiesMemoryHeaps)) {
-        hadError |= mInstance->ConsumedError(
-            DAWN_VALIDATION_ERROR("Feature AdapterPropertiesMemoryHeaps is not available."));
-    }
-    if (unpacked.Has<AdapterPropertiesD3D>() &&
-        !mSupportedFeatures.IsEnabled(wgpu::FeatureName::AdapterPropertiesD3D)) {
-        hadError |= mInstance->ConsumedError(
-            DAWN_VALIDATION_ERROR("Feature AdapterPropertiesD3D is not available."));
-    }
-    if (unpacked.Has<AdapterPropertiesVk>() &&
-        !mSupportedFeatures.IsEnabled(wgpu::FeatureName::AdapterPropertiesVk)) {
-        hadError |= mInstance->ConsumedError(
-            DAWN_VALIDATION_ERROR("Feature AdapterPropertiesVk is not available."));
-    }
-    if (unpacked.Has<AdapterPropertiesDrm>() &&
-        !mSupportedFeatures.IsEnabled(wgpu::FeatureName::AdapterPropertiesDrm)) {
-        hadError |= mInstance->ConsumedError(
-            DAWN_VALIDATION_ERROR("Feature AdapterPropertiesDrm is not available."));
-    }
-    if (unpacked.Has<AdapterPropertiesSubgroupMatrixConfigs>() &&
-        !mSupportedFeatures.IsEnabled(wgpu::FeatureName::ChromiumExperimentalSubgroupMatrix)) {
-        hadError |= mInstance->ConsumedError(
-            DAWN_VALIDATION_ERROR("Feature ChromiumExperimentalSubgroupMatrix is not available."));
-    }
-    if (hadError) {
+    if (mInstance->ConsumedError(ValidateGetInfo(info), &unpacked)) {
         return wgpu::Status::Error;
     }
 
@@ -160,26 +131,15 @@ wgpu::Status AdapterBase::APIGetInfo(AdapterInfo* info) const {
 
     mPhysicalDevice->PopulateBackendProperties(unpacked, mTogglesState);
 
-    // Allocate space for all strings.
-    size_t allocSize = mPhysicalDevice->GetVendorName().length() +
-                       mPhysicalDevice->GetArchitectureName().length() +
-                       mPhysicalDevice->GetName().length() +
-                       mPhysicalDevice->GetDriverDescription().length();
-    absl::Span<char> outBuffer{new char[allocSize], allocSize};
-
-    auto AddString = [&](const std::string& in, StringView* out) {
-        DAWN_CHECK(in.length() <= outBuffer.length());
-        DAWN_UNSAFE_TODO(memcpy(outBuffer.data(), in.data(), in.length()));
-        *out = {outBuffer.data(), in.length()};
-        outBuffer = outBuffer.subspan(in.length());
+    auto AllocateStringView = [&](const std::string& in) -> StringView {
+        Span<char> copy = HeapArrayFrom(in).MoveToSpan();
+        return {copy.data(), copy.size()};
     };
 
-    AddString(mPhysicalDevice->GetVendorName(), &info->vendor);
-    AddString(mPhysicalDevice->GetArchitectureName(), &info->architecture);
-    AddString(mPhysicalDevice->GetName(), &info->device);
-    AddString(mPhysicalDevice->GetDriverDescription(), &info->description);
-    DAWN_CHECK(outBuffer.empty());
-
+    info->vendor = AllocateStringView(mPhysicalDevice->GetVendorName());
+    info->architecture = AllocateStringView(mPhysicalDevice->GetArchitectureName());
+    info->device = AllocateStringView(mPhysicalDevice->GetName());
+    info->description = AllocateStringView(mPhysicalDevice->GetDriverDescription());
     info->backendType = mPhysicalDevice->GetBackendType();
     info->adapterType = mPhysicalDevice->GetAdapterType();
     info->vendorID = mPhysicalDevice->GetVendorId();
@@ -198,9 +158,36 @@ wgpu::Status AdapterBase::APIGetInfo(AdapterInfo* info) const {
     return wgpu::Status::Success;
 }
 
+ResultOrValError<UnpackedPtr<AdapterInfo>> AdapterBase::ValidateGetInfo(AdapterInfo* info) const {
+    UnpackedPtr<AdapterInfo> unpacked;
+    DAWN_TRY_ASSIGN(unpacked, ValidateAndUnpack(info));
+
+    DAWN_INVALID_IF(
+        unpacked.Has<AdapterPropertiesMemoryHeaps>() &&
+            !mSupportedFeatures.IsEnabled(wgpu::FeatureName::AdapterPropertiesMemoryHeaps),
+        "Feature AdapterPropertiesMemoryHeaps is not available.");
+    DAWN_INVALID_IF(unpacked.Has<AdapterPropertiesD3D>() &&
+                        !mSupportedFeatures.IsEnabled(wgpu::FeatureName::AdapterPropertiesD3D),
+                    "Feature AdapterPropertiesD3D is not available.");
+    DAWN_INVALID_IF(unpacked.Has<AdapterPropertiesVk>() &&
+                        !mSupportedFeatures.IsEnabled(wgpu::FeatureName::AdapterPropertiesVk),
+                    "Feature AdapterPropertiesVk is not available.");
+    DAWN_INVALID_IF(unpacked.Has<AdapterPropertiesDrm>() &&
+                        !mSupportedFeatures.IsEnabled(wgpu::FeatureName::AdapterPropertiesDrm),
+                    "Feature AdapterPropertiesDrm is not available.");
+    DAWN_INVALID_IF(
+        unpacked.Has<AdapterPropertiesSubgroupMatrixConfigs>() &&
+            !mSupportedFeatures.IsEnabled(wgpu::FeatureName::ChromiumExperimentalSubgroupMatrix),
+        "Feature ChromiumExperimentalSubgroupMatrix is not available.");
+
+    return unpacked;
+}
+
 void APIAdapterInfoFreeMembers(WGPUAdapterInfo info) {
-    // This single delete is enough because everything is a single allocation.
     delete[] info.vendor.data;
+    delete[] info.architecture.data;
+    delete[] info.device.data;
+    delete[] info.description.data;
 }
 
 void APIAdapterPropertiesMemoryHeapsFreeMembers(
@@ -420,27 +407,30 @@ Future AdapterBase::APIRequestDevice(const DeviceDescriptor* descriptor,
 
 wgpu::Status AdapterBase::APIGetFormatCapabilities(wgpu::TextureFormat format,
                                                    DawnFormatCapabilities* capabilities) {
-    if (!mSupportedFeatures.IsEnabled(wgpu::FeatureName::DawnFormatCapabilities)) {
-        [[maybe_unused]] bool hadError = mInstance->ConsumedError(
-            DAWN_VALIDATION_ERROR("Feature DawnFormatCapabilities is not available."));
-        return wgpu::Status::Error;
-    }
-    DAWN_CHECK(capabilities != nullptr);
-
     UnpackedPtr<DawnFormatCapabilities> unpacked;
-    if (mInstance->ConsumedError(ValidateAndUnpack(capabilities), &unpacked)) {
-        return wgpu::Status::Error;
-    }
-
-    if (unpacked.Has<DawnDrmFormatCapabilities>() &&
-        !mSupportedFeatures.IsEnabled(wgpu::FeatureName::DawnDrmFormatCapabilities)) {
-        [[maybe_unused]] bool hadError = mInstance->ConsumedError(
-            DAWN_VALIDATION_ERROR("Feature DawnDrmFormatCapabilities is not available."));
+    if (mInstance->ConsumedError(ValidateGetFormatCapabilities(capabilities), &unpacked)) {
         return wgpu::Status::Error;
     }
 
     mPhysicalDevice->PopulateBackendFormatCapabilities(format, unpacked);
     return wgpu::Status::Success;
+}
+
+ResultOrValError<UnpackedPtr<DawnFormatCapabilities>> AdapterBase::ValidateGetFormatCapabilities(
+    DawnFormatCapabilities* capabilities) {
+    DAWN_INVALID_IF(!mSupportedFeatures.IsEnabled(wgpu::FeatureName::DawnFormatCapabilities),
+                    "Feature DawnFormatCapabilities is not available.");
+
+    DAWN_CHECK(capabilities != nullptr);
+
+    UnpackedPtr<DawnFormatCapabilities> unpacked;
+    DAWN_TRY_ASSIGN(unpacked, ValidateAndUnpack(capabilities));
+
+    DAWN_INVALID_IF(unpacked.Has<DawnDrmFormatCapabilities>() &&
+                        !mSupportedFeatures.IsEnabled(wgpu::FeatureName::DawnDrmFormatCapabilities),
+                    "Feature DawnDrmFormatCapabilities is not available.");
+
+    return unpacked;
 }
 
 const TogglesState& AdapterBase::GetTogglesState() const {
@@ -461,19 +451,29 @@ const std::string& AdapterBase::GetName() const {
 
 std::vector<Ref<AdapterBase>> SortAdapters(std::vector<Ref<AdapterBase>> adapters,
                                            const UnpackedPtr<RequestAdapterOptions>& options) {
-    const bool noPowerPreference = options->powerPreference == wgpu::PowerPreference::Undefined;
-    const bool highPerformance = options->powerPreference == wgpu::PowerPreference::HighPerformance;
+    int discreteRank = 1;
+    int integratedRank = 1;
+    switch (options->powerPreference) {
+        case wgpu::PowerPreference::HighPerformance:
+            // Prioritize discrete GPUs in this case.
+            discreteRank = 0;
+            break;
+        case wgpu::PowerPreference::LowPower:
+            // Prioritize integrated GPUs in this case.
+            integratedRank = 0;
+            break;
+        case wgpu::PowerPreference::Undefined:
+            // Deliberately leave both discrete and integrated ranks at 1 so that the original
+            // OS-provided order of adapters is preserved.
+            break;
+    }
 
     const auto ComputeAdapterTypeRank = [&](const Ref<AdapterBase>& a) {
-        if (noPowerPreference) {
-            return 0;
-        }
-
         switch (a->GetPhysicalDevice()->GetAdapterType()) {
             case wgpu::AdapterType::DiscreteGPU:
-                return highPerformance ? 0 : 1;
+                return discreteRank;
             case wgpu::AdapterType::IntegratedGPU:
-                return highPerformance ? 1 : 0;
+                return integratedRank;
             case wgpu::AdapterType::CPU:
                 return 2;
             case wgpu::AdapterType::Unknown:

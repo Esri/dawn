@@ -148,7 +148,7 @@ FeaturesSet PhysicalDeviceBase::GetSupportedFeatures(const TogglesState& toggles
     // Iterate each PhysicalDevice's supported feature and check if it is supported with given
     // toggles
     for (Feature feature : mSupportedFeatures.featuresBitSet) {
-        if (IsFeatureSupportedWithToggles(ToAPI(feature), toggles)) {
+        if (IsFeatureSupportedWithToggles(ToCppAPI(feature), toggles)) {
             supportedFeaturesWithToggles.EnableFeature(feature);
         }
     }
@@ -214,7 +214,7 @@ MaybeError PhysicalDeviceBase::ResetInternalDeviceForTesting() {
 }
 
 MaybeError PhysicalDeviceBase::ResetInternalDeviceForTestingImpl() {
-    return DAWN_INTERNAL_ERROR(
+    return DAWN_UNRECOVERABLE_ERROR(
         "ResetInternalDeviceForTesting should only be used with the D3D12 backend.");
 }
 

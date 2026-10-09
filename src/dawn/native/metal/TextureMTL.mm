@@ -361,7 +361,8 @@ MaybeError Texture::InitializeAsInternalTexture(const UnpackedPtr<TextureDescrip
             mMtlPlaneTextures[plane] = AcquireNSPRef(
                 CreateTextureMtlForPlane(mMtlUsage, GetFormat(), plane, device, GetIOSurface()));
             if (mMtlPlaneTextures[plane] == nil) {
-                return DAWN_INTERNAL_ERROR("Failed to create MTLTexture plane view for IOSurface.");
+                return DAWN_UNRECOVERABLE_ERROR(
+                    "Failed to create MTLTexture plane view for IOSurface.");
             }
         }
     }
@@ -685,10 +686,9 @@ MaybeError Texture::ClearTexture(CommandRecordingContext* commandContext,
                 blockInfo.ToBytes(largestMipSize.width * largestMipSize.height);
             uint64_t uploadSize = blockInfo.ToBytes(uploadBlocks);
 
-            // TODO(https://crbug.com/534203108): Spanify WithUploadReservation.
             DAWN_TRY(device->GetDynamicUploader()->WithUploadReservation(
                 uploadSize, blockInfo.byteSize, [&](UploadReservation reservation) -> MaybeError {
-                    DAWN_UNSAFE_TODO(memset(reservation.mappedPointer, clearColor, uploadSize));
+                    std::ranges::fill(reservation.mappedData, std::byte(clearColor));
 
                     id<MTLBuffer> buffer = ToBackend(reservation.buffer)->GetMTLBuffer();
                     for (uint32_t level = range.baseMipLevel;
@@ -832,7 +832,7 @@ MaybeError TextureView::Initialize(const UnpackedPtr<TextureViewDescriptor>& des
             }
 
             if (mMtlTextureView == nil) {
-                return DAWN_INTERNAL_ERROR("Failed to create MTLTexture view.");
+                return DAWN_UNRECOVERABLE_ERROR("Failed to create MTLTexture view.");
             }
         }
     }

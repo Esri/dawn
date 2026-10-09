@@ -32,7 +32,7 @@
 #include "src/tint/lang/core/fluent_types.h"  // IWYU pragma: export
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/manager.h"
 #include "src/tint/lang/hlsl/ir/builtin_call.h"
 
@@ -113,13 +113,11 @@ struct State {
 
             // Force to a `let` to get better generated HLSL
             auto* d = b.Let(type);
-            d->SetValue(div->Result());
+            d->SetValue(div);
 
             auto* trunc = b.Call(type, core::BuiltinFn::kTrunc, d);
             auto* mul = b.Multiply(trunc, binary->RHS());
-            auto* sub = b.Subtract(binary->LHS(), mul);
-
-            binary->Result()->ReplaceAllUsesWith(sub->Result());
+            b.SubtractReplaceResult(binary->DetachResult(), binary->LHS(), mul);
         });
         binary->Destroy();
     }

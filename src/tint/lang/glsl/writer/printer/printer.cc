@@ -27,8 +27,11 @@
 
 #include "src/tint/lang/glsl/writer/printer/printer.h"
 
+#include <algorithm>
+#include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "src/tint/lang/core/constant/splat.h"
 #include "src/tint/lang/core/enums.h"
@@ -61,7 +64,7 @@
 #include "src/tint/lang/core/ir/terminate_invocation.h"
 #include "src/tint/lang/core/ir/unreachable.h"
 #include "src/tint/lang/core/ir/user_call.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/ir/var.h"
 #include "src/tint/lang/core/type/array.h"
 #include "src/tint/lang/core/type/binding_array.h"
@@ -210,15 +213,25 @@ class Printer : public tint::TextGenerator {
     // The set of emitted structs
     Hashset<const core::type::Struct*, 4> emitted_structs_;
 
+    /// PaddingStruct holds the name of a struct that provides a certain amount of padding bytes,
+    /// along with the name of a global constant that provides a zero-initializer for that struct.
+    struct PaddingStruct {
+        std::string name;
+        std::string init;
+    };
+    PaddingStruct pad16bytes;
+    PaddingStruct pad64bytes;
+
     // For host shareable structs where we have injected padding, this map stores a pointer from the
-    // struct to a vector. The vector contains an entry for each member and padded item. Each
-    // padding item will have a `nullopt` set. Each real member will have a value of the index into
-    // the struct members list.
-    Hashmap<const core::type::Struct*, Vector<std::optional<uint32_t>, 4>, 4>
+    // struct to a vector. The vector contains an entry for each member and padded item. Each real
+    // member will have a value of the index into the struct members list, while each padding member
+    // will be represented by a string that can be used to zero-initialize it.
+    using PaddedStructEntry = std::variant<uint32_t, std::string>;
+    Hashmap<const core::type::Struct*, Vector<PaddedStructEntry, 4>, 4>
         struct_to_padding_struct_ids_;
 
     /// Block to emit for a continuing
-    std::function<void()> emit_continuing_;
+    std::vector<std::unique_ptr<std::function<void()>>> emit_continuing_;
 
     /// @returns `true` if @p ident should be renamed
     bool ShouldRename(std::string_view ident) {
@@ -459,10 +472,10 @@ class Printer : public tint::TextGenerator {
         }
     }
 
-    void EmitVectorAccess(StringStream& out, const core::ir::Value* index) {
+    void EmitVectorAccess(StringStream& out, const core::ir::Value* index, uint32_t max) {
         if (auto* cnst = index->As<core::ir::Constant>()) {
             out << ".";
-            IdxToComponent(out, cnst->Value()->ValueAs<uint32_t>());
+            IdxToComponent(out, std::min(cnst->Value()->ValueAs<uint32_t>(), max));
         } else {
             out << "[";
             EmitValue(out, index);
@@ -474,7 +487,8 @@ class Printer : public tint::TextGenerator {
         auto out = Line();
 
         EmitValue(out, s->To());
-        EmitVectorAccess(out, s->Index());
+        EmitVectorAccess(out, s->Index(),
+                         s->To()->Type()->UnwrapPtr()->As<core::type::Vector>()->Width() - 1);
         out << " = ";
         EmitValue(out, s->Value());
         out << ";";
@@ -482,7 +496,8 @@ class Printer : public tint::TextGenerator {
 
     void EmitLoadVectorElement(StringStream& out, const core::ir::LoadVectorElement* l) {
         EmitValue(out, l->From());
-        EmitVectorAccess(out, l->Index());
+        EmitVectorAccess(out, l->Index(),
+                         l->From()->Type()->UnwrapPtr()->As<core::type::Vector>()->Width() - 1);
     }
 
     void EmitSwizzle(StringStream& out, const core::ir::Swizzle* swizzle) {
@@ -496,8 +511,9 @@ class Printer : public tint::TextGenerator {
     void EmitDiscard() { Line() << "discard;"; }
 
     void EmitContinue(const core::ir::Continue* c) {
-        if (emit_continuing_) {
-            emit_continuing_();
+        if (!emit_continuing_.empty()) {
+            auto fn = emit_continuing_.back().get();
+            (*fn)();
         }
         if (c->Block() != c->Loop()->Body()) {
             Line() << "continue;";
@@ -517,18 +533,17 @@ class Printer : public tint::TextGenerator {
         //   }
         // }
 
-        auto emit_continuing = [&] {
-            Line() << "{";
-            {
-                const ScopedIndent si(current_buffer_);
-                EmitBlock(l->Continuing());
-            }
-            Line() << "}";
-        };
-        TINT_SCOPED_ASSIGNMENT(emit_continuing_, emit_continuing);
-
         Line() << "{";
         {
+            emit_continuing_.push_back(std::make_unique<std::function<void()>>([&] {
+                Line() << "{";
+                {
+                    const ScopedIndent si(current_buffer_);
+                    EmitBlock(l->Continuing());
+                }
+                Line() << "}";
+            }));
+
             ScopedIndent init(current_buffer_);
             EmitBlock(l->Initializer());
 
@@ -538,6 +553,8 @@ class Printer : public tint::TextGenerator {
                 EmitBlock(l->Body());
             }
             Line() << "}";
+
+            emit_continuing_.pop_back();
         }
         Line() << "}";
     }
@@ -622,8 +639,8 @@ class Printer : public tint::TextGenerator {
                     out << "." << NameOf(member);
                     current_type = member->Type();
                 },
-                [&](const core::type::Vector*) {  //
-                    EmitVectorAccess(out, index);
+                [&](const core::type::Vector* vec) {  //
+                    EmitVectorAccess(out, index, vec->Width() - 1);
                 },
                 [&](Default) {
                     out << "[";
@@ -741,27 +758,93 @@ class Printer : public tint::TextGenerator {
             TINT_ICE_ON_NO_MATCH);
     }
 
+    PaddingStruct MakePaddingStruct(uint32_t bytes) {
+        TINT_IR_ASSERT(ir_, bytes % 4 == 0);
+
+        PaddingStruct result;
+        result.name = UniqueIdentifier("tint_pad" + std::to_string(bytes));
+        result.init = UniqueIdentifier("tint_pad" + std::to_string(bytes) + "_init");
+
+        TextBuffer str_buf;
+        Line(&str_buf) << "\nstruct " << result.name << " {";
+        str_buf.IncrementIndent();
+        for (uint32_t i = 0; i < bytes / 4; i++) {
+            Line(&str_buf) << "uint tint_pad_" << i << ";";
+        }
+        str_buf.DecrementIndent();
+        Line(&str_buf) << "};";
+
+        {
+            auto init = Line(&str_buf);
+            init << "const " << result.name << " " << result.init << " = " << result.name << "(";
+            for (uint32_t i = 0; i < bytes / 4; i++) {
+                if (i > 0) {
+                    init << ", ";
+                }
+                init << "0u";
+            }
+            init << ");";
+        }
+
+        preamble_buffer_.Append(str_buf);
+
+        return result;
+    }
+
     void EmitStructMembers(TextBuffer& str_buf, const core::type::Struct* str) {
         bool is_host_shareable = host_shareable_structs_.Contains(str);
-        Vector<std::optional<uint32_t>, 4> new_struct_to_old;
+        Vector<PaddedStructEntry, 4> new_struct_to_old;
+
+        uint32_t glsl_offset = 0;
 
         // Padding members need to be named consistently between different shader stages to satisfy
         // GLSL's interface matching rules.
         uint32_t pad_id = 0;
-        auto add_padding = [&](uint32_t size) {
-            auto pad_size = size / 4;
-            for (size_t i = 0; i < pad_size; ++i) {
+        auto add_padding = [&](uint32_t pad_size) {
+            while (pad_size > 0) {
                 std::string name;
                 do {
                     name = "tint_pad_" + std::to_string(pad_id++);
                 } while (str->FindMember(ir_.symbols.Get(name)));
 
-                Line(&str_buf) << "uint " << name << ";";
-                new_struct_to_old.Push(std::nullopt);
+                // If the number of padding bytes is large and the current offset is sufficiently
+                // aligned, use structures to pad out the struct to avoid emitting too many struct
+                // members and initializer values. We use structures of uint values to avoid
+                // increasing the alignment of the containing struct.
+                if (pad_size >= 64 && glsl_offset % 64 == 0) {
+                    if (pad64bytes.name.empty()) {
+                        pad64bytes = MakePaddingStruct(64);
+                    }
+
+                    Line(&str_buf) << pad64bytes.name << " " << name << ";";
+                    pad_size -= 64;
+                    glsl_offset += 64;
+                    new_struct_to_old.Push(pad64bytes.init);
+                } else if (pad_size >= 16 && glsl_offset % 16 == 0) {
+                    if (pad16bytes.name.empty()) {
+                        pad16bytes = MakePaddingStruct(16);
+                    }
+
+                    Line(&str_buf) << pad16bytes.name << " " << name << ";";
+                    pad_size -= 16;
+                    glsl_offset += 16;
+                    new_struct_to_old.Push(pad16bytes.init);
+                } else if (pad_size % 4 == 0) {
+                    Line(&str_buf) << "uint " << name << ";";
+                    pad_size -= 4;
+                    glsl_offset += 4;
+                    new_struct_to_old.Push("0u");
+                } else if (pad_size % 2 == 0) {
+                    Line(&str_buf) << "float16_t " << name << ";";
+                    pad_size -= 2;
+                    glsl_offset += 2;
+                    new_struct_to_old.Push("0.0hf");
+                } else {
+                    TINT_IR_UNREACHABLE(ir_);
+                }
             }
         };
 
-        uint32_t glsl_offset = 0;
         for (auto* mem : str->Members()) {
             auto out = Line(&str_buf);
             auto ir_offset = mem->Offset();
@@ -776,7 +859,6 @@ class Printer : public tint::TextGenerator {
                 // Generate padding if required
                 if (auto padding = ir_offset - glsl_offset) {
                     add_padding(padding);
-                    glsl_offset += padding;
                 }
             }
 
@@ -1157,12 +1239,11 @@ class Printer : public tint::TextGenerator {
                 EmitExtension(kOESSampleVariables);
             }
 
-            if (attrs.builtin == tint::core::BuiltinValue::kFragDepth) {
+            if (options_.has_gl_ext_conservative_depth &&
+                attrs.builtin == tint::core::BuiltinValue::kFragDepth) {
                 if (attrs.depth_mode == core::BuiltinDepthMode::kGreater ||
                     attrs.depth_mode == core::BuiltinDepthMode::kLess) {
-                    if (options_.version.IsES()) {
-                        EmitExtension(kEXTConservativeDepth);
-                    }
+                    EmitExtension(kEXTConservativeDepth);
                     std::string depth_layout_qualifier =
                         (attrs.depth_mode == core::BuiltinDepthMode::kGreater) ? "depth_greater"
                                                                                : "depth_less";
@@ -1564,11 +1645,17 @@ class Printer : public tint::TextGenerator {
                         }
                         needs_comma = true;
 
-                        if (!idx.has_value()) {
-                            out << "0u";
-                        } else {
-                            EmitValue(out, c->Args()[idx.value()]);
-                        }
+                        // Emit the argument that corresponds to a non-padding member, or a zero
+                        // value for a padding member.
+                        std::visit(
+                            [&](auto v) {
+                                if constexpr (std::is_same_v<decltype(v), std::uint32_t>) {
+                                    EmitValue(out, c->Args()[v]);
+                                } else {
+                                    out << v;
+                                }
+                            },
+                            idx);
                     }
                     out << ")";
                 } else {
@@ -1888,12 +1975,18 @@ class Printer : public tint::TextGenerator {
                 }
                 first = false;
 
-                if (!idx.has_value()) {
-                    out << "0u";
-                } else {
-                    EmitConstant(out, c->Index(i));
-                    ++i;
-                }
+                // Emit the next value in the constant for a non-padding member, or a zero value
+                // for a padding member.
+                std::visit(
+                    [&](auto v) {
+                        if constexpr (std::is_same_v<decltype(v), std::uint32_t>) {
+                            EmitConstant(out, c->Index(i));
+                            ++i;
+                        } else {
+                            out << v;
+                        }
+                    },
+                    idx);
             }
         } else {
             for (size_t i = 0; i < s->Members().Length(); ++i) {

@@ -47,7 +47,7 @@ constexpr uint64_t kMediumDurationNs = 50000000;
 bool WaitOnReceiver(const SystemEventReceiver& receiver, Nanoseconds timeout) {
     bool ready = false;
     std::pair<const SystemEventReceiver&, bool*> event = {receiver, &ready};
-    return WaitAnySystemEvent(&event, DAWN_UNSAFE_TODO(&event + 1), timeout);
+    return WaitAnySystemEvent(SpanFromRef(event), timeout);
 }
 
 class WaitListEventTests : public DawnTest {
@@ -131,9 +131,6 @@ TEST_P(WaitListEventTests, WaitAsyncAlreadySignaled) {
 
 // Test WaitAsync, signaling the event later
 TEST_P(WaitListEventTests, WaitAsyncThenSignal) {
-    // TODO(crbug.com/469958428): Flaky w/ WARP.
-    DAWN_SUPPRESS_TEST_IF(IsWindows() && IsWARP());
-
     Ref<WaitListEvent> event = AcquireRef(new WaitListEvent());
     EXPECT_FALSE(event->IsSignaled());
 
@@ -156,7 +153,7 @@ TEST_P(WaitListEventTests, WaitAsyncThenSignal) {
 
 // Test WaitAny with an empty list
 TEST_P(WaitListEventTests, WaitAnyEmpty) {
-    std::array<std::pair<Ref<WaitListEvent>, bool*>, 0> events;
+    std::array<std::pair<Ref<WaitListEvent>, bool*>, 0> events{};
     EXPECT_FALSE(
         WaitListEvent::WaitAny(events.begin(), events.end(), Nanoseconds(kShortDurationNs)));
 }

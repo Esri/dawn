@@ -32,8 +32,8 @@
 #include <limits>
 #include <utility>
 
+#include "src/tint/lang/core/ir/array_count.h"
 #include "src/tint/lang/core/ir/builder.h"
-#include "src/tint/lang/core/ir/const_param_validator.h"
 #include "src/tint/lang/core/ir/constexpr_if.h"
 #include "src/tint/lang/core/ir/construct.h"
 #include "src/tint/lang/core/ir/evaluator.h"
@@ -42,8 +42,7 @@
 #include "src/tint/lang/core/ir/override.h"
 #include "src/tint/lang/core/ir/terminator.h"
 #include "src/tint/lang/core/ir/traverse.h"
-#include "src/tint/lang/core/ir/type/array_count.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/ir/value.h"
 #include "src/tint/utils/math/math.h"
 #include "src/utils/numeric.h"
@@ -462,7 +461,7 @@ Result<SuccessType> SubstituteOverrides(Module& ir, const SubstituteOverridesCon
 
     // TODO(crbug.com/382300469): This function should take in a constant module but it does not due
     // to missing constant functions.
-    TINT_CHECK_RESULT(tint::core::ir::ValidateConstParam(ir));
+    TINT_CHECK_RESULT(tint::core::ir::Validate(ir, tint::core::ir::ErrorSource::kWgsl));
 
     ir.properties.Remove(Property::kAllowOverrides);
 

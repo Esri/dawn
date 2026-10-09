@@ -49,6 +49,7 @@
 # install calls, but since GN's behaviour is to build to the output
 # directory, they are being called as one command).
 
+import("../../scripts/dawn_overrides_with_defaults.gni")
 import("meson_overrides_with_defaults.gni")
 
 import("//build/config/clang/clang.gni")
@@ -78,9 +79,6 @@ template("_meson_setup") {
     _cc_path = rebase_path("$clang_base_path/bin/clang")
     _cxx_path = rebase_path("$clang_base_path/bin/clang++")
 
-    # Use the glslang_validator target built from source.
-    _glslang_path = rebase_path("$root_out_dir/glslang_validator")
-
     # The pre-compiled version of llvm-config from CIPD returns a hard
     # coded path to a system installed libzstd, so need to intercept
     # the output and rewrite it to point to where it is checked out.
@@ -106,6 +104,33 @@ template("_meson_setup") {
     ]
     write_file(_llvm_config_wrapper_path, _wrapper_content)
 
+    # Mesa is currently pinned to a older version while the fuzzing
+    # experiment is deployed to avoid having a moving implementation
+    # target. This has led to some drift between glslang's behaviour
+    # and the expectations of the Mesa build (specifically requiring
+    # --target-env to be explicitly set in certain
+    # situations).
+    # Currently wrapping the glslang calls to insert the missing flags
+    # when needed. Once Mesa starts rolling regularly this wrapper can
+    # be removed.
+    #
+    # Use the glslang_validator target built from source.
+    _glslang_path =
+        rebase_path("$root_out_dir/glslang_validator", "", root_build_dir)
+
+    _glslang_wrapper_path = "${target_gen_dir}/glslang_wrapper.py"
+    _glslang_wrapper_content = [
+      "import sys",
+      "import subprocess",
+      "real_glslang = '${_glslang_path}'",
+      "args = [real_glslang] + sys.argv[1:]",
+      "if ('-V' in args or '-G' in args) and '--target-env' not in args:",
+      "    args.extend(['--target-env', 'spirv1.2'])",
+      "res = subprocess.run(args)",
+      "sys.exit(res.returncode)",
+    ]
+    write_file(_glslang_wrapper_path, _glslang_wrapper_content)
+
     # Used by meson to allow specifying the toolchain elements to use
     _native_file_content = [
       "[binaries]",
@@ -114,10 +139,11 @@ template("_meson_setup") {
       "ar = '" + rebase_path("$clang_base_path/bin/llvm-ar") + "'",
       "strip = '" + rebase_path("$clang_base_path/bin/llvm-strip") + "'",
       "pkg-config = 'pkg-config'",
-      "python = ['vpython3', '-vpython-spec', '" + rebase_path("//.vpython3") +
+      "python = ['vpython3', '-vpython-spec', '" +
+          rebase_path("${dawn_root}/vpython.toml") + "']",
+      "glslang = ['python3', '" + rebase_path(_glslang_wrapper_path) + "']",
+      "glslangValidator = ['python3', '" + rebase_path(_glslang_wrapper_path) +
           "']",
-      "glslang = '${_glslang_path}'",
-      "glslangValidator = '${_glslang_path}'",
       "llvm-config = ['python3', '" + rebase_path(_llvm_config_wrapper_path) +
           "']",
     ]
@@ -196,8 +222,8 @@ template("_meson_setup") {
       _zstd_include_dir =
           rebase_path("${meson_zstd_dir}/include", root_build_dir)
 
-      _c_args = "-I${_zstd_include_dir}"
-      _cpp_args = "-I${_zstd_include_dir}"
+      _c_args = "-I${_zstd_include_dir} -w"
+      _cpp_args = "-I${_zstd_include_dir} -w"
       _c_link_args = "-fuse-ld=lld -L${_zstd_lib_dir}"
       _cpp_link_args = "-fuse-ld=lld -L${_zstd_lib_dir}"
 

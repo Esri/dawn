@@ -33,10 +33,13 @@
 #include <optional>
 
 #include "dawn/wire/ObjectType_autogen.h"
+#include "dawn/wire/dawn_platform.h"
 #include "src/dawn/wire/BufferConsumer.h"
 #include "src/dawn/wire/ObjectHandle.h"
 #include "src/dawn/wire/WireResult.h"
 #include "src/utils/span.h"
+
+{% from 'dawn/cpp_macros.tmpl' import as_annotated_dawnType, as_dawnType with context %}
 
 namespace dawn::wire {
 
@@ -87,8 +90,7 @@ namespace dawn::wire {
     };
 
     struct CmdHeader {
-        uint64_t commandSize;
-        WireCmd commandId;
+        WireCmd commandId{};
 
         CmdHeader() = default;
         CmdHeader(const CmdHeader&) = default;
@@ -121,9 +123,9 @@ namespace dawn::wire {
 
         //* Serialize the structure and everything it points to into serializeBuffer which must be
         //* big enough to contain all the data (as queried from GetRequiredSize).
-        WireResult Serialize(size_t commandSize, SerializeBuffer* serializeBuffer, const ObjectIdProvider& objectIdProvider) const;
+        WireResult Serialize(SerializeBuffer* serializeBuffer, const ObjectIdProvider& objectIdProvider) const;
         // Override which produces a FatalError if any object is used.
-        WireResult Serialize(size_t commandSize, SerializeBuffer* serializeBuffer) const;
+        WireResult Serialize(SerializeBuffer* serializeBuffer) const;
 
         //* Deserializes the structure from a buffer, consuming a maximum of *size bytes. When this
         //* function returns, buffer and size will be updated by the number of bytes consumed to
@@ -139,25 +141,14 @@ namespace dawn::wire {
         {% if command.derived_method %}
             //* Command handlers want to know the object ID in addition to the backing object.
             //* Doesn't need to be filled before Serialize, or GetRequiredSize.
-            ObjectId selfId;
+            ObjectId selfId = 0;
         {% endif %}
 
         {% for member in command.members %}
             {% if member.is_length %}
                 //* Skip as it's included in the span just below.
-            {% elif member.length and member.constant_length != 1 %}
-                {% set length = "dawn::detail::DynamicExtent<size_t>" %}
-                {% if member.length == "constant" %}
-                    {% set length = member.constant_length %}
-                {% endif %}
-                {% set element_type = "std::remove_pointer_t<" + decorate(as_cType(member.type.name, True), member) + ">" %}
-                {% if is_wire_data_only(member) %}
-                    //* If the member is data only, we do not copy the data, so it will be volatile.
-                    {% set element_type = "volatile " + element_type %}
-                {% endif %}
-                ityp::span<size_t, {{element_type}}, {{length}}> {{as_varName(member.name)}};
             {% else %}
-                {{as_annotated_cType(member)}};
+                {{as_annotated_dawnType(member, is_volatile=is_wire_data_only(member))}}{};
             {% endif %}
         {% endfor %}
     };

@@ -63,6 +63,16 @@ if (NOT TARGET absl::strings)
     add_subdirectory(${DAWN_ABSEIL_DIR} "${CMAKE_CURRENT_BINARY_DIR}/abseil")
 endif()
 
+# Warning suppressions to keep dependencies from poluting the logs.
+if (("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang") OR
+    ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang"))
+    add_compile_options(
+            -Wno-deprecated-this-capture # For protobuf and marl
+            -Wno-nontrivial-memcall # For swiftshader
+            -Wno-c++20-extensions # For swiftshader and marl
+    )
+endif()
+
 if (DAWN_BUILD_PROTOBUF AND EXISTS "${DAWN_PROTOBUF_DIR}/cmake")
     if (("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang") AND WIN32)
         set(protobuf_HAVE_BUILTIN_ATOMICS 1)
@@ -349,13 +359,6 @@ function(AddSubdirectoryDXC)
             "LIBRARY_OUTPUT_DIRECTORY" "${CMAKE_BINARY_DIR}"
         )
     endif()
-
-    # Create a target that copies dxil.dll from the platform SDK
-    if (WIN32)
-        AddCopyWindowsSDKDLLTarget("copy_dxil_dll" "dxil.dll")
-        # Make dxc target depend on copy_dxil_dll
-        add_dependencies(dxc copy_dxil_dll)
-    endif()
 endfunction()
 
 if (DAWN_USE_BUILT_DXC)
@@ -364,5 +367,9 @@ endif()
 
 if (TINT_BUILD_MESA)
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/mesa" "${CMAKE_CURRENT_BINARY_DIR}/mesa")
+endif()
+
+if (DAWN_USE_AGILITY_SDK AND NOT TARGET agility-sdk)
+    add_subdirectory(${DAWN_AGILITY_SDK_DIR} "${CMAKE_CURRENT_BINARY_DIR}/agility-sdk")
 endif()
 

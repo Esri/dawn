@@ -38,7 +38,9 @@ using IR_OperandInstructionTest = IRTestHelper;
 
 TEST_F(IR_OperandInstructionTest, Destroy) {
     auto* block = b.Block();
-    auto* inst = b.Add(1_i, 2_i);
+    auto* l = b.Let("l", 1_i);
+    auto* v = b.Add(l, 2_i);
+    auto* inst = v->AsInstruction<CoreBinary>();
     block->Append(inst);
     auto* lhs = inst->LHS();
     auto* rhs = inst->RHS();

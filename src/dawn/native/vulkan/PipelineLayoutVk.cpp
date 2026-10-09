@@ -53,7 +53,7 @@ ResultOrError<Ref<PipelineLayout>> PipelineLayout::Create(
 ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> PipelineLayout::CreateVkPipelineLayout(
     const Specialization& specialization) {
     // Compute the array of VkDescriptorSetLayouts that will be chained in the create info.
-    ityp::array<BindGroupIndex, VkDescriptorSetLayout, size_t(kMaxBindGroupsTyped) + 2> setLayouts;
+    ityp::array<BindGroupIndex, VkDescriptorSetLayout, size_t{kMaxBindGroupsTyped} + 2> setLayouts;
 
     // The first VkDescriptorSetLayouts are the for framebuffer fetch and/or the resource table if
     // needed.
@@ -114,25 +114,17 @@ ResultOrError<Ref<RefCountedVkHandle<VkPipelineLayout>>> PipelineLayout::CreateV
 }
 
 MaybeError PipelineLayout::Initialize() {
-    BindGroupMask bindGroupMask = GetBindGroupLayoutsMask();
-    BindGroupIndex highestBindGroupIndex = GetHighestBitIndexPlusOne(bindGroupMask);
     PerBindGroup<const CachedObject*> cachedObjects;
-    for (BindGroupIndex i : Range(highestBindGroupIndex)) {
-        if (bindGroupMask[i]) {
-            cachedObjects[i] = GetBindGroupLayout(i);
-        } else {
-            cachedObjects[i] = GetDevice()->GetEmptyBindGroupLayout()->GetInternalBindGroupLayout();
-        }
+    cachedObjects.fill(GetDevice()->GetEmptyBindGroupLayout()->GetInternalBindGroupLayout());
+
+    for (BindGroupIndex i : GetBindGroupLayoutsMask()) {
+        cachedObjects[i] = GetBindGroupLayout(i);
     }
 
     // Record bind group layout objects and user immediate data size into pipeline layout cache key.
     // It represents pipeline layout base attributes and ignored future changes caused by internal
     // immediate data size from pipeline.
-    uint32_t numSetLayoutsWithHoles =
-        static_cast<uint32_t>(GetHighestBitIndexPlusOne(bindGroupMask));
-    StreamIn(&mCacheKey, stream::Iterable(cachedObjects.data(), numSetLayoutsWithHoles),
-             GetImmediateDataRangeByteSize());
-
+    StreamIn(&mCacheKey, cachedObjects, UsesResourceTable(), GetImmediateDataRangeByteSize());
     return {};
 }
 

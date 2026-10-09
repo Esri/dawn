@@ -37,7 +37,7 @@
 #include "src/tint/lang/core/ir/instruction.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/switch.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/ir/value.h"
 
 using namespace tint::core::fluent_types;  // NOLINT
@@ -116,9 +116,9 @@ struct State {
                     for (auto& sel : c.selectors) {
                         auto* curr_selector = b.Equal(switch_cond, sel.val->As<core::ir::Value>());
                         if (case_cond) {
-                            case_cond = b.Or(curr_selector, case_cond)->Result();
+                            case_cond = b.Or(curr_selector, case_cond);
                         } else {
-                            case_cond = curr_selector->Result();
+                            case_cond = curr_selector;
                         }
                     }
                     conditions.Push(case_cond);

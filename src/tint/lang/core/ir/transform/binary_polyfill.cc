@@ -31,7 +31,7 @@
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
@@ -58,10 +58,10 @@ struct State {
     SymbolTable& sym{ir.symbols};
 
     /// Map from integer type to its divide helper function.
-    Hashmap<const type::Type*, Function*, 4> int_div_helpers{};
+    Hashmap<const core::type::Type*, Function*, 4> int_div_helpers{};
 
     /// Map from integer type to its modulo helper function.
-    Hashmap<const type::Type*, Function*, 4> int_mod_helpers{};
+    Hashmap<const core::type::Type*, Function*, 4> int_mod_helpers{};
 
     /// Process the module.
     void Process() {
@@ -110,7 +110,7 @@ struct State {
             // Generate a name for the helper function.
             StringStream name;
             name << "tint_" << (is_div ? "div_" : "mod_");
-            if (auto* vec = result_ty->As<type::Vector>()) {
+            if (auto* vec = result_ty->As<core::type::Vector>()) {
                 name << "v" << vec->Width() << vec->Type()->FriendlyName();
             } else {
                 name << result_ty->FriendlyName();
@@ -147,14 +147,14 @@ struct State {
 
                 if (binary->Op() == BinaryOp::kDivide) {
                     // Perform the divide with the modified RHS.
-                    b.Return(func, b.Divide(lhs, rhs_or_one)->Result());
+                    b.Return(func, b.Divide(lhs, rhs_or_one));
                 } else if (binary->Op() == BinaryOp::kModulo) {
                     // Calculate the modulo manually, as modulo with negative operands is undefined
                     // behavior for many backends:
                     //   result = lhs - ((lhs / rhs_or_one) * rhs_or_one)
                     auto* whole = b.Divide(lhs, rhs_or_one);
                     auto* remainder = b.Subtract(lhs, b.Multiply(whole, rhs_or_one));
-                    b.Return(func, remainder->Result());
+                    b.Return(func, remainder);
                 }
             });
             return func;
@@ -162,8 +162,8 @@ struct State {
 
         /// Helper to splat a value to match the vector width of the result type if necessary.
         auto maybe_splat = [&](ir::Value* value) -> ir::Value* {
-            if (value->Type()->Is<type::Scalar>() && result_ty->Is<core::type::Vector>()) {
-                return b.Construct(result_ty, value)->Result();
+            if (value->Type()->Is<core::type::Scalar>() && result_ty->Is<core::type::Vector>()) {
+                return b.Construct(result_ty, value);
             }
             return value;
         };
@@ -183,9 +183,9 @@ struct State {
         auto* lhs = binary->LHS();
         auto* rhs = binary->RHS();
         auto mask = u32(lhs->Type()->DeepestElement()->Size() * 8 - 1);
-        auto* masked = b.And(rhs, b.MatchWidth(mask, rhs->Type()));
-        masked->InsertBefore(binary);
-        binary->SetOperand(ir::CoreBinary::kRhsOperandOffset, masked->Result());
+        Value* masked = nullptr;
+        b.InsertBefore(binary, [&] { masked = b.And(rhs, b.MatchWidth(mask, rhs->Type())); });
+        binary->SetOperand(ir::CoreBinary::kRhsOperandOffset, masked);
     }
 };
 

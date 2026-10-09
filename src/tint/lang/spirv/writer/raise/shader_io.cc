@@ -39,7 +39,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/transform/shader_io.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/spirv/builtin_fn.h"
 #include "src/tint/lang/spirv/ir/builtin_call.h"
 #include "src/tint/lang/spirv/type/image.h"
@@ -284,11 +284,11 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         // Load the input from the global variable declared earlier.
         auto* ptr = ty.ptr(core::AddressSpace::kIn, inputs[idx].type, core::Access::kRead);
         auto input_index = input_indices[idx];
-        auto* from = input_vars[input_index]->Result();
+        core::ir::Value* from = input_vars[input_index]->Result();
 
         // SampleMask becomes an array for SPIR-V, so load from the first element.
         if (inputs[idx].attributes.builtin == core::BuiltinValue::kSampleMask) {
-            from = builder.Access(ptr, input_vars[input_index], 0_u)->Result();
+            from = builder.Access(ptr, input_vars[input_index], 0_u);
         }
 
         core::ir::Value* value = builder.Load(from)->Result();
@@ -326,8 +326,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
                 for (uint32_t i = 0; i < width; ++i) {
                     indices.Push(i);
                 }
-                value =
-                    builder.Swizzle(ty.MatchWidth(sampled_ty, orig_ty), value, indices)->Result();
+                value = builder.Swizzle(ty.MatchWidth(sampled_ty, orig_ty), value, indices);
             }
         }
 
@@ -335,7 +334,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         bool should_convert_f16 =
             config.polyfill_f16_io || inputs[idx].attributes.color.has_value();
         if (should_convert_f16 && inputs[idx].type->DeepestElement()->Is<core::type::F16>()) {
-            value = builder.Convert(inputs[idx].type, value)->Result();
+            value = builder.Convert(inputs[idx].type, value);
         }
 
         if (inputs[idx].attributes.builtin == core::BuiltinValue::kPosition &&
@@ -367,10 +366,8 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
             // The expected value for component 'w' of 'FragCoord' is actually 1/w.
             auto* user_center_w = builder.Divide(1_f, interpolated_w);
 
-            auto* viewport_user_center_z =
-                ViewportMappedFragDepth(builder, user_center_z->Result());
-            value = builder.Construct(ty.vec4f(), plus_p5, viewport_user_center_z, user_center_w)
-                        ->Result();
+            auto* viewport_user_center_z = ViewportMappedFragDepth(builder, user_center_z);
+            value = builder.Construct(ty.vec4f(), plus_p5, viewport_user_center_z, user_center_w);
         }
 
         return value;
@@ -390,11 +387,11 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         // Store the output to the global variable declared earlier.
         auto& output = outputs[idx];
         auto* ptr = ty.ptr(core::AddressSpace::kOut, output.type, core::Access::kWrite);
-        auto* to = output_vars[idx]->Result();
+        core::ir::Value* to = output_vars[idx]->Result();
 
         // SampleMask becomes an array for SPIR-V, so store to the first element.
         if (output.attributes.builtin == core::BuiltinValue::kSampleMask) {
-            to = builder.Access(ptr, to, 0_u)->Result();
+            to = builder.Access(ptr, to, 0_u);
         }
 
         if (output.attributes.builtin == core::BuiltinValue::kPosition) {
@@ -414,7 +411,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
 
         // Convert f16 values to f32 values if needed.
         if (config.polyfill_f16_io && value->Type()->DeepestElement()->Is<core::type::F16>()) {
-            value = builder.Convert(to->Type()->UnwrapPtr(), value)->Result();
+            value = builder.Convert(to->Type()->UnwrapPtr(), value);
         }
 
         builder.Store(to, value);
@@ -426,20 +423,21 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
     /// @returns the clamped value
     core::ir::Value* ViewportMappedFragDepth(core::ir::Builder& builder,
                                              core::ir::Value* frag_depth) {
-        if (!config.depth_range_offsets) {
+        if (!config.immediate_data_layout.HasImmediate(core::InternalImmediate::kFragDepthMin) ||
+            !config.immediate_data_layout.HasImmediate(core::InternalImmediate::kFragDepthMax)) {
             return frag_depth;
         }
 
-        auto* immediate_data = config.immediate_data_layout.var;
-        auto min_idx = u32(config.immediate_data_layout.IndexOf(config.depth_range_offsets->min));
-        auto max_idx = u32(config.immediate_data_layout.IndexOf(config.depth_range_offsets->max));
-        auto* min = builder.Load(builder.Access<ptr<immediate, f32>>(immediate_data, min_idx));
-        auto* max = builder.Load(builder.Access<ptr<immediate, f32>>(immediate_data, max_idx));
+        auto* min =
+            config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMin);
+        auto* max =
+            config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMax);
+
         // Viewport remapping depth normalization equation.
         // https://www.w3.org/TR/webgpu/#coordinate-systems#:~:text=Viewport%20coordinates
         auto* max_minus_min = builder.Subtract(max, min);
         auto* rhs = builder.Multiply(max_minus_min, frag_depth);
-        return builder.Add(min, rhs)->Result();
+        return builder.Add(min, rhs);
     }
 
     /// Clamp a frag_depth builtin value if necessary.
@@ -447,16 +445,16 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
     /// @param frag_depth the incoming frag_depth value
     /// @returns the clamped value
     core::ir::Value* ClampFragDepth(core::ir::Builder& builder, core::ir::Value* frag_depth) {
-        if (!config.depth_range_offsets) {
+        if (!config.immediate_data_layout.HasImmediate(core::InternalImmediate::kFragDepthMin) ||
+            !config.immediate_data_layout.HasImmediate(core::InternalImmediate::kFragDepthMax)) {
             return frag_depth;
         }
 
-        auto* immediate_data = config.immediate_data_layout.var;
-        auto min_idx = u32(config.immediate_data_layout.IndexOf(config.depth_range_offsets->min));
-        auto max_idx = u32(config.immediate_data_layout.IndexOf(config.depth_range_offsets->max));
-        auto* min = builder.Load(builder.Access<ptr<immediate, f32>>(immediate_data, min_idx));
-        auto* max = builder.Load(builder.Access<ptr<immediate, f32>>(immediate_data, max_idx));
-        return builder.Clamp(frag_depth, min, max)->Result();
+        auto* min =
+            config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMin);
+        auto* max =
+            config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMax);
+        return builder.Clamp(frag_depth, min, max);
     }
 
     /// @copydoc ShaderIO::BackendState::NeedsVertexPointSize

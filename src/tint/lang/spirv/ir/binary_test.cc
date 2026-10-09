@@ -29,7 +29,7 @@
 
 #include "gtest/gtest.h"
 #include "src/tint/lang/core/ir/ir_helper_test.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 
 using namespace tint::core::fluent_types;  // NOLINT
 
@@ -45,7 +45,8 @@ TEST_F(IR_SpirvBinaryTest, Clone) {
 
     auto* lhs = b.Construct(ty, 2_i);
     auto* rhs = b.Construct(ty, 4_i);
-    auto* inst = b.Binary<spirv::ir::Binary>(core::BinaryOp::kAdd, ty, lhs, rhs);
+    auto* v = b.Binary<spirv::ir::Binary>(core::BinaryOp::kAdd, ty, lhs, rhs);
+    auto* inst = v->AsInstruction<spirv::ir::Binary>();
 
     auto* c = clone_ctx.Clone(inst);
 
