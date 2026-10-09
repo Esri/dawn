@@ -301,7 +301,8 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
     VkMemoryRequirements requirements;
     device->fn.GetBufferMemoryRequirements(device->GetVkDevice(), mHandle, &requirements);
 
-    dawn::WarningLog() << "Vulkan buffer allocation request: " << requirements.size << " bytes";
+    dawn::WarningLog() << "Vulkan buffer '" << GetLabel() << "' allocation request: "
+                       << requirements.size << " bytes";
     const auto& memoryHeaps = device->GetDeviceInfo().memoryHeaps;
     for (size_t i = 0; i < memoryHeaps.size(); ++i) {
         const VkMemoryHeap& heap = memoryHeaps[i];
@@ -328,8 +329,25 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
     const VkMemoryType& selectedMemoryType = device->GetDeviceInfo().memoryTypes[memoryType];
     const size_t heapIndex = selectedMemoryType.heapIndex;
     const VkMemoryHeap& selectedHeap = device->GetDeviceInfo().memoryHeaps[heapIndex];
-    dawn::WarningLog() << "Vulkan buffer selected memory type " << memoryType << " (heap "
-                       << heapIndex << ") with heap capacity " << selectedHeap.size << " bytes";
+    dawn::WarningLog() << "Vulkan buffer '" << GetLabel() << "' selected memory type "
+                       << memoryType << " (heap " << heapIndex << ") with heap capacity "
+                       << selectedHeap.size << " bytes";
+    dawn::WarningLog()
+        << "Vulkan buffer '" << GetLabel() << "' memory type properties: deviceLocal="
+        << ((selectedMemoryType.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) ? "yes" : "no")
+        << ", hostVisible="
+        << ((selectedMemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ? "yes" : "no")
+        << ", hostCoherent="
+        << ((selectedMemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) ? "yes" : "no")
+        << ", hostCached="
+        << ((selectedMemoryType.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) ? "yes" : "no")
+        << ", lazilyAllocated="
+        << ((selectedMemoryType.propertyFlags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) ? "yes"
+                                                                                         : "no")
+        << "; heap flags: deviceLocal="
+        << ((selectedHeap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) ? "yes" : "no")
+        << ", multiInstance="
+        << ((selectedHeap.flags & VK_MEMORY_HEAP_MULTI_INSTANCE_BIT) ? "yes" : "no");
     const VkMemoryPropertyFlags memoryPropertyFlags =
         selectedMemoryType.propertyFlags;
     mHostVisible = IsSubset(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, memoryPropertyFlags);
