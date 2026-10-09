@@ -135,7 +135,7 @@ MaybeError Buffer::Initialize(bool mappedAtCreation) {
         auto scopedUseDuringCreation = UseInternal();
         CommandRecordingContext* commandContext =
             ToBackend(GetDevice()->GetQueue())->GetPendingCommandContext();
-        ClearBuffer(commandContext, uint8_t(1u));
+        ClearBuffer(commandContext, uint8_t{1});
     }
 
     // Initialize the padding bytes to zero.
@@ -165,9 +165,9 @@ MaybeError Buffer::InitializeHostMapped(const BufferHostMappedPointer* hostMappe
     Ref<DeviceBase> deviceRef = GetDevice();
     wgpu::Callback callback = hostMappedDesc->disposeCallback;
     void* userdata = hostMappedDesc->userdata;
-    auto dispose = ^(void*, NSUInteger) {
+    auto dispose = [deviceRef, callback, userdata](void*, NSUInteger) {
         deviceRef->GetCallbackTaskManager()->AddCallbackTask(
-            [callback, userdata] { callback(userdata); });
+            [callback, userdata]() { callback(userdata); });
     };
 
     mMtlBuffer.Acquire([ToBackend(GetDevice())->GetMTLDevice()
@@ -177,7 +177,7 @@ MaybeError Buffer::InitializeHostMapped(const BufferHostMappedPointer* hostMappe
                      deallocator:dispose]);
     if (mMtlBuffer == nil) {
         dispose(hostMappedDesc->pointer, GetSize());
-        return DAWN_INTERNAL_ERROR("Buffer allocation failed");
+        return DAWN_UNRECOVERABLE_ERROR("Buffer allocation failed");
     }
 
     // Data is assumed to be initialized since it is externally allocated.
@@ -210,16 +210,18 @@ MaybeError Buffer::FinalizeMapImpl(BufferState newState) {
     // The real mapped pointer is never returned for zero sized buffers. MappedAtCreation buffers
     // are initialized in BufferBase already.
     if (NeedsInitialization() && GetSize() > 0 && newState == BufferState::Mapped) {
-        // TODO(https://crbug.com/501491697): Spanify GetMappedPointerImpl.
-        DAWN_UNSAFE_TODO(std::memset(GetMappedPointerImpl(), 0, GetAllocatedSize()));
+        std::ranges::fill(GetMappedRangeImpl(0, GetAllocatedSize()), std::byte(0u));
         GetDevice()->IncrementLazyClearCountForTesting();
         SetInitialized(true);
     }
     return {};
 }
 
-void* Buffer::GetMappedPointerImpl() {
-    return [*mMtlBuffer contents];
+Span<std::byte> Buffer::GetMappedRangeImpl(size_t offset, size_t size) {
+    // SAFETY: For mappable buffers, MTLBuffer::contents points at MTLBuffer::length valid bytes.
+    Span<std::byte> wholeRange = DAWN_UNSAFE_BUFFERS(
+        {static_cast<std::byte*>([*mMtlBuffer contents]), [*mMtlBuffer length]});
+    return wholeRange.subspan(offset, size);
 }
 
 void Buffer::UnmapImpl(BufferState oldState, BufferState newState) {
@@ -285,7 +287,7 @@ bool Buffer::EnsureDataInitializedAsDestination(CommandRecordingContext* command
 void Buffer::InitializeToZero(CommandRecordingContext* commandContext) {
     DAWN_ASSERT(NeedsInitialization());
 
-    ClearBuffer(commandContext, uint8_t(0u));
+    ClearBuffer(commandContext, uint8_t{0});
 
     SetInitialized(true);
     GetDevice()->IncrementLazyClearCountForTesting();

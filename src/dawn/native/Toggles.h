@@ -68,7 +68,6 @@ enum class Toggle {
     DisableRobustness,
     MetalEnableVertexPulling,
     AllowUnsafeAPIs,
-    AllowExperimentalSnorm10_10_10_2,
     FlushBeforeClientWaitSync,
     UseTempBufferInSmallFormatTextureToTextureCopyFromGreaterToLessMipLevel,
     EmitHLSLDebugSymbols,
@@ -124,11 +123,16 @@ enum class Toggle {
     UseBlitForRGB9E5UfloatTextureCopy,
     UseBlitForRG11B10UfloatTextureCopy,
     UseBlitForFloat16TextureCopy,
-    UseBlitForFloat32TextureCopy,
     UseBlitForT2B,
     UseBlitForB2T,
+    UseBlitForNonRGBAUnormTextureToBufferCopy,
+    UseBlitForNonRGBAFloatTextureToBufferCopy,
+    UseBlitForUintTextureToBufferCopy,
+    UseBlitForSintTextureToBufferCopy,
     VulkanSplitBufferTextureCopyForArrayLayers,
-    GLUseArrayLengthFromUniform,
+    VulkanForceAlphaWriteForAlphaToCoverage,
+    SplitBufferTextureCopyForOversizedRow,
+    GLUseArrayLengthFromImmediate,
     D3D11DisableCPUUploadBuffers,
     UseT2B2TForSRGBTextureCopy,
     D3D12ReplaceAddWithMinusWhenDstFactorIsZeroAndSrcFactorIsDstAlpha,
@@ -178,9 +182,10 @@ enum class Toggle {
     MetalUseArgumentBuffers,
     EnableShaderPrint,
     BlobCacheHashValidation,
-    DecomposeUniformBuffers,
     D3D12DecomposeWorkgroupAccess,
+    D3D12PolyfillF16CeilFloor,
     CollapseSubgroupMinMax,
+    D3D12ForceEnableSubgroupMatrixOnBuggyIntelDrivers,
     VulkanEnableF16OnNvidia,
     EnableRenderDocProcessInjection,
     VulkanUseDynamicRendering,
@@ -197,6 +202,10 @@ enum class Toggle {
     UseSpirvReconvergenceMode,
     VulkanReplaceWorkgroupAtomicStoreWithExchange,
     VulkanDisallowNPOTDepthStencilMipmaps,
+    VulkanReplaceUnsignedCompareZero,
+    VulkanUseCooperativeMatrixRobustBufferAccess,
+    MetalEnableTensors,
+    AllowAlphaToCoverageNotBlendable,
 
     // Once all backends have been updated to be thread safe for waiting, we can remove this toggle.
     WaitIsThreadSafe,
@@ -222,15 +231,8 @@ enum class Toggle {
     GLDefer,
     DisableTransientAttachment,
     AutoMapBackendBuffer,
-    MetalPolyfillBoolVecDynamicStore,
-
-    // Some toggles so we can toggle this without recompilation.
-    #if defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
-    RTCPreferVulkanOverDirectX,
-    #endif // defined(RTC_DAWN_PREFER_VULKAN_OVER_DIRECTX)
-    #if defined(RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
-    RTCAllowDXCToFXCFallback,
-    #endif // defined(RTC_DAWN_ALLOW_DXC_TO_FXC_FALLBACK)
+    PolyfillBoolVecDynamicStore,
+    VulkanRelaxMaxInterStageShaderVariables,
 
     EnumCount,
     InvalidEnum = EnumCount,

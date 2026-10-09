@@ -311,7 +311,7 @@ MaybeError MapBufferAndWriteTextureData(CaptureContext::ScopedContentWriter& wri
     DAWN_ASSERT(mapAsyncResult.status == WGPUMapAsyncStatus_Success);
 
     if (mapAsyncResult.status != WGPUMapAsyncStatus_Success) {
-        return DAWN_INTERNAL_ERROR(mapAsyncResult.message);
+        return DAWN_UNRECOVERABLE_ERROR(mapAsyncResult.message);
     }
 
     // We only write out the beginning of each row, the rest is padding.
@@ -375,7 +375,7 @@ MaybeError Texture::CaptureContentIfNeeded(CaptureContext& captureContext,
         for (uint32_t mipLevel = 0; mipLevel < GetNumMipLevels(); ++mipLevel) {
             auto size = TexelExtent3D(GetMipLevelSubresourcePhysicalSize(mipLevel, aspect));
             auto blockSize = blockInfo.ToBlock(size);
-            uint32_t usedBytesPerRow = uint32_t(blockInfo.ToBytes(blockSize.width));
+            uint32_t usedBytesPerRow = checked_cast<uint32_t>(blockInfo.ToBytes(blockSize.width));
             size_t mappableBytesPerRow = checked_cast<size_t>(RoundUp(usedBytesPerRow, 4));
 
             schema::RootCommandInitTextureCmd cmd{{

@@ -36,7 +36,7 @@ namespace dawn {
 namespace {
 
 // Clear the content of the result buffer into 0xFFFFFFFF.
-constexpr static uint64_t kSentinelValue = ~uint64_t(0u);
+constexpr static uint64_t kSentinelValue = ~uint64_t{0};
 constexpr static uint64_t kZero = 0u;
 constexpr static unsigned int kRTSize = 4;
 constexpr uint64_t kMinDestinationOffset = kQueryResolveAlignment;
@@ -753,8 +753,6 @@ class TimestampQueryTestsBase : public QueryTests {
     void SetUp() override {
         QueryTests::SetUp();
 
-        // TODO(crbug.com/458607667): Timestamp tests are flaky on WARP.
-        DAWN_SUPPRESS_TEST_IF(IsWARP());
 
         // TODO(crbug.com/451389800): [Capture] implement query set.
         DAWN_SUPPRESS_TEST_IF(IsCaptureReplayCheckingEnabled());

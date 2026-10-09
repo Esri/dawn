@@ -83,8 +83,8 @@ class TestCache final : public LRUCache<CacheKey, CacheValue, CacheFuncs> {
         return result.AcquireSuccess();
     }
 
-    static Result<CacheValue, ErrorData> CreateFn(const CacheKey& key) {
-        DAWN_INTERNAL_ERROR_IF(key.mIsError, "CacheKey was an error key");
+    static Result<CacheValue, UnrecoverableError> CreateFn(const CacheKey& key) {
+        DAWN_UNRECOVERABLE_ERROR_IF(key.mIsError, "CacheKey was an error key");
         return CacheValue(key.mValue);
     }
 };
@@ -135,7 +135,7 @@ TEST(LRUCache, Basic) {
 TEST(LRUCache, CacheEviction) {
     TestCache cache;
 
-    std::array<uint32_t, TestCache::kDefaultCapacity> keyIds;
+    std::array<uint32_t, TestCache::kDefaultCapacity> keyIds{};
     // Fill the cache with values.
     for (uint32_t i = 0; i < TestCache::kDefaultCapacity; ++i) {
         CacheKey key(i);
@@ -180,7 +180,7 @@ TEST(LRUCache, CacheEviction) {
 TEST(LRUCache, CacheClear) {
     TestCache cache;
 
-    std::array<uint32_t, TestCache::kDefaultCapacity> keyIds;
+    std::array<uint32_t, TestCache::kDefaultCapacity> keyIds{};
     // Fill the cache with values.
     for (uint32_t i = 0; i < TestCache::kDefaultCapacity; ++i) {
         CacheKey key(i);

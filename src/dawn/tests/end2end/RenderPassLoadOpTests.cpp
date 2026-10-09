@@ -321,8 +321,8 @@ TEST_P(RenderPassLoadOpTests, LoadOpClearIntegerFormatsOutOfBound_Uint8) {
 // Test clearing a color attachment on Sint8 formats (R8Sint, RG8Sint, RGBA8Sint) when the clear
 // values are out of bound.
 TEST_P(RenderPassLoadOpTests, LoadOpClearIntegerFormatsOutOfBound_Sint8) {
-    constexpr int16_t kSint8Max = std::numeric_limits<int8_t>::max();
-    constexpr int16_t kSint8Min = std::numeric_limits<int8_t>::min();
+    constexpr int16_t kSint8Max{std::numeric_limits<int8_t>::max()};
+    constexpr int16_t kSint8Min{std::numeric_limits<int8_t>::min()};
 
     using TestCase = std::tuple<wgpu::TextureFormat, wgpu::Color, std::array<int8_t, 4>>;
     constexpr std::array<TestCase, 7> kTestCases = {{
@@ -501,7 +501,7 @@ TEST_P(RenderPassLoadOpTests, LoadOpClearWithBig32BitIntegralValuesOnMultipleCol
     std::array<float, 4> testColorForRGBA32Float = {
         kMaxUInt32RepresentableInFloat, kMaxUInt32RepresentableInFloat - 1,
         kMaxUInt32RepresentableInFloat - 2, kMaxUInt32RepresentableInFloat - 3};
-    std::array<uint32_t, 4> expectedDataForRGBA32Float;
+    std::array<uint32_t, 4> expectedDataForRGBA32Float{};
     for (uint32_t i = 0; i < expectedDataForRGBA32Float.size(); ++i) {
         expectedDataForRGBA32Float[i] = std::bit_cast<uint32_t>(testColorForRGBA32Float[i]);
     }
@@ -532,9 +532,9 @@ TEST_P(RenderPassLoadOpTests, LoadOpClearWithBig32BitIntegralValuesOnMultipleCol
             return attachmentCase;
         }
 
-        wgpu::TextureFormat mFormat;
-        wgpu::Color mClearValue;
-        uint8_t mExpData[16];
+        wgpu::TextureFormat mFormat{};
+        wgpu::Color mClearValue{};
+        uint8_t mExpData[16]{};
     };
     using TestCase = std::vector<AttachmentCase>;
     // Test cases are split so that the attachments in each case do not exceed the default

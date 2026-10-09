@@ -33,6 +33,7 @@
 #include "src/dawn/native/Instance.h"
 #include "src/dawn/native/metal/BackendMTL.h"
 #include "src/dawn/native/metal/DeviceMTL.h"
+#include "src/dawn/native/metal/ImmediatesLayoutMTL.h"
 #include "src/dawn/native/metal/ShaderModuleMTL.h"
 #include "src/dawn/native/metal/UtilsMetal.h"
 #include "src/dawn/platform/metrics/HistogramMacros.h"
@@ -58,6 +59,9 @@ ResultOrError<Extent3D> ComputePipeline::InitializeImpl() {
     const ProgrammableStage& computeStage = GetStage(SingleShaderStage::Compute);
     ShaderModule::MetalFunctionData computeData;
 
+    mImmediateMask |= GetImmediateBlockBits(offsetof(ComputeImmediates, nonConstantZero),
+                                            sizeof(NonConstantZero));
+
     DAWN_TRY(ToBackend(computeStage.module.Get())
                  ->CreateFunction(SingleShaderStage::Compute, computeStage, ToBackend(GetLayout()),
                                   GetImmediateMask(), &computeData,
@@ -80,18 +84,18 @@ ResultOrError<Extent3D> ComputePipeline::InitializeImpl() {
                                    reflection:nil
                                         error:&error]);
     if (error != nullptr) {
-        return DAWN_INTERNAL_ERROR("Error creating pipeline state " +
-                                   std::string([error.localizedDescription UTF8String]));
+        return DAWN_PIPELINE_UNCATEGORIZED_ERROR(
+            "Error creating pipeline state %s",
+            std::string([error.localizedDescription UTF8String]));
     }
     DAWN_ASSERT(mMtlComputePipelineState != nil);
     timer.RecordMicroseconds("Metal.newComputePipelineStateWithDescriptor.CacheMiss");
 
-    mRequiresStorageBufferLength = computeData.needsStorageBufferLength;
     mWorkgroupAllocations = std::move(computeData.workgroupAllocations);
 
-    return {{uint32_t(computeData.localWorkgroupSize.width),
-             uint32_t(computeData.localWorkgroupSize.height),
-             uint32_t(computeData.localWorkgroupSize.depth)}};
+    return {{checked_cast<uint32_t>(computeData.localWorkgroupSize.width),
+             checked_cast<uint32_t>(computeData.localWorkgroupSize.height),
+             checked_cast<uint32_t>(computeData.localWorkgroupSize.depth)}};
 }
 
 void ComputePipeline::Encode(id<MTLComputeCommandEncoder> encoder) {
@@ -108,10 +112,6 @@ void ComputePipeline::Encode(id<MTLComputeCommandEncoder> encoder) {
 
 MTLSize ComputePipeline::GetLocalWorkGroupSize() const {
     return ToMTLSize(GetWorkgroupSize());
-}
-
-bool ComputePipeline::RequiresStorageBufferLength() const {
-    return mRequiresStorageBufferLength;
 }
 
 }  // namespace dawn::native::metal

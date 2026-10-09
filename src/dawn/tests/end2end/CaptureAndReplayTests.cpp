@@ -516,7 +516,8 @@ TEST_P(CaptureAndReplayTests, CaptureWithMapRead) {
     // does not have CopySrc. So, let's do it ourselves.
     MapAsyncAndWait(dstBuffer, wgpu::MapMode::Read, 0, sizeof(myData));
     auto actual = static_cast<const uint8_t*>(dstBuffer.GetConstMappedRange(0, sizeof(myData)));
-    std::span<const uint8_t> actual_span(actual, std::size(myData));
+    std::span<const uint8_t> actual_span =
+        DAWN_UNSAFE_TODO(std::span<const uint8_t>(actual, std::size(myData)));
     ASSERT_THAT(actual_span, ::testing::ElementsAreArray(myData));
 }
 
@@ -1583,7 +1584,7 @@ TEST_P(CaptureAndReplayTests, CaptureDepthRenderPass) {
     // We just expect no errors.
 }
 
-constexpr static uint64_t kSentinelValue = ~uint64_t(0u);
+constexpr static uint64_t kSentinelValue = ~uint64_t{0};
 class OcclusionExpectation : public detail::Expectation {
   public:
     enum class Result { Zero, NonZero };
@@ -2271,10 +2272,6 @@ TEST_P(CaptureAndReplayTests, MappedBufferDestroyed) {
 // put values in it via render pass. Then capture it in an empty render pass.
 // On replay we read the values via a compute shader.
 TEST_P(CaptureAndReplayTests, CaptureDepth24Plus) {
-    // TODO(477645283): This fails only on WARP and after it fails, all following tests
-    // fail to create a device.
-    DAWN_SUPPRESS_TEST_IF(IsWARP());
-
     constexpr uint32_t kNumLayers = 6;
     auto [cPipeline, commands] = [&]() {
         wgpu::Texture texture = CreateTexture(
@@ -2406,7 +2403,7 @@ TEST_P(CaptureAndReplayTests, CaptureDepth24Plus) {
         queue.Submit(1, &replayCommands);
     }
 
-    std::array<float, kNumLayers> expected;
+    std::array<float, kNumLayers> expected{};
     for (uint32_t i = 0; i < kNumLayers; ++i) {
         DAWN_UNSAFE_TODO(expected[i]) = (i + 0.5f) / 6.f;
     }
@@ -2783,7 +2780,6 @@ class CaptureAndReplaySurfaceTests : public CaptureAndReplayTests {
 
         mWindow.reset();
         mReplayWindow.reset();
-        glfwTerminate();
     }
 
     // Creates a window for a replay surface. DXGI only allows one flip-model swapchain per HWND at
@@ -2801,8 +2797,6 @@ class CaptureAndReplaySurfaceTests : public CaptureAndReplayTests {
 };
 
 TEST_P(CaptureAndReplaySurfaceTests, TestSurface) {
-    DAWN_SUPPRESS_TEST_IF(IsWARP());
-
     wgpu::Surface surface = wgpu::glfw::CreateSurfaceForWindow(instance, mWindow.get());
     surface.SetLabel("mySurface");
 
@@ -2850,8 +2844,6 @@ TEST_P(CaptureAndReplaySurfaceTests, TestSurface) {
 }
 
 TEST_P(CaptureAndReplaySurfaceTests, MultiFrame) {
-    DAWN_SUPPRESS_TEST_IF(IsWARP());
-
     wgpu::Surface surface = wgpu::glfw::CreateSurfaceForWindow(instance, mWindow.get());
     surface.SetLabel("mySurface");
 

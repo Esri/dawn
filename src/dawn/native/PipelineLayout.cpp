@@ -51,7 +51,7 @@
 
 namespace dawn::native {
 
-ResultOrError<UnpackedPtr<PipelineLayoutDescriptor>> ValidatePipelineLayoutDescriptor(
+ResultOrValError<UnpackedPtr<PipelineLayoutDescriptor>> ValidatePipelineLayoutDescriptor(
     DeviceBase* device,
     const PipelineLayoutDescriptor* descriptor,
     PipelineCompatibilityToken pipelineCompatibilityToken) {
@@ -103,14 +103,14 @@ ResultOrError<UnpackedPtr<PipelineLayoutDescriptor>> ValidatePipelineLayoutDescr
 
     // Validation for the bind group layouts.
     if (usesResourceTable) {
-        DAWN_INVALID_IF(descriptor->bindGroupLayouts.size() >= kMaxBindGroupsTyped,
+        DAWN_INVALID_IF(descriptor->bindGroupLayouts.untyped_size() >= kMaxBindGroups,
                         "bindGroupLayoutCount (%i) + 1 for the resource table is larger than the "
                         "maximum allowed (%i).",
-                        descriptor->bindGroupLayouts.size(), kMaxBindGroups);
+                        descriptor->bindGroupLayouts.untyped_size(), kMaxBindGroups);
     } else {
-        DAWN_INVALID_IF(descriptor->bindGroupLayouts.size() > kMaxBindGroupsTyped,
+        DAWN_INVALID_IF(descriptor->bindGroupLayouts.untyped_size() > kMaxBindGroups,
                         "bindGroupLayoutCount (%i) is larger than the maximum allowed (%i).",
-                        descriptor->bindGroupLayouts.size(), kMaxBindGroups);
+                        descriptor->bindGroupLayouts.untyped_size(), kMaxBindGroups);
     }
 
     for (auto [i, bgl] : Enumerate(descriptor->bindGroupLayouts)) {
@@ -221,7 +221,7 @@ Ref<PipelineLayoutBase> PipelineLayoutBase::MakeError(DeviceBase* device, String
 namespace {
 
 // Helper function used to merge multiple TextureSampleTypes for the same binding together.
-ResultOrError<wgpu::TextureSampleType> MostSpecificSampleTypeIfCompatible(
+ResultOrValError<wgpu::TextureSampleType> MostSpecificSampleTypeIfCompatible(
     wgpu::TextureSampleType a,
     wgpu::TextureSampleType b) {
     if (a == b) {
@@ -244,7 +244,7 @@ ResultOrError<wgpu::TextureSampleType> MostSpecificSampleTypeIfCompatible(
 }
 
 // Helper function used to merge multiple SamplerBindingType for the same binding together.
-ResultOrError<wgpu::SamplerBindingType> MostSpecificSamplerTypeIfCompatible(
+ResultOrValError<wgpu::SamplerBindingType> MostSpecificSamplerTypeIfCompatible(
     wgpu::SamplerBindingType a,
     wgpu::SamplerBindingType b) {
     if (a == b) {
@@ -266,8 +266,8 @@ ResultOrError<wgpu::SamplerBindingType> MostSpecificSamplerTypeIfCompatible(
 }
 
 // Merges two entries at the same location, if they are allowed to be merged.
-MaybeError MergeEntries(BindGroupLayoutEntry* modifiedEntry,
-                        const BindGroupLayoutEntry& mergedEntry) {
+MaybeValError MergeEntries(BindGroupLayoutEntry* modifiedEntry,
+                           const BindGroupLayoutEntry& mergedEntry) {
     DAWN_CHECK(modifiedEntry->binding == mergedEntry.binding);
 
     BindingInfoType modifiedType = GetBindingInfoType(modifiedEntry);
@@ -353,7 +353,7 @@ BindGroupLayoutEntry ConvertMetadataToEntry(
     const ShaderBindingInfo& shaderBinding,
     const ExternalTextureBindingLayout* externalTextureBindingEntry) {
     BindGroupLayoutEntry entry = {};
-    entry.bindingArraySize = uint32_t(shaderBinding.arraySize);
+    entry.bindingArraySize = uint32_t{shaderBinding.arraySize};
 
     MatchVariant(
         shaderBinding.bindingInfo,
@@ -556,7 +556,7 @@ ResultOrError<Ref<PipelineLayoutBase>> PipelineLayoutBase::CreateDefault(
                 // Create the BindGroupLayoutEntry
                 BindGroupLayoutEntry entry = ConvertMetadataToEntry(
                     texelBufferLayouts, shaderBinding, &externalTextureBindingLayout);
-                entry.binding = uint32_t(bindingNumber);
+                entry.binding = uint32_t{bindingNumber};
                 entry.visibility = StageBit(stage.shaderStage);
 
                 // Add it to our map of all entries, if there is an existing entry, then we

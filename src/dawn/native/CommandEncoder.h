@@ -33,6 +33,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "partition_alloc/pointers/raw_ptr.h"
+#include "partition_alloc/pointers/raw_ptr_exclusion.h"
 #include "src/dawn/common/StackAllocated.h"
 #include "src/dawn/native/EncodingContext.h"
 #include "src/dawn/native/Error.h"
@@ -47,7 +48,7 @@ enum class UsageValidationMode;
 
 Color ClampClearColorValueToLegalRange(const Color& originalColor, const Format& format);
 
-ResultOrError<UnpackedPtr<CommandEncoderDescriptor>> ValidateCommandEncoderDescriptor(
+ResultOrValError<UnpackedPtr<CommandEncoderDescriptor>> ValidateCommandEncoderDescriptor(
     const DeviceBase* device,
     const CommandEncoderDescriptor* descriptor);
 
@@ -88,10 +89,10 @@ class CommandEncoder final : public ApiObjectBase {
     void APICopyTextureToTexture(const TexelCopyTextureInfo* source,
                                  const TexelCopyTextureInfo* destination,
                                  const Extent3D* copySize);
-    void APIClearBuffer(BufferBase* destination, uint64_t destinationOffset, uint64_t size);
+    void APIClearBuffer(BufferBase* buffer, uint64_t offset, uint64_t size);
 
     void APIInjectValidationError(StringView message);
-    void APIInsertDebugMarker(StringView groupLabel);
+    void APIInsertDebugMarker(StringView marker);
     void APIPopDebugGroup();
     void APIPushDebugGroup(StringView groupLabel);
 
@@ -128,19 +129,21 @@ class CommandEncoder final : public ApiObjectBase {
 
     [[nodiscard]] InternalUsageScope MakeInternalUsageScope();
 
-
   private:
     CommandEncoder(DeviceBase* device, const UnpackedPtr<CommandEncoderDescriptor>& descriptor);
     CommandEncoder(DeviceBase* device, ObjectBase::ErrorTag tag, StringView label);
 
     void DestroyImpl(DestroyReason reason) override;
 
-    MaybeError ValidateFinish() const;
+    MaybeValError ValidateFinish() const;
 
     EncodingContext mEncodingContext;
-    absl::flat_hash_set<BufferBase*> mTopLevelBuffers;
-    absl::flat_hash_set<TextureBase*> mTopLevelTextures;
-    absl::flat_hash_set<QuerySetBase*> mUsedQuerySets;
+    // NOTE: these are hot (populated on every copy command) and are moved into
+    // CommandBufferResourceUsage, so they are intentionally left as raw pointers instead of
+    // raw_ptr<T>. See b/551978862.
+    RAW_PTR_EXCLUSION absl::flat_hash_set<BufferBase*> mTopLevelBuffers;
+    RAW_PTR_EXCLUSION absl::flat_hash_set<TextureBase*> mTopLevelTextures;
+    RAW_PTR_EXCLUSION absl::flat_hash_set<QuerySetBase*> mUsedQuerySets;
 
     uint64_t mDebugGroupStackSize = 0;
 

@@ -32,7 +32,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/transform/shader_io.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
@@ -218,7 +218,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         auto index = input_indices[idx];
         auto* param = input_params[index.param_index];
         if (param->Type()->Is<core::type::Struct>()) {
-            return builder.Access(inputs[idx].type, param, u32(index.member_index))->Result();
+            return builder.Access(inputs[idx].type, param, u32(index.member_index));
         } else {
             return param;
         }
@@ -231,7 +231,7 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
         // If this a sample mask builtin, combine with the fixed sample mask if provided.
         if (config.fixed_sample_mask != UINT32_MAX &&
             output.attributes.builtin == core::BuiltinValue::kSampleMask) {
-            value = builder.And(value, u32(config.fixed_sample_mask))->Result();
+            value = builder.And(value, u32(config.fixed_sample_mask));
         }
 
         // Clamp frag_depth values if necessary.
@@ -302,16 +302,16 @@ struct StateImpl : core::ir::transform::ShaderIOBackendState {
     /// @param frag_depth the incoming frag_depth value
     /// @returns the clamped value
     core::ir::Value* ClampFragDepth(core::ir::Builder& builder, core::ir::Value* frag_depth) {
-        if (!config.depth_range_offsets) {
+        if (!config.immediate_data_layout.HasImmediate(core::InternalImmediate::kFragDepthMin) ||
+            !config.immediate_data_layout.HasImmediate(core::InternalImmediate::kFragDepthMax)) {
             return frag_depth;
         }
 
-        auto* immediate_data = config.immediate_data_layout.var;
-        auto min_idx = u32(config.immediate_data_layout.IndexOf(config.depth_range_offsets->min));
-        auto max_idx = u32(config.immediate_data_layout.IndexOf(config.depth_range_offsets->max));
-        auto* min = builder.Load(builder.Access<ptr<immediate, f32>>(immediate_data, min_idx));
-        auto* max = builder.Load(builder.Access<ptr<immediate, f32>>(immediate_data, max_idx));
-        return builder.Clamp(frag_depth, min, max)->Result();
+        auto* min =
+            config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMin);
+        auto* max =
+            config.immediate_data_layout.GetValue(builder, core::InternalImmediate::kFragDepthMax);
+        return builder.Clamp(frag_depth, min, max);
     }
 };
 

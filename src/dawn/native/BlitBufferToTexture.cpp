@@ -41,7 +41,7 @@
 #include "src/dawn/native/Queue.h"
 #include "src/dawn/native/RenderPassEncoder.h"
 #include "src/dawn/native/RenderPipeline.h"
-#include "src/dawn/native/utils/WGPUHelpers.h"
+#include "src/dawn/native/utils/NativeHelpers.h"
 #include "src/utils/assert.h"
 
 namespace dawn::native {
@@ -467,7 +467,7 @@ MaybeError BlitBufferToTexture(DeviceBase* device,
             DAWN_TRY_ASSIGN(paramsBuffer,
                             device->GetOrCreateTemporaryUniformBuffer(sizeof(uint32_t) * 4));
 
-            std::array<uint32_t, 4> params;
+            std::array<uint32_t, 4> params{};
             params[0] = shaderReadOffset;
             params[1] = src.bytesPerRow;
             params[2] = dchecked_cast<uint32_t>(dst.origin.x);

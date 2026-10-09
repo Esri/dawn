@@ -88,6 +88,8 @@ struct FuzzedOptions {
     bool polyfill_distance_scalar_float;
     bool collapse_subgroup_min_max;
     bool replace_workgroup_atomic_store_with_exchange;
+    bool replace_unsigned_compare_zero;
+    bool polyfill_bool_vec_dynamic_store;
 
     /// Reflect the fields of this class so that it can be used by tint::ForeachField()
     TINT_REFLECT(FuzzedOptions,
@@ -125,7 +127,9 @@ struct FuzzedOptions {
                  polyfill_length_scalar_float,
                  polyfill_distance_scalar_float,
                  collapse_subgroup_min_max,
-                 replace_workgroup_atomic_store_with_exchange);
+                 replace_workgroup_atomic_store_with_exchange,
+                 replace_unsigned_compare_zero,
+                 polyfill_bool_vec_dynamic_store);
     TINT_REFLECT_HASH_CODE(FuzzedOptions);
 };
 
@@ -355,6 +359,10 @@ Result<SuccessType> IRFuzzer(core::ir::Module& module,
     options.workarounds.collapse_subgroup_min_max = fuzzed_options.collapse_subgroup_min_max;
     options.workarounds.replace_workgroup_atomic_store_with_exchange =
         fuzzed_options.replace_workgroup_atomic_store_with_exchange;
+    options.workarounds.replace_unsigned_compare_zero =
+        fuzzed_options.replace_unsigned_compare_zero;
+    options.workarounds.polyfill_bool_vec_dynamic_store =
+        fuzzed_options.polyfill_bool_vec_dynamic_store;
     options.multisampled_framebuffer_fetch = fuzzed_options.multisampled_framebuffer_fetch;
 
     TINT_CHECK_RESULT_UNWRAP(output, Generate(module, options));

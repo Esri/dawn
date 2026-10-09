@@ -35,7 +35,6 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "partition_alloc/pointers/raw_ptr.h"
-#include "src/dawn/common/Atomic.h"
 #include "src/dawn/common/ityp_array.h"
 #include "src/dawn/native/Buffer.h"
 #include "src/dawn/native/d3d/d3d_platform.h"
@@ -76,8 +75,7 @@ class Buffer : public BufferBase {
                      uint64_t size);
     MaybeError Write(const ScopedCommandRecordingContext* commandContext,
                      uint64_t offset,
-                     const void* data,
-                     size_t size);
+                     Span<const std::byte> data);
 
     static MaybeError Copy(const ScopedCommandRecordingContext* commandContext,
                            Buffer* source,
@@ -110,8 +108,7 @@ class Buffer : public BufferBase {
     // Write the buffer without checking if the buffer is initialized.
     virtual MaybeError WriteInternal(const ScopedCommandRecordingContext* commandContext,
                                      uint64_t bufferOffset,
-                                     const void* data,
-                                     size_t size,
+                                     Span<const std::byte> data,
                                      bool isInitialWrite) = 0;
     // Copy this buffer to the destination without checking if the buffer is initialized.
     virtual MaybeError CopyToInternal(const ScopedCommandRecordingContext* commandContext,
@@ -129,7 +126,7 @@ class Buffer : public BufferBase {
     class ScopedMap : public NonCopyable {
       public:
         // Map buffer and return a ScopedMap object. If the buffer is not mappable,
-        // scopedMap.GetMappedData() will return nullptr.
+        // scopedMap.GetMappedData() will return an empty span.
         static ResultOrError<ScopedMap> Create(const ScopedCommandRecordingContext* commandContext,
                                                Buffer* buffer,
                                                wgpu::MapMode mode);
@@ -140,7 +137,7 @@ class Buffer : public BufferBase {
         ScopedMap(ScopedMap&& other);
         ScopedMap& operator=(ScopedMap&& other);
 
-        uint8_t* GetMappedData() const;
+        Span<std::byte> GetMappedData() const;
 
         void Reset();
 
@@ -182,8 +179,7 @@ class Buffer : public BufferBase {
 
     virtual ComPtr<ID3D11Buffer> GetD3D11MappedBuffer();
 
-    // TODO(https://crbug.com/501491697): Spanify this.
-    Atomic<uint8_t*, std::memory_order::relaxed> mMappedData{nullptr};
+    RawSpan<std::byte> mMappedData;
 
   private:
     MaybeError Initialize(bool mappedAtCreation,
@@ -193,7 +189,7 @@ class Buffer : public BufferBase {
     void UnmapImpl(BufferState oldState, BufferState newState) override;
     bool IsCPUWritableAtCreation() const override;
     MaybeError MapAtCreationImpl() override;
-    void* GetMappedPointerImpl() override;
+    Span<std::byte> GetMappedRangeImpl(size_t offset, size_t size) override;
     std::optional<DeviceGuard> UseDeviceGuardForDestroy() override;
 
     MaybeError InitializeToZero(const ScopedCommandRecordingContext* commandContext);
@@ -205,7 +201,7 @@ class Buffer : public BufferBase {
     // Track whether padding bytes have been cleared to zero.
     bool mPaddingCleared = false;
     // Temporary storage for MapAtCreation when the lock cannot be acquired.
-    HeapArray<uint8_t> mMapAtCreationData;
+    HeapArray<std::byte> mMapAtCreationData;
 
     // A buffer can only have one scheduled map request at a time, so we embed the request object
     // here to avoid heap allocations.
@@ -289,16 +285,20 @@ class GPUUsableBuffer final : public Buffer {
                               Buffer* destination,
                               uint64_t destinationOffset) override;
     MaybeError CopyFromD3DInternal(const ScopedCommandRecordingContext* commandContext,
-                                   ID3D11Buffer* srcD3D11Buffer,
+                                   ID3D11Buffer* d3d11SourceBuffer,
                                    uint64_t sourceOffset,
                                    size_t size,
                                    uint64_t destinationOffset) override;
 
     MaybeError WriteInternal(const ScopedCommandRecordingContext* commandContext,
                              uint64_t bufferOffset,
-                             const void* data,
-                             size_t size,
+                             Span<const std::byte> data,
                              bool isInitialWrite) override;
+
+    MaybeError ClearInternal(const ScopedCommandRecordingContext* commandContext,
+                             uint8_t clearValue,
+                             uint64_t offset,
+                             uint64_t size) override;
 
     ComPtr<ID3D11Buffer> GetD3D11MappedBuffer() override;
 
@@ -320,8 +320,7 @@ class GPUUsableBuffer final : public Buffer {
                                          ID3D11Buffer* d3d11Buffer,
                                          bool firstTimeUpdate,
                                          uint64_t bufferOffset,
-                                         const void* data,
-                                         size_t size);
+                                         Span<const std::byte> data);
 
     // Storage types for different usages.
     // - Since D3D11 doesn't allow both CPU and GPU to write to a buffer, we need separate storages

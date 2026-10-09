@@ -92,9 +92,10 @@ ResultOrError<std::unique_ptr<ContextEGL>> ContextEGL::Create(Ref<DisplayEGL> di
                                                               EGLint angleVirtualizationGroup) {
     auto context =
         std::unique_ptr<ContextEGL>(new ContextEGL(std::move(display), bindContextOnlyDuringUse));
-    DAWN_TRY(context->Initialize(backend, useRobustness, disableEGL15Robustness,
-                                 useANGLETextureSharing, forceES31AndMinExtensions,
-                                 angleVirtualizationGroup));
+    DAWN_TRY(context->Initialize(
+        backend, /*useRobustness=*/useRobustness, /*disableEGL15Robustness=*/disableEGL15Robustness,
+        /*useANGLETextureSharing=*/useANGLETextureSharing,
+        /*forceES31AndMinExtensions=*/forceES31AndMinExtensions, angleVirtualizationGroup));
     return std::move(context);
 }
 
@@ -134,7 +135,7 @@ MaybeError ContextEGL::Initialize(wgpu::BackendType backend,
 
         contextConfig = mDisplay->ChooseConfig(EGL_WINDOW_BIT, format);
         if (contextConfig == kNoConfig) {
-            return DAWN_FORMAT_INTERNAL_ERROR(
+            return DAWN_FORMAT_UNRECOVERABLE_ERROR(
                 "Couldn't find an EGLConfig rendering to a window for %s.", format);
         }
     }
@@ -217,7 +218,7 @@ MaybeError ContextEGL::Initialize(wgpu::BackendType backend,
 
         EGLConfig pbufferConfig = mDisplay->ChooseConfig(EGL_PBUFFER_BIT, format);
         if (pbufferConfig == kNoConfig) {
-            return DAWN_FORMAT_INTERNAL_ERROR(
+            return DAWN_FORMAT_UNRECOVERABLE_ERROR(
                 "Couldn't find an EGLConfig rendering to a window for %s.", format);
         }
 

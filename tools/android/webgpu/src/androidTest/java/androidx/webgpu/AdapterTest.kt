@@ -16,10 +16,11 @@
 package androidx.webgpu
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.SdkSuppress
 import androidx.test.filters.SmallTest
 import androidx.webgpu.WebGpuTestConstants.EMULATOR_TESTS_MIN_API_LEVEL
 import androidx.webgpu.helper.initLibrary
-import androidx.webgpu.GPU.createInstance
+import androidx.webgpu.GPU.createGPUInstance
 import java.util.concurrent.Executor
 import junit.framework.TestCase.assertEquals
 import kotlinx.coroutines.runBlocking
@@ -43,7 +44,7 @@ class AdapterTest {
   @Before
   fun setup() = runBlocking {
     initLibrary()
-    instance = createInstance()
+    instance = createGPUInstance()
     adapter = instance.requestAdapter()
   }
 
@@ -67,6 +68,7 @@ class AdapterTest {
 
   @Test
   @ApiRequirement(minApi = EMULATOR_TESTS_MIN_API_LEVEL, onlySkipOnEmulator = true)
+    @SdkSuppress(maxSdkVersion = 36) // b/537525245
   fun adapterBackendTest() {
     val adapterInfo = adapter.getInfo()
     assertEquals(
@@ -146,9 +148,7 @@ class AdapterTest {
     assertThrows(
       "Adapter should be consumed after one device request", WebGpuException::class.java
     ) {
-      runBlocking {
-        val secondDeviceStatus = adapter.requestDevice()
-      }
+      runBlocking { adapter.requestDevice() }
     }
   }
 

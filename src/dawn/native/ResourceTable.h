@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/functional/function_ref.h"
 #include "partition_alloc/pointers/raw_ptr.h"
 #include "src/dawn/common/Ref.h"
 #include "src/dawn/common/WeakRefSupport.h"
@@ -48,8 +49,8 @@ enum class ResourceType : uint32_t;
 
 namespace dawn::native {
 
-MaybeError ValidateResourceTableDescriptor(const DeviceBase* device,
-                                           const ResourceTableDescriptor* descriptor);
+MaybeValError ValidateResourceTableDescriptor(const DeviceBase* device,
+                                              const ResourceTableDescriptor* descriptor);
 
 // ResourceTableBase implements the frontend tracking for GPUResourceTable, a sparse array of
 // heterogeneous resources that can be accessed in shaders. It needs logic for multiple aspects:
@@ -80,7 +81,7 @@ class ResourceTableBase : public ApiObjectBase, public WeakRefSupport<ResourceTa
 
     BufferBase* GetMetadataBuffer() const;
     bool IsDestroyed() const;
-    MaybeError ValidateCanUseInSubmitNow() const;
+    MaybeValError ValidateCanUseInSubmitNow() const;
 
     // Dawn API
     void APIDestroy();
@@ -116,13 +117,13 @@ class ResourceTableBase : public ApiObjectBase, public WeakRefSupport<ResourceTa
                                     const BindingResource* resource,
                                     std::string_view methodName);
 
-    // AcquireDirtySlotUpdates returns all the batched updates that need to be applied before uses
-    // of the ResourceTable (since the last call to AcquireDirtySlotUpdates or creation of the
+    // The ApplyUpdateFn takes all the batched updates that need to be applied before uses of the
+    // ResourceTable (since the last call to ApplyDirtySlotUpdatesWith or creation of the
     // ResourceTable).
     struct MetadataUpdate {
         ResourceTableSlot slot{0u};  // Slot index to update
-        uint32_t offset = 0;        // Byte offset resource array
-        uint32_t data = 0;          // tint::ResourceType in the low 16 bits
+        uint32_t offset = 0;         // Byte offset resource array
+        uint32_t data = 0;           // tint::ResourceType in the low 16 bits
     };
     struct ResourceDiff {
         using Resource = std::variant<std::monostate, Ref<TextureViewBase>, Ref<SamplerBase>>;
@@ -130,12 +131,16 @@ class ResourceTableBase : public ApiObjectBase, public WeakRefSupport<ResourceTa
         Resource removed;  // Resource removed from 'slot', if any
         Resource added;    // Resource added to 'slot', if any
     };
-    struct Updates {
-        std::vector<MetadataUpdate> metadataUpdates;
-        std::vector<ResourceDiff> resourceDiffs;
-        absl::flat_hash_set<Ref<TextureBase>> texturesToTransition;
-    };
-    Updates AcquireDirtySlotUpdates(const absl::flat_hash_set<TextureBase*>& writableTextures);
+    using ApplyUpdateFn =
+        MaybeError(const std::vector<MetadataUpdate>& metadataUpdates,
+                   const std::vector<ResourceDiff>& resourceDiffs,
+                   const absl::flat_hash_set<raw_ptr<TextureBase>>& texturesToTransition);
+
+    // Wrapper for the code that handles dirty slot updates in the backend so we can run code right
+    // after it that ignores unnecessarily dirty textures added while transitioning them for this
+    // table.
+    MaybeError ApplyDirtySlotUpdatesWith(const absl::flat_hash_set<TextureBase*>& writableTextures,
+                                         absl::FunctionRef<ApplyUpdateFn> ApplyUpdate);
 
   private:
     ResourceTableBase(DeviceBase* device,
@@ -151,8 +156,17 @@ class ResourceTableBase : public ApiObjectBase, public WeakRefSupport<ResourceTa
     // `availableAfter`), so that the slot updates are included in the next batch of updates.
     void MarkStateDirty(ResourceTableSlot slot);
 
-    absl::flat_hash_set<Ref<TextureBase>> MakeResourcesVisibleExcept(
-        const absl::flat_hash_set<TextureBase*>& writableTextures);
+    // Functions used to compute all the updates needed to apply the latest state for this table.
+    struct Updates {
+        std::vector<MetadataUpdate> metadataUpdates;
+        std::vector<ResourceDiff> resourceDiffs;
+        absl::flat_hash_set<raw_ptr<TextureBase>> texturesToTransition;
+        absl::flat_hash_set<raw_ptr<TextureBase>> texturesDirtyAfterUpdate;
+    };
+    // Fills only texturesToTransition and texturesDirtyAfterUpdate.
+    Updates MakeResourcesVisibleExcept(const absl::flat_hash_set<TextureBase*>& writableTextures);
+    // Fills the whole Updates structure.
+    Updates AcquireDirtySlotUpdates(const absl::flat_hash_set<TextureBase*>& writableTextures);
 
     ResourceTableSlot mAPISize = ResourceTableSlot(0u);
     bool mDestroyed = false;
@@ -195,7 +209,7 @@ class ResourceTableBase : public ApiObjectBase, public WeakRefSupport<ResourceTa
 
     // Textures that are "dirty" for some reason, e.g. destroyed, access change, r/w change. Handled
     // by MakeResourcesVisibleExcept.
-    absl::flat_hash_set<TextureBase*> mDirtyStateTextures;
+    absl::flat_hash_set<raw_ptr<TextureBase>> mDirtyStateTextures;
 };
 
 }  // namespace dawn::native

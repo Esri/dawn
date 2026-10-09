@@ -42,6 +42,7 @@
 #include "src/tint/lang/core/fluent_types.h"
 #include "src/tint/lang/core/number.h"
 #include "src/tint/utils/ice/ice.h"
+#include "src/tint/utils/memory/bitcast.h"
 #include "src/tint/utils/strconv/parse_num.h"
 #include "src/tint/utils/text/unicode.h"
 #include "src/utils/compiler.h"
@@ -110,7 +111,9 @@ uint32_t hex_value(char c) {
 
 }  // namespace
 
-Lexer::Lexer(const Source::File* file) : file_(file), location_{1, 1} {}
+Lexer::Lexer(const Source::File* file) : file_(file), location_{1, 1} {
+    update_line();
+}
 
 Lexer::~Lexer() = default;
 
@@ -136,11 +139,16 @@ std::vector<Token> Lexer::Lex() {
 }
 
 std::string_view Lexer::line() const {
-    if (file_->content.GetLineCount() == 0) {
+    return line_;
+}
+
+void Lexer::update_line() {
+    if (file_->content.GetLineCount() == 0 || location_.line > file_->content.GetLineCount()) {
         static const char* empty_string = "";
-        return empty_string;
+        line_ = empty_string;
+    } else {
+        line_ = file_->content.GetLine(location_.line - 1);
     }
-    return file_->content.GetLine(location_.line - 1);
 }
 
 uint32_t Lexer::pos() const {
@@ -148,30 +156,27 @@ uint32_t Lexer::pos() const {
 }
 
 uint32_t Lexer::length() const {
-    return static_cast<uint32_t>(line().size());
+    return static_cast<uint32_t>(line_.size());
 }
 
 const char& Lexer::at(uint32_t pos) const {
-    const auto& l = line();
-    // Unlike for std::string, if pos == line().size(), indexing `l[pos]` is UB for
-    // std::string_view.
-    if (pos >= l.size()) {
+    // Unlike for std::string, if pos == line_.size(), indexing `line_[pos]` is UB
+    // for std::string_view.
+    if (pos >= line_.size()) {
         static const char zero = 0;
         return zero;
     }
-    return l[pos];
+    return line_[pos];
 }
 
-// This pointer is passed into std::from_chars which requires a pointer beyond the end of contiguous
-// range, not an end iterator, so will always hit this warning.
-TINT_BEGIN_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 const char* Lexer::line_end() const {
-    return &(line()[length() - 1]) + 1;
+    // SAFETY: line_ is a valid string_view, so line_.data() + line_.size()
+    // is bounds-safe.
+    return DAWN_UNSAFE_BUFFERS(line_.data() + line_.size());
 }
-TINT_END_DISABLE_WARNING(UNSAFE_BUFFER_USAGE);
 
 std::string_view Lexer::substr(uint32_t offset, uint32_t count) {
-    return line().substr(offset, count);
+    return line_.substr(offset, count);
 }
 
 void Lexer::advance(uint32_t offset) {
@@ -185,6 +190,7 @@ void Lexer::set_pos(uint32_t pos) {
 void Lexer::advance_line() {
     location_.line++;
     location_.column = 1;
+    update_line();
 }
 
 bool Lexer::is_eof() const {
@@ -459,7 +465,7 @@ std::optional<Token> Lexer::try_float() {
         return {};
     }
 
-    auto ret = tint::strconv::ParseDouble(std::string_view(&at(start), end - start));
+    auto ret = tint::strconv::ParseDouble(substr(start, end - start));
     double value = ret == Success ? ret.Get() : 0.0;
     bool overflow =
         ret != Success && ret.Failure() == tint::strconv::ParseNumberError::kResultOutOfRange;
@@ -814,8 +820,7 @@ std::optional<Token> Lexer::try_hex_float() {
     result_u64 |= (static_cast<uint64_t>(signed_exponent) & kExponentMask) << kExponentLeftShift;
 
     // Reinterpret as f16 and return
-    double result_f64;
-    DAWN_UNSAFE_TODO(std::memcpy(&result_f64, &result_u64, 8));
+    double result_f64 = tint::Bitcast<double>(result_u64);
 
     if (has_f_suffix) {
         // Check value fits in f32
@@ -867,7 +872,7 @@ std::optional<Token> Lexer::try_hex_float() {
         }
         // Check the low 52-valid_mantissa_bits mantissa bits must be 0.
         TINT_ASSERT((0 <= valid_mantissa_bits) && (valid_mantissa_bits <= 23));
-        if (result_u64 & ((uint64_t(1) << (52 - valid_mantissa_bits)) - 1)) {
+        if (result_u64 & ((uint64_t{1} << (52 - valid_mantissa_bits)) - 1)) {
             return Token{Token::Type::kError, source,
                          "value cannot be exactly represented as 'f32'"};
         }
@@ -920,7 +925,7 @@ std::optional<Token> Lexer::try_hex_float() {
         }
         // Check the low 52-valid_mantissa_bits mantissa bits must be 0.
         TINT_ASSERT((0 <= valid_mantissa_bits) && (valid_mantissa_bits <= 10));
-        if (result_u64 & ((uint64_t(1) << (52 - valid_mantissa_bits)) - 1)) {
+        if (result_u64 & ((uint64_t{1} << (52 - valid_mantissa_bits)) - 1)) {
             return Token{Token::Type::kError, source,
                          "value cannot be exactly represented as 'f16'"};
         }
@@ -1079,230 +1084,251 @@ std::optional<Token> Lexer::try_punctuation() {
     auto source = begin_source();
     auto type = Token::Type::kUninitialized;
 
-    if (matches(pos(), '@')) {
-        type = Token::Type::kAttr;
-        advance(1);
-    } else if (matches(pos(), '(')) {
-        // Entering a nested expression
-        nesting_depth_ += 1;
+    if (is_eol()) {
+        return {};
+    }
 
-        type = Token::Type::kParenLeft;
-        advance(1);
-    } else if (matches(pos(), ')')) {
-        // Exiting a nested expression
-        // Pop the stack until we return to the current expression expr_depth
-        clear_templates_to_nest_depth();
-        if (nesting_depth_ > 0) {
-            nesting_depth_ -= 1;
-        }
-
-        type = Token::Type::kParenRight;
-        advance(1);
-    } else if (matches(pos(), '[')) {
-        // Entering a nested expression
-        nesting_depth_ += 1;
-
-        type = Token::Type::kBracketLeft;
-        advance(1);
-    } else if (matches(pos(), ']')) {
-        // Exiting a nested expression
-        // Pop the stack until we return to the current expression expr_depth
-        clear_templates_to_nest_depth();
-        if (nesting_depth_ > 0) {
-            nesting_depth_ -= 1;
-        }
-
-        type = Token::Type::kBracketRight;
-        advance(1);
-    } else if (matches(pos(), '{')) {
-        // Expression terminating token. No opening template list can hold this tokens, so clear the
-        // stack and expression depth.
-        reset_nest_depth();
-
-        type = Token::Type::kBraceLeft;
-        advance(1);
-    } else if (matches(pos(), '}')) {
-        type = Token::Type::kBraceRight;
-        advance(1);
-    } else if (matches(pos(), '&')) {
-        if (matches(pos() + 1, '&')) {
-            // Treat 'a < b || c > d' as a logical binary operator of two comparison operators
-            // instead of a single template argument 'b||c'.
-            // Use parentheses around 'b||c' to parse as a template argument list.
+    switch (at(pos())) {
+        case '@':
+            type = Token::Type::kAttr;
+            advance(1);
+            break;
+        case '(':
+            // Entering a nested expression
+            nesting_depth_ += 1;
+            type = Token::Type::kParenLeft;
+            advance(1);
+            break;
+        case ')':
+            // Exiting a nested expression
+            // Pop the stack until we return to the current expression expr_depth
             clear_templates_to_nest_depth();
-
-            type = Token::Type::kAndAnd;
-            advance(2);
-        } else if (matches(pos() + 1, '=')) {
-            type = Token::Type::kAndEqual;
-            advance(2);
-        } else {
-            type = Token::Type::kAnd;
+            if (nesting_depth_ > 0) {
+                nesting_depth_ -= 1;
+            }
+            type = Token::Type::kParenRight;
             advance(1);
-        }
-    } else if (matches(pos(), '/')) {
-        if (matches(pos() + 1, '=')) {
-            type = Token::Type::kDivisionEqual;
-            advance(2);
-        } else {
-            type = Token::Type::kForwardSlash;
+            break;
+        case '[':
+            // Entering a nested expression
+            nesting_depth_ += 1;
+            type = Token::Type::kBracketLeft;
             advance(1);
-        }
-    } else if (matches(pos(), '!')) {
-        if (matches(pos() + 1, '=')) {
-            type = Token::Type::kNotEqual;
-            advance(2);
-        } else {
-            type = Token::Type::kBang;
+            break;
+        case ']':
+            // Exiting a nested expression
+            // Pop the stack until we return to the current expression expr_depth
+            clear_templates_to_nest_depth();
+            if (nesting_depth_ > 0) {
+                nesting_depth_ -= 1;
+            }
+            type = Token::Type::kBracketRight;
             advance(1);
-        }
-    } else if (matches(pos(), ':')) {
-        // Expression terminating token. No opening template list can hold this tokens, so clear the
-        // stack and expression depth.
-        reset_nest_depth();
-
-        type = Token::Type::kColon;
-        advance(1);
-    } else if (matches(pos(), ',')) {
-        type = Token::Type::kComma;
-        advance(1);
-    } else if (matches(pos(), '=')) {
-        if (matches(pos() + 1, '=')) {
-            type = Token::Type::kEqualEqual;
-            advance(2);
-        } else {
+            break;
+        case '{':
             // Expression terminating token. No opening template list can hold this tokens, so clear
             // the stack and expression depth.
             reset_nest_depth();
-
-            type = Token::Type::kEqual;
+            type = Token::Type::kBraceLeft;
             advance(1);
-        }
-    } else if (matches(pos(), '>')) {
-        if (!possible_templates_.IsEmpty() && possible_templates_.Back().depth == nesting_depth_) {
+            break;
+        case '}':
+            type = Token::Type::kBraceRight;
             advance(1);
-
-            type = Token::Type::kTemplateArgsRight;
-            tokens_[possible_templates_.Pop().token_idx].SetType(Token::Type::kTemplateArgsLeft);
-        } else if (matches(pos() + 1, '=')) {
-            type = Token::Type::kGreaterThanEqual;
-            advance(2);
-        } else if (matches(pos() + 1, '>')) {
-            if (matches(pos() + 2, '=')) {
-                type = Token::Type::kShiftRightEqual;
-                advance(3);
-            } else {
-                type = Token::Type::kShiftRight;
+            break;
+        case '&':
+            if (matches(pos() + 1, '&')) {
+                // Treat 'a < b || c > d' as a logical binary operator of two comparison operators
+                // instead of a single template argument 'b||c'.
+                // Use parentheses around 'b||c' to parse as a template argument list.
+                clear_templates_to_nest_depth();
+                type = Token::Type::kAndAnd;
                 advance(2);
-            }
-        } else {
-            type = Token::Type::kGreaterThan;
-            advance(1);
-        }
-    } else if (matches(pos(), '<')) {
-        if (matches(pos() + 1, '=')) {
-            type = Token::Type::kLessThanEqual;
-            advance(2);
-        } else if (matches(pos() + 1, '<')) {
-            if (matches(pos() + 2, '=')) {
-                type = Token::Type::kShiftLeftEqual;
-                advance(3);
-            } else {
-                type = Token::Type::kShiftLeft;
+            } else if (matches(pos() + 1, '=')) {
+                type = Token::Type::kAndEqual;
                 advance(2);
+            } else {
+                type = Token::Type::kAnd;
+                advance(1);
             }
-        } else {
-            if (!tokens_.empty() && (tokens_.back().Is(Token::Type::kIdentifier) ||
-                                     tokens_.back().Is(Token::Type::kVar))) {
-                possible_templates_.Emplace(static_cast<uint32_t>(tokens_.size()), nesting_depth_);
+            break;
+        case '/':
+            if (matches(pos() + 1, '=')) {
+                type = Token::Type::kDivisionEqual;
+                advance(2);
+            } else {
+                type = Token::Type::kForwardSlash;
+                advance(1);
             }
-
-            type = Token::Type::kLessThan;
+            break;
+        case '!':
+            if (matches(pos() + 1, '=')) {
+                type = Token::Type::kNotEqual;
+                advance(2);
+            } else {
+                type = Token::Type::kBang;
+                advance(1);
+            }
+            break;
+        case ':':
+            // Expression terminating token. No opening template list can hold this tokens, so clear
+            // the stack and expression depth.
+            reset_nest_depth();
+            type = Token::Type::kColon;
             advance(1);
-        }
-    } else if (matches(pos(), '%')) {
-        if (matches(pos() + 1, '=')) {
-            type = Token::Type::kModuloEqual;
-            advance(2);
-        } else {
-            type = Token::Type::kMod;
+            break;
+        case ',':
+            type = Token::Type::kComma;
             advance(1);
-        }
-    } else if (matches(pos(), '-')) {
-        if (matches(pos() + 1, '>')) {
-            type = Token::Type::kArrow;
-            advance(2);
-        } else if (matches(pos() + 1, '-')) {
-            type = Token::Type::kMinusMinus;
-            advance(2);
-        } else if (matches(pos() + 1, '=')) {
-            type = Token::Type::kMinusEqual;
-            advance(2);
-        } else {
-            type = Token::Type::kMinus;
+            break;
+        case '=':
+            if (matches(pos() + 1, '=')) {
+                type = Token::Type::kEqualEqual;
+                advance(2);
+            } else {
+                // Expression terminating token. No opening template list can hold this tokens, so
+                // clear the stack and expression depth.
+                reset_nest_depth();
+                type = Token::Type::kEqual;
+                advance(1);
+            }
+            break;
+        case '>':
+            if (!possible_templates_.IsEmpty() &&
+                possible_templates_.Back().depth == nesting_depth_) {
+                advance(1);
+                type = Token::Type::kTemplateArgsRight;
+                tokens_[possible_templates_.Pop().token_idx].SetType(
+                    Token::Type::kTemplateArgsLeft);
+            } else if (matches(pos() + 1, '=')) {
+                type = Token::Type::kGreaterThanEqual;
+                advance(2);
+            } else if (matches(pos() + 1, '>')) {
+                if (matches(pos() + 2, '=')) {
+                    type = Token::Type::kShiftRightEqual;
+                    advance(3);
+                } else {
+                    type = Token::Type::kShiftRight;
+                    advance(2);
+                }
+            } else {
+                type = Token::Type::kGreaterThan;
+                advance(1);
+            }
+            break;
+        case '<':
+            if (matches(pos() + 1, '=')) {
+                type = Token::Type::kLessThanEqual;
+                advance(2);
+            } else if (matches(pos() + 1, '<')) {
+                if (matches(pos() + 2, '=')) {
+                    type = Token::Type::kShiftLeftEqual;
+                    advance(3);
+                } else {
+                    type = Token::Type::kShiftLeft;
+                    advance(2);
+                }
+            } else {
+                if (!tokens_.empty() && (tokens_.back().Is(Token::Type::kIdentifier) ||
+                                         tokens_.back().Is(Token::Type::kVar))) {
+                    possible_templates_.Emplace(static_cast<uint32_t>(tokens_.size()),
+                                                nesting_depth_);
+                }
+                type = Token::Type::kLessThan;
+                advance(1);
+            }
+            break;
+        case '%':
+            if (matches(pos() + 1, '=')) {
+                type = Token::Type::kModuloEqual;
+                advance(2);
+            } else {
+                type = Token::Type::kMod;
+                advance(1);
+            }
+            break;
+        case '-':
+            if (matches(pos() + 1, '>')) {
+                type = Token::Type::kArrow;
+                advance(2);
+            } else if (matches(pos() + 1, '-')) {
+                type = Token::Type::kMinusMinus;
+                advance(2);
+            } else if (matches(pos() + 1, '=')) {
+                type = Token::Type::kMinusEqual;
+                advance(2);
+            } else {
+                type = Token::Type::kMinus;
+                advance(1);
+            }
+            break;
+        case '.':
+            type = Token::Type::kPeriod;
             advance(1);
-        }
-    } else if (matches(pos(), '.')) {
-        type = Token::Type::kPeriod;
-        advance(1);
-    } else if (matches(pos(), '+')) {
-        if (matches(pos() + 1, '+')) {
-            type = Token::Type::kPlusPlus;
-            advance(2);
-        } else if (matches(pos() + 1, '=')) {
-            type = Token::Type::kPlusEqual;
-            advance(2);
-        } else {
-            type = Token::Type::kPlus;
+            break;
+        case '+':
+            if (matches(pos() + 1, '+')) {
+                type = Token::Type::kPlusPlus;
+                advance(2);
+            } else if (matches(pos() + 1, '=')) {
+                type = Token::Type::kPlusEqual;
+                advance(2);
+            } else {
+                type = Token::Type::kPlus;
+                advance(1);
+            }
+            break;
+        case '|':
+            if (matches(pos() + 1, '|')) {
+                // Treat 'a < b || c > d' as a logical binary operator of two comparison operators
+                // instead of a single template argument 'b||c'.
+                // Use parentheses around 'b||c' to parse as a template argument list.
+                clear_templates_to_nest_depth();
+                type = Token::Type::kOrOr;
+                advance(2);
+            } else if (matches(pos() + 1, '=')) {
+                type = Token::Type::kOrEqual;
+                advance(2);
+            } else {
+                type = Token::Type::kOr;
+                advance(1);
+            }
+            break;
+        case ';':
+            // Expression terminating token. No opening template list can hold this tokens, so clear
+            // the stack and expression depth.
+            reset_nest_depth();
+            type = Token::Type::kSemicolon;
             advance(1);
-        }
-    } else if (matches(pos(), '|')) {
-        if (matches(pos() + 1, '|')) {
-            // Treat 'a < b || c > d' as a logical binary operator of two comparison operators
-            // instead of a single template argument 'b||c'.
-            // Use parentheses around 'b||c' to parse as a template argument list.
-            clear_templates_to_nest_depth();
-
-            type = Token::Type::kOrOr;
-            advance(2);
-        } else if (matches(pos() + 1, '=')) {
-            type = Token::Type::kOrEqual;
-            advance(2);
-        } else {
-            type = Token::Type::kOr;
+            break;
+        case '*':
+            if (matches(pos() + 1, '=')) {
+                type = Token::Type::kTimesEqual;
+                advance(2);
+            } else {
+                type = Token::Type::kStar;
+                advance(1);
+            }
+            break;
+        case '~':
+            type = Token::Type::kTilde;
             advance(1);
-        }
-    } else if (matches(pos(), ';')) {
-        // Expression terminating token. No opening template list can hold this tokens, so clear the
-        // stack and expression depth.
-        reset_nest_depth();
-
-        type = Token::Type::kSemicolon;
-        advance(1);
-    } else if (matches(pos(), '*')) {
-        if (matches(pos() + 1, '=')) {
-            type = Token::Type::kTimesEqual;
-            advance(2);
-        } else {
-            type = Token::Type::kStar;
+            break;
+        case '_':
+            type = Token::Type::kUnderscore;
             advance(1);
-        }
-    } else if (matches(pos(), '~')) {
-        type = Token::Type::kTilde;
-        advance(1);
-    } else if (matches(pos(), '_')) {
-        type = Token::Type::kUnderscore;
-        advance(1);
-    } else if (matches(pos(), '^')) {
-        if (matches(pos() + 1, '=')) {
-            type = Token::Type::kXorEqual;
-            advance(2);
-        } else {
-            type = Token::Type::kXor;
-            advance(1);
-        }
-    } else {
-        return {};
+            break;
+        case '^':
+            if (matches(pos() + 1, '=')) {
+                type = Token::Type::kXorEqual;
+                advance(2);
+            } else {
+                type = Token::Type::kXor;
+                advance(1);
+            }
+            break;
+        default:
+            return {};
     }
 
     end_source(source);

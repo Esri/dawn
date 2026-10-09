@@ -134,9 +134,9 @@ class Texture final : public TextureBase {
 
     // Barriers implementation details.
     struct StateAndDecay {
-        D3D12_RESOURCE_STATES lastState;
+        D3D12_RESOURCE_STATES lastState{};
         ExecutionSerial lastDecaySerial;
-        bool isValidToDecay;
+        bool isValidToDecay = false;
 
         bool operator==(const StateAndDecay& other) const = default;
     };
@@ -151,10 +151,10 @@ class Texture final : public TextureBase {
                                     const SubresourceRange& range,
                                     StateAndDecay* state,
                                     D3D12_RESOURCE_STATES subresourceNewState,
-                                    ExecutionSerial pendingCommandSerial) const;
+                                    ExecutionSerial pendingCommandSerial);
     void HandleTransitionSpecialCases(CommandRecordingContext* commandContext);
 
-    D3D12_RESOURCE_FLAGS mD3D12ResourceFlags;
+    D3D12_RESOURCE_FLAGS mD3D12ResourceFlags{};
     ResourceHeapAllocation mResourceAllocation;
 
     Ref<d3d::KeyedMutex> mKeyedMutex;
@@ -183,7 +183,7 @@ class TextureView final : public TextureViewBase {
   private:
     TextureView(TextureBase* texture, const UnpackedPtr<TextureViewDescriptor>& descriptor);
 
-    D3D12_SHADER_RESOURCE_VIEW_DESC mSrvDesc;
+    D3D12_SHADER_RESOURCE_VIEW_DESC mSrvDesc{};
 };
 }  // namespace d3d12
 }  // namespace dawn::native

@@ -32,8 +32,9 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/transform/prepare_immediate_data.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/hlsl/builtin_fn.h"
+#include "src/tint/lang/hlsl/ir/builtin_call.h"
 #include "src/tint/lang/hlsl/ir/member_builtin_call.h"
 
 using namespace tint::core::fluent_types;     // NOLINT
@@ -53,9 +54,6 @@ struct State {
 
     /// Immediate data layout contains all immediate block info.
     const core::ir::transform::ImmediateDataLayout& immediate_data_layout;
-
-    /// The offset in immediate block for buffer offsets array.
-    uint32_t buffer_offsets_offset = 0;
 
     /// The total number of u32 elements used to store buffer offsets in the immediate block.
     uint32_t buffer_offsets_array_elements_num = 0;
@@ -110,19 +108,33 @@ struct State {
         auto usages_unsorted_copy = var->Result()->UsagesUnsorted();
 
         for (auto usage : usages_unsorted_copy) {
+            // Adds the dynamic offset loaded from the immediate block at offset_index to the
+            // call's argument at 'arg_index'.
+            auto add_offset_to_arg = [&](core::ir::Call* call, uint32_t arg_index) {
+                b.InsertBefore(call, [&] {
+                    Value* curr_offset = call->Args()[arg_index];
+                    Value* dyn_offset = LoadDynamicOffset(offset_index);
+                    auto* new_offset = b.Add(curr_offset, dyn_offset);
+                    call->SetArg(arg_index, new_offset);
+                });
+            };
+
             tint::Switch(
                 usage->instruction,
+                [&](hlsl::ir::BuiltinCall* bc) {
+                    // Subgroup matrix loads take the buffer as their first argument:
+                    // `hlsl.Load<matrix> buffer, offset, stride, layout`.
+                    TINT_IR_ASSERT(ir, bc->Func() == hlsl::BuiltinFn::kLoad);
+                    add_offset_to_arg(bc, 1);
+                },
                 [&](hlsl::ir::MemberBuiltinCall* mbc) {
-                    // Adds the dynamic offset loaded from the immediate block at offset_index to
-                    // the mbc's argument at 'arg_index'.
-                    auto add_offset_to_arg = [&](uint32_t arg_index) {
-                        b.InsertBefore(mbc, [&] {
-                            Value* curr_offset = mbc->Args()[arg_index];
-                            Value* dyn_offset = LoadDynamicOffset(offset_index);
-                            auto* new_offset = b.Add(curr_offset, dyn_offset);
-                            mbc->SetArg(arg_index, new_offset->Result());
-                        });
-                    };
+                    // Subgroup matrix stores are called on the matrix and take the buffer as their
+                    // first argument: `matrix.Store buffer, offset, stride, layout`.
+                    if (usage->operand_index >= mbc->ArgsOperandOffset()) {
+                        TINT_IR_ASSERT(ir, mbc->Func() == hlsl::BuiltinFn::kStore);
+                        add_offset_to_arg(mbc, 1);
+                        return;
+                    }
 
                     switch (mbc->Func()) {
                         // Handle all member functions that take a byte_address_buffer and an offset
@@ -160,7 +172,7 @@ struct State {
                         case hlsl::BuiltinFn::kStore2U16:
                         case hlsl::BuiltinFn::kStore3U16:
                         case hlsl::BuiltinFn::kStore4U16:
-                            add_offset_to_arg(0);
+                            add_offset_to_arg(mbc, 0);
                             break;
                         // Ignore the functions below
                         case hlsl::BuiltinFn::kAsint:
@@ -218,11 +230,9 @@ struct State {
     /// Loads the storage buffer dynamic offset from the immediate block.
     /// @returns the loaded dynamic offset value
     Value* LoadDynamicOffset(uint32_t offset_index) {
-        auto* buffer_offsets = b.Access(
-            ty.ptr(immediate, ty.array(ty.u32(), buffer_offsets_array_elements_num)),
-            immediate_data_layout.var, u32(immediate_data_layout.IndexOf(buffer_offsets_offset)));
-        auto* offset_ptr =
-            b.Access(ty.ptr(immediate, ty.u32()), buffer_offsets->Result(), u32(offset_index));
+        auto* buffer_offsets =
+            immediate_data_layout.GetPointer(b, core::InternalImmediate::kStorageBufferOffsets);
+        auto* offset_ptr = b.Access(ty.ptr(immediate, ty.u32()), buffer_offsets, u32(offset_index));
         return b.Load(offset_ptr)->Result();
     }
 };
@@ -232,12 +242,11 @@ struct State {
 Result<SuccessType> ArrayOffsetFromImmediates(
     core::ir::Module& ir,
     const ImmediateDataLayout& immediate_data_layout,
-    const uint32_t buffer_offsets_offset,
     const uint32_t buffer_offsets_array_elements_num,
     const std::unordered_map<BindingPoint, uint32_t>& bindpoint_to_offset_index) {
     AssertValid(ir, "before core.ArrayOffsetFromImmediates");
 
-    State state{ir, immediate_data_layout, buffer_offsets_offset, buffer_offsets_array_elements_num,
+    State state{ir, immediate_data_layout, buffer_offsets_array_elements_num,
                 bindpoint_to_offset_index};
     state.Process();
 

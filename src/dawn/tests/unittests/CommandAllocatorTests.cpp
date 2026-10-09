@@ -35,10 +35,10 @@
 #include <utility>
 #include <vector>
 
-#include "gtest/gtest.h"
 #include "src/dawn/common/Enumerator.h"
 #include "src/dawn/common/MemoryBlockAllocator.h"
 #include "src/dawn/native/CommandAllocator.h"
+#include "src/utils/gtest.h"
 
 namespace dawn::native {
 namespace {
@@ -158,7 +158,7 @@ TEST(CommandAllocator, BasicWithData) {
         immediates->size = mySize;
         immediates->offset = myOffset;
 
-        Span<uint32_t> values = allocator.AllocateData<uint32_t>(size_t{5u});
+        Span<uint32_t> values = allocator.AllocateData<uint32_t>(size_t{5});
         for (size_t i = 0; i < 5; i++) {
             values[i] = myValues[i];
         }
@@ -176,7 +176,7 @@ TEST(CommandAllocator, BasicWithData) {
         ASSERT_EQ(immediates->size, mySize);
         ASSERT_EQ(immediates->offset, myOffset);
 
-        Span<const uint32_t> values = iterator.NextData<uint32_t>(size_t{5u});
+        Span<const uint32_t> values = iterator.NextData<uint32_t>(size_t{5});
         ASSERT_EQ(values.size(), 5u);
         for (auto [i, value] : Enumerate(values)) {
             ASSERT_EQ(value, myValues[i]);
@@ -405,28 +405,28 @@ struct alignas(A) AlignedStruct {
 // Test for overflows in Allocate's computations, size 1 variant
 TEST(CommandAllocatorDeathTest, AllocationOverflow_1) {
     CommandAllocatorAndPool allocator;
-    EXPECT_DEATH_IF_SUPPORTED(
+    DAWN_EXPECT_DEATH_IF_SUPPORTED(
         allocator.AllocateData<AlignedStruct<1>>(std::numeric_limits<size_t>::max() / 1u), "");
 }
 
 // Test for overflows in Allocate's computations, size 2 variant
 TEST(CommandAllocatorDeathTest, AllocationOverflow_2) {
     CommandAllocatorAndPool allocator;
-    EXPECT_DEATH_IF_SUPPORTED(
+    DAWN_EXPECT_DEATH_IF_SUPPORTED(
         allocator.AllocateData<AlignedStruct<2>>(std::numeric_limits<size_t>::max() / 2u), "");
 }
 
 // Test for overflows in Allocate's computations, size 4 variant
 TEST(CommandAllocatorDeathTest, AllocationOverflow_4) {
     CommandAllocatorAndPool allocator;
-    EXPECT_DEATH_IF_SUPPORTED(
+    DAWN_EXPECT_DEATH_IF_SUPPORTED(
         allocator.AllocateData<AlignedStruct<4>>(std::numeric_limits<size_t>::max() / 4u), "");
 }
 
 // Test for overflows in Allocate's computations, size 8 variant
 TEST(CommandAllocatorDeathTest, AllocationOverflow_8) {
     CommandAllocatorAndPool allocator;
-    EXPECT_DEATH_IF_SUPPORTED(
+    DAWN_EXPECT_DEATH_IF_SUPPORTED(
         allocator.AllocateData<AlignedStruct<8>>(std::numeric_limits<size_t>::max() / 8u), "");
 }
 

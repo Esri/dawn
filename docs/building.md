@@ -43,7 +43,7 @@ If you are developing Dawn itself, see also
     - Apple Silicon
     - Intel x86-64
   - [Xcode](https://developer.apple.com/xcode/) 12.2+.
-  - The macOS 12.0 SDK. Run `xcode-select` to check whether you have it.
+  - The macOS 13.0 SDK. Run `xcode-select` to check whether you have it.
     ```sh
     ls `xcode-select -p`/SDKs
     ```
@@ -78,6 +78,17 @@ cp scripts/standalone.gclient .gclient
 gclient sync
 ```
 
+The standalone build dependencies includes Microsoft Direct 3D WARP with the following terms:
+
+```
+The Microsoft Direct 3D WARP software is available as part of this download and is
+licensed to you by Microsoft Corporation (or one of its affiliates). The Microsoft
+Direct 3D WARP software is governed by an end user license agreement (“EULA”)
+which can be found at this link or successor links as applicable:
+https://www.nuget.org/packages/Microsoft.Direct3D.WARP/1.0.20-preview/License?.
+By downloading the Microsoft Direct 3D WARP software you agree to the EULA terms.
+```
+
 ### Without `depot_tools`
 
 If you cannot or do not want to depend on `depot_tools`, you may use the `tools/fetch_dawn_dependencies.py` to clone the dependencies' repositories:
@@ -101,6 +112,8 @@ The following packages are needed to build Dawn. (Package names are the Ubuntu n
 * `libxrandr-dev`
 * `libxinerama-dev`
 * `libxcursor-dev`
+( `libxkbcommon-dev`
+* `libxi-dev`
 * `mesa-common-dev`
 * `libx11-xcb-dev`
 * `pkg-config`
@@ -108,7 +121,7 @@ The following packages are needed to build Dawn. (Package names are the Ubuntu n
 * `npm`
 
 ```sh
-sudo apt-get install libfuse2 libxrandr-dev libxinerama-dev libxcursor-dev mesa-common-dev libx11-xcb-dev pkg-config nodejs npm
+sudo apt-get install libfuse2 libxrandr-dev libxinerama-dev libxcursor-dev libxkbcommon-dev libxi-dev mesa-common-dev libx11-xcb-dev pkg-config nodejs npm
 ```
 
 Note, `nodejs` and `npm` are only needed if building `dawn.node`.

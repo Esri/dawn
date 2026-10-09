@@ -69,7 +69,7 @@ wgpu::TexelCopyBufferInfo CreateTexelCopyBufferInfo(
     uint32_t rowsPerImage = wgpu::kCopyStrideUndefined);
 wgpu::TexelCopyTextureInfo CreateTexelCopyTextureInfo(
     wgpu::Texture texture,
-    uint32_t level = 0,
+    uint32_t mipLevel = 0,
     wgpu::Origin3D origin = {0, 0, 0},
     wgpu::TextureAspect aspect = wgpu::TextureAspect::All);
 wgpu::TexelCopyBufferLayout CreateTexelCopyBufferLayout(
@@ -229,10 +229,13 @@ bool BackendRequiresCompat(wgpu::BackendType backend);
 absl::flat_hash_set<wgpu::FeatureName> FeatureAndImplicitlyEnabled(wgpu::FeatureName featureName);
 
 int8_t ConvertFloatToSnorm8(float value);
-
 int16_t ConvertFloatToSnorm16(float value);
-
 uint16_t ConvertFloatToUnorm16(float value);
+
+#if !DAWN_PLATFORM_IS(EMSCRIPTEN)
+wgpu::SharedFence ImportFenceTo(const wgpu::Device& importingDevice,
+                                const wgpu::SharedFence& fence);
+#endif  // !DAWN_PLATFORM_IS(EMSCRIPTEN)
 
 }  // namespace dawn::utils
 

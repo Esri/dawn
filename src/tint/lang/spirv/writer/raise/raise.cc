@@ -41,6 +41,7 @@
 #include "src/tint/lang/core/ir/transform/demote_to_helper.h"
 #include "src/tint/lang/core/ir/transform/direct_variable_access.h"
 #include "src/tint/lang/core/ir/transform/multiplanar_external_texture.h"
+#include "src/tint/lang/core/ir/transform/polyfill_bool_vector_dynamic_stores.h"
 #include "src/tint/lang/core/ir/transform/prepare_immediate_data.h"
 #include "src/tint/lang/core/ir/transform/preserve_padding.h"
 #include "src/tint/lang/core/ir/transform/prevent_infinite_loops.h"
@@ -50,7 +51,6 @@
 #include "src/tint/lang/core/ir/transform/robustness.h"
 #include "src/tint/lang/core/ir/transform/signed_integer_polyfill.h"
 #include "src/tint/lang/core/ir/transform/single_entry_point.h"
-#include "src/tint/lang/core/ir/transform/std140.h"
 #include "src/tint/lang/core/ir/transform/substitute_overrides.h"
 #include "src/tint/lang/core/ir/transform/vectorize_scalar_matrix_constructors.h"
 #include "src/tint/lang/core/ir/transform/zero_init_workgroup_memory.h"
@@ -64,6 +64,7 @@
 #include "src/tint/lang/spirv/writer/raise/merge_return.h"
 #include "src/tint/lang/spirv/writer/raise/pass_matrix_by_pointer.h"
 #include "src/tint/lang/spirv/writer/raise/remove_unreachable_in_loop_continuing.h"
+#include "src/tint/lang/spirv/writer/raise/replace_unsigned_compare_zero.h"
 #include "src/tint/lang/spirv/writer/raise/resource_table_helper.h"
 #include "src/tint/lang/spirv/writer/raise/shader_io.h"
 #include "src/tint/lang/spirv/writer/raise/unary_polyfill.h"
@@ -94,6 +95,8 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
         config.disable_runtime_sized_array_index_clamping =
             options.extensions.disable_runtime_sized_array_index_clamping;
         config.use_integer_range_analysis = !options.disable_integer_range_analysis;
+        config.clamp_storage_subgroup_matrix =
+            !options.extensions.disable_storage_subgroup_matrix_clamping;
         TINT_CHECK_RESULT(core::ir::transform::Robustness(module, config));
 
         TINT_CHECK_RESULT(core::ir::transform::PreventInfiniteLoops(module));
@@ -106,11 +109,11 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
     core::ir::transform::PrepareImmediateDataConfig immediate_data_config;
     if (options.depth_range_offsets) {
         TINT_CHECK_RESULT(immediate_data_config.AddInternalImmediateData(
-            options.depth_range_offsets.value().min, module.symbols.New("tint_frag_depth_min"),
-            module.Types().f32()));
+            core::InternalImmediate::kFragDepthMin, options.depth_range_offsets.value().min,
+            module.symbols.New("tint_frag_depth_min"), module.Types().f32()));
         TINT_CHECK_RESULT(immediate_data_config.AddInternalImmediateData(
-            options.depth_range_offsets.value().max, module.symbols.New("tint_frag_depth_max"),
-            module.Types().f32()));
+            core::InternalImmediate::kFragDepthMax, options.depth_range_offsets.value().max,
+            module.symbols.New("tint_frag_depth_max"), module.Types().f32()));
     }
     TINT_CHECK_RESULT_UNWRAP(immediate_data_layout, core::ir::transform::PrepareImmediateData(
                                                         module, immediate_data_config));
@@ -151,7 +154,7 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
     }
 
     // PreservePadding must come before DirectVariableAccess.
-    TINT_CHECK_RESULT(core::ir::transform::PreservePadding(module));
+    TINT_CHECK_RESULT(core::ir::transform::PreservePadding(module, {}));
 
     core::ir::transform::DirectVariableAccessConfig dva_options;
     dva_options.transform_function = true;
@@ -181,14 +184,12 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
 
     // DecomposeAccess must come before BlockDecoratedStructs, which will wrap
     // buffer resource variables in a structure.
-    // Uniform buffers are only unconditionally decomposed if the implementation does not support
-    // uniform buffer standard layout. Otherwise, only buffer type variables are decomposed.
+    // Uniform buffers are unconditionally decomposed to support implementations that do not support
+    // uniform buffer standard layout.
     core::ir::transform::DecomposeAccessConfig decompose_config{
-        .uniform = !options.extensions.use_uniform_buffers};
+        .uniform = true,
+    };
     TINT_CHECK_RESULT(core::ir::transform::DecomposeAccess(module, decompose_config));
-    if (options.extensions.use_uniform_buffers) {
-        TINT_CHECK_RESULT(core::ir::transform::Std140(module));
-    }
     TINT_CHECK_RESULT(core::ir::transform::BlockDecoratedStructs(module));
 
     TINT_CHECK_RESULT(core::ir::transform::VectorizeScalarMatrixConstructors(module));
@@ -211,7 +212,12 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
         TINT_CHECK_RESULT(core::ir::transform::CollapseSubgroupMinMax(module));
     }
 
+    if (options.workarounds.polyfill_bool_vec_dynamic_store) {
+        TINT_CHECK_RESULT(core::ir::transform::PolyfillBoolVectorDynamicStores(module));
+    }
+
     raise::PolyfillConfig config = {
+        .disable_robustness = options.disable_robustness,
         .use_vulkan_memory_model = options.extensions.use_vulkan_memory_model,
         .version = options.spirv_version,
         .texture_sample_compare_depth_cube_array =
@@ -234,6 +240,10 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
     core::ir::transform::SignedIntegerPolyfillConfig signed_integer_cfg{
         .signed_negation = true, .signed_arithmetic = true, .signed_shiftleft = true};
     TINT_CHECK_RESULT(core::ir::transform::SignedIntegerPolyfill(module, signed_integer_cfg));
+
+    if (options.workarounds.replace_unsigned_compare_zero) {
+        TINT_CHECK_RESULT(raise::ReplaceUnsignedCompareZero(module));
+    }
 
     // AMD Mesa front end optimizer bug for unary f32 and f16 negation and abs.
     // Fixed in 25.3 - See crbug.com/448294721 and crbug.com/500099471
@@ -258,7 +268,6 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
                     .polyfill_f16_io = !options.extensions.use_storage_input_output_16,
                     .polyfill_pixel_center = options.polyfill_pixel_center,
                     .multisampled_framebuffer_fetch = options.multisampled_framebuffer_fetch,
-                    .depth_range_offsets = options.depth_range_offsets,
                 }));
 
     // Immediate data is decomposed after ShaderIO because ShaderIO can introduce new accesses
@@ -270,6 +279,12 @@ Result<SuccessType> Raise(core::ir::Module& module, const Options& options) {
                     .minimum_array_size = options.minimum_immediate_size,
                     .allow_dynamic_immediate_indices = false,
                 }));
+
+    // DecomposeAccess can introduce selects that need lowered, but ShaderIO requires subgroup
+    // builtins to have already been lowered.
+    raise::PolyfillConfig rerun_config = config;
+    rerun_config.rerun = true;
+    TINT_CHECK_RESULT(raise::BuiltinPolyfill(module, rerun_config));
 
     // BlockDecoratedStructs must run again to wrap the decomposed immediate array in a block
     // struct, as SPIR-V requires push constant variables to be typed as a struct. Storage and

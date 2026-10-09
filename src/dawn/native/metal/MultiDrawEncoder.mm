@@ -33,7 +33,7 @@
 #include "src/dawn/native/metal/BufferMTL.h"
 
 namespace {
-const char* kShaderSource = "#include <metal_stdlib>\n" DAWN_MULTILINE(
+constexpr const char* kShaderSource = "#include <metal_stdlib>\n" DAWN_MULTILINE(
     using namespace metal;
 
     struct DrawCmd {
@@ -177,11 +177,11 @@ const char* kShaderSource = "#include <metal_stdlib>\n" DAWN_MULTILINE(
 
 // Direct copy of the Metal shader struct
 struct Constants {
-    uint32_t maxDrawCount;
-    uint32_t numIndexBufferElementsAfterOffsetLow;
-    uint32_t numIndexBufferElementsAfterOffsetHigh;
-    uint8_t flags;
-    uint8_t primitiveType;
+    uint32_t maxDrawCount = 0;
+    uint32_t numIndexBufferElementsAfterOffsetLow = 0;
+    uint32_t numIndexBufferElementsAfterOffsetHigh = 0;
+    uint8_t flags = 0;
+    uint8_t primitiveType = 0;
 };
 
 static constexpr uint8_t kDrawCountBuffer = 4u;
@@ -232,8 +232,8 @@ MaybeError MultiDrawConverterPipeline::Initialize(DeviceBase* device) {
     NSString* source = [NSString stringWithUTF8String:kShaderSource];
     id<MTLLibrary> lib = [mtlDevice newLibraryWithSource:source options:nullptr error:&error];
     if (error != nullptr) {
-        return DAWN_INTERNAL_ERROR("Error creating multi draw MTLLibrary:" +
-                                   std::string([error.localizedDescription UTF8String]));
+        return DAWN_UNRECOVERABLE_ERROR("Error creating multi draw MTLLibrary:" +
+                                        std::string([error.localizedDescription UTF8String]));
     }
     DAWN_ASSERT(lib != nil);
 
@@ -246,8 +246,8 @@ MaybeError MultiDrawConverterPipeline::Initialize(DeviceBase* device) {
                                             constantValues:funcConstants
                                                      error:&error];
     if (error != nullptr) {
-        return DAWN_INTERNAL_ERROR("Error creating multi draw converter compute function:" +
-                                   std::string([error.localizedDescription UTF8String]));
+        return DAWN_UNRECOVERABLE_ERROR("Error creating multi draw converter compute function:" +
+                                        std::string([error.localizedDescription UTF8String]));
     }
     DAWN_ASSERT(convertFunc != nil);
 
@@ -255,8 +255,8 @@ MaybeError MultiDrawConverterPipeline::Initialize(DeviceBase* device) {
     mPipeline = [mtlDevice newComputePipelineStateWithFunction:convertFunc error:&error];
 
     if (error != nullptr) {
-        return DAWN_INTERNAL_ERROR("Error creating multi draw converter compute pipeline:" +
-                                   std::string([error.localizedDescription UTF8String]));
+        return DAWN_UNRECOVERABLE_ERROR("Error creating multi draw converter compute pipeline:" +
+                                        std::string([error.localizedDescription UTF8String]));
     }
     DAWN_ASSERT(mPipeline != nil);
 
@@ -322,7 +322,8 @@ ResultOrError<std::vector<MultiDrawExecutionData>> PrepareMultiDraws(
                                               maxCommandCount:draw.cmd->maxDrawCount
                                                       options:MTLResourceStorageModePrivate];
         if (drawData.mIndirectCommandBuffer == nil) {
-            return DAWN_INTERNAL_ERROR("Error creating an indirect command buffer for multi draw");
+            return DAWN_UNRECOVERABLE_ERROR(
+                "Error creating an indirect command buffer for multi draw");
         }
 
         id<MTLArgumentEncoder> argEnc = pipelineStore->GetMTLArgumentEncoder();

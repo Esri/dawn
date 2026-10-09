@@ -36,7 +36,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/core_builtin_call.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/array.h"
 #include "src/tint/lang/core/type/atomic.h"
 #include "src/tint/lang/core/type/pointer.h"
@@ -67,10 +67,11 @@ struct AtomicLeaf {
 
 /// State for the transform.
 struct State {
-    explicit State(core::ir::Module& module) : ir(module) {}
-
     /// The IR module.
     core::ir::Module& ir;
+
+    // The transform options
+    const SplitWorkgroupAtomicsConfig& config;
 
     /// The IR builder.
     core::ir::Builder b{ir};
@@ -83,6 +84,9 @@ struct State {
         core::ir::Var* var;
         Vector<uint32_t, 4> member_path;
     };
+
+    /// Cache for deatomicized struct types.
+    Hashmap<const core::type::Struct*, const core::type::Struct*, 4> deatomicized_structs_{};
 
     /// Checks whether a type contains an atomic.
     bool ContainsAtomic(const core::type::Type* type) const {
@@ -129,8 +133,13 @@ struct State {
             });
     }
 
-    /// Creates a type with every atomic replaced by its element type.
+    /// Replaces atomic types with their element types, preserving types without atomics.
     const core::type::Type* CreateDeatomicizedType(const core::type::Type* type) {
+        // Preserve non-atomic structs because struct types are nominal.
+        if (!ContainsAtomic(type)) {
+            return type;
+        }
+
         if (auto* str = type->As<core::type::Struct>()) {
             return CreateDeatomicizedStruct(str);
         }
@@ -153,12 +162,7 @@ struct State {
 
         Vector<core::type::Manager::StructMemberDesc, 4> new_members;
         for (auto* member : original->Members()) {
-            auto* member_type = member->Type();
-
-            if (ContainsAtomic(member_type)) {
-                member_type = CreateDeatomicizedType(member_type);
-            }
-
+            auto* member_type = CreateDeatomicizedType(member->Type());
             new_members.Push({member->Name(), member_type, member->Attributes()});
         }
 
@@ -171,7 +175,7 @@ struct State {
     /// Creates a replacement array type when its element type contains an atomic.
     const core::type::Type* CreateDeatomicizedArrayType(const core::type::Array* arr) {
         auto* elem = arr->ElemType();
-        auto* new_elem = ContainsAtomic(elem) ? CreateDeatomicizedType(elem) : elem;
+        auto* new_elem = CreateDeatomicizedType(elem);
 
         if (new_elem == elem) {
             return arr;
@@ -181,6 +185,27 @@ struct State {
             return ty.runtime_array(new_elem);
         }
         return ty.array(new_elem, arr->ConstantCount().value());
+    }
+
+    bool UsedWithSubgroupMatrix(core::ir::Value* v) {
+        for (auto& use : v->UsagesUnsorted()) {
+            bool used = tint::Switch(
+                use->instruction,
+                [&](core::ir::Access* a) { return UsedWithSubgroupMatrix(a->Result()); },
+                [&](core::ir::Let* let) { return UsedWithSubgroupMatrix(let->Result()); },
+                [&](core::ir::CoreBuiltinCall* call) {
+                    if (call->Func() == core::BuiltinFn::kSubgroupMatrixLoad ||
+                        call->Func() == core::BuiltinFn::kSubgroupMatrixStore) {
+                        return true;
+                    }
+                    return false;
+                },
+                [&](Default) { return false; });
+            if (used) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// Process the module.
@@ -204,6 +229,11 @@ struct State {
             }
 
             if (ptr_ty->AddressSpace() != core::AddressSpace::kWorkgroup) {
+                continue;
+            }
+
+            if (config.mode == SplitMode::kSubgroupMatrix &&
+                !UsedWithSubgroupMatrix(var->Result())) {
                 continue;
             }
 
@@ -323,10 +353,7 @@ struct State {
                 usages.Push(child_usage);
             }
 
-            auto* object_result = access->Object()->As<core::ir::InstructionResult>();
-            TINT_IR_ASSERT(ir, object_result);
-
-            auto* parent = object_result->Instruction()->As<core::ir::Access>();
+            auto* parent = access->Object()->AsInstruction<core::ir::Access>();
             if (!parent) {
                 continue;
             }
@@ -436,7 +463,7 @@ struct State {
 
                 b.InsertBefore(access, [&] {
                     auto* new_access = b.Access(atomic_ptr_ty, atomic_var, analysis.array_indices);
-                    access->Result()->ReplaceAllUsesWith(new_access->Result());
+                    access->Result()->ReplaceAllUsesWith(new_access);
                 });
             } else {
                 // Use the atomic variable directly when there is no outer array.
@@ -454,17 +481,15 @@ struct State {
             access->Result()->SetType(ty.ptr(ptr_ty->AddressSpace(), store_ty, ptr_ty->Access()));
         }
     }
-
-    /// Cache for deatomicized struct types.
-    Hashmap<const core::type::Struct*, const core::type::Struct*, 4> deatomicized_structs_;
 };
 
 }  // namespace
 
-Result<SuccessType> SplitWorkgroupAtomics(core::ir::Module& ir) {
+Result<SuccessType> SplitWorkgroupAtomics(core::ir::Module& ir,
+                                          const SplitWorkgroupAtomicsConfig& config) {
     core::ir::AssertValid(ir, "before hlsl.SplitWorkgroupAtomics");
 
-    State state{ir};
+    State state{ir, config};
     state.Process();
     return Success;
 }

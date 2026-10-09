@@ -35,7 +35,7 @@ namespace dawn::utils {
 namespace {
 
 uint64_t GetCurrentTimeNs() {
-    struct timespec currentTime;
+    struct timespec currentTime{};
     clock_gettime(CLOCK_MONOTONIC, &currentTime);
     return static_cast<uint64_t>(currentTime.tv_sec) * 1'000'000'000llu +
            static_cast<uint64_t>(currentTime.tv_nsec);
@@ -74,8 +74,8 @@ class PosixTimer : public Timer {
 
   private:
     bool mRunning;
-    uint64_t mStartTimeNs;
-    uint64_t mStopTimeNs;
+    uint64_t mStartTimeNs = 0;
+    uint64_t mStopTimeNs = 0;
 };
 
 Timer* CreateTimer() {

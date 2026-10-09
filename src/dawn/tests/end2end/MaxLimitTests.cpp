@@ -150,17 +150,13 @@ TEST_P(MaxLimitTests, MaxBufferBindingSize) {
                 // TODO(crbug.com/dawn/1160): Usually can't actually allocate a buffer this large
                 // because allocating the buffer for zero-initialization fails.
                 maxBufferBindingSize =
-                    std::min(maxBufferBindingSize, uint64_t(2) * 1024 * 1024 * 1024);
+                    std::min(maxBufferBindingSize, uint64_t{2} * 1024 * 1024 * 1024);
                 // With WARP or on 32-bit platforms, such large buffer allocations often fail.
 #if DAWN_PLATFORM_IS(32_BIT)
                 if (IsWindows()) {
                     continue;
                 }
 #endif
-                if (IsWARP()) {
-                    maxBufferBindingSize =
-                        std::min(maxBufferBindingSize, uint64_t(512) * 1024 * 1024);
-                }
                 maxBufferBindingSize = Align(maxBufferBindingSize - 3u, 4);
                 shader = R"(
                   struct Buf {
@@ -187,7 +183,7 @@ TEST_P(MaxLimitTests, MaxBufferBindingSize) {
 
                 // Clamp to not exceed the maximum i32 value for the WGSL @size(x) annotation.
                 maxBufferBindingSize = std::min(maxBufferBindingSize,
-                                                uint64_t(std::numeric_limits<int32_t>::max()) + 8);
+                                                uint64_t{std::numeric_limits<int32_t>::max()} + 8);
                 maxBufferBindingSize = Align(maxBufferBindingSize - 3u, 4);
 
                 const uint64_t kMaxStructMemberU32ArraySize = 65535ULL * 4;
@@ -860,13 +856,14 @@ TEST_P(MaxLimitTests, WriteToMaxFragmentCombinedOutputResources) {
     }
 }
 
-// Verifies that supported buffer limits do not exceed maxBufferSize.
+// Verifies that supported buffer limits do not exceed maxBufferSize and are multiples of 4.
 TEST_P(MaxLimitTests, MaxBufferSizes) {
     // Base limits without tiering.
     dawn::utils::ComboLimits baseLimits;
     GetAdapterLimits().UnlinkedCopyTo(&baseLimits);
     EXPECT_LE(baseLimits.maxStorageBufferBindingSize, baseLimits.maxBufferSize);
     EXPECT_LE(baseLimits.maxUniformBufferBindingSize, baseLimits.maxBufferSize);
+    EXPECT_EQ(baseLimits.maxStorageBufferBindingSize % 4, 0u);
 
     // Base limits with tiering.
     GetAdapter().SetUseTieredLimits(true);
@@ -874,9 +871,48 @@ TEST_P(MaxLimitTests, MaxBufferSizes) {
     GetAdapterLimits().UnlinkedCopyTo(&tieredLimits);
     EXPECT_LE(tieredLimits.maxStorageBufferBindingSize, tieredLimits.maxBufferSize);
     EXPECT_LE(tieredLimits.maxUniformBufferBindingSize, tieredLimits.maxBufferSize);
+    EXPECT_EQ(tieredLimits.maxStorageBufferBindingSize % 4, 0u);
 
     // Unset tiered limit usage to avoid affecting other tests.
     GetAdapter().SetUseTieredLimits(false);
+}
+
+// Verifies creating a bind group with a buffer of size maxStorageBufferBindingSize
+// succeeds for both Storage and ReadOnlyStorage buffer types.
+TEST_P(MaxLimitTests, CreateBindGroupMaxStorageBufferBindingSize) {
+    // TODO(crbug.com/562922243): triggers context loss on Swiftshader
+    DAWN_SUPPRESS_TEST_IF(IsOpenGLES() && IsANGLESwiftShader());
+
+    dawn::utils::ComboLimits supportedLimits;
+    GetSupportedLimits().UnlinkedCopyTo(&supportedLimits);
+
+    uint64_t maxStorageBindingSize = supportedLimits.maxStorageBufferBindingSize;
+    EXPECT_EQ(maxStorageBindingSize % 4, 0u);
+
+    for (wgpu::BufferBindingType type :
+         {wgpu::BufferBindingType::Storage, wgpu::BufferBindingType::ReadOnlyStorage}) {
+        wgpu::BindGroupLayout bgl =
+            utils::MakeBindGroupLayout(device, {{0, wgpu::ShaderStage::Compute, type}});
+
+        wgpu::BufferDescriptor desc;
+        desc.usage = wgpu::BufferUsage::Storage;
+        desc.size = maxStorageBindingSize;
+
+        device.PushErrorScope(wgpu::ErrorFilter::OutOfMemory);
+        wgpu::Buffer buffer = device.CreateBuffer(&desc);
+
+        wgpu::ErrorType oomResult = wgpu::ErrorType::NoError;
+        device.PopErrorScope(wgpu::CallbackMode::AllowProcessEvents,
+                             [&oomResult](wgpu::PopErrorScopeStatus, wgpu::ErrorType errorType,
+                                          wgpu::StringView) { oomResult = errorType; });
+        FlushWire();
+        instance.ProcessEvents();
+
+        if (oomResult != wgpu::ErrorType::OutOfMemory && buffer != nullptr) {
+            // Binding at exactly the limit should succeed without validation error.
+            utils::MakeBindGroup(device, bgl, {{0, buffer, 0, maxStorageBindingSize}});
+        }
+    }
 }
 
 DAWN_INSTANTIATE_TEST(MaxLimitTests,

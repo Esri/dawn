@@ -237,7 +237,7 @@ struct State {
                 for (uint32_t i = 0; i < str->Members().Length(); i++) {
                     construct_args.Push(backend->GetInput(builder, input_idx++));
                 }
-                args.Push(builder.Construct(param->Type(), construct_args)->Result());
+                args.Push(builder.Construct(param->Type(), construct_args));
             } else {
                 args.Push(backend->GetInput(builder, input_idx++));
             }
@@ -252,8 +252,7 @@ struct State {
     void SetOutputs(Builder& builder, Value* inner_result) {
         if (auto* str = inner_result->Type()->As<core::type::Struct>()) {
             for (auto* member : str->Members()) {
-                Value* from =
-                    builder.Access(member->Type(), inner_result, u32(member->Index()))->Result();
+                Value* from = builder.Access(member->Type(), inner_result, u32(member->Index()));
                 backend->SetOutput(builder, member->Index(), from);
             }
         } else if (!inner_result->Type()->Is<core::type::Void>()) {
@@ -296,12 +295,11 @@ core::ir::Value* ShaderIOBackendState::PolyfillWorkgroupIndex(Builder& builder,
 
     auto* num_workgroups_x = builder.Access(ty.u32(), num_workgroups, 0_u);
     auto* num_workgroups_y = builder.Access(ty.u32(), num_workgroups, 1_u);
-    auto* z_part = builder.Multiply(num_workgroups_x, num_workgroups_y)->Result();
-    z_part = builder.Multiply(builder.Access(ty.u32(), workgroup_id, 2_u), z_part)->Result();
-    auto* y_part =
-        builder.Multiply(builder.Access(ty.u32(), workgroup_id, 1_u), num_workgroups_x)->Result();
-    auto* init = builder.Add(builder.Access(ty.u32(), workgroup_id, 0_u), y_part)->Result();
-    init = builder.Add(init, z_part)->Result();
+    auto* z_part = builder.Multiply(num_workgroups_x, num_workgroups_y);
+    z_part = builder.Multiply(builder.Access(ty.u32(), workgroup_id, 2_u), z_part);
+    auto* y_part = builder.Multiply(builder.Access(ty.u32(), workgroup_id, 1_u), num_workgroups_x);
+    auto* init = builder.Add(builder.Access(ty.u32(), workgroup_id, 0_u), y_part);
+    init = builder.Add(init, z_part);
     tint_workgroup_index = init;
     return tint_workgroup_index;
 }
@@ -336,8 +334,7 @@ core::ir::Value* ShaderIOBackendState::PolyfillGlobalInvocationIndex(
     z_part = builder.Multiply(global_id_z, z_part);
     auto* y_part = builder.Multiply(global_id_y, x_size);
     auto* value = builder.Add(global_id_x, y_part);
-    value = builder.Add(value, z_part);
-    tint_global_invocation_index = value->Result();
+    tint_global_invocation_index = builder.Add(value, z_part);
     return tint_global_invocation_index;
 }
 

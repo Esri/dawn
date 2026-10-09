@@ -231,7 +231,7 @@ wgpu::PipelineLayout MakePipelineLayout(const wgpu::Device& device,
                                         std::vector<wgpu::BindGroupLayout> bgls,
                                         uint32_t immediateSize) {
     wgpu::PipelineLayoutDescriptor descriptor;
-    descriptor.bindGroupLayoutCount = uint32_t(bgls.size());
+    descriptor.bindGroupLayoutCount = bgls.size();
     descriptor.bindGroupLayouts = bgls.data();
     descriptor.immediateSize = immediateSize;
     return device.CreatePipelineLayout(&descriptor);
@@ -455,6 +455,10 @@ const absl::flat_hash_map<wgpu::FeatureName, absl::flat_hash_set<wgpu::FeatureNa
         {wgpu::FeatureName::TextureFormatsTier2, {wgpu::FeatureName::TextureFormatsTier1}},
         {wgpu::FeatureName::SubgroupSizeControl, {wgpu::FeatureName::Subgroups}},
         {wgpu::FeatureName::ChromiumExperimentalSubgroupMatrix, {wgpu::FeatureName::Subgroups}},
+#if !DAWN_PLATFORM_IS(EMSCRIPTEN)
+        {wgpu::FeatureName::BufferMapExtendedUsages,
+         {wgpu::FeatureName::BufferMapWriteExtendedUsages}},
+#endif  // !DAWN_PLATFORM_IS(EMSCRIPTEN)
         // Add other implicit enabling rules here
 };
 
@@ -502,4 +506,91 @@ uint16_t ConvertFloatToUnorm16(float value) {
     return static_cast<uint16_t>(clampedValue);
 }
 
+#if !DAWN_PLATFORM_IS(EMSCRIPTEN)
+wgpu::SharedFence ImportFenceTo(const wgpu::Device& importingDevice,
+                                const wgpu::SharedFence& fence) {
+    wgpu::SharedFenceExportInfo exportInfo;
+    fence.ExportInfo(&exportInfo);
+
+    switch (exportInfo.type) {
+        case wgpu::SharedFenceType::VkSemaphoreOpaqueFD: {
+            wgpu::SharedFenceVkSemaphoreOpaqueFDExportInfo vkExportInfo;
+            exportInfo.nextInChain = &vkExportInfo;
+            fence.ExportInfo(&exportInfo);
+
+            wgpu::SharedFenceVkSemaphoreOpaqueFDDescriptor vkDesc;
+            vkDesc.handle = vkExportInfo.handle;
+
+            wgpu::SharedFenceDescriptor fenceDesc;
+            fenceDesc.nextInChain = &vkDesc;
+            return importingDevice.ImportSharedFence(&fenceDesc);
+        }
+        case wgpu::SharedFenceType::SyncFD: {
+            wgpu::SharedFenceSyncFDExportInfo vkExportInfo;
+            exportInfo.nextInChain = &vkExportInfo;
+            fence.ExportInfo(&exportInfo);
+
+            wgpu::SharedFenceSyncFDDescriptor vkDesc;
+            vkDesc.handle = vkExportInfo.handle;
+
+            wgpu::SharedFenceDescriptor fenceDesc;
+            fenceDesc.nextInChain = &vkDesc;
+            return importingDevice.ImportSharedFence(&fenceDesc);
+        }
+        case wgpu::SharedFenceType::VkSemaphoreZirconHandle: {
+            wgpu::SharedFenceVkSemaphoreZirconHandleExportInfo vkExportInfo;
+            exportInfo.nextInChain = &vkExportInfo;
+            fence.ExportInfo(&exportInfo);
+
+            wgpu::SharedFenceVkSemaphoreZirconHandleDescriptor vkDesc;
+            vkDesc.handle = vkExportInfo.handle;
+
+            wgpu::SharedFenceDescriptor fenceDesc;
+            fenceDesc.nextInChain = &vkDesc;
+            return importingDevice.ImportSharedFence(&fenceDesc);
+        }
+        case wgpu::SharedFenceType::DXGISharedHandle: {
+            wgpu::SharedFenceDXGISharedHandleExportInfo dxgiExportInfo;
+            exportInfo.nextInChain = &dxgiExportInfo;
+            fence.ExportInfo(&exportInfo);
+
+            wgpu::SharedFenceDXGISharedHandleDescriptor dxgiDesc;
+            dxgiDesc.handle = dxgiExportInfo.handle;
+
+            wgpu::SharedFenceDescriptor fenceDesc;
+            fenceDesc.nextInChain = &dxgiDesc;
+            return importingDevice.ImportSharedFence(&fenceDesc);
+        }
+        case wgpu::SharedFenceType::MTLSharedEvent: {
+            wgpu::SharedFenceMTLSharedEventExportInfo sharedEventInfo;
+            exportInfo.nextInChain = &sharedEventInfo;
+
+            fence.ExportInfo(&exportInfo);
+
+            wgpu::SharedFenceMTLSharedEventDescriptor sharedEventDesc;
+            sharedEventDesc.sharedEvent = sharedEventInfo.sharedEvent;
+
+            wgpu::SharedFenceDescriptor fenceDesc;
+            fenceDesc.nextInChain = &sharedEventDesc;
+            return importingDevice.ImportSharedFence(&fenceDesc);
+        }
+        case wgpu::SharedFenceType::EGLSync: {
+            wgpu::SharedFenceEGLSyncExportInfo eglSyncInfo;
+            exportInfo.nextInChain = &eglSyncInfo;
+
+            fence.ExportInfo(&exportInfo);
+
+            wgpu::SharedFenceEGLSyncDescriptor eglSyncDesc;
+            eglSyncDesc.sync = eglSyncInfo.sync;
+
+            wgpu::SharedFenceDescriptor fenceDesc;
+            fenceDesc.nextInChain = &eglSyncDesc;
+            return importingDevice.ImportSharedFence(&fenceDesc);
+        }
+        default:
+            DAWN_UNREACHABLE();
+    }
+}
+#endif  // !DAWN_PLATFORM_IS(EMSCRIPTEN)
+        //
 }  // namespace dawn::utils

@@ -62,14 +62,14 @@ enum class AllowMultiPlanarTextureFormat {
     Yes,
 };
 
-MaybeError ValidateTextureDescriptor(
+MaybeValError ValidateTextureDescriptor(
     const DeviceBase* device,
     const UnpackedPtr<TextureDescriptor>& descriptor,
     AllowMultiPlanarTextureFormat allowMultiPlanar = AllowMultiPlanarTextureFormat::No,
     std::optional<wgpu::TextureUsage> allowedSharedTextureMemoryUsage = std::nullopt);
-MaybeError ValidateTextureViewDescriptor(const DeviceBase* device,
-                                         const TextureBase* texture,
-                                         const UnpackedPtr<TextureViewDescriptor>& descriptor);
+MaybeValError ValidateTextureViewDescriptor(const DeviceBase* device,
+                                            const TextureBase* texture,
+                                            const UnpackedPtr<TextureViewDescriptor>& descriptor);
 ResultOrError<TextureViewDescriptor> GetTextureViewDescriptorWithDefaults(
     const TextureBase* texture,
     const TextureViewDescriptor* descriptor);
@@ -192,7 +192,7 @@ class TextureBase : public RefCountedWithExternalCount<SharedResource> {
     bool IsSubresourceContentInitialized(const SubresourceRange& range) const;
     void SetIsSubresourceContentInitialized(bool isInitialized, const SubresourceRange& range);
 
-    MaybeError ValidateCanUseInSubmitNow() const;
+    MaybeValError ValidateCanUseInSubmitNow() const;
 
     bool IsMultisampledTexture() const;
 
@@ -259,6 +259,10 @@ class TextureBase : public RefCountedWithExternalCount<SharedResource> {
     void AddInternalUsage(wgpu::TextureUsage usage);
     void SetSharedResourceMemoryContentsForTesting(Ref<SharedResourceMemoryContents> contents);
 
+    // Used to notify resource tables that something needs to be handled for this texture the next
+    // time the resource table is used. Must be called when applying memory barriers on the texture.
+    void MarkDirtyInResourceTables();
+
     ExecutionSerial mLastSharedTextureMemoryUsageSerial{kBeginningOfGPUTime};
 
   private:
@@ -277,7 +281,6 @@ class TextureBase : public RefCountedWithExternalCount<SharedResource> {
 
     ResultOrError<Ref<TextureViewBase>> GetOrCreateDefaultView();
 
-    void MarkDirtyInResourceTables();
     void MarkDestroyedInResourceTables();
 
     void WillAddFirstExternalRef() override;

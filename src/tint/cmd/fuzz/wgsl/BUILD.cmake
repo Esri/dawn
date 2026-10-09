@@ -50,7 +50,6 @@ tint_target_add_dependencies(tint_cmd_fuzz_wgsl_fuzz_cmd fuzz_cmd
   tint_cmd_fuzz_wgsl_fuzz
   tint_lang_core_ir_transform_fuzz
   tint_utils
-  tint_utils_bytes
   tint_utils_containers
   tint_utils_ice
   tint_utils_macros
@@ -86,12 +85,6 @@ if(TINT_BUILD_IR_BINARY)
     tint_lang_core_ir_binary_fuzz
   )
 endif(TINT_BUILD_IR_BINARY)
-
-if(TINT_BUILD_MESA)
-  tint_target_add_external_dependencies(tint_cmd_fuzz_wgsl_fuzz_cmd fuzz_cmd
-    "mesa"
-  )
-endif(TINT_BUILD_MESA)
 
 if(TINT_BUILD_MSL_WRITER)
   tint_target_add_dependencies(tint_cmd_fuzz_wgsl_fuzz_cmd fuzz_cmd
@@ -139,7 +132,6 @@ tint_target_add_dependencies(tint_cmd_fuzz_wgsl_fuzz fuzz
   tint_lang_wgsl_reader
   tint_lang_wgsl_sem
   tint_utils
-  tint_utils_bytes
   tint_utils_containers
   tint_utils_diagnostic
   tint_utils_ice
@@ -156,6 +148,12 @@ tint_target_add_external_dependencies(tint_cmd_fuzz_wgsl_fuzz fuzz
   "src_utils"
   "thread"
 )
+
+if(TINT_BUILD_IR_BINARY)
+  tint_target_add_dependencies(tint_cmd_fuzz_wgsl_fuzz fuzz
+    tint_lang_core_ir_binary
+  )
+endif(TINT_BUILD_IR_BINARY)
 
 if(TINT_BUILD_WGSL_WRITER)
   tint_target_add_dependencies(tint_cmd_fuzz_wgsl_fuzz fuzz

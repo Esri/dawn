@@ -32,7 +32,7 @@
 #include "src/tint/lang/core/fluent_types.h"  // IWYU pragma: export
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/manager.h"
 #include "src/tint/lang/glsl/ir/builtin_call.h"
 
@@ -142,15 +142,15 @@ struct State {
             core::ir::Value* result = nullptr;
             switch (binary->Op()) {
                 case core::BinaryOp::kAnd:
-                    result = b.And(lhs, rhs)->Result();
+                    result = b.And(lhs, rhs);
                     break;
                 case core::BinaryOp::kOr:
-                    result = b.Or(lhs, rhs)->Result();
+                    result = b.Or(lhs, rhs);
                     break;
                 default:
                     TINT_IR_UNREACHABLE(ir);
             }
-            b.ConvertWithResult(binary->DetachResult(), result);
+            b.ConvertReplaceResult(binary->DetachResult(), result);
         });
         binary->Destroy();
     }
@@ -165,10 +165,10 @@ struct State {
             b.Append(f->Block(), [&] {
                 core::ir::Value* ret = nullptr;
 
-                ret = b.Divide(x, y)->Result();
-                ret = b.Call(type, core::BuiltinFn::kTrunc, ret)->Result();
-                ret = b.Multiply(y, ret)->Result();
-                ret = b.Subtract(x, ret)->Result();
+                ret = b.Divide(x, y);
+                ret = b.Call(type, core::BuiltinFn::kTrunc, ret);
+                ret = b.Multiply(y, ret);
+                ret = b.Subtract(x, ret);
                 b.Return(f, ret);
             });
             return f;
@@ -187,10 +187,10 @@ struct State {
             // the result type. If we have a mixed scalar/vector, construct a vector of the scalar
             // type which makes the polyfill simpler.
             if (lhs->Type() != res_ty) {
-                lhs = b.Construct(res_ty, lhs)->Result();
+                lhs = b.Construct(res_ty, lhs);
             }
             if (rhs->Type() != res_ty) {
-                rhs = b.Construct(res_ty, rhs)->Result();
+                rhs = b.Construct(res_ty, rhs);
             }
 
             auto* func = CreateFloatModuloPolyfill(res_ty);

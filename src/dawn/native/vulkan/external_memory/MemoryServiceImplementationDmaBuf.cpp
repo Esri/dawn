@@ -81,10 +81,10 @@ bool GetFormatModifierProps(const VulkanFunctions& fn,
 
 // Some modifiers use multiple planes (for example, see the comment for
 // I915_FORMAT_MOD_Y_TILED_CCS in drm/drm_fourcc.h).
-ResultOrError<uint32_t> GetModifierPlaneCount(const VulkanFunctions& fn,
-                                              VkPhysicalDevice vkPhysicalDevice,
-                                              VkFormat format,
-                                              uint64_t modifier) {
+ResultOrValError<uint32_t> GetModifierPlaneCount(const VulkanFunctions& fn,
+                                                 VkPhysicalDevice vkPhysicalDevice,
+                                                 VkFormat format,
+                                                 uint64_t modifier) {
     VkDrmFormatModifierPropertiesEXT props;
     if (GetFormatModifierProps(fn, vkPhysicalDevice, format, modifier, &props)) {
         return static_cast<uint32_t>(props.drmFormatModifierPlaneCount);
@@ -354,7 +354,7 @@ class ServiceImplementationDmaBuf : public ServiceImplementation {
         createInfoChain.Add(&externalMemoryImageCreateInfo,
                             VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO);
 
-        std::array<VkSubresourceLayout, ExternalImageDescriptorDmaBuf::kMaxPlanes> planeLayouts;
+        std::array<VkSubresourceLayout, ExternalImageDescriptorDmaBuf::kMaxPlanes> planeLayouts{};
         for (uint32_t plane = 0u; plane < planeCount; ++plane) {
             planeLayouts[plane].offset = dmaBufDescriptor->planeLayouts[plane].offset;
             planeLayouts[plane].size = 0;  // VK_EXT_image_drm_format_modifier mandates size = 0.

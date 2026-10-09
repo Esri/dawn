@@ -46,30 +46,30 @@ DAWN_WIRE_EXPORT const DawnProcTable& GetProcs();
 }  // namespace client
 
 struct ReservedBuffer {
-    WGPUBuffer buffer;
+    WGPUBuffer buffer = nullptr;
     Handle handle;
     Handle deviceHandle;
 };
 
 struct ReservedTexture {
-    WGPUTexture texture;
+    WGPUTexture texture = nullptr;
     Handle handle;
     Handle deviceHandle;
 };
 
 struct ReservedSurface {
-    WGPUSurface surface;
+    WGPUSurface surface = nullptr;
     Handle instanceHandle;
     Handle handle;
 };
 
 struct ReservedInstance {
-    WGPUInstance instance;
+    WGPUInstance instance = nullptr;
     Handle handle;
 };
 
 struct DAWN_WIRE_EXPORT WireClientDescriptor {
-    CommandSerializer* serializer;
+    CommandSerializer* serializer = nullptr;
     client::MemoryTransferService* memoryTransferService = nullptr;
 };
 
@@ -112,12 +112,26 @@ class DAWN_WIRE_EXPORT MemoryTransferService {
     // Create a handle for sharing memory with the server.
     // This may fail and return nullptr.
     class MemoryHandle;
-    virtual std::unique_ptr<MemoryHandle> CreateMemoryHandle(size_t size) = 0;
+
+    enum class MemoryHandleUse : uint8_t {
+        BulkData,
+        MappedAtCreationData,
+        MappedBuffer,
+    };
+    // TODO(386255678): Remove the one-parameter overload when it is no longer used in Chromium.
+    virtual std::unique_ptr<MemoryHandle> CreateMemoryHandle(size_t size);
+    virtual std::unique_ptr<MemoryHandle> CreateMemoryHandle(size_t size,
+                                                             MemoryHandleUse memoryHandleUse);
 
     class DAWN_WIRE_EXPORT MemoryHandle {
       public:
         MemoryHandle();
         virtual ~MemoryHandle();
+
+        // Returns true if the memory is already known to be zero-initialized, allowing callers to
+        // skip explicitly zeroing it out.
+        // TODO(386255678): Make this function non-virtual once it is implemented in Chromium.
+        virtual bool IsInitialized() const { return false; }
 
         // Get the required serialization size for SerializeCreate
         virtual size_t GetSerializeCreateSize() const = 0;

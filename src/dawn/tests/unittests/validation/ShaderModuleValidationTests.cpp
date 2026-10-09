@@ -54,6 +54,7 @@ class ShaderModuleValidationTest : public ValidationTest {};
 
 #if TINT_BUILD_SPV_READER && !DAWN_PLATFORM_IS(EMSCRIPTEN)
 
+template <typename T = wgpu::ShaderSourceSPIRV>
 wgpu::ShaderModule CreateShaderModuleFromASM(
     const wgpu::Device& device,
     const char* source,
@@ -72,8 +73,8 @@ wgpu::ShaderModule CreateShaderModuleFromASM(
         DAWN_ASSERT(spirv != nullptr);
         DAWN_ASSERT(spirv->wordCount <= std::numeric_limits<uint32_t>::max());
 
-        wgpu::ShaderSourceSPIRV spirvDesc;
-        spirvDesc.codeSize = static_cast<uint32_t>(spirv->wordCount);
+        T spirvDesc;
+        spirvDesc.codeSize = static_cast<decltype(spirvDesc.codeSize)>(spirv->wordCount);
         spirvDesc.code = spirv->code;
         spirvDesc.nextInChain = spirv_options;
 
@@ -123,7 +124,8 @@ TEST_F(ShaderModuleValidationTest, CreationSuccess) {
                    OpReturn
                    OpFunctionEnd)";
 
-    CreateShaderModuleFromASM(device, shader);
+    CreateShaderModuleFromASM<wgpu::ShaderSourceSPIRV>(device, shader);
+    CreateShaderModuleFromASM<wgpu::DawnShaderSourceSPIRV>(device, shader);
 }
 
 // Tint's SPIR-V reader transforms a combined image sampler into two
@@ -200,47 +202,6 @@ TEST_F(ShaderModuleValidationTest, ArrayOfCombinedTextureAndSampler) {
 %_arr_8_uint_2 = OpTypeArray %8 %uint_2
 %_ptr_UniformConstant__arr_8_uint_2 = OpTypePointer UniformConstant %_arr_8_uint_2
         %tex = OpVariable %_ptr_UniformConstant__arr_8_uint_2 UniformConstant
-       %main = OpFunction %void None %3
-          %5 = OpLabel
-               OpReturn
-               OpFunctionEnd
-        )";
-
-    ASSERT_DEVICE_ERROR(CreateShaderModuleFromASM(device, shader));
-}
-
-// Test that it is not allowed to declare a multisampled-array interface texture.
-// TODO(enga): Also test multisampled cube, cube array, and 3D. These have no GLSL keywords.
-TEST_F(ShaderModuleValidationTest, MultisampledArrayTexture) {
-    // SPIR-V ASM produced by glslang for the following fragment shader:
-    //
-    //  #version 450
-    //  layout(set=0, binding=0) uniform texture2DMSArray tex;
-    //  void main () {}}
-    //
-    // Note that the following defines an interface array multisampled texture which is not allowed
-    // in Dawn / WebGPU.
-    //
-    //  %7 = OpTypeImage %float 2D 0 1 1 1 Unknown
-    //  %_ptr_UniformConstant_7 = OpTypePointer UniformConstant %7
-    //  %tex = OpVariable %_ptr_UniformConstant_7 UniformConstant
-    const char* shader = R"(
-               OpCapability Shader
-          %1 = OpExtInstImport "GLSL.std.450"
-               OpMemoryModel Logical GLSL450
-               OpEntryPoint Fragment %main "main"
-               OpExecutionMode %main OriginUpperLeft
-               OpSource GLSL 450
-               OpName %main "main"
-               OpName %tex "tex"
-               OpDecorate %tex DescriptorSet 0
-               OpDecorate %tex Binding 0
-       %void = OpTypeVoid
-          %3 = OpTypeFunction %void
-      %float = OpTypeFloat 32
-          %7 = OpTypeImage %float 2D 0 1 1 1 Unknown
-%_ptr_UniformConstant_7 = OpTypePointer UniformConstant %7
-        %tex = OpVariable %_ptr_UniformConstant_7 UniformConstant
        %main = OpFunction %void None %3
           %5 = OpLabel
                OpReturn
@@ -979,7 +940,7 @@ const WGSLExtensionInfo kExtensions[] = {
     {"chromium_experimental_subgroup_matrix", true, {wgpu::FeatureName::ChromiumExperimentalSubgroupMatrix}, {"subgroups"}},
     {"chromium_experimental_resource_table", true, {wgpu::FeatureName::ChromiumExperimentalSamplingResourceTable}, {}},
     {"subgroup_size_control", false, {wgpu::FeatureName::SubgroupSizeControl}, {"subgroups"}},
-    {"atomic_vec2u_min_max", true, {wgpu::FeatureName::AtomicVec2uMinMax}, {}}
+    {"atomic_vec2u_min_max", false, {wgpu::FeatureName::AtomicVec2uMinMax}, {}}
 
     // Currently the following WGSL extensions are not enabled under any situation.
     /*

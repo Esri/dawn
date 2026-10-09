@@ -77,6 +77,9 @@ type struct_with_runtime_array
 type struct_add_carry_scalar<T>
 type struct_add_carry_vec<N: num, T>
 
+type struct_umul_extended_scalar<T>
+type struct_umul_extended_vec<N: num, T>
+
 @ns("spirv::type") enum dim {
   d1
   d2
@@ -337,6 +340,11 @@ fn image_fetch(image: image<T, dim_2d, non_depth, non_arrayed, multi_sampled, sa
                coords: vec2<C>,
                image_operands: literal) -> vec4<T>
 
+implicit(T: fiu32, C: iu32, F: texel_format)
+fn image_fetch(image: image<T, dim_2d, non_depth, is_arrayed, multi_sampled, sampling_compatible, F, readable>,
+               coords: vec3<C>,
+               image_operands: literal) -> vec4<T>
+
 implicit(C: iu32, F: texel_format)
 fn image_fetch(image: image<f32, dim_2d, is_depth, non_arrayed, single_sampled, sampling_compatible, F, readable>,
                coords: vec2<C>,
@@ -379,6 +387,12 @@ fn image_fetch(image: image<T, dim_3d, non_depth, non_arrayed, single_sampled, s
 implicit(T: fiu32, C: iu32, Z: iu32, F: texel_format)
 fn image_fetch(image: image<T, dim_2d, non_depth, non_arrayed, multi_sampled, sampling_compatible, F, readable>,
                coords: vec2<C>,
+               image_operands: literal,
+               sample: Z) -> vec4<T>
+
+implicit(T: fiu32, C: iu32, Z: iu32, F: texel_format)
+fn image_fetch(image: image<T, dim_2d, non_depth, is_arrayed, multi_sampled, sampling_compatible, F, readable>,
+               coords: vec3<C>,
                image_operands: literal,
                sample: Z) -> vec4<T>
 
@@ -505,6 +519,9 @@ fn image_query_size<R: iu32>(image: image<T, dim_cube, non_depth, is_arrayed, si
 
 implicit(T: fiu32, S: sampled, F: texel_format, A: access)
 fn image_query_size<R: iu32>(image: image<T, dim_2d, non_depth, non_arrayed, multi_sampled, S, F, A>) -> vec2<R>
+
+implicit(T: fiu32, S: sampled, F: texel_format, A: access)
+fn image_query_size<R: iu32>(image: image<T, dim_2d, non_depth, is_arrayed, multi_sampled, S, F, A>) -> vec3<R>
 
 implicit(F: texel_format, A: access)
 fn image_query_size<R: iu32>(image: image<f32, dim_2d, is_depth, non_arrayed, single_sampled, rw_op_compatible, F, A>) -> vec2<R>
@@ -1975,3 +1992,8 @@ fn add_carry(T, T) -> struct_add_carry_scalar<T>
 @must_use implicit(T: u32, N: num)
 fn add_carry(vec<N, T>, vec<N, T>) -> struct_add_carry_vec<N, T>
 
+/// UMul extended
+@must_use implicit(T: u32)
+fn umul_extended(T, T) -> struct_umul_extended_scalar<T>
+@must_use implicit(N: num, T: u32)
+fn umul_extended(vec<N, T>, vec<N, T>) -> struct_umul_extended_vec<N, T>

@@ -58,6 +58,7 @@
 #include "src/dawn/utils/Timer.h"
 #include "src/utils/log.h"
 #include "src/utils/platform.h"
+#include "src/utils/span.h"
 
 // Getting data back from Dawn is done in an async manners so all expectations are "deferred"
 // until the end of the test. Also expectations use a copy to a MapRead buffer to get the data
@@ -124,6 +125,9 @@
 #define EXPECT_PIXEL_RGBA8_EQ(expected, texture, x, y) \
     AddTextureExpectation(__FILE__, __LINE__, expected, texture, {x, y})
 
+#define EXPECT_PIXEL_U32_EQ(expected, texture, x, y) \
+    AddTextureExpectation(__FILE__, __LINE__, expected, texture, {x, y})
+
 #define EXPECT_PIXEL_FLOAT_EQ(expected, texture, x, y) \
     AddTextureExpectation(__FILE__, __LINE__, expected, texture, {x, y})
 
@@ -171,6 +175,32 @@ MATCHER_P(CHandleIs, cType, "") {
     ASSERT_DEVICE_ERROR_MSG_ON(device, statement, testing::_)
 
 #define ASSERT_DEVICE_ERROR(statement) ASSERT_DEVICE_ERROR_MSG(statement, testing::_)
+
+#define EXPECT_DEVICE_LOSS_REASON_MSG_ON(device, reason, statement, matcher)               \
+    do {                                                                                   \
+        FlushWire();                                                                       \
+        bool deviceLost = false;                                                           \
+        EXPECT_CALL(mDeviceLostCallback, Call(CHandleIs(device.Get()), reason, matcher))   \
+            .WillOnce([&](const wgpu::Device&, wgpu::DeviceLostReason, wgpu::StringView) { \
+                deviceLost = true;                                                         \
+            })                                                                             \
+            .RetiresOnSaturation();                                                        \
+        statement;                                                                         \
+        instance.ProcessEvents();                                                          \
+        FlushWire();                                                                       \
+        EXPECT_TRUE(deviceLost);                                                           \
+    } while (0)
+
+#define EXPECT_DEVICE_LOSS_MSG_ON(device, statement, matcher) \
+    EXPECT_DEVICE_LOSS_REASON_MSG_ON(device, wgpu::DeviceLostReason::Unknown, statement, matcher)
+
+#define EXPECT_DEVICE_LOSS_ON(device, statement) \
+    EXPECT_DEVICE_LOSS_MSG_ON(device, statement, testing::_)
+
+#define EXPECT_DEVICE_LOSS_MSG(statement, matcher) \
+    EXPECT_DEVICE_LOSS_MSG_ON(this->device, statement, matcher)
+
+#define EXPECT_DEVICE_LOSS(statement) EXPECT_DEVICE_LOSS_MSG(statement, testing::_)
 
 struct GLFWwindow;
 
@@ -222,8 +252,7 @@ class DawnTestEnvironment : public testing::Environment {
     static DawnTestEnvironment* GetEnvironment();
 
     std::vector<AdapterTestParam> GetAvailableAdapterTestParamsForBackends(
-        const BackendTestConfig* params,
-        size_t numParams);
+        dawn::Span<const BackendTestConfig> params);
 
     void SetUp() override;
     void TearDown() override;
@@ -236,7 +265,7 @@ class DawnTestEnvironment : public testing::Environment {
     bool HasVendorIdFilter() const;
     uint32_t GetVendorIdFilter() const;
     bool HasBackendTypeFilter() const;
-    wgpu::BackendType GetBackendTypeFilter() const;
+    bool BackendTypeMatchesFilter(wgpu::BackendType backendType) const;
     bool HasWebGPUInnerBackendTypeFilter() const;
     wgpu::BackendType GetWebGPUInnerBackendTypeFilter() const;
     bool GetWebGPUInnerForceFallbackAdapter() const;
@@ -270,8 +299,7 @@ class DawnTestEnvironment : public testing::Environment {
     bool mBeginCaptureOnStartup = false;
     bool mHasVendorIdFilter = false;
     uint32_t mVendorIdFilter = 0;
-    bool mHasBackendTypeFilter = false;
-    wgpu::BackendType mBackendTypeFilter;
+    std::set<wgpu::BackendType> mBackendTypeFilters;
     bool mHasWebGPUInnerBackendTypeFilter = false;
     wgpu::BackendType mWebGPUInnerBackendTypeFilter = wgpu::BackendType::Undefined;
     bool mWebGPUInnerForceFallbackAdapter = false;
@@ -334,7 +362,10 @@ class DawnTestBase {
     bool IsWindows11() const;
     bool IsWindowsVersionAtLeast(uint32_t buildNumber, uint32_t updateBuildRevision = 0) const;
     bool IsLinux() const;
-    bool IsMacOS(int32_t majorVersion = -1, int32_t minorVersion = -1) const;
+    bool IsMacOS() const;
+    bool IsMacOSVersionAtLeast(uint32_t majorVersion,
+                               uint32_t minorVersion = 0,
+                               uint32_t patchVersion = 0) const;
     bool IsAndroid() const;
     bool IsAndroidOlderThan(uint32_t version) const;
     bool IsChromeOS() const;
@@ -360,8 +391,8 @@ class DawnTestBase {
     static bool IsAsan();
     static bool IsTsan();
 
-    bool HasToggleEnabled(const char* workaround, const wgpu::Device& device) const;
-    bool HasToggleEnabled(const char* workaround) const;
+    bool HasToggleEnabled(const char* toggle, const wgpu::Device& device) const;
+    bool HasToggleEnabled(const char* toggle) const;
 
     void DestroyDevice(wgpu::Device device = nullptr);
     void LoseDeviceForTesting(wgpu::Device device = nullptr);
@@ -370,7 +401,7 @@ class DawnTestBase {
     uint32_t GetVendorIdFilter() const;
 
     bool HasBackendTypeFilter() const;
-    wgpu::BackendType GetBackendTypeFilter() const;
+    bool BackendTypeMatchesFilter(wgpu::BackendType backendType) const;
 
     const wgpu::Instance& GetInstance() const;
     native::Adapter GetAdapter() const;
@@ -809,9 +840,9 @@ class DawnTestBase {
                                                    uint32_t width,
                                                    uint32_t height,
                                                    uint32_t componentCount,
+                                                   uint32_t sampleCount,
                                                    uint32_t arrayLayer,
                                                    uint32_t mipLevel,
-                                                   uint32_t sampleCount,
                                                    wgpu::TextureAspect aspect,
                                                    detail::Expectation* expectation);
 
@@ -819,9 +850,8 @@ class DawnTestBase {
     struct ReadbackSlot {
         wgpu::Device device;
         wgpu::Buffer buffer;
-        uint64_t bufferSize;
         std::string label;
-        raw_ptr<const void> mappedData = nullptr;
+        dawn::Span<const std::byte> mappedData = {};
     };
     std::vector<ReadbackSlot> mReadbackSlots;
 
@@ -832,7 +862,7 @@ class DawnTestBase {
     struct ReadbackReservation {
         wgpu::Device device;
         wgpu::Buffer buffer;
-        size_t slot;
+        size_t slot = 0;
     };
     ReadbackReservation ReserveReadback(wgpu::Device targetDevice, uint64_t readbackSize);
 
@@ -841,10 +871,10 @@ class DawnTestBase {
     void CheckReplayedReadbackBuffers(std::span<ReadbackSlot> existingReadbacks);
 
     struct DeferredExpectation {
-        const char* file;
-        int line;
-        size_t readbackSlot;
-        uint64_t size;
+        const char* file = nullptr;
+        int line = 0;
+        size_t readbackSlot = 0;
+        uint64_t size = 0;
         uint32_t rowBytes = 0;
         uint32_t bytesPerRow = 0;
         std::unique_ptr<detail::Expectation> expectation;
@@ -923,13 +953,12 @@ using DawnTest = DawnTestWithParams<>;
 
 // Instantiate the test once for each backend provided after the first argument. Use it like this:
 //     DAWN_INSTANTIATE_TEST(MyTestFixture, MetalBackend, OpenGLBackend)
-#define DAWN_INSTANTIATE_TEST(testName, ...)                                            \
-    const decltype(DAWN_PP_GET_HEAD(__VA_ARGS__)) testName##params[] = {__VA_ARGS__};   \
-    INSTANTIATE_TEST_SUITE_P(                                                           \
-        , testName,                                                                     \
-        testing::ValuesIn(::dawn::detail::GetAvailableAdapterTestParamsForBackends(     \
-            testName##params, sizeof(testName##params) / sizeof(testName##params[0]))), \
-        DawnTestBase::PrintToStringParamName(#testName));                               \
+#define DAWN_INSTANTIATE_TEST(testName, ...)                                          \
+    INSTANTIATE_TEST_SUITE_P(                                                         \
+        , testName,                                                                   \
+        testing::ValuesIn(                                                            \
+            ::dawn::detail::GetAvailableAdapterTestParamsForBackends({__VA_ARGS__})), \
+        DawnTestBase::PrintToStringParamName(#testName));                             \
     GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(testName)
 
 #define DAWN_INSTANTIATE_PREFIXED_TEST_P(prefix, testName, ...)                    \
@@ -979,8 +1008,7 @@ using DawnTest = DawnTestWithParams<>;
 namespace detail {
 // Helper functions used for DAWN_INSTANTIATE_TEST
 std::vector<AdapterTestParam> GetAvailableAdapterTestParamsForBackends(
-    const BackendTestConfig* params,
-    size_t numParams);
+    dawn::Span<const BackendTestConfig> params);
 
 // All classes used to implement the deferred expectations should inherit from this.
 class Expectation {
@@ -1081,13 +1109,13 @@ template <typename Param, typename... Params>
 auto MakeParamGenerator(std::vector<BackendTestConfig>&& first,
                         std::initializer_list<Params>&&... params) {
     return ParamGenerator<Param, AdapterTestParam, Params...>(
-        ::dawn::detail::GetAvailableAdapterTestParamsForBackends(first.data(), first.size()),
+        ::dawn::detail::GetAvailableAdapterTestParamsForBackends(first),
         std::forward<std::initializer_list<Params>&&>(params)...);
 }
 template <typename Param, typename... Params>
 auto MakeParamGenerator(std::vector<BackendTestConfig>&& first, std::vector<Params>&&... params) {
     return ParamGenerator<Param, AdapterTestParam, Params...>(
-        ::dawn::detail::GetAvailableAdapterTestParamsForBackends(first.data(), first.size()),
+        ::dawn::detail::GetAvailableAdapterTestParamsForBackends(first),
         std::forward<std::vector<Params>&&>(params)...);
 }
 

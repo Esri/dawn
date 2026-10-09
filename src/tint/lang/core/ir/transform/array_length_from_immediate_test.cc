@@ -116,7 +116,7 @@ $B1: {  # root
     auto immediate_data = PrepareImmediateData(mod, {});
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, 0u, bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -186,14 +186,13 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -263,14 +262,13 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -324,7 +322,7 @@ $B1: {  # root
     auto immediate_data = PrepareImmediateData(mod, {});
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, 0u, bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -379,7 +377,7 @@ $B1: {  # root
     auto immediate_data = PrepareImmediateData(mod, {});
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, 0u, bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -467,14 +465,13 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -559,14 +556,13 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -666,14 +662,13 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -745,14 +740,13 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -842,14 +836,13 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -959,14 +952,13 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -1042,7 +1034,7 @@ $B1: {  # root
     auto immediate_data = PrepareImmediateData(mod, {});
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, 0u, bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -1141,14 +1133,13 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -1250,13 +1241,12 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -1374,13 +1364,12 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -1450,13 +1439,12 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -1579,13 +1567,12 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -1643,15 +1630,14 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, 0u, bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -1712,15 +1698,14 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, 0u, bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -1800,15 +1785,14 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, 0u, bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -1866,15 +1850,14 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, 0u, bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -1973,13 +1956,12 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -2031,8 +2013,7 @@ $B1: {  # root
 
 %foo = @compute @workgroup_size(1u, 1u, 1u) func():void {
   $B2: {
-    %4:u32 = div 128u, 4u
-    %5:ptr<storage, array<u32>, read_write> = bufferArrayView<array<u32>> %gv, 0u, 128u, 256u
+    %4:ptr<storage, array<u32>, read_write> = bufferArrayView<array<u32>> %gv, 0u, 128u, 256u
     ret
   }
 }
@@ -2045,15 +2026,14 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, 0u, bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), 0u, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }
@@ -2188,7 +2168,7 @@ $B1: {  # root
 }
 )";
 
-    mod.properties.Add(core::ir::Property::kAllowMslEntryPointInterface);
+    mod.properties.Add(core::ir::Property::kAllowPointerAndHandleInAggregates);
     std::unordered_map<BindingPoint, uint32_t> bindpoint_to_index;
     bindpoint_to_index[{0, 0}] = 0;
 
@@ -2196,13 +2176,12 @@ $B1: {  # root
     constexpr uint32_t buffer_size_start_offset = 16;
     uint32_t num_elements = GetBufferSizesNumElements(bindpoint_to_index);
     ASSERT_EQ(immediate_data_config.AddInternalImmediateData(
-                  buffer_size_start_offset, mod.symbols.New("tint_storage_buffer_sizes"),
-                  ty.array(ty.u32(), num_elements)),
+                  core::InternalImmediate::kStorageBufferSizes, buffer_size_start_offset,
+                  mod.symbols.New("tint_storage_buffer_sizes"), ty.array(ty.u32(), num_elements)),
               Success);
     auto immediate_data = PrepareImmediateData(mod, immediate_data_config);
     EXPECT_EQ(immediate_data, Success);
-    Run(ArrayLengthFromImmediates, immediate_data.Get(), buffer_size_start_offset, num_elements,
-        bindpoint_to_index);
+    Run(ArrayLengthFromImmediates, immediate_data.Get(), num_elements, bindpoint_to_index);
 
     EXPECT_EQ(expect, str());
 }

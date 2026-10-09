@@ -51,14 +51,12 @@ class ComputePipeline final : public ComputePipelineBase {
 
     void Encode(id<MTLComputeCommandEncoder> encoder);
     MTLSize GetLocalWorkGroupSize() const;
-    bool RequiresStorageBufferLength() const;
 
   private:
     using ComputePipelineBase::ComputePipelineBase;
     ResultOrError<Extent3D> InitializeImpl() override;
 
     NSPRef<id<MTLComputePipelineState>> mMtlComputePipelineState;
-    bool mRequiresStorageBufferLength;
     std::vector<uint32_t> mWorkgroupAllocations;
 };
 

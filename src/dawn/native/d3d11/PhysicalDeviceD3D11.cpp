@@ -129,7 +129,7 @@ MaybeError PhysicalDevice::InitializeImpl() {
     // Create the device to populate the adapter properties then reuse it when needed for actual
     // rendering.
     if (!mIsSharedD3D11Device) {
-        DAWN_TRY_ASSIGN(mD3D11Device, CreateD3D11Device(/*enableDebugLayers=*/false));
+        DAWN_TRY_ASSIGN(mD3D11Device, CreateD3D11Device(/*enableDebugLayer=*/false));
     }
 
     mFeatureLevel = mD3D11Device->GetFeatureLevel();
@@ -169,6 +169,7 @@ void PhysicalDevice::InitializeSupportedFeaturesImpl() {
     if (mDeviceInfo.isUMA && mDeviceInfo.supportsMapNoOverwriteDynamicBuffers) {
         // With UMA we should allow mapping usages on more type of buffers.
         EnableFeature(Feature::BufferMapExtendedUsages);
+        EnableFeature(Feature::BufferMapWriteExtendedUsages);
     }
 
     // Multi planar formats are always supported since Feature Level 11.0
@@ -374,6 +375,12 @@ void PhysicalDevice::SetupBackendDeviceToggles(dawn::platform::Platform* platfor
         }
     }
 
+    if (gpu_info::IsIntel(vendorId)) {
+        // Workaround an Intel GPU hardware limitation that corrupts buffer<->texture copies with
+        // a large row pitch. See https://crbug.com/481934465.
+        deviceToggles->Default(Toggle::SplitBufferTextureCopyForOversizedRow, true);
+    }
+
     // Enable the integer range analysis for shader robustness by default if the corresponding
     // platform feature is enabled.
     deviceToggles->Default(
@@ -433,6 +440,8 @@ void PhysicalDevice::PopulateBackendProperties(UnpackedPtr<AdapterInfo>& info,
     }
     if (auto* d3dProperties = info.Get<AdapterPropertiesD3D>()) {
         d3dProperties->shaderModel = GetDeviceInfo().shaderModel;
+        d3dProperties->adapterLUIDLowPart = GetAdapterLUID().LowPart;
+        d3dProperties->adapterLUIDHighPart = static_cast<uint32_t>(GetAdapterLUID().HighPart);
     }
 }
 

@@ -80,17 +80,17 @@ F AsVkFn(void(VKAPI_PTR* addr)()) {
 
 }  // anonymous namespace
 
-#define GET_GLOBAL_PROC(name)                                                        \
-    do {                                                                             \
-        name = AsVkFn<PFN_vk##name>(GetInstanceProcAddr(nullptr, "vk" #name));       \
-        if (name == nullptr) {                                                       \
-            return DAWN_INTERNAL_ERROR(std::string("Couldn't get proc vk") + #name); \
-        }                                                                            \
+#define GET_GLOBAL_PROC(name)                                                             \
+    do {                                                                                  \
+        name = AsVkFn<PFN_vk##name>(GetInstanceProcAddr(nullptr, "vk" #name));            \
+        if (name == nullptr) {                                                            \
+            return DAWN_UNRECOVERABLE_ERROR(std::string("Couldn't get proc vk") + #name); \
+        }                                                                                 \
     } while (0)
 
 MaybeError VulkanFunctions::LoadGlobalProcs(const DynamicLib& vulkanLib) {
     if (!vulkanLib.GetProc(&GetInstanceProcAddr, "vkGetInstanceProcAddr")) {
-        return DAWN_INTERNAL_ERROR("Couldn't get vkGetInstanceProcAddr");
+        return DAWN_UNRECOVERABLE_ERROR("Couldn't get vkGetInstanceProcAddr");
     }
 
     GET_GLOBAL_PROC(CreateInstance);
@@ -106,12 +106,12 @@ MaybeError VulkanFunctions::LoadGlobalProcs(const DynamicLib& vulkanLib) {
 
 #define GET_INSTANCE_PROC_NO_ERROR_BASE(name, procName) \
     name = AsVkFn<PFN_vk##name>(GetInstanceProcAddr(instance, "vk" #procName))
-#define GET_INSTANCE_PROC_BASE(name, procName)                                           \
-    do {                                                                                 \
-        GET_INSTANCE_PROC_NO_ERROR_BASE(name, procName);                                 \
-        if (name == nullptr) {                                                           \
-            return DAWN_INTERNAL_ERROR(std::string("Couldn't get proc vk") + #procName); \
-        }                                                                                \
+#define GET_INSTANCE_PROC_BASE(name, procName)                                                \
+    do {                                                                                      \
+        GET_INSTANCE_PROC_NO_ERROR_BASE(name, procName);                                      \
+        if (name == nullptr) {                                                                \
+            return DAWN_UNRECOVERABLE_ERROR(std::string("Couldn't get proc vk") + #procName); \
+        }                                                                                     \
     } while (0)
 
 #define GET_INSTANCE_PROC(name) GET_INSTANCE_PROC_BASE(name, name)
@@ -152,20 +152,6 @@ MaybeError VulkanFunctions::LoadInstanceProcs(VkInstance instance,
     GET_INSTANCE_PROC(GetPhysicalDeviceProperties2);
     GET_INSTANCE_PROC(GetPhysicalDeviceQueueFamilyProperties2);
     GET_INSTANCE_PROC(GetPhysicalDeviceSparseImageFormatProperties2);
-
-    if (globalInfo.HasExt(InstanceExt::DebugUtils)) {
-        GET_INSTANCE_PROC(CmdBeginDebugUtilsLabelEXT);
-        GET_INSTANCE_PROC(CmdEndDebugUtilsLabelEXT);
-        GET_INSTANCE_PROC(CmdInsertDebugUtilsLabelEXT);
-        GET_INSTANCE_PROC(CreateDebugUtilsMessengerEXT);
-        GET_INSTANCE_PROC(DestroyDebugUtilsMessengerEXT);
-        GET_INSTANCE_PROC(QueueBeginDebugUtilsLabelEXT);
-        GET_INSTANCE_PROC(QueueEndDebugUtilsLabelEXT);
-        GET_INSTANCE_PROC(QueueInsertDebugUtilsLabelEXT);
-        GET_INSTANCE_PROC(SetDebugUtilsObjectNameEXT);
-        GET_INSTANCE_PROC(SetDebugUtilsObjectTagEXT);
-        GET_INSTANCE_PROC(SubmitDebugUtilsMessageEXT);
-    }
 
     if (globalInfo.HasExt(InstanceExt::Surface)) {
         GET_INSTANCE_PROC(DestroySurfaceKHR);
@@ -230,12 +216,47 @@ MaybeError VulkanFunctions::LoadInstanceProcs(VkInstance instance,
     return {};
 }
 
-#define GET_DEVICE_PROC(name)                                                        \
-    do {                                                                             \
-        name = AsVkFn<PFN_vk##name>(GetDeviceProcAddr(device, "vk" #name));          \
-        if (name == nullptr) {                                                       \
-            return DAWN_INTERNAL_ERROR(std::string("Couldn't get proc vk") + #name); \
-        }                                                                            \
+bool VulkanFunctions::TryLoadEXTDebugUtils(VkInstance instance) {
+    GET_INSTANCE_PROC_NO_ERROR(CmdBeginDebugUtilsLabelEXT);
+    GET_INSTANCE_PROC_NO_ERROR(CmdEndDebugUtilsLabelEXT);
+    GET_INSTANCE_PROC_NO_ERROR(CmdInsertDebugUtilsLabelEXT);
+    GET_INSTANCE_PROC_NO_ERROR(CreateDebugUtilsMessengerEXT);
+    GET_INSTANCE_PROC_NO_ERROR(DestroyDebugUtilsMessengerEXT);
+    GET_INSTANCE_PROC_NO_ERROR(QueueBeginDebugUtilsLabelEXT);
+    GET_INSTANCE_PROC_NO_ERROR(QueueEndDebugUtilsLabelEXT);
+    GET_INSTANCE_PROC_NO_ERROR(QueueInsertDebugUtilsLabelEXT);
+    GET_INSTANCE_PROC_NO_ERROR(SetDebugUtilsObjectNameEXT);
+    GET_INSTANCE_PROC_NO_ERROR(SetDebugUtilsObjectTagEXT);
+    GET_INSTANCE_PROC_NO_ERROR(SubmitDebugUtilsMessageEXT);
+
+    if (CmdBeginDebugUtilsLabelEXT == nullptr || CmdEndDebugUtilsLabelEXT == nullptr ||
+        CmdInsertDebugUtilsLabelEXT == nullptr || CreateDebugUtilsMessengerEXT == nullptr ||
+        DestroyDebugUtilsMessengerEXT == nullptr || QueueBeginDebugUtilsLabelEXT == nullptr ||
+        QueueEndDebugUtilsLabelEXT == nullptr || QueueInsertDebugUtilsLabelEXT == nullptr ||
+        SetDebugUtilsObjectNameEXT == nullptr || SetDebugUtilsObjectTagEXT == nullptr ||
+        SubmitDebugUtilsMessageEXT == nullptr) {
+        CmdBeginDebugUtilsLabelEXT = nullptr;
+        CmdEndDebugUtilsLabelEXT = nullptr;
+        CmdInsertDebugUtilsLabelEXT = nullptr;
+        CreateDebugUtilsMessengerEXT = nullptr;
+        DestroyDebugUtilsMessengerEXT = nullptr;
+        QueueBeginDebugUtilsLabelEXT = nullptr;
+        QueueEndDebugUtilsLabelEXT = nullptr;
+        QueueInsertDebugUtilsLabelEXT = nullptr;
+        SetDebugUtilsObjectNameEXT = nullptr;
+        SetDebugUtilsObjectTagEXT = nullptr;
+        SubmitDebugUtilsMessageEXT = nullptr;
+        return false;
+    }
+    return true;
+}
+
+#define GET_DEVICE_PROC(name)                                                             \
+    do {                                                                                  \
+        name = AsVkFn<PFN_vk##name>(GetDeviceProcAddr(device, "vk" #name));               \
+        if (name == nullptr) {                                                            \
+            return DAWN_UNRECOVERABLE_ERROR(std::string("Couldn't get proc vk") + #name); \
+        }                                                                                 \
     } while (0)
 
 MaybeError VulkanFunctions::LoadDeviceProcs(VkInstance instance,

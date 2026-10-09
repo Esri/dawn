@@ -27,19 +27,15 @@ void main_inner(uint tint_local_index) {
   GroupMemoryBarrierWithGroupSync();
   uint v_2 = 0u;
   s_var.GetDimensions(v_2);
-  uint v_3 = asuint(int(0));
-  uint v_4 = asuint(int(8));
-  bool v_5 = (((v_3 + (v_4 * 7u)) + 8u) <= (v_2 / 4u));
-  Matrix_left_f32_8x8 m = Matrix_left_f32_8x8::Load(s_var, (0u + (select(v_5, v_3, 0u) * 4u)), (select(v_5, v_4, 8u) * 4u), MatrixLayout::RowMajor);
+  bool v_3 = (64u <= (v_2 / 4u));
+  Matrix_left_f32_8x8 m = Matrix_left_f32_8x8::Load(s_var, (0u + (select(v_3, 0u, 0u) * 4u)), (select(v_3, 8u, 8u) * 4u), MatrixLayout::RowMajor);
   m.Store(wg_var, 0u, 8u, MatrixLayout::RowMajor);
   GroupMemoryBarrierWithGroupSync();
   Matrix_right_f32_8x8 m2 = Matrix_right_f32_8x8::Load(wg_var, 0u, 8u, MatrixLayout::ColMajor);
-  uint v_6 = 0u;
-  s_var.GetDimensions(v_6);
-  uint v_7 = asuint(int(0));
-  uint v_8 = asuint(int(8));
-  bool v_9 = (((v_7 + (v_8 * 7u)) + 8u) <= (v_6 / 4u));
-  m2.Store(s_var, (0u + (select(v_9, v_7, 0u) * 4u)), (select(v_9, v_8, 8u) * 4u), MatrixLayout::ColMajor);
+  uint v_4 = 0u;
+  s_var.GetDimensions(v_4);
+  bool v_5 = (64u <= (v_4 / 4u));
+  m2.Store(s_var, (0u + (select(v_5, 0u, 0u) * 4u)), (select(v_5, 8u, 8u) * 4u), MatrixLayout::ColMajor);
 }
 
 [numthreads(32, 1, 1)]

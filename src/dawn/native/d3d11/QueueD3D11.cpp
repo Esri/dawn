@@ -426,7 +426,7 @@ MaybeError Queue::WriteBufferImpl(BufferBase* buffer,
     }
 
     auto commandContext = GetScopedPendingCommandContext(QueueBase::SubmitMode::Normal);
-    return ToBackend(buffer)->Write(&commandContext, bufferOffset, data.data(), data.size());
+    return ToBackend(buffer)->Write(&commandContext, bufferOffset, data);
 }
 
 MaybeError Queue::WriteTextureImpl(const TexelCopyTextureInfo& destination,
@@ -449,10 +449,9 @@ MaybeError Queue::WriteTextureImpl(const TexelCopyTextureInfo& destination,
 
     Texture* texture = ToBackend(destination.texture);
     DAWN_TRY(texture->SynchronizeTextureBeforeUse(&commandContext));
-    return texture->Write(
-        &commandContext, subresources, destination.origin, writeSizePixel,
-        DAWN_UNSAFE_TODO(reinterpret_cast<const uint8_t*>(data.data()) + dataLayout.offset),
-        dataLayout.bytesPerRow, dataLayout.rowsPerImage);
+    return texture->Write(&commandContext, subresources, destination.origin, writeSizePixel,
+                          data.subspan(static_cast<size_t>(dataLayout.offset)),
+                          dataLayout.bytesPerRow, dataLayout.rowsPerImage);
 }
 
 bool Queue::HasPendingCommands() const {
@@ -485,7 +484,7 @@ MaybeError MonitoredFenceQueue::NextSerial() {
 
     DAWN_TRY(commandContext.FlushBuffersForSyncingWithCPU());
 
-    const uint64_t submitSerial = uint64_t(GetPendingCommandSerial());
+    const uint64_t submitSerial = uint64_t{GetPendingCommandSerial()};
 
     {
         TRACE_EVENT(DAWN_TRACE_CATEGORY(), "D3D11Device::SignalFence", "serial", submitSerial);
@@ -507,7 +506,7 @@ ResultOrError<ExecutionSerial> MonitoredFenceQueue::CheckCompletedSerialsImpl() 
         DAWN_TRY(CheckHRESULT(d3d11Device->GetDeviceRemovedReason(),
                               "ID3D11Device::GetDeviceRemovedReason"));
         // Otherwise, return a generic device lost error.
-        return DAWN_DEVICE_LOST_ERROR("Device lost");
+        return DAWN_BACKEND_DEVICE_LOST_ERROR("Device lost");
     }
 
     DAWN_TRY(RecycleSystemEventReceivers(completedSerial));
@@ -535,8 +534,8 @@ MaybeError SystemEventQueue::NextSerial() {
         DAWN_ASSERT(mFence);
 
         TRACE_EVENT(DAWN_TRACE_CATEGORY(), "D3D11Device::SignalFence", "serial",
-                    uint64_t(submitSerial));
-        DAWN_TRY(CheckHRESULT(commandContext.Signal(mFence.Get(), uint64_t(submitSerial)),
+                    uint64_t{submitSerial});
+        DAWN_TRY(CheckHRESULT(commandContext.Signal(mFence.Get(), uint64_t{submitSerial}),
                               "D3D11 command queue signal fence"));
     }
 
@@ -572,9 +571,9 @@ ResultOrError<ExecutionSerial> SystemEventQueue::CheckCompletedSerialsImpl() {
             DWORD result = WaitForMultipleObjects(static_cast<DWORD>(handles.size()),
                                                   handles.data(), /*bWaitAll=*/false,
                                                   /*dwMilliseconds=*/0);
-            DAWN_INTERNAL_ERROR_IF(result == WAIT_FAILED, "WaitForMultipleObjects() failed");
+            DAWN_UNRECOVERABLE_ERROR_IF(result == WAIT_FAILED, "WaitForMultipleObjects() failed");
 
-            DAWN_INTERNAL_ERROR_IF(
+            DAWN_UNRECOVERABLE_ERROR_IF(
                 result >= WAIT_ABANDONED_0 && result < WAIT_ABANDONED_0 + handles.size(),
                 "WaitForMultipleObjects() get abandoned event");
 
@@ -625,9 +624,9 @@ ResultOrError<ExecutionSerial> SystemEventQueue::WaitForQueueSerialImpl(Executio
     }
 
     if (serial > GetLastSubmittedCommandSerial()) {
-        return DAWN_FORMAT_INTERNAL_ERROR(
+        return DAWN_FORMAT_UNRECOVERABLE_ERROR(
             "Wait a serial (%llu) which is greater than last submitted command serial (%llu).",
-            uint64_t(serial), uint64_t(GetLastSubmittedCommandSerial()));
+            uint64_t{serial}, uint64_t(GetLastSubmittedCommandSerial()));
     }
 
     return mPendingEvents.Use([=, &completedEventsList = mCompletedEvents](
@@ -644,7 +643,7 @@ ResultOrError<ExecutionSerial> SystemEventQueue::WaitForQueueSerialImpl(Executio
         // TODO(crbug.com/335553337): call WaitForSingleObject() without holding the mutex.
         DWORD result =
             WaitForSingleObject(it->receiver.GetPrimitive().Get(), ToMilliseconds(timeout));
-        DAWN_INTERNAL_ERROR_IF(result == WAIT_FAILED, "WaitForSingleObject() failed");
+        DAWN_UNRECOVERABLE_ERROR_IF(result == WAIT_FAILED, "WaitForSingleObject() failed");
 
         if (result != WAIT_OBJECT_0) {
             return kWaitSerialTimeout;
@@ -698,8 +697,8 @@ MaybeError DelayFlushQueue::NextSerial() {
         DAWN_ASSERT(mFence);
 
         TRACE_EVENT(DAWN_TRACE_CATEGORY(), "D3D11Device::SignalFence", "serial",
-                    uint64_t(submitSerial));
-        DAWN_TRY(CheckHRESULT(commandContext.Signal(mFence.Get(), uint64_t(submitSerial)),
+                    uint64_t{submitSerial});
+        DAWN_TRY(CheckHRESULT(commandContext.Signal(mFence.Get(), uint64_t{submitSerial}),
                               "D3D11 command queue signal fence"));
     }
 
@@ -766,9 +765,9 @@ ResultOrError<ExecutionSerial> DelayFlushQueue::WaitForQueueSerialImpl(Execution
     }
 
     if (waitSerial > GetLastSubmittedCommandSerial()) {
-        return DAWN_FORMAT_INTERNAL_ERROR(
+        return DAWN_FORMAT_UNRECOVERABLE_ERROR(
             "Wait a serial (%llu) which is greater than last submitted command serial (%llu).",
-            uint64_t(waitSerial), uint64_t(GetLastSubmittedCommandSerial()));
+            uint64_t{waitSerial}, uint64_t(GetLastSubmittedCommandSerial()));
     }
 
     // A coarse-grained D3D11 scope lock is unnecessary here. When D3D11 multithread protection is
@@ -784,8 +783,7 @@ ResultOrError<ExecutionSerial> DelayFlushQueue::WaitForQueueSerialImpl(Execution
         return waitSerial;
     }
 
-    if (uint64_t(timeout) == std::numeric_limits<uint64_t>::max() &&
-        waitSerial == GetLastSubmittedCommandSerial()) {
+    if (timeout >= kMaxDurationNanos && waitSerial == GetLastSubmittedCommandSerial()) {
         // If user submits then waits immediately, we can do a small optimization here,
         // Flush + enqueue SetEvent then wait on the event. This can avoid spinning wait below,
         // wasting less CPU cycles.
@@ -815,9 +813,10 @@ ResultOrError<ExecutionSerial> DelayFlushQueue::WaitForQueueSerialImpl(Execution
 
             if (!done) {
                 auto curTime = std::chrono::steady_clock::now();
-                auto elapsedNs =
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(curTime - startTime);
-                if (static_cast<uint64_t>(elapsedNs.count()) >= uint64_t(timeout)) {
+                auto elapsedNs = Nanoseconds(static_cast<uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(curTime - startTime)
+                        .count()));
+                if (elapsedNs >= timeout) {
                     return kWaitSerialTimeout;
                 }
                 std::this_thread::yield();
@@ -840,7 +839,7 @@ MaybeError DelayFlushQueue::BlockWaitForLastSubmittedSerial(
     commandContext->Flush1(D3D11_CONTEXT_TYPE_ALL, receiver.GetPrimitive().Get());
 
     DWORD result = WaitForSingleObject(receiver.GetPrimitive().Get(), INFINITE);
-    DAWN_INTERNAL_ERROR_IF(result != WAIT_OBJECT_0, "WaitForSingleObject() failed");
+    DAWN_UNRECOVERABLE_ERROR_IF(result != WAIT_OBJECT_0, "WaitForSingleObject() failed");
 
     SystemEventReceiver returnedReceivers[] = {std::move(receiver)};
     return ReturnSystemEventReceivers(returnedReceivers);

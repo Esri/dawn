@@ -386,6 +386,9 @@ MaybeError RenderPipeline::InitializeImpl() {
                                                 sizeof(ClampFragDepthArgs));
     }
 
+    mImmediateMask |=
+        GetImmediateBlockBits(offsetof(RenderImmediates, nonConstantZero), sizeof(NonConstantZero));
+
     const PerStage<ProgrammableStage>& allStages = GetAllStages();
     const ProgrammableStage& vertexStage = allStages[wgpu::ShaderStage::Vertex];
     ShaderModule::MetalFunctionData vertexData;
@@ -396,9 +399,6 @@ MaybeError RenderPipeline::InitializeImpl() {
         " getting vertex MTLFunction for %s", this);
 
     descriptorMTL.vertexFunction = vertexData.function.Get();
-    if (vertexData.needsStorageBufferLength) {
-        mStagesRequiringStorageBufferLength |= wgpu::ShaderStage::Vertex;
-    }
 
     ShaderModule::MetalFunctionData fragmentData;
     if (GetStageMask() & wgpu::ShaderStage::Fragment) {
@@ -410,9 +410,6 @@ MaybeError RenderPipeline::InitializeImpl() {
             " getting fragment MTLFunction for %s", this);
 
         descriptorMTL.fragmentFunction = fragmentData.function.Get();
-        if (fragmentData.needsStorageBufferLength) {
-            mStagesRequiringStorageBufferLength |= wgpu::ShaderStage::Fragment;
-        }
 
         const auto& fragmentOutputMask = fragmentStage.metadata->fragmentOutputMask;
         for (auto i : GetColorAttachmentsMask()) {
@@ -481,7 +478,7 @@ MaybeError RenderPipeline::InitializeImpl() {
         if (GetStageMask() & wgpu::ShaderStage::Fragment) {
             absl::StrAppendFormat(&errorMessage, "\n\nand fragment MSL:\n\n%s", fragmentData.msl);
         }
-        return DAWN_INTERNAL_ERROR(errorMessage);
+        return DAWN_UNRECOVERABLE_ERROR(errorMessage);
     }
     DAWN_ASSERT(mMtlRenderPipelineState != nil);
     timer.RecordMicroseconds("Metal.newRenderPipelineStateWithDescriptor.CacheMiss");
@@ -521,10 +518,6 @@ uint32_t RenderPipeline::GetMtlVertexBufferIndex(VertexBufferSlot slot) const {
     return mMtlVertexBufferIndices[slot];
 }
 
-wgpu::ShaderStage RenderPipeline::GetStagesRequiringStorageBufferLength() const {
-    return mStagesRequiringStorageBufferLength;
-}
-
 NSRef<MTLVertexDescriptor> RenderPipeline::MakeVertexDesc() const {
     MTLVertexDescriptor* mtlVertexDescriptor = [MTLVertexDescriptor new];
 
@@ -545,7 +538,7 @@ NSRef<MTLVertexDescriptor> RenderPipeline::MakeVertexDesc() const {
                 }
                 maxArrayStride =
                     std::max(maxArrayStride,
-                             GetVertexFormatInfo(attrib.format).byteSize + size_t(attrib.offset));
+                             GetVertexFormatInfo(attrib.format).byteSize + size_t{attrib.offset});
             }
             layoutDesc.stepFunction = MTLVertexStepFunctionConstant;
             layoutDesc.stepRate = 0;

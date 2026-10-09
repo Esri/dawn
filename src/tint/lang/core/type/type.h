@@ -88,6 +88,9 @@ class Type : public Castable<Type, UniqueNode> {
     /// declared in WGSL.
     virtual std::string FriendlyName() const = 0;
 
+    /// @returns the name for this type in a format that can be used in an identifier
+    virtual std::string IdentifierName() const;
+
     /// @returns the inner most pointee type if this is a pointer, `this`
     /// otherwise
     const Type* UnwrapPtr() const;
@@ -206,8 +209,8 @@ class Type : public Castable<Type, UniqueNode> {
     /// Examples:
     ///  * Elements() of `array<vec3<f32>, 5>` returns `[vec3<f32>, 5]`.
     ///  * Elements() of `array<f32>` returns `[f32, count_if_invalid]`.
-    ///  * Elements() of `struct S { a : f32, b : i32 }` returns `[count_if_invalid, 2]`.
-    ///  * Elements() of `struct S { a : i32, b : i32 }` also returns `[count_if_invalid, 2]`.
+    ///  * Elements() of `struct S { a : f32, b : i32 }` returns `[type_if_invalid, 2]`.
+    ///  * Elements() of `struct S { a : i32, b : i32 }` also returns `[type_if_invalid, 2]`.
     virtual TypeAndCount Elements(const Type* type_if_invalid = nullptr,
                                   uint32_t count_if_invalid = 0) const;
 

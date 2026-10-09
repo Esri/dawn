@@ -79,8 +79,8 @@ class DualSourceBlendTests : public DawnTest {
     }
 
     struct TestParams {
-        wgpu::BlendFactor srcBlendFactor;
-        wgpu::BlendFactor dstBlendFactor;
+        wgpu::BlendFactor srcBlendFactor{};
+        wgpu::BlendFactor dstBlendFactor{};
         utils::RGBA8 baseColor;
         utils::RGBA8 testColorIndex0;
         utils::RGBA8 testColorIndex1;
@@ -95,7 +95,7 @@ class DualSourceBlendTests : public DawnTest {
                                              const std::array<float, 4>& dstF32,
                                              const std::array<float, 4>& src0F32,
                                              const std::array<float, 4>& src1F32) {
-        std::array<float, 4> idealBlendOutputF32;
+        std::array<float, 4> idealBlendOutputF32{};
         // Currently in this test blendComponents are same for both color and alpha so we can
         // compute them together.
         switch (blendFactor) {
@@ -287,7 +287,7 @@ class DualSourceBlendTests : public DawnTest {
 
     // Create a bind group to set the colors as a uniform buffer
     wgpu::BindGroup MakeBindGroupForColors(std::array<utils::RGBA8, 2> colors) {
-        std::array<float, 16> data;
+        std::array<float, 16> data{};
         for (unsigned int i = 0; i < 2; ++i) {
             data[4 * i + 0] = static_cast<float>(colors[i].r) / 255.f;
             data[4 * i + 1] = static_cast<float>(colors[i].g) / 255.f;

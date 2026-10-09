@@ -32,7 +32,7 @@
 
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/hlsl/ir/member_builtin_call.h"
 
 using namespace tint::core::fluent_types;     // NOLINT
@@ -109,7 +109,7 @@ struct State {
                             core::ir::Value* curr_offset = mbc->Args()[arg_index];
                             core::ir::Value* dyn_offset = LoadDynamicOffset(offset_index);
                             auto* new_offset = b.Add(curr_offset, dyn_offset);
-                            mbc->SetArg(arg_index, new_offset->Result());
+                            mbc->SetArg(arg_index, new_offset);
                         });
                     };
 

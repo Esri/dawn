@@ -146,6 +146,20 @@ class Value : public Castable<Value> {
     /// @param replacement the replacement value
     void ReplaceAllUsesWith(Value* replacement);
 
+    /// Cast helper to access as instruction.
+    Instruction* AsInstruction();
+    const Instruction* AsInstruction() const;
+
+    /// Cast helper to access as a specific type of instruction.
+    template <typename T>
+    T* AsInstruction() {
+        return tint::As<T>(AsInstruction());
+    }
+    template <typename T>
+    const T* AsInstruction() const {
+        return tint::As<T>(AsInstruction());
+    }
+
   protected:
     /// Constructor
     /// @param type the type of the value

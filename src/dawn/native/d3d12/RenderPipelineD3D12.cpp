@@ -411,7 +411,7 @@ MaybeError RenderPipeline::InitializeImpl() {
     descriptorD3D12.pRootSignature = mPipelineLayoutHandle->GetRootSignature();
 
     // D3D12 logs warnings if any empty input state is used
-    std::array<D3D12_INPUT_ELEMENT_DESC, kMaxVertexAttributes> inputElementDescriptors;
+    std::array<D3D12_INPUT_ELEMENT_DESC, kMaxVertexAttributes> inputElementDescriptors{};
     if (GetAttributeLocationsUsed().any()) {
         descriptorD3D12.InputLayout = ComputeInputLayout(&inputElementDescriptors);
     }
@@ -540,7 +540,7 @@ void RenderPipeline::SetLabelImpl() {
     SetDebugName(ToBackend(GetDevice()), GetPipelineState(), "Dawn_RenderPipeline", GetLabel());
 }
 
-ComPtr<ID3D12CommandSignature> RenderPipeline::GetDrawIndirectCommandSignature() {
+const CommandSignature& RenderPipeline::GetDrawIndirectCommandSignature() {
     if (UsesVertexIndex() || UsesInstanceIndex()) {
         return mPipelineLayoutHandle->GetDrawIndirectCommandSignatureWithInstanceVertexOffsets();
     }
@@ -548,7 +548,7 @@ ComPtr<ID3D12CommandSignature> RenderPipeline::GetDrawIndirectCommandSignature()
     return ToBackend(GetDevice())->GetDrawIndirectSignature();
 }
 
-ComPtr<ID3D12CommandSignature> RenderPipeline::GetDrawIndexedIndirectCommandSignature() {
+const CommandSignature& RenderPipeline::GetDrawIndexedIndirectCommandSignature() {
     if (UsesVertexIndex() || UsesInstanceIndex()) {
         return mPipelineLayoutHandle
             ->GetDrawIndexedIndirectCommandSignatureWithInstanceVertexOffsets();

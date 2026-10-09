@@ -30,8 +30,8 @@
 #include <utility>
 
 #include "src/tint/lang/core/enums.h"
+#include "src/tint/lang/core/ir/array_count.h"
 #include "src/tint/lang/core/ir/transform/helper_test.h"
-#include "src/tint/lang/core/ir/type/array_count.h"
 
 using namespace tint::core::fluent_types;     // NOLINT
 using namespace tint::core::number_suffixes;  // NOLINT
@@ -337,21 +337,20 @@ $B1: {  # root
 }
 
 TEST_F(IR_SingleEntryPointTest, DirectOverridesWithInitializer) {
-    Value* init1 = nullptr;
-    Value* init2 = nullptr;
-    Value* init3 = nullptr;
-    b.Append(mod.root_block, [&] {
-        init1 = b.Multiply(2_i, 4_i)->Result();
-        auto* x = b.Multiply(2_i, 4_i);
-        init2 = b.Add(x, 4_i)->Result();
+    auto* init1 = mod.root_block->Append(b.Append(mod.CreateInstruction<core::ir::CoreBinary>(
+        b.InstructionResult(ty.i32()), BinaryOp::kMultiply, b.Constant(2_i), b.Constant(4_i))));
+    auto* x = mod.root_block->Append(b.Append(mod.CreateInstruction<core::ir::CoreBinary>(
+        b.InstructionResult(ty.i32()), BinaryOp::kMultiply, b.Constant(2_i), b.Constant(4_i))));
+    auto* init2 = mod.root_block->Append(b.Append(mod.CreateInstruction<core::ir::CoreBinary>(
+        b.InstructionResult(ty.i32()), BinaryOp::kAdd, x->Result(), b.Constant(4_i))));
+    auto* y = mod.root_block->Append(b.Append(mod.CreateInstruction<core::ir::CoreBinary>(
+        b.InstructionResult(ty.i32()), BinaryOp::kMultiply, b.Constant(3_i), b.Constant(5_i))));
+    auto* init3 = mod.root_block->Append(b.Append(mod.CreateInstruction<core::ir::CoreBinary>(
+        b.InstructionResult(ty.i32()), BinaryOp::kAdd, y->Result(), b.Constant(5_i))));
 
-        auto* y = b.Multiply(3_i, 5_i);
-        init3 = b.Add(y, 5_i)->Result();
-    });
-
-    auto* o1 = Override("o1", 1, init1);
-    auto* o2 = Override("o2", 2, init2);
-    auto* o3 = Override("o3", 3, init3);
+    auto* o1 = Override("o1", 1, init1->Result());
+    auto* o2 = Override("o2", 2, init2->Result());
+    auto* o3 = Override("o3", 3, init3->Result());
 
     EntryPoint("foo", {o1, o2});
     EntryPoint("bar", {o3});
@@ -958,7 +957,7 @@ TEST_F(IR_SingleEntryPointTest, OverrideWithComplexIncludingOverride) {
         auto* add = b.Add(x, 4_u);
         o = b.Override(Source{{1, 2}}, "a", ty.u32());
         o->SetOverrideId({1});
-        o->SetInitializer(add->Result());
+        o->SetInitializer(add);
     });
 
     auto* func = b.Function("foo", ty.u32());
@@ -1020,7 +1019,7 @@ TEST_F(IR_SingleEntryPointTest, OverrideInitVar) {
         auto* add = b.Add(x, 3_u);
         auto* var_local =
             b.Var("a", core::AddressSpace::kPrivate, ty.u32(), core::Access::kReadWrite);
-        var_local->SetInitializer(add->Result());
+        var_local->SetInitializer(add);
         v1 = var_local->Result();
     });
 
@@ -1074,8 +1073,8 @@ TEST_F(IR_SingleEntryPointTest, OverrideInitVarIntermediateUnused) {
             b.Var("a", core::AddressSpace::kPrivate, ty.u32(), core::Access::kReadWrite);
         auto* var_local_b =
             b.Var("b", core::AddressSpace::kPrivate, ty.u32(), core::Access::kReadWrite);
-        var_local_b->SetInitializer(add_b->Result());
-        var_local->SetInitializer(add_a->Result());
+        var_local_b->SetInitializer(add_b);
+        var_local->SetInitializer(add_a);
         v1 = var_local->Result();
     });
 
@@ -1128,7 +1127,7 @@ TEST_F(IR_SingleEntryPointTest, OverideInitVarUnused) {
         auto* add = b.Add(x, 3_u);
         auto* var_local =
             b.Var("a", core::AddressSpace::kPrivate, ty.u32(), core::Access::kReadWrite);
-        var_local->SetInitializer(add->Result());
+        var_local->SetInitializer(add);
         v1 = var_local->Result();
     });
 
@@ -1260,7 +1259,7 @@ TEST_F(IR_SingleEntryPointTest, OverrideSizedBuffer) {
     const core::ir::type::ValueArrayCount* c1 = nullptr;
     const core::type::Type* b1 = nullptr;
     b.Append(mod.root_block, [&] {
-        add = b.Add(o, 2_i)->Result();
+        add = b.Add(o, 2_i);
         c1 = ty.Get<core::ir::type::ValueArrayCount>(add);
         b1 = ty.Get<core::type::Buffer>(c1);
         v = b.Var("v", ty.ptr(workgroup, b1));

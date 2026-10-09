@@ -50,6 +50,7 @@
 #include "src/dawn/platform/metrics/HistogramMacros.h"
 #include "src/dawn/platform/tracing/TraceEvent.h"
 #include "src/utils/assert.h"
+#include "src/utils/compiler.h"
 #include "tint/tint.h"
 
 namespace dawn::native::d3d12 {
@@ -68,7 +69,7 @@ void DumpDXCCompiledShader(Device* device,
     dumpedMsg << "/* DXC compile flags */\n"
               << dawn::native::d3d::CompileFlagsToString(compileFlags) << "\n";
     dumpedMsg << "/* Dumped disassembled DXIL */\n";
-    DxcBuffer dxcBuffer;
+    DxcBuffer dxcBuffer{};
     dxcBuffer.Encoding = DXC_CP_UTF8;
     dxcBuffer.Ptr = shaderBlob.DataPtr();
     dxcBuffer.Size = shaderBlob.Size();
@@ -79,15 +80,16 @@ void DumpDXCCompiledShader(Device* device,
     ComPtr<IDxcBlobEncoding> disassembly;
     if (dxcResult && dxcResult->HasOutput(DXC_OUT_DISASSEMBLY) &&
         SUCCEEDED(dxcResult->GetOutput(DXC_OUT_DISASSEMBLY, IID_PPV_ARGS(&disassembly), nullptr))) {
-        dumpedMsg << std::string_view(static_cast<const char*>(disassembly->GetBufferPointer()),
-                                      disassembly->GetBufferSize());
+        dumpedMsg << DAWN_UNSAFE_TODO(
+            std::string_view(static_cast<const char*>(disassembly->GetBufferPointer()),
+                             disassembly->GetBufferSize()));
     } else {
         dumpedMsg << "DXC disassemble failed\n";
         ComPtr<IDxcBlobEncoding> errors;
         if (dxcResult && dxcResult->HasOutput(DXC_OUT_ERRORS) &&
             SUCCEEDED(dxcResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr))) {
-            dumpedMsg << std::string_view(static_cast<const char*>(errors->GetBufferPointer()),
-                                          errors->GetBufferSize());
+            dumpedMsg << DAWN_UNSAFE_TODO(std::string_view(
+                static_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize()));
         }
     }
 
@@ -161,25 +163,25 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
         }
     }
 
-    tint::hlsl::writer::ArrayLengthFromUniformOptions arrayLengthFromUniform;
-    tint::hlsl::writer::ArrayOffsetFromUniformOptions arrayOffsetFromUniform;
+    tint::hlsl::writer::ArrayLengthFromImmediateOptions arrayLengthFromImmediate;
+    tint::hlsl::writer::ArrayOffsetFromImmediateOptions arrayOffsetFromImmediate;
 
     if (stage == SingleShaderStage::Compute) {
-        arrayLengthFromUniform.buffer_sizes_offset = GetImmediateByteOffsetInPipelineIfAny(
+        arrayLengthFromImmediate.buffer_sizes_offset = GetImmediateByteOffsetInPipelineIfAny(
             &ComputeImmediates::storageBufferDynamicLengths, pipelineImmediateMask);
-        arrayOffsetFromUniform.buffer_offsets_offset = GetImmediateByteOffsetInPipelineIfAny(
+        arrayOffsetFromImmediate.buffer_offsets_offset = GetImmediateByteOffsetInPipelineIfAny(
             &ComputeImmediates::storageBufferDynamicOffsets, pipelineImmediateMask);
     } else {
-        arrayLengthFromUniform.buffer_sizes_offset = GetImmediateByteOffsetInPipelineIfAny(
+        arrayLengthFromImmediate.buffer_sizes_offset = GetImmediateByteOffsetInPipelineIfAny(
             &RenderImmediates::storageBufferDynamicLengths, pipelineImmediateMask);
-        arrayOffsetFromUniform.buffer_offsets_offset = GetImmediateByteOffsetInPipelineIfAny(
+        arrayOffsetFromImmediate.buffer_offsets_offset = GetImmediateByteOffsetInPipelineIfAny(
             &RenderImmediates::storageBufferDynamicOffsets, pipelineImmediateMask);
     }
 
     auto ToHLSLBindPoint = [&](BindGroupIndex group, BindingIndex index) -> tint::BindingPoint {
         const BindGroupLayout* bgl = ToBackend(layout->GetBindGroupLayout(group));
         return tint::BindingPoint{
-            .group = uint32_t(group),
+            .group = uint32_t{group},
             .binding = bgl->GetShaderRegister(index),
         };
     };
@@ -258,12 +260,13 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
             }
         }
 
-        // Add per-group arrayLengthFromUniform and arrayOffsetFromUniform options
+        // Add per-group array length and offset mappings.
         for (const auto& bindingAndImmediateIndex :
              layout->GetDynamicStorageBufferInfo()[group].bindingAndImmediateIndices) {
             // The bindpoint to index mapping is the same for both lengths and offsets,
-            // the difference is the uniform buffer object binding
-            // (arrayLengthFromUniform.ubo_binding and arrayOffsetFromUniform.ubo_binding).
+            // the difference is the offset in the immediate block
+            // (arrayLengthFromImmediate.buffer_sizes_offset and
+            // arrayOffsetFromImmediate.buffer_offsets_offset).
             BindingNumber bindingNum = bindingAndImmediateIndex.binding;
 
             // Skip bindings not present for the stage because GenerateBindingRemapping doesn't
@@ -277,8 +280,9 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
             uint32_t immediateIndex = bindingAndImmediateIndex.immediateIndex;
             tint::BindingPoint bindingPoint{static_cast<uint32_t>(group),
                                             static_cast<uint32_t>(bindingNum)};
-            arrayLengthFromUniform.bindpoint_to_size_index.emplace(bindingPoint, immediateIndex);
-            arrayOffsetFromUniform.bindpoint_to_offset_index.emplace(bindingPoint, immediateIndex);
+            arrayLengthFromImmediate.bindpoint_to_size_index.emplace(bindingPoint, immediateIndex);
+            arrayOffsetFromImmediate.bindpoint_to_offset_index.emplace(bindingPoint,
+                                                                       immediateIndex);
         }
     }
 
@@ -292,6 +296,7 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
     req.hlsl.tintOptions.disable_workgroup_init =
         device->IsToggleEnabled(Toggle::DisableWorkgroupInit);
     req.hlsl.tintOptions.workarounds.d3d12_decompose_workgroup_access =
+        stage == SingleShaderStage::Compute &&
         device->IsToggleEnabled(Toggle::D3D12DecomposeWorkgroupAccess);
     req.hlsl.tintOptions.disable_polyfill_integer_div_mod =
         device->IsToggleEnabled(Toggle::DisablePolyfillsOnIntegerDivisonAndModulo);
@@ -329,13 +334,8 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
         }
     }
 
-    // TODO(dawn:549): HLSL generation outputs the indices into the
-    // array_length_from_uniform buffer that were actually used. When the blob cache can
-    // store more than compiled shaders, we should reflect these used indices and store
-    // them as well. This would allow us to only upload root constants that are actually
-    // read by the shader.
-    req.hlsl.tintOptions.array_length_from_uniform = std::move(arrayLengthFromUniform);
-    req.hlsl.tintOptions.array_offset_from_uniform = std::move(arrayOffsetFromUniform);
+    req.hlsl.tintOptions.array_length_from_immediate = std::move(arrayLengthFromImmediate);
+    req.hlsl.tintOptions.array_offset_from_immediate = std::move(arrayOffsetFromImmediate);
 
     if (stage == SingleShaderStage::Vertex) {
         // Now that only vertex shader can have interstage outputs.
@@ -354,6 +354,8 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
         device->IsToggleEnabled(Toggle::D3D12PolyfillReflectVec2F32);
     req.hlsl.tintOptions.workarounds.polyfill_subgroup_broadcast_f16 =
         device->IsToggleEnabled(Toggle::EnableSubgroupsIntelGen9);
+    req.hlsl.tintOptions.workarounds.polyfill_f16_ceil_floor =
+        device->IsToggleEnabled(Toggle::D3D12PolyfillF16CeilFloor);
     req.hlsl.tintOptions.workarounds.collapse_subgroup_min_max =
         device->IsToggleEnabled(Toggle::CollapseSubgroupMinMax);
 
@@ -376,6 +378,9 @@ ResultOrError<d3d::CompiledShader> ShaderModule::Compile(
     }
 
     req.hlsl.usesSubgroupMatrix = programmableStage.metadata->usesSubgroupMatrix;
+    req.hlsl.subgroupMatrixConfig =
+        ToBackend(device->GetPhysicalDevice())
+            ->EnumerateSubgroupMatrixConfigs(device->GetAdapter()->GetTogglesState());
 
     CacheResult<d3d::CompiledShader> compiledShader;
     DAWN_TRY_LOAD_OR_RUN(compiledShader, device, std::move(req),

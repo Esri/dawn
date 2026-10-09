@@ -16,6 +16,7 @@
 package androidx.webgpu
 
 import androidx.test.filters.MediumTest
+import androidx.test.filters.SdkSuppress
 import androidx.test.filters.SmallTest
 import androidx.webgpu.WebGpuTestConstants.EMULATOR_TESTS_MIN_API_LEVEL
 import androidx.webgpu.helper.WebGpu
@@ -96,8 +97,7 @@ class BufferTest {
   fun bufferMapFailureTest() {
     runBlocking {
       val unused = webGpu.execute {
-        //TODO(b/452516879): Catch a more specific exception type.
-        assertThrows(Error::class.java) {
+        assertThrows(DawnException::class.java) {
           device.createBuffer(
             GPUBufferDescriptor(
               usage = BufferUsage.Vertex,
@@ -167,6 +167,7 @@ class BufferTest {
    */
   @MediumTest
   @Test
+    @SdkSuppress(maxSdkVersion = 36) // b/537525245
   @ApiRequirement(minApi = EMULATOR_TESTS_MIN_API_LEVEL, onlySkipOnEmulator = true)
   fun testWriteAndReadBuffer() {
     runBlocking {
@@ -250,9 +251,8 @@ class BufferTest {
 
         assertEquals(BufferMapState.Unmapped, buffer.mapState)
 
-        //TODO(b/452516879): Catch a more specific exception type.
         // Should not be able to get the mapped range after unmapping.
-        assertThrows(Error::class.java) {
+        assertThrows(DawnException::class.java) {
           buffer.getMappedRange(0, bufferSize)
         }
       }

@@ -55,7 +55,7 @@ struct VulkanGlobalKnobs {
 };
 
 struct VulkanGlobalInfo : VulkanGlobalKnobs {
-    uint32_t apiVersion;
+    uint32_t apiVersion = 0;
 };
 
 // Device information - gathered before the device is created.
@@ -116,7 +116,7 @@ struct VulkanDeviceInfo : VulkanDeviceKnobs {
 };
 
 struct VulkanSurfaceInfo {
-    VkSurfaceCapabilitiesKHR capabilities;
+    VkSurfaceCapabilitiesKHR capabilities{};
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR> presentModes;
     std::vector<bool> supportedQueueFamilies;

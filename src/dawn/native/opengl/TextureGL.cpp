@@ -464,6 +464,7 @@ MaybeError Texture::ClearTexture(const OpenGLFunctions& gl,
                     }
                     DAWN_TRY(FramebufferTextureHelper(gl, mTarget, GL_DRAW_FRAMEBUFFER, attachment,
                                                       GetTextureHandle(), level, layer));
+                    DAWN_TRY(CheckFramebufferComplete(gl, GL_DRAW_FRAMEBUFFER));
                     DAWN_TRY(DoClear(aspectsToClear));
                 }
             }
@@ -476,13 +477,13 @@ MaybeError Texture::ClearTexture(const OpenGLFunctions& gl,
             // For gl.ClearBufferiv/uiv calls
             constexpr std::array<GLuint, 4> kClearColorDataUint0 = {0u, 0u, 0u, 0u};
             constexpr std::array<GLuint, 4> kClearColorDataUint1 = {1u, 1u, 1u, 1u};
-            std::array<GLuint, 4> clearColorData;
+            std::array<GLuint, 4> clearColorData{};
             clearColorData.fill((clearValue == TextureBase::ClearValue::Zero) ? 0u : 1u);
 
             // For gl.ClearBufferfv calls
             constexpr std::array<GLfloat, 4> kClearColorDataFloat0 = {0.f, 0.f, 0.f, 0.f};
             constexpr std::array<GLfloat, 4> kClearColorDataFloat1 = {1.f, 1.f, 1.f, 1.f};
-            std::array<GLfloat, 4> fClearColorData;
+            std::array<GLfloat, 4> fClearColorData{};
             fClearColorData.fill((clearValue == TextureBase::ClearValue::Zero) ? 0.f : 1.f);
 
             static constexpr uint32_t MAX_TEXEL_SIZE = 16;
@@ -570,12 +571,14 @@ MaybeError Texture::ClearTexture(const OpenGLFunctions& gl,
                         for (GLint z = 0; z < static_cast<GLint>(depth); ++z) {
                             DAWN_GL_TRY(gl, FramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, attachment,
                                                                     GetTextureHandle(), level, z));
+                            DAWN_TRY(CheckFramebufferComplete(gl, GL_DRAW_FRAMEBUFFER));
                             DAWN_TRY(DoClear());
                         }
                     } else {
                         DAWN_TRY(FramebufferTextureHelper(gl, mTarget, GL_DRAW_FRAMEBUFFER,
                                                           attachment, GetTextureHandle(), level,
                                                           layer));
+                        DAWN_TRY(CheckFramebufferComplete(gl, GL_DRAW_FRAMEBUFFER));
                         DAWN_TRY(DoClear());
                     }
 
@@ -620,7 +623,7 @@ MaybeError Texture::ClearTexture(const OpenGLFunctions& gl,
         DAWN_TRY_ASSIGN(srcBuffer, Buffer::CreateInternalBuffer(device, &descriptor, false));
 
         // Fill the buffer with clear color
-        DAWN_UNSAFE_TODO(memset(srcBuffer->GetMappedRange(0, bufferSize), clearColor, bufferSize));
+        srcBuffer->GetMappedRange().FillBytes(std::byte(clearColor));
         DAWN_TRY(srcBuffer->Unmap());
 
         DAWN_GL_TRY(gl, BindBuffer(GL_PIXEL_UNPACK_BUFFER, srcBuffer->GetHandle()));
@@ -765,10 +768,9 @@ GLenum TextureView::GetGLTarget() const {
 MaybeError TextureView::BindToFramebuffer(const OpenGLFunctions& gl,
                                           GLenum target,
                                           GLenum attachment,
-                                          GLuint depthSlice,
+                                          GLuint layer,
                                           std::optional<uint32_t> passSampleCount) {
-    DAWN_ASSERT(depthSlice <
-                static_cast<GLuint>(GetSingleSubresourceVirtualSize().depthOrArrayLayers));
+    DAWN_ASSERT(layer < static_cast<GLuint>(GetSingleSubresourceVirtualSize().depthOrArrayLayers));
 
     if (ToBackend(GetTexture())->IsRenderbuffer()) {
         DAWN_ASSERT(GetDimension() == wgpu::TextureViewDimension::e2D);
@@ -799,11 +801,11 @@ MaybeError TextureView::BindToFramebuffer(const OpenGLFunctions& gl,
         textureHandle = ToBackend(GetTexture())->GetTextureHandle();
         textarget = ToBackend(GetTexture())->GetGLTarget();
         mipLevel = GetBaseMipLevel();
-        // We have validated that the depthSlice in render pass's colorAttachments must be undefined
+        // We have validated that the layer in render pass's colorAttachments must be undefined
         // for 2d RTVs, which value is set to 0. For 3d RTVs, the baseArrayLayer must be 0. So here
-        // we can simply use baseArrayLayer + depthSlice to specify the slice in RTVs without
+        // we can simply use baseArrayLayer + layer to specify the slice in RTVs without
         // checking the view's dimension.
-        arrayLayer = GetBaseArrayLayer() + depthSlice;
+        arrayLayer = GetBaseArrayLayer() + layer;
     }
 
     DAWN_ASSERT(textureHandle != 0);

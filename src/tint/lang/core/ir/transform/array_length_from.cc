@@ -33,7 +33,7 @@
 #include "src/tint/lang/core/ir/builder.h"
 #include "src/tint/lang/core/ir/module.h"
 #include "src/tint/lang/core/ir/transform/prepare_immediate_data.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/core/type/array.h"
 #include "src/tint/lang/core/type/pointer.h"
 #include "src/tint/lang/core/type/struct.h"
@@ -60,8 +60,6 @@ struct State {
 
     const core::ir::transform::ImmediateDataLayout& immediate_data_layout;
 
-    uint32_t buffer_sizes_offset = 0;
-
     uint32_t buffer_sizes_array_elements_num = 0;
 
     /// The IR builder.
@@ -83,7 +81,7 @@ struct State {
     Hashmap<Function*, Value*, 8> function_to_lengths_structure{};
 
     /// A list of structure members for the array lengths structure.
-    Vector<type::Manager::StructMemberDesc, 8> lengths_structure_members{};
+    Vector<core::type::Manager::StructMemberDesc, 8> lengths_structure_members{};
 
     /// A map from a binding point to its index in the array length structure.
     Hashmap<BindingPoint, uint32_t, 8> bindpoint_to_length_member_index{};
@@ -91,7 +89,7 @@ struct State {
     /// An ordered list of binding points that map to the structure members.
     struct BindingPointInfo {
         BindingPoint binding_point{};
-        const type::Type* store_type = nullptr;
+        const core::type::Type* store_type = nullptr;
     };
     Vector<BindingPointInfo, 8> ordered_bindpoints{};
 
@@ -127,7 +125,7 @@ struct State {
     /// @param buffer true if call is a bufferLength call (arrayLength otherwise)
     void MaybeReplace(CoreBuiltinCall* call, bool buffer) {
         if (buffer) {
-            auto* buffer_ty = call->Args()[0]->Type()->UnwrapPtr()->As<type::Buffer>();
+            auto* buffer_ty = call->Args()[0]->Type()->UnwrapPtr()->As<core::type::Buffer>();
             if (call->Args().size() > 1) {
                 // Length was encoded directly, so just use it.
                 call->Result()->ReplaceAllUsesWith(call->Args()[1]);
@@ -183,7 +181,7 @@ struct State {
                 }
                 if (auto* construct = result->Instruction()->As<Construct>()) {
                     // In the MSL backend, buffer_view can decompose into bundled parameters.
-                    TINT_IR_ASSERT(ir, construct->Operands()[0]->Type()->Is<type::Pointer>());
+                    TINT_IR_ASSERT(ir, construct->Operands()[0]->Type()->Is<core::type::Pointer>());
                     ptr = construct->Operands()[0];
                     continue;
                 }
@@ -212,12 +210,12 @@ struct State {
                     uint32_t struct_offset = 0;
                     uint32_t stride = 0;
                     TINT_IR_ASSERT(ir, !res_ty->HasFixedFootprint());
-                    if (auto* str_ty = res_ty->As<type::Struct>()) {
+                    if (auto* str_ty = res_ty->As<core::type::Struct>()) {
                         auto last = str_ty->Members().Back();
                         struct_offset = last->Offset();
-                        stride = last->Type()->As<type::Array>()->ImplicitStride();
+                        stride = last->Type()->As<core::type::Array>()->ImplicitStride();
                     } else {
-                        stride = res_ty->As<type::Array>()->ImplicitStride();
+                        stride = res_ty->As<core::type::Array>()->ImplicitStride();
                     }
                     if (call->Func() == BuiltinFn::kBufferView) {
                         // where:
@@ -226,7 +224,8 @@ struct State {
                         // * offset is (structure offset + offset arg)
                         // * stride is the implicit stride of the runtime array
                         Value* length = nullptr;
-                        auto* buffer_ty = call->Args()[0]->Type()->UnwrapPtr()->As<type::Buffer>();
+                        auto* buffer_ty =
+                            call->Args()[0]->Type()->UnwrapPtr()->As<core::type::Buffer>();
                         if (call->Args().size() > 2) {
                             length = call->Args()[2];
                         } else if (auto const_count = buffer_ty->ConstantCount()) {
@@ -243,10 +242,10 @@ struct State {
                             auto* arg = call->Args()[1];
                             auto* total_offset = b.InsertBitcastIfNeeded(ty.u32(), arg);
                             if (struct_offset != 0) {
-                                total_offset = b.Add(total_offset, u32(struct_offset))->Result();
+                                total_offset = b.Add(total_offset, u32(struct_offset));
                             }
-                            length = b.Subtract(length, total_offset)->Result();
-                            length = b.Divide(length, u32(stride))->Result();
+                            length = b.Subtract(length, total_offset);
+                            length = b.Divide(length, u32(stride));
                         });
                         return length;
                     } else if (call->Func() == BuiltinFn::kBufferArrayView) {
@@ -257,9 +256,9 @@ struct State {
                         Value* length = b.InsertBitcastIfNeeded(ty.u32(), call->Args()[2]);
                         b.InsertBefore(call, [&] {
                             if (struct_offset > 0) {
-                                length = b.Subtract(length, u32(struct_offset))->Result();
+                                length = b.Subtract(length, u32(struct_offset));
                             }
-                            length = b.Divide(length, u32(stride))->Result();
+                            length = b.Divide(length, u32(stride));
                         });
                         return length;
                     }
@@ -267,7 +266,7 @@ struct State {
                 if (auto* builtin = result->Instruction()->As<BuiltinCall>()) {
                     // Various builtins return a pointer:
                     // * msl.pointer_offset
-                    if (builtin->Args()[0]->Type()->Is<type::Pointer>()) {
+                    if (builtin->Args()[0]->Type()->Is<core::type::Pointer>()) {
                         ptr = builtin->Args()[0];
                         continue;
                     }
@@ -303,18 +302,17 @@ struct State {
                         // the original builtin as the callee is expecting a value.
                         b.InsertBefore(call, [&] {
                             if (buffer) {
-                                len = b.Call<u32>(BuiltinFn::kBufferLength, arg)->Result();
+                                len = b.Call<u32>(BuiltinFn::kBufferLength, arg);
                             } else {
                                 if (struct_index) {
-                                    auto* ptr_ty = arg->Type()->As<type::Pointer>();
-                                    auto* str_ty = ptr_ty->UnwrapPtr()->As<type::Struct>();
+                                    auto* ptr_ty = arg->Type()->As<core::type::Pointer>();
+                                    auto* str_ty = ptr_ty->UnwrapPtr()->As<core::type::Struct>();
                                     auto* array_ty = str_ty->Members().Back()->Type();
-                                    arg = b.Access(ty.ptr(ptr_ty->AddressSpace(), array_ty,
-                                                          ptr_ty->Access()),
-                                                   arg, struct_index)
-                                              ->Result();
+                                    arg = b.Access(
+                                        ty.ptr(ptr_ty->AddressSpace(), array_ty, ptr_ty->Access()),
+                                        arg, struct_index);
                                 }
-                                len = b.Call<u32>(BuiltinFn::kArrayLength, arg)->Result();
+                                len = b.Call<u32>(BuiltinFn::kArrayLength, arg);
                             }
                         });
                     }
@@ -335,7 +333,8 @@ struct State {
                 // Create a placeholder construct instruction for the lengths structure that will be
                 // filled in later when we know all of the structure members.
                 TINT_IR_ASSERT(ir, lengths_constructor == nullptr);
-                lengths_constructor = b.ConstructWithResult(ir.CreateValue<InstructionResult>());
+                lengths_constructor = b.ConstructReplaceResult(ir.CreateValue<InstructionResult>())
+                                          ->AsInstruction<Construct>();
                 lengths_constructor->InsertBefore(func->Block()->Front());
                 return lengths_constructor->Result();
             }
@@ -390,7 +389,7 @@ struct State {
             auto index = static_cast<uint32_t>(lengths_structure_members.Length());
             auto name = "tint_array_length_" + std::to_string(binding->group) + "_" +
                         std::to_string(binding->binding);
-            lengths_structure_members.Push(type::Manager::StructMemberDesc{
+            lengths_structure_members.Push(core::type::Manager::StructMemberDesc{
                 .name = ir.symbols.Register(name),
                 .type = ty.u32(),
             });
@@ -402,10 +401,11 @@ struct State {
         });
 
         // Extract the length from the structure.
-        auto* length = b.Access<u32>(GetArrayLengthsStructure(ContainingFunction(insertion_point)),
-                                     u32(member_index));
-        length->InsertBefore(insertion_point);
-        return length->Result();
+        core::ir::Value* length = nullptr;
+        auto* structure = GetArrayLengthsStructure(ContainingFunction(insertion_point));
+        b.InsertBefore(insertion_point,
+                       [&] { length = b.Access<u32>(structure, u32(member_index)); });
+        return length;
     }
 
     /// Get (or create, on first call) the uniform buffer that contains the storage buffer sizes.
@@ -470,12 +470,10 @@ struct State {
                     auto* vec_ptr = b.Access<ptr<uniform, vec4u>>(BufferSizes(), u32(array_index));
                     total_buffer_size = b.LoadVectorElement(vec_ptr, u32(vec_index))->Result();
                 } else {
-                    auto* buffer_sizes = b.Access(
-                        ty.ptr(immediate, ty.array(ty.u32(), buffer_sizes_array_elements_num)),
-                        immediate_data_layout.var,
-                        u32(immediate_data_layout.IndexOf(buffer_sizes_offset)));
-                    auto* size_ptr = b.Access(ty.ptr(immediate, ty.u32()), buffer_sizes->Result(),
-                                              u32(size_index));
+                    auto* buffer_sizes = immediate_data_layout.GetPointer(
+                        b, core::InternalImmediate::kStorageBufferSizes);
+                    auto* size_ptr =
+                        b.Access(ty.ptr(immediate, ty.u32()), buffer_sizes, u32(size_index));
                     total_buffer_size = b.Load(size_ptr)->Result();
                 }
 
@@ -489,7 +487,7 @@ struct State {
                     // The variable is a struct, so subtract the byte offset of the array member.
                     auto* member = str->Members().Back();
                     auto* array_type = member->Type()->As<core::type::Array>();
-                    array_size = b.Subtract(total_buffer_size, u32(member->Offset()))->Result();
+                    array_size = b.Subtract(total_buffer_size, u32(member->Offset()));
                     array_stride = array_type->ImplicitStride();
                 } else if (info.store_type->Is<core::type::Buffer>()) {
                     array_stride = 1;
@@ -499,7 +497,7 @@ struct State {
 
                 auto* length = array_size;
                 if (array_stride != 1) {
-                    length = b.Divide(array_size, u32(array_stride))->Result();
+                    length = b.Divide(array_size, u32(array_stride));
                 }
                 constructor_values.Push(length);
             }
@@ -549,7 +547,6 @@ Result<ArrayLengthResult> ArrayLengthFromUniform(
 Result<ArrayLengthResult> ArrayLengthFromImmediates(
     Module& ir,
     const core::ir::transform::ImmediateDataLayout& immediate_data_layout,
-    const uint32_t buffer_sizes_offset,
     const uint32_t buffer_sizes_array_elements_num,
     const std::unordered_map<BindingPoint, uint32_t>& bindpoint_to_size_index) {
     core::ir::AssertValid(ir, "before core.ArrayLengthFromImmediates");
@@ -559,7 +556,6 @@ Result<ArrayLengthResult> ArrayLengthFromImmediates(
                 .ubo_binding = {},
                 .bindpoint_to_size_index = bindpoint_to_size_index,
                 .immediate_data_layout = immediate_data_layout,
-                .buffer_sizes_offset = buffer_sizes_offset,
                 .buffer_sizes_array_elements_num = buffer_sizes_array_elements_num};
     state.Process();
 

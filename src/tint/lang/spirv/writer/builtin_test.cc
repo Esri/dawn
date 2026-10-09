@@ -52,7 +52,8 @@ TEST_P(Builtin_1arg, Scalar) {
 
     auto* func = b.Function("main", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     b.Append(func->Block(), [&] {
-        b.Call(MakeScalarType(params.type), params.function, MakeScalarValue(params.type));
+        b.Call(MakeScalarType(params.type), params.function,
+               b.Let("l", MakeScalarValue(params.type)));
         b.Return(func);
     });
 
@@ -65,7 +66,8 @@ TEST_P(Builtin_1arg, Vector) {
 
     auto* func = b.Function("main", ty.void_(), core::ir::Function::PipelineStage::kFragment);
     b.Append(func->Block(), [&] {
-        b.Call(MakeVectorType(params.type), params.function, MakeVectorValue(params.type));
+        b.Call(MakeVectorType(params.type), params.function,
+               b.Let("l", MakeVectorValue(params.type)));
         b.Return(func);
     });
 
@@ -176,10 +178,9 @@ TEST_F(SpirvWriterTest, Builtin_Abs_u32) {
 TEST_F(SpirvWriterTest, Builtin_Abs_i32) {
     auto* func = b.Function("foo", MakeScalarType(kI32));
     b.Append(func->Block(), [&] {
-        auto* arg = MakeScalarValue(kI32);
+        auto* arg = b.Let("arg", MakeScalarValue(kI32));
         auto* result = b.Call(MakeScalarType(kI32), core::BuiltinFn::kAbs, arg);
         b.Return(func, result);
-        mod.SetName(arg, "arg");
     });
 
     auto* eb = b.ComputeFunction("main");
@@ -191,8 +192,8 @@ TEST_F(SpirvWriterTest, Builtin_Abs_i32) {
     auto result = Generate();
     ASSERT_EQ(result, Success) << result.Failure() << output_;
     EXPECT_INST(R"(
-          %6 = OpBitcast %uint %arg
-          %8 = OpNot %uint %6
+          %7 = OpBitcast %uint %arg
+          %8 = OpNot %uint %7
           %9 = OpIAdd %uint %8 %uint_1
          %11 = OpBitcast %int %9
          %12 = OpExtInst %int %13 SMax %arg %11
@@ -902,7 +903,7 @@ TEST_F(SpirvWriterTest, Builtin_CountLeadingZeros_U32) {
          %36 = OpBitwiseOr %uint %20 %35
          %37 = OpBitwiseOr %uint %15 %36
          %38 = OpBitwiseOr %uint %9 %37
-     %result = OpIAdd %uint %38 %33
+         %39 = OpIAdd %uint %38 %33
 )");
 }
 
@@ -948,7 +949,7 @@ TEST_F(SpirvWriterTest, Builtin_CountLeadingZeros_I32) {
          %39 = OpBitwiseOr %uint %17 %38
          %40 = OpBitwiseOr %uint %11 %39
          %41 = OpIAdd %uint %40 %35
-     %result = OpBitcast %int %41
+         %42 = OpBitcast %int %41
 )");
 }
 
@@ -1003,7 +1004,7 @@ TEST_F(SpirvWriterTest, Builtin_CountLeadingZeros_Vec2U32) {
          %48 = OpBitwiseOr %v2uint %27 %47
          %49 = OpBitwiseOr %v2uint %20 %48
          %50 = OpBitwiseOr %v2uint %12 %49
-     %result = OpIAdd %v2uint %50 %45
+         %51 = OpIAdd %v2uint %50 %45
 )");
 }
 
@@ -1051,7 +1052,7 @@ TEST_F(SpirvWriterTest, Builtin_CountTrailingZeros_U32) {
          %39 = OpBitwiseOr %uint %23 %38
          %40 = OpBitwiseOr %uint %17 %39
          %41 = OpBitwiseOr %uint %11 %40
-     %result = OpIAdd %uint %41 %37
+         %42 = OpIAdd %uint %41 %37
 )");
 }
 
@@ -1101,7 +1102,7 @@ TEST_F(SpirvWriterTest, Builtin_CountTrailingZeros_I32) {
          %42 = OpBitwiseOr %uint %19 %41
          %43 = OpBitwiseOr %uint %13 %42
          %44 = OpIAdd %uint %43 %39
-     %result = OpBitcast %int %44
+         %45 = OpBitcast %int %44
 )");
 }
 
@@ -1159,7 +1160,7 @@ TEST_F(SpirvWriterTest, Builtin_CountTrailingZeros_Vec2U32) {
          %50 = OpBitwiseOr %v2uint %30 %49
          %51 = OpBitwiseOr %v2uint %22 %50
          %52 = OpBitwiseOr %v2uint %14 %51
-     %result = OpIAdd %v2uint %52 %48
+         %53 = OpIAdd %v2uint %52 %48
 )");
 }
 
@@ -1206,7 +1207,7 @@ TEST_F(SpirvWriterTest, Builtin_FirstLeadingBit_U32) {
          %38 = OpBitwiseOr %uint %17 %37
          %39 = OpBitwiseOr %uint %11 %38
          %40 = OpIEqual %bool %31 %uint_0
-     %result = OpSelect %uint %40 %uint_4294967295 %39
+         %41 = OpSelect %uint %40 %uint_4294967295 %39
 )");
 }
 
@@ -1258,7 +1259,7 @@ TEST_F(SpirvWriterTest, Builtin_FirstLeadingBit_I32) {
          %45 = OpBitwiseOr %uint %17 %44
          %46 = OpIEqual %bool %37 %uint_0
          %47 = OpSelect %uint %46 %uint_4294967295 %45
-     %result = OpBitcast %int %47
+         %49 = OpBitcast %int %47
 )");
 }
 
@@ -1316,7 +1317,7 @@ TEST_F(SpirvWriterTest, Builtin_FirstLeadingBit_Vec2U32) {
          %49 = OpBitwiseOr %v2uint %22 %48
          %50 = OpBitwiseOr %v2uint %14 %49
          %51 = OpIEqual %v2bool %41 %11
-     %result = OpSelect %v2uint %51 %53 %50
+         %52 = OpSelect %v2uint %51 %53 %50
 )");
 }
 
@@ -1363,7 +1364,7 @@ TEST_F(SpirvWriterTest, Builtin_FirstTrailingBit_U32) {
          %38 = OpBitwiseOr %uint %17 %37
          %39 = OpBitwiseOr %uint %11 %38
          %40 = OpIEqual %bool %31 %uint_0
-     %result = OpSelect %uint %40 %uint_4294967295 %39
+         %41 = OpSelect %uint %40 %uint_4294967295 %39
 )");
 }
 
@@ -1412,7 +1413,7 @@ TEST_F(SpirvWriterTest, Builtin_FirstTrailingBit_I32) {
          %41 = OpBitwiseOr %uint %13 %40
          %42 = OpIEqual %bool %33 %uint_0
          %43 = OpSelect %uint %42 %uint_4294967295 %41
-     %result = OpBitcast %int %43
+         %45 = OpBitcast %int %43
 )");
 }
 
@@ -1470,7 +1471,7 @@ TEST_F(SpirvWriterTest, Builtin_FirstTrailingBit_Vec2U32) {
          %49 = OpBitwiseOr %v2uint %22 %48
          %50 = OpBitwiseOr %v2uint %14 %49
          %51 = OpIEqual %v2bool %41 %11
-     %result = OpSelect %v2uint %51 %53 %50
+         %52 = OpSelect %v2uint %51 %53 %50
 )");
 }
 
@@ -1526,8 +1527,8 @@ TEST_P(Builtin_2arg, Scalar) {
 
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
-        b.Call(MakeScalarType(params.type), params.function, MakeScalarValue(params.type),
-               MakeScalarValue(params.type));
+        b.Call(MakeScalarType(params.type), params.function,
+               b.Let("l", MakeScalarValue(params.type)), MakeScalarValue(params.type));
         b.Return(func);
     });
 
@@ -1540,8 +1541,8 @@ TEST_P(Builtin_2arg, Vector) {
 
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
-        b.Call(MakeVectorType(params.type), params.function, MakeVectorValue(params.type),
-               MakeVectorValue(params.type));
+        b.Call(MakeVectorType(params.type), params.function,
+               b.Let("l", MakeVectorValue(params.type)), MakeVectorValue(params.type));
         b.Return(func);
     });
 
@@ -1724,7 +1725,7 @@ TEST_F(SpirvWriterTest, Builtin_Dot_vec4u) {
          %19 = OpCompositeExtract %uint %arg1 3
          %20 = OpCompositeExtract %uint %arg2 3
          %21 = OpIMul %uint %19 %20
-     %result = OpIAdd %uint %18 %21
+         %22 = OpIAdd %uint %18 %21
 )");
 }
 
@@ -1867,8 +1868,9 @@ TEST_P(Builtin_3arg, Scalar) {
 
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
-        b.Call(MakeScalarType(params.type), params.function, MakeScalarValue(params.type),
-               MakeScalarValue(params.type), MakeScalarValue(params.type));
+        b.Call(MakeScalarType(params.type), params.function,
+               b.Let("l", MakeScalarValue(params.type)), MakeScalarValue(params.type),
+               MakeScalarValue(params.type));
         b.Return(func);
     });
 
@@ -1881,8 +1883,9 @@ TEST_P(Builtin_3arg, Vector) {
 
     auto* func = b.ComputeFunction("main");
     b.Append(func->Block(), [&] {
-        b.Call(MakeVectorType(params.type), params.function, MakeVectorValue(params.type),
-               MakeVectorValue(params.type), MakeVectorValue(params.type));
+        b.Call(MakeVectorType(params.type), params.function,
+               b.Let("l", MakeVectorValue(params.type)), MakeVectorValue(params.type),
+               MakeVectorValue(params.type));
         b.Return(func);
     });
 

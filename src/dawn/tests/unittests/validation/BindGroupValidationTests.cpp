@@ -1138,7 +1138,7 @@ TEST_F(BindGroupValidationTest, BufferBindingOOB) {
 
     // Error case, offset+size overflows to be 0
     ASSERT_DEVICE_ERROR(
-        utils::MakeBindGroup(device, layout, {{0, buffer, 256, uint32_t(0) - uint32_t(256)}}));
+        utils::MakeBindGroup(device, layout, {{0, buffer, 256, uint32_t{0} - uint32_t{256}}}));
 }
 
 // Tests constraints to be sure the uniform buffer binding isn't too large
@@ -2785,8 +2785,8 @@ class SetBindGroupValidationTest : public ValidationTest {
     }
 
   protected:
-    uint32_t mMinUniformBufferOffsetAlignment;
-    uint64_t mBufferSize;
+    uint32_t mMinUniformBufferOffsetAlignment = 0;
+    uint64_t mBufferSize = 0;
 };
 
 // This is the test case that should work.
@@ -3054,7 +3054,7 @@ TEST_F(SetBindGroupValidationTest, DynamicOffsetOrder) {
                                                          {2, buffer1x, 0, 4},
                                                      });
 
-    std::array<uint32_t, 3> offsets;
+    std::array<uint32_t, 3> offsets{};
     {
         // Base case works.
         offsets = {/* binding 0 */ 0,
@@ -3444,7 +3444,7 @@ class SetBindGroupPersistenceValidationTest : public ValidationTest {
     }
 
   protected:
-    uint32_t mBufferSize;
+    uint32_t mBufferSize = 0;
 
   private:
     wgpu::ShaderModule mVsModule;
@@ -3902,7 +3902,7 @@ class BindingsValidationTest : public BindGroupLayoutCompatibilityTest {
         }
     }
 
-    uint32_t mBufferSize;
+    uint32_t mBufferSize = 0;
     static constexpr uint32_t kBindingNum = 3;
 };
 
@@ -4581,177 +4581,6 @@ TEST_F(SamplerTypeBindingTest, SamplerAndBindGroupMatches) {
 
         // Test non-filtering sampler
         utils::MakeBindGroup(device, bindGroupLayout, {{0, device.CreateSampler()}});
-    }
-}
-
-class PipelineLayoutValidationTest : public ValidationTest {};
-
-// Test creating pipeline layout with null bind group layout works when unsafe APIs are allowed.
-TEST_F(PipelineLayoutValidationTest, CreateWithNullBindGroupLayout) {
-    for (uint32_t nullBGLIndex = 0; nullBGLIndex < 4; ++nullBGLIndex) {
-        std::vector<wgpu::BindGroupLayout> bgls(4);
-        for (uint32_t i = 0; i < 4; ++i) {
-            if (i == nullBGLIndex) {
-                continue;
-            }
-            bgls[i] = utils::MakeBindGroupLayout(
-                device, {{0, wgpu::ShaderStage::Compute, wgpu::StorageTextureAccess::WriteOnly,
-                          wgpu::TextureFormat::R32Float}});
-        }
-        utils::MakePipelineLayout(device, bgls);
-    }
-}
-
-// Test the pipeline layout with null bind group layout must match the corresponding binding in
-// shader.
-TEST_F(PipelineLayoutValidationTest, ShaderMatchesPipelineLayoutWithNullBindGroupLayout) {
-    for (uint32_t nullBGLIndex = 0; nullBGLIndex < 4; ++nullBGLIndex) {
-        std::vector<wgpu::BindGroupLayout> bgls(4);
-        for (uint32_t i = 0; i < 4; ++i) {
-            if (i == nullBGLIndex) {
-                continue;
-            }
-            bgls[i] = utils::MakeBindGroupLayout(
-                device, {{0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage}});
-        }
-        wgpu::PipelineLayout pipelineLayout = utils::MakePipelineLayout(device, bgls);
-
-        for (uint32_t missedGroupIndex = 0; missedGroupIndex < 4; ++missedGroupIndex) {
-            std::ostringstream stream;
-            for (uint32_t i = 0; i < 4; ++i) {
-                if (i != missedGroupIndex) {
-                    stream << "@group(" << i << ") @binding(0) var<storage, read_write> outputData"
-                           << i << " : u32;\n";
-                }
-            }
-            stream << "@compute @workgroup_size(1, 1) fn main() {\n";
-            for (uint32_t i = 0; i < 4; ++i) {
-                if (i != missedGroupIndex) {
-                    stream << "outputData" << i << " = 1u;\n";
-                }
-            }
-            stream << "};";
-            wgpu::ComputePipelineDescriptor computePipelineDescriptor = {};
-            computePipelineDescriptor.compute.module =
-                utils::CreateShaderModule(device, stream.str());
-            computePipelineDescriptor.layout = pipelineLayout;
-            if (missedGroupIndex == nullBGLIndex) {
-                device.CreateComputePipeline(&computePipelineDescriptor);
-            } else {
-                ASSERT_DEVICE_ERROR(device.CreateComputePipeline(&computePipelineDescriptor));
-            }
-        }
-    }
-}
-
-// Test the null or empty bind group layout in a pipeline layout should be ignored when we check the
-// compatibility between the pipeline layout and the corresponding bind group.
-TEST_F(PipelineLayoutValidationTest, BindGroupSlotWithEmptyLayoutIsNotValidated) {
-    std::array<wgpu::BindGroupLayout, 2> nullOrEmptyBindGroupLayouts = {
-        nullptr, utils::MakeBindGroupLayout(device, {})};
-
-    wgpu::BindGroupLayout nonEmptyBGL = utils::MakeBindGroupLayout(
-        device, {{0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage}});
-    wgpu::BufferDescriptor bufferDescForNonEmptyBGL = {};
-    bufferDescForNonEmptyBGL.size = 4;
-    bufferDescForNonEmptyBGL.usage = wgpu::BufferUsage::Storage;
-    wgpu::Buffer bufferForNonEmptyBGL = device.CreateBuffer(&bufferDescForNonEmptyBGL);
-    wgpu::BindGroup nonEmptyBindGroup =
-        utils::MakeBindGroup(device, nonEmptyBGL, {{0, bufferForNonEmptyBGL}});
-
-    for (uint32_t nullBGLIndex = 0; nullBGLIndex < 4; ++nullBGLIndex) {
-        for (wgpu::BindGroupLayout nullOrEmptyBindGroupLayout : nullOrEmptyBindGroupLayouts) {
-            std::vector<wgpu::BindGroupLayout> bgls(4);
-            std::vector<wgpu::BindGroup> bgs(4);
-
-            // Create compute pipeline with null or empty bind group layout and the bind groups.
-            // Note that the bind groups are all non-empty.
-            for (uint32_t i = 0; i < 4; ++i) {
-                if (i == nullBGLIndex) {
-                    bgls[i] = nullOrEmptyBindGroupLayout;
-                    bgs[i] = nonEmptyBindGroup;
-                } else {
-                    bgls[i] = utils::MakeBindGroupLayout(
-                        device,
-                        {{0, wgpu::ShaderStage::Compute, wgpu::BufferBindingType::Storage}});
-
-                    wgpu::BufferDescriptor bufferDesc = {};
-                    bufferDesc.size = 4;
-                    bufferDesc.usage = wgpu::BufferUsage::Storage;
-                    wgpu::Buffer buffer = device.CreateBuffer(&bufferDesc);
-                    bgs[i] = utils::MakeBindGroup(device, bgls[i], {{0, buffer}});
-                }
-            }
-            wgpu::PipelineLayout pipelineLayout = utils::MakePipelineLayout(device, bgls);
-
-            std::ostringstream stream;
-            for (uint32_t i = 0; i < 4; ++i) {
-                if (i != nullBGLIndex) {
-                    stream << "@group(" << i << ") @binding(0) var<storage, read_write> outputData"
-                           << i << " : u32;\n";
-                }
-            }
-            stream << "@compute @workgroup_size(1, 1) fn main() {\n";
-            for (uint32_t i = 0; i < 4; ++i) {
-                if (i != nullBGLIndex) {
-                    stream << "outputData" << i << " = 1u;\n";
-                }
-            }
-            stream << "};";
-            wgpu::ComputePipelineDescriptor computePipelineDescriptor = {};
-            computePipelineDescriptor.compute.module =
-                utils::CreateShaderModule(device, stream.str());
-            computePipelineDescriptor.layout = pipelineLayout;
-
-            wgpu::ComputePipeline computePipeline =
-                device.CreateComputePipeline(&computePipelineDescriptor);
-
-            // Set pipeline and bind groups. The null or empty bind group layout in the pipeline
-            // layout should be ignored in the check of the compatibility between pipeline layout
-            // and the bind group when encoding `SetBindGroup()`.
-            wgpu::CommandEncoder encoder = device.CreateCommandEncoder();
-            wgpu::ComputePassEncoder computePass = encoder.BeginComputePass();
-            for (uint32_t i = 0; i < 4; ++i) {
-                computePass.SetBindGroup(i, bgs[i]);
-            }
-            computePass.SetPipeline(computePipeline);
-            computePass.DispatchWorkgroups(1);
-            computePass.End();
-            wgpu::CommandBuffer cmdbuf = encoder.Finish();
-            device.GetQueue().Submit(1, &cmdbuf);
-        }
-    }
-}
-
-// Test the empty bind group layout returned by calling `getBindGroupLayout()` on a pipeline created
-// with `auto` pipeline layout cannot be used to create other pipeline layouts.
-TEST_F(PipelineLayoutValidationTest, ReuseEmptyBindGroupLayoutCreatedwithAutoPipelineLayout) {
-    // The empty bind group layout comes from a pipeline created with an explicit pipeline layout.
-    {
-        wgpu::PipelineLayout pipelineLayout = utils::MakePipelineLayout(device, {});
-        wgpu::ComputePipelineDescriptor computePipelineDescriptor = {};
-        computePipelineDescriptor.compute.module = utils::CreateShaderModule(device, R"(
-                @compute @workgroup_size(1, 1) fn main() {})");
-        computePipelineDescriptor.layout = pipelineLayout;
-        wgpu::ComputePipeline computePipeline =
-            device.CreateComputePipeline(&computePipelineDescriptor);
-
-        wgpu::BindGroupLayout emptyBindGroupLayout = computePipeline.GetBindGroupLayout(3);
-        std::vector<wgpu::BindGroupLayout> bindGroupLayouts = {{emptyBindGroupLayout}};
-        utils::MakePipelineLayout(device, bindGroupLayouts);
-    }
-
-    // The empty bind group layout comes from a pipeline created with an 'auto' pipeline layout.
-    {
-        wgpu::ComputePipelineDescriptor computePipelineDescriptor = {};
-        computePipelineDescriptor.compute.module = utils::CreateShaderModule(device, R"(
-                @compute @workgroup_size(1, 1) fn main() {})");
-        wgpu::ComputePipeline computePipeline =
-            device.CreateComputePipeline(&computePipelineDescriptor);
-
-        wgpu::BindGroupLayout emptyBindGroupLayout = computePipeline.GetBindGroupLayout(3);
-        std::vector<wgpu::BindGroupLayout> bindGroupLayouts = {{emptyBindGroupLayout}};
-        ASSERT_DEVICE_ERROR(utils::MakePipelineLayout(device, bindGroupLayouts));
     }
 }
 

@@ -122,7 +122,7 @@ class VertexBufferTracker {
 
         for (VertexBufferSlot slot : vertexBuffersToApply) {
             mCommandContext->GetD3D11DeviceContext3()->IASetVertexBuffers(
-                uint8_t(slot), 1, &mD3D11Buffers[slot], &mStrides[slot], &mOffsets[slot]);
+                uint8_t{slot}, 1, &mD3D11Buffers[slot], &mStrides[slot], &mOffsets[slot]);
 
             mDirtyVertexBuffers.reset(slot);
         }
@@ -267,8 +267,8 @@ class ImmediateTracker : public T {
                 GetImmediateIndexInPipeline(static_cast<uint32_t>(offset), pipelineMask);
             commandContext->WriteUniformBufferRange(
                 immediateRangeStartOffset,
-                this->mContent.template Get<uint32_t>(immediateContentStartOffset),
-                size * kImmediateElementByteSize);
+                this->mContent.GetDataBytes(immediateContentStartOffset,
+                                            size * kImmediateElementByteSize));
         }
 
         // Reset all dirty bits after uploading.
@@ -437,8 +437,9 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
                 DAWN_TRY(texture->SynchronizeTextureBeforeUse(commandContext));
                 SubresourceRange subresources = GetSubresourcesAffectedByCopy(dst, copy->copySize);
 
-                DAWN_ASSERT(scopedMap.GetMappedData());
-                const uint8_t* data = DAWN_UNSAFE_TODO(scopedMap.GetMappedData() + bufferOffset);
+                DAWN_ASSERT(!scopedMap.GetMappedData().empty());
+                Span<std::byte> data =
+                    scopedMap.GetMappedData().subspan(checked_cast<size_t>(bufferOffset));
                 uint64_t bytesPerRow = blockInfo.ToBytes(src.blocksPerRow);
                 DAWN_TRY(texture->Write(commandContext, subresources, dst.origin.ToOrigin3D(),
                                         copy->copySize.ToExtent3D(), data,
@@ -472,11 +473,10 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
 
                 DAWN_TRY(buffer->EnsureDataInitializedAsDestination(commandContext, copy));
 
-                Texture::ReadCallback callback = [&](const uint8_t* data, uint64_t offset,
-                                                     uint64_t size) -> MaybeError {
-                    DAWN_TRY(ToBackend(dst.buffer)
-                                 ->Write(commandContext, dst.offset + offset, data,
-                                         checked_cast<size_t>(size)));
+                Texture::ReadCallback callback = [&](Span<const std::byte> data,
+                                                     size_t offset) -> MaybeError {
+                    DAWN_TRY(
+                        ToBackend(dst.buffer)->Write(commandContext, dst.offset + offset, data));
                     return {};
                 };
 
@@ -535,7 +535,7 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
 
             case Command::WriteBuffer: {
                 WriteBufferCmd* cmd = mCommands.NextCommand<WriteBufferCmd>();
-                Span<const uint8_t> data = mCommands.NextData<uint8_t>(cmd->size);
+                Span<const std::byte> data = mCommands.NextData<std::byte>(cmd->size);
 
                 if (data.empty()) {
                     // Skip no-op writes.
@@ -544,7 +544,7 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
 
                 Buffer* dstBuffer = ToBackend(cmd->buffer.Get());
                 DAWN_TRY(dstBuffer->TrackUsage(commandContext, pendingSerial));
-                DAWN_TRY(dstBuffer->Write(commandContext, cmd->offset, data.data(), data.size()));
+                DAWN_TRY(dstBuffer->Write(commandContext, cmd->offset, data));
 
                 break;
             }
@@ -557,7 +557,7 @@ MaybeError CommandBuffer::Execute(const ScopedSwapStateCommandRecordingContext* 
             }
 
             default:
-                return DAWN_FORMAT_INTERNAL_ERROR("Unknown command type: %d", type);
+                return DAWN_FORMAT_UNRECOVERABLE_ERROR("Unknown command type: %d", type);
         }
     }
 
@@ -1098,7 +1098,7 @@ void CommandBuffer::HandleDebugCommands(
         }
 
         case Command::PopDebugGroup: {
-            [[maybe_unused]] auto cmd = iter->NextCommand<PopDebugGroupCmd>();
+            std::ignore = iter->NextCommand<PopDebugGroupCmd>();
             commandContext->GetD3DUserDefinedAnnotation()->EndEvent();
             break;
         }

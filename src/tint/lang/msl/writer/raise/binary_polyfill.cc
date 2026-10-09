@@ -30,7 +30,7 @@
 #include <vector>
 
 #include "src/tint/lang/core/ir/builder.h"
-#include "src/tint/lang/core/ir/validator.h"
+#include "src/tint/lang/core/ir/validator/validate.h"
 #include "src/tint/lang/msl/ir/builtin_call.h"
 
 namespace tint::msl::writer::raise {
@@ -40,9 +40,6 @@ namespace {
 struct State {
     /// The IR module.
     core::ir::Module& ir;
-
-    /// The polyfill config.
-    const BinaryPolyfillConfig& config;
 
     /// The IR builder.
     core::ir::Builder b{ir};
@@ -65,11 +62,6 @@ struct State {
             auto* lhs_type = binary->LHS()->Type();
             if (op == core::BinaryOp::kModulo && lhs_type->IsFloatScalarOrVector()) {
                 worklist.push_back([this, binary] { FMod(binary); });
-            } else if ((op == core::BinaryOp::kModulo || op == core::BinaryOp::kDivide) &&
-                       lhs_type->DeepestElement()->Is<core::type::U32>()) {
-                if (config.fix_u32_div_mod) {
-                    worklist.push_back([this, binary] { UDivMod(binary); });
-                }
             } else if ((op == core::BinaryOp::kAnd || op == core::BinaryOp::kOr) &&
                        lhs_type->IsBoolScalarOrVector()) {
                 worklist.push_back([this, binary] { LogicalBool(binary); });
@@ -89,16 +81,6 @@ struct State {
         binary->Destroy();
     }
 
-    /// Add a volatile zero to unsigned divide and modulo binary instructions to work around a
-    /// driver bug.
-    /// @param binary the unsigned integer divide or modulo binary instruction
-    void UDivMod(core::ir::CoreBinary* binary) {
-        b.InsertBefore(binary, [&] {
-            auto* zero = b.Call<msl::ir::BuiltinCall>(ty.u32(), msl::BuiltinFn::kVolatileZero);
-            binary->SetOperand(0u, b.Add(binary->LHS(), zero)->Result());
-        });
-    }
-
     /// Replace a logical boolean binary instruction.
     /// @param binary the logical boolean binary instruction
     void LogicalBool(core::ir::CoreBinary* binary) {
@@ -111,7 +93,7 @@ struct State {
             auto* int_lhs = b.Convert(int_ty, binary->LHS());
             auto* int_rhs = b.Convert(int_ty, binary->RHS());
             auto* int_binary = b.Binary(binary->Op(), int_ty, int_lhs, int_rhs);
-            b.ConvertWithResult(binary->DetachResult(), int_binary);
+            b.ConvertReplaceResult(binary->DetachResult(), int_binary);
         });
         binary->Destroy();
     }
@@ -119,10 +101,10 @@ struct State {
 
 }  // namespace
 
-Result<SuccessType> BinaryPolyfill(core::ir::Module& ir, const BinaryPolyfillConfig& config) {
+Result<SuccessType> BinaryPolyfill(core::ir::Module& ir) {
     AssertValid(ir, "before msl.BinaryPolyfill");
 
-    State{ir, config}.Process();
+    State{ir}.Process();
 
     return Success;
 }
