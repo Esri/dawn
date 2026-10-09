@@ -2,7 +2,7 @@ from conans import ConanFile
 
 class DawnConan(ConanFile):
     name = "dawn"
-    version = "0.0.1"
+    version = "20261002.154047"
     url = "https://github.com/Esri/dawn/blob/runtimecore"
     license = "https://github.com/Esri/dawn/blob/runtimecore/LICENSE"
     description = "Dawn is an open-source and cross-platform implementation of the WebGPU standard."
